@@ -1,0 +1,33 @@
+# Go
+api/bin/
+api/tmp/
+
+# Node / SvelteKit
+web/node_modules/
+web/.svelte-kit/
+web/build/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Docker
+docker-compose.override.yml
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Images volume (local dev)
+images/
+
+# Test
+coverage/

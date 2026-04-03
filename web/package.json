@@ -1,0 +1,27 @@
+{
+  "name": "ms-utrustning-web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@auth/sveltekit": "^1.11.1",
+    "@scouterna/design-tokens": "^0.0.5",
+    "@scouterna/tailwind-theme": "^0.0.4",
+    "@scouterna/ui-webc": "^3.2.0"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-node": "^5.5.4",
+    "@sveltejs/kit": "^2.55.0",
+    "@sveltejs/vite-plugin-svelte": "^7.0.0",
+    "@tailwindcss/vite": "^4.2.2",
+    "svelte": "^5.55.1",
+    "tailwindcss": "^4.2.2",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.3"
+  }
+}
