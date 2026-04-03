@@ -69,7 +69,7 @@ WHERE a.group_id = @group_id
             AND b.status IN ('draft', 'confirmed', 'picked_up', 'submitted', 'approved')
             AND b.start_date <= @end_date
             AND b.end_date >= @start_date
-            AND (bi.return_status IS NULL OR bi.return_status = 'pending')
+            AND (bi.return_status IS NULL OR bi.return_status IN ('pending', 'delayed'))
     )
     AND a.id NOT IN (
         SELECT bi.article_id FROM booking_items bi
@@ -119,7 +119,7 @@ WHERE a.group_id = @group_id
             AND b.status IN ('draft', 'confirmed', 'picked_up', 'submitted', 'approved')
             AND b.start_date <= @end_date
             AND b.end_date >= @start_date
-            AND (bi.return_status IS NULL OR bi.return_status = 'pending')
+            AND (bi.return_status IS NULL OR bi.return_status IN ('pending', 'delayed'))
     )
 ORDER BY a.commercial_name, a.common_name;
 
@@ -158,6 +158,22 @@ SELECT NOT EXISTS (
     WHERE booking_id = @booking_id AND group_id = @group_id
         AND pickup_status IS NULL
 ) AS all_picked_up;
+
+-- name: UpdateBookingItemReturnStatus :one
+UPDATE booking_items SET return_status = @return_status
+WHERE id = @id AND group_id = @group_id AND booking_id = @booking_id
+RETURNING *;
+
+-- name: AllItemsReturned :one
+-- Returns true if every picked-up item has a final return status.
+-- Delayed items are NOT final — they must be resolved before completing.
+-- Items that were never picked up are excluded.
+SELECT NOT EXISTS (
+    SELECT 1 FROM booking_items
+    WHERE booking_id = @booking_id AND group_id = @group_id
+        AND pickup_status IS NOT NULL AND pickup_status != 'not_available'
+        AND (return_status IS NULL OR return_status = 'delayed')
+) AS all_returned;
 
 -- name: CleanupStaleDrafts :exec
 -- Delete draft bookings older than the given threshold.

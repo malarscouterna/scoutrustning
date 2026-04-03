@@ -43,4 +43,21 @@ for UNIT in Yggdrasil Ornéerna; do
     -d "{\"name\":\"$UNIT\"}" > /dev/null && echo "  Created: $UNIT" || echo "  Exists: $UNIT"
 done
 
+# Create quantity-tracked test articles (Tältlampa LED)
+# First delete the individually-tracked one from CSV import, then create 5 quantity-tracked
+echo "Creating quantity-tracked test articles..."
+LOC_ID=$(curl -s "$API/api/v0/locations" -H "$HEADER" | python3 -c "import json,sys; print([l['id'] for l in json.load(sys.stdin) if l['name']=='Hajkförrådet'][0])")
+CAT_ID=$(curl -s "$API/api/v0/categories" -H "$HEADER" | python3 -c "import json,sys; print([c['id'] for c in json.load(sys.stdin) if c['name']=='Sova'][0])")
+OLD_ID=$(curl -s "$API/api/v0/articles?search=T%C3%A4ltlampor" -H "$HEADER" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d[0]['id'] if d else '')")
+if [ -n "$OLD_ID" ]; then
+  curl -sf -X DELETE "$API/api/v0/articles/$OLD_ID" -H "$HEADER" > /dev/null
+fi
+for i in 1 2 3 4 5; do
+  curl -sf -X POST "$API/api/v0/articles" \
+    -H "$HEADER" \
+    -H "Content-Type: application/json" \
+    -d "{\"commercial_name\":\"Tältlampa LED\",\"common_name\":\"Tältlampa LED\",\"category_id\":\"$CAT_ID\",\"location_id\":\"$LOC_ID\",\"individually_tracked\":false,\"requires_approval\":false,\"place\":\"Hylla 2\"}" > /dev/null
+done
+echo "  Created: 5x Tältlampa LED (quantity-tracked)"
+
 echo "Done."

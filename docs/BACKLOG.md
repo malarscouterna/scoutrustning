@@ -53,3 +53,36 @@ Two users editing the same booking simultaneously could cause conflicts. No opti
 ## Pickup — report missing items
 
 When confirming pickup of quantity-tracked items with a count lower than booked, prompt the user to report the missing items. This could auto-create an issue report for the equipment manager. Currently the shortfall is silently marked as `not_available`.
+
+## Manager article swap on active bookings
+
+Equipment managers need the ability to swap out which specific article is assigned to a booking, even after confirmation. Use cases:
+- An article becomes unexpectedly unavailable (broken between bookings, lent informally, etc.)
+- A delayed return from another booking blocks an assigned article
+- Rebalancing inventory across locations
+
+The swap endpoint exists for pickup (`POST /bookings/{id}/items/{itemId}/swap`) but is restricted to `picked_up` status. Managers should be able to swap on `confirmed`/`approved` bookings too.
+
+## Delayed return — conflict resolution
+
+When an article is returned late (`delayed` status) and overlaps with another booking that has the same article assigned:
+- Option A: auto-swap the article in the affected booking for a free equivalent (transparent to the other booker)
+- Option B: notify the equipment manager to manually resolve
+- Option C: both — auto-swap if possible, alert manager if no equivalent available
+
+Currently the system shows a warning when picking a delayed return date that conflicts, but doesn't resolve the conflict.
+
+## Date validation and overdue handling
+
+Several date-related edge cases need attention:
+- **Overdue bookings**: bookings with `end_date` in the past that are still `picked_up` — should show a visual warning, possibly notify the manager
+- **Delayed return date in the past**: the UI currently allows entering an `expected_return_date` that's already passed — should validate or warn
+- **Booking start date in the past**: creating or editing bookings with past dates — should this be allowed? Managers might need it for retroactive bookings
+- **Overdue reminder schedule**: periodic notifications for unreturned items (daily? configurable?)
+
+## Quantity-tracked items — return flow
+
+Quantity-tracked items (e.g. 5× Tältlampa LED) need a grouped return UI similar to the pickup flow:
+- Show one row per product group with a number input for how many are returned OK
+- Allow marking some as broken/lost/delayed with a count
+- Currently the return checklist shows individual rows for quantity-tracked items, which is confusing since they all have the same name

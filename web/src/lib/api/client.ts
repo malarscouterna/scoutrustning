@@ -158,6 +158,10 @@ export function createApiClient(opts: FetchOptions = {}) {
 			if (params?.commercial_name) query.set('commercial_name', params.commercial_name);
 			return request<{ id: string; commercial_name: string; common_name: string; location_name: string; place: string }[]>(`/articles/availability/articles?${query}`, opts);
 		},
+		returnBooking: (id: string) =>
+			requestMut<Booking>(`/bookings/${id}/return`, 'POST', {}, opts),
+		updateItemReturn: (bookingId: string, itemId: string, data: { return_status: string; expected_return_date?: string; notes?: string }) =>
+			requestMut<BookingItem>(`/bookings/${bookingId}/items/${itemId}/return`, 'PUT', data, opts),
 		listUnits: () => request<Unit[]>('/units', opts),
 	};
 }

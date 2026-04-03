@@ -59,6 +59,30 @@ func (q *Queries) AllItemsPickedUp(ctx context.Context, arg AllItemsPickedUpPara
 	return all_picked_up, err
 }
 
+const allItemsReturned = `-- name: AllItemsReturned :one
+SELECT NOT EXISTS (
+    SELECT 1 FROM booking_items
+    WHERE booking_id = $1 AND group_id = $2
+        AND pickup_status IS NOT NULL AND pickup_status != 'not_available'
+        AND (return_status IS NULL OR return_status = 'delayed')
+) AS all_returned
+`
+
+type AllItemsReturnedParams struct {
+	BookingID pgtype.UUID `json:"booking_id"`
+	GroupID   string      `json:"group_id"`
+}
+
+// Returns true if every picked-up item has a final return status.
+// Delayed items are NOT final — they must be resolved before completing.
+// Items that were never picked up are excluded.
+func (q *Queries) AllItemsReturned(ctx context.Context, arg AllItemsReturnedParams) (bool, error) {
+	row := q.db.QueryRow(ctx, allItemsReturned, arg.BookingID, arg.GroupID)
+	var all_returned bool
+	err := row.Scan(&all_returned)
+	return all_returned, err
+}
+
 const availableArticles = `-- name: AvailableArticles :many
 SELECT a.id, a.commercial_name, a.common_name, a.category_id, a.location_id,
     l.name AS location_name, c.name AS category_name, a.place, a.status,
@@ -75,7 +99,7 @@ WHERE a.group_id = $1
             AND b.status IN ('draft', 'confirmed', 'picked_up', 'submitted', 'approved')
             AND b.start_date <= $2
             AND b.end_date >= $3
-            AND (bi.return_status IS NULL OR bi.return_status = 'pending')
+            AND (bi.return_status IS NULL OR bi.return_status IN ('pending', 'delayed'))
     )
 ORDER BY a.commercial_name, a.common_name
 `
@@ -149,7 +173,7 @@ WHERE a.group_id = $1
             AND b.status IN ('draft', 'confirmed', 'picked_up', 'submitted', 'approved')
             AND b.start_date <= $3
             AND b.end_date >= $4
-            AND (bi.return_status IS NULL OR bi.return_status = 'pending')
+            AND (bi.return_status IS NULL OR bi.return_status IN ('pending', 'delayed'))
     )
     AND a.id NOT IN (
         SELECT bi.article_id FROM booking_items bi
@@ -744,6 +768,39 @@ type UpdateBookingItemPickupStatusParams struct {
 func (q *Queries) UpdateBookingItemPickupStatus(ctx context.Context, arg UpdateBookingItemPickupStatusParams) (BookingItem, error) {
 	row := q.db.QueryRow(ctx, updateBookingItemPickupStatus,
 		arg.PickupStatus,
+		arg.ID,
+		arg.GroupID,
+		arg.BookingID,
+	)
+	var i BookingItem
+	err := row.Scan(
+		&i.ID,
+		&i.GroupID,
+		&i.BookingID,
+		&i.ArticleID,
+		&i.PickupStatus,
+		&i.ReturnStatus,
+		&i.Notes,
+	)
+	return i, err
+}
+
+const updateBookingItemReturnStatus = `-- name: UpdateBookingItemReturnStatus :one
+UPDATE booking_items SET return_status = $1
+WHERE id = $2 AND group_id = $3 AND booking_id = $4
+RETURNING id, group_id, booking_id, article_id, pickup_status, return_status, notes
+`
+
+type UpdateBookingItemReturnStatusParams struct {
+	ReturnStatus pgtype.Text `json:"return_status"`
+	ID           pgtype.UUID `json:"id"`
+	GroupID      string      `json:"group_id"`
+	BookingID    pgtype.UUID `json:"booking_id"`
+}
+
+func (q *Queries) UpdateBookingItemReturnStatus(ctx context.Context, arg UpdateBookingItemReturnStatusParams) (BookingItem, error) {
+	row := q.db.QueryRow(ctx, updateBookingItemReturnStatus,
+		arg.ReturnStatus,
 		arg.ID,
 		arg.GroupID,
 		arg.BookingID,

@@ -33,6 +33,8 @@ func (h *BookingHandler) Routes() chi.Router {
 	r.Post("/{id}/pickup", h.Pickup)
 	r.Put("/{id}/items/{itemId}/pickup", h.UpdateItemPickup)
 	r.Post("/{id}/items/{itemId}/swap", h.SwapItem)
+	r.Post("/{id}/return", h.Return)
+	r.Put("/{id}/items/{itemId}/return", h.UpdateItemReturn)
 	return r
 }
 
@@ -705,6 +707,166 @@ func (h *BookingHandler) SwapItem(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusNotFound, "item not found")
 		return
 	}
+	WriteJSON(w, http.StatusOK, item)
+}
+
+// Return transitions a picked_up booking to returned.
+func (h *BookingHandler) Return(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	bookingID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	booking, err := h.Q.GetBooking(r.Context(), db.GetBookingParams{ID: bookingID, GroupID: claims.GroupID})
+	if err != nil {
+		WriteError(w, http.StatusNotFound, "booking not found")
+		return
+	}
+	if !h.canAccessBooking(r.Context(), claims, accessFromGetBookingRow(booking)) {
+		WriteError(w, http.StatusForbidden, "forbidden")
+		return
+	}
+	if booking.Status != "picked_up" {
+		WriteError(w, http.StatusBadRequest, "booking must be in picked_up status")
+		return
+	}
+
+	allReturned, err := h.Q.AllItemsReturned(r.Context(), db.AllItemsReturnedParams{
+		BookingID: bookingID, GroupID: claims.GroupID,
+	})
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to check return status")
+		return
+	}
+	if !allReturned {
+		WriteError(w, http.StatusBadRequest, "not all items have been returned")
+		return
+	}
+
+	updated, err := h.Q.UpdateBookingStatus(r.Context(), db.UpdateBookingStatusParams{
+		ID: bookingID, GroupID: claims.GroupID, Status: "returned",
+	})
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to update booking")
+		return
+	}
+	WriteJSON(w, http.StatusOK, updated)
+}
+
+// UpdateItemReturn sets the return status for a single booking item.
+// Side effects: broken/lost creates an issue report and updates article status.
+func (h *BookingHandler) UpdateItemReturn(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	bookingID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid booking id")
+		return
+	}
+	itemID, err := parseUUID(chi.URLParam(r, "itemId"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid item id")
+		return
+	}
+
+	booking, err := h.Q.GetBooking(r.Context(), db.GetBookingParams{ID: bookingID, GroupID: claims.GroupID})
+	if err != nil {
+		WriteError(w, http.StatusNotFound, "booking not found")
+		return
+	}
+	if !h.canAccessBooking(r.Context(), claims, accessFromGetBookingRow(booking)) {
+		WriteError(w, http.StatusForbidden, "forbidden")
+		return
+	}
+	if booking.Status != "picked_up" && booking.Status != "returned" {
+		WriteError(w, http.StatusBadRequest, "booking must be in picked_up or returned status")
+		return
+	}
+
+	// Reopen if already returned
+	if booking.Status == "returned" {
+		h.Q.UpdateBookingStatus(r.Context(), db.UpdateBookingStatusParams{
+			ID: bookingID, GroupID: claims.GroupID, Status: "picked_up",
+		})
+	}
+
+	var req struct {
+		ReturnStatus       string  `json:"return_status"`
+		ExpectedReturnDate *string `json:"expected_return_date"`
+		Notes              string  `json:"notes"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	validStatuses := map[string]bool{"returned_ok": true, "delayed": true, "broken": true, "lost": true, "": true}
+	if !validStatuses[req.ReturnStatus] {
+		WriteError(w, http.StatusBadRequest, "return_status must be returned_ok, delayed, broken, lost, or empty")
+		return
+	}
+
+	if req.ReturnStatus == "delayed" && req.ExpectedReturnDate == nil {
+		WriteError(w, http.StatusBadRequest, "expected_return_date required when return_status is delayed")
+		return
+	}
+
+	var returnStatus pgtype.Text
+	if req.ReturnStatus != "" {
+		returnStatus = pgtype.Text{String: req.ReturnStatus, Valid: true}
+	}
+
+	item, err := h.Q.UpdateBookingItemReturnStatus(r.Context(), db.UpdateBookingItemReturnStatusParams{
+		ID: itemID, GroupID: claims.GroupID, BookingID: bookingID,
+		ReturnStatus: returnStatus,
+	})
+	if err != nil {
+		WriteError(w, http.StatusNotFound, "item not found")
+		return
+	}
+
+	// Side effects based on return status
+	switch req.ReturnStatus {
+	case "":
+		// Undo: reset article to ok
+		h.Q.UpdateArticleStatus(r.Context(), db.UpdateArticleStatusParams{
+			ID: item.ArticleID, GroupID: claims.GroupID,
+			Status: "ok",
+		})
+	case "delayed":
+		// No article status change — item is still out on loan
+	case "broken":
+		h.Q.UpdateArticleStatus(r.Context(), db.UpdateArticleStatusParams{
+			ID: item.ArticleID, GroupID: claims.GroupID,
+			Status: "reported_unusable",
+		})
+		h.Q.CreateIssueReport(r.Context(), db.CreateIssueReportParams{
+			GroupID:     claims.GroupID,
+			ArticleID:   item.ArticleID,
+			ReporterID:  claims.MemberID,
+			Description: req.Notes,
+			Severity:    "unusable",
+		})
+	case "lost":
+		h.Q.UpdateArticleStatus(r.Context(), db.UpdateArticleStatusParams{
+			ID: item.ArticleID, GroupID: claims.GroupID,
+			Status: "archived",
+		})
+		h.Q.CreateIssueReport(r.Context(), db.CreateIssueReportParams{
+			GroupID:     claims.GroupID,
+			ArticleID:   item.ArticleID,
+			ReporterID:  claims.MemberID,
+			Description: req.Notes,
+			Severity:    "unusable",
+		})
+	case "returned_ok":
+		h.Q.UpdateArticleStatus(r.Context(), db.UpdateArticleStatusParams{
+			ID: item.ArticleID, GroupID: claims.GroupID,
+			Status: "ok",
+		})
+	}
+
 	WriteJSON(w, http.StatusOK, item)
 }
 

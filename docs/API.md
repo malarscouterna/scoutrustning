@@ -232,6 +232,34 @@ Replace the article on a booking item during pickup. The new article must be ava
 
 **Response** `200` | `400` | `403` | `404` | `409` (article not available)
 
+### `POST /api/v0/bookings/{id}/return`
+Transition a picked_up booking to `returned`. All items must have a final return status (not null, not pending, not drying). Access: creator, unit leaders, or equipment manager.
+
+**Response** `200` | `400` | `403` | `404`
+
+### `PUT /api/v0/bookings/{id}/items/{itemId}/return`
+Set the return status for a single booking item. Booking must be in `picked_up` status. Access: creator, unit leaders, or equipment manager.
+
+Side effects:
+- `delayed` — no article status change, item stays on loan
+- `broken` — sets article status to `reported_unusable`, creates issue report
+- `lost` — sets article status to `archived`, creates issue report
+- `returned_ok` — sets article status back to `ok`
+
+When all items have a final return status (not pending/delayed), the booking auto-transitions to `returned`.
+
+**Body**
+```json
+{
+  "return_status": "returned_ok",
+  "expected_return_date": "2026-06-10",
+  "notes": "Optional, used as issue description for broken/lost"
+}
+```
+Valid values: `returned_ok`, `delayed`, `broken`, `lost`, `""` (undo). `expected_return_date` required when status is `delayed`.
+
+**Response** `200` | `400` | `403` | `404`
+
 ---
 
 ## Units

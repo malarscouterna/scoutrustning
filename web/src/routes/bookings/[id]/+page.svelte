@@ -2,6 +2,7 @@
 	import { createApiClient, type Booking, type BookingItem } from '$lib/api/client';
 	import BookingItemsList from '$lib/components/BookingItemsList.svelte';
 	import PickupChecklist from '$lib/components/PickupChecklist.svelte';
+	import ReturnChecklist from '$lib/components/ReturnChecklist.svelte';
 	import type { PageData } from './$types';
 	import { page } from '$app/stores';
 
@@ -89,6 +90,41 @@
 		items = updatedItems;
 	}
 
+	function handleReturnUpdate(updatedItems: BookingItem[]) {
+		items = updatedItems;
+	}
+
+	function handleBookingReturned() {
+		booking = { ...booking, status: 'returned' };
+		message = 'Allt återlämnat!';
+		setTimeout(() => message = '', 4000);
+	}
+
+	async function reopenBooking() {
+		error = '';
+		try {
+			booking = { ...booking, status: 'picked_up' };
+			showReturn = true;
+			message = 'Bokning öppnad igen';
+			setTimeout(() => message = '', 4000);
+		} catch (e: any) {
+			error = e.message;
+		}
+	}
+
+	let anyPickedUp = $derived(
+		items.some((i) => i.pickup_status !== null)
+	);
+
+	let showReturn = $state(false);
+
+	// Auto-resume return mode if a return was already started
+	$effect(() => {
+		if (items.some((i) => i.return_status && i.return_status !== 'pending')) {
+			showReturn = true;
+		}
+	});
+
 </script>
 
 <div class="max-w-4xl mx-auto p-4">
@@ -144,13 +180,28 @@
 
 	<h2 class="font-medium mb-2">Utrustning ({items.length} artiklar)</h2>
 	{#if booking.status === 'picked_up'}
-		<PickupChecklist
-			bookingId={booking.id}
-			{items}
-			startDate={booking.start_date}
-			endDate={booking.end_date}
-			onUpdate={handlePickupUpdate}
-		/>
+		{#if showReturn}
+			<ReturnChecklist
+				bookingId={booking.id}
+				{items}
+				onUpdate={handleReturnUpdate}
+				onBookingReturned={handleBookingReturned}
+			/>
+		{:else}
+			<PickupChecklist
+				bookingId={booking.id}
+				{items}
+				startDate={booking.start_date}
+				endDate={booking.end_date}
+				onUpdate={handlePickupUpdate}
+			/>
+			{#if anyPickedUp}
+				<button onclick={() => showReturn = true} class="mt-4 bg-blue-700 text-white px-4 py-2 rounded text-sm">Starta återlämning</button>
+			{/if}
+		{/if}
+	{:else if booking.status === 'returned'}
+		<BookingItemsList {items} />
+		<button onclick={reopenBooking} class="mt-4 text-sm text-blue-700 underline">Öppna igen</button>
 	{:else}
 		<BookingItemsList {items} />
 	{/if}

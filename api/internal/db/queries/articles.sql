@@ -51,6 +51,11 @@ UPDATE articles SET
 WHERE id = @id AND group_id = @group_id
 RETURNING *;
 
+-- name: UpdateArticleStatus :one
+UPDATE articles SET status = @status, drying_until = @drying_until, updated_at = now()
+WHERE id = @id AND group_id = @group_id
+RETURNING *;
+
 -- name: DeleteArticle :exec
 DELETE FROM articles
 WHERE id = @id AND group_id = @group_id;

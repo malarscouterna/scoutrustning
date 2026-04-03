@@ -53,6 +53,16 @@
 								<td class="px-4 py-2">{item.common_name}</td>
 								<td class="px-4 py-2 text-neutral-600">{item.location_name}</td>
 								<td class="px-4 py-2 text-neutral-600">{item.place || ''}</td>
+								{#if item.return_status && item.return_status !== 'returned_ok' && item.return_status !== 'pending'}
+									<td class="px-4 py-2">
+										<span class="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700"
+										>{{broken: 'Trasig', lost: 'Förlorad'}[item.return_status] ?? item.return_status}</span>
+									</td>
+								{:else if !item.pickup_status || item.pickup_status === 'not_available'}
+									<td class="px-4 py-2"><span class="text-xs text-neutral-400">Ej hämtad</span></td>
+								{:else}
+									<td></td>
+								{/if}
 								{#if editable && onRemove}
 									<td class="px-4 py-2 text-right">
 										<button onclick={() => onRemove(item.id)} class="text-red-600 text-xs hover:underline">Ta bort</button>

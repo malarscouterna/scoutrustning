@@ -400,3 +400,47 @@ func (q *Queries) UpdateArticle(ctx context.Context, arg UpdateArticleParams) (A
 	)
 	return i, err
 }
+
+const updateArticleStatus = `-- name: UpdateArticleStatus :one
+UPDATE articles SET status = $1, drying_until = $2, updated_at = now()
+WHERE id = $3 AND group_id = $4
+RETURNING id, group_id, commercial_name, common_name, category_id, location_id, status, individually_tracked, requires_approval, image_path, description, instructions, purchase_date, purchase_price, place, drying_until, created_at, updated_at
+`
+
+type UpdateArticleStatusParams struct {
+	Status      string      `json:"status"`
+	DryingUntil pgtype.Date `json:"drying_until"`
+	ID          pgtype.UUID `json:"id"`
+	GroupID     string      `json:"group_id"`
+}
+
+func (q *Queries) UpdateArticleStatus(ctx context.Context, arg UpdateArticleStatusParams) (Article, error) {
+	row := q.db.QueryRow(ctx, updateArticleStatus,
+		arg.Status,
+		arg.DryingUntil,
+		arg.ID,
+		arg.GroupID,
+	)
+	var i Article
+	err := row.Scan(
+		&i.ID,
+		&i.GroupID,
+		&i.CommercialName,
+		&i.CommonName,
+		&i.CategoryID,
+		&i.LocationID,
+		&i.Status,
+		&i.IndividuallyTracked,
+		&i.RequiresApproval,
+		&i.ImagePath,
+		&i.Description,
+		&i.Instructions,
+		&i.PurchaseDate,
+		&i.PurchasePrice,
+		&i.Place,
+		&i.DryingUntil,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}

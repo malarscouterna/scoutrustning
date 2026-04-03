@@ -132,7 +132,7 @@ CREATE TABLE booking_items (
         'picked_up', 'swapped', 'not_available'
     )),
     CONSTRAINT booking_items_return_check CHECK (return_status IS NULL OR return_status IN (
-        'returned_ok', 'drying', 'broken', 'lost', 'pending'
+        'returned_ok', 'delayed', 'broken', 'lost', 'pending'
     )),
     CONSTRAINT booking_items_unique_article UNIQUE (booking_id, article_id)
 );
