@@ -56,6 +56,7 @@ export interface BookingItem {
 	location_name: string;
 	category_name: string;
 	place: string;
+	requires_approval: boolean;
 	pickup_status: string | null;
 	return_status: string | null;
 }

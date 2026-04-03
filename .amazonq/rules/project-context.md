@@ -96,6 +96,7 @@ ms-utrustning/
 - API calls go through a typed client in `src/lib/api/`.
 - Server-side load functions fetch data; forms use SvelteKit form actions or fetch to the Go API.
 - Mobile-first responsive design. Test layouts at 375px width.
+- Extract shared UI patterns into reusable components in `src/lib/components/` to reduce duplication. If the same UI appears in two or more pages, extract it.
 
 ### Database
 
@@ -144,9 +145,30 @@ ms-utrustning/
 
 ## Documentation
 
+This rules file is **living documentation** — update it whenever decisions are made, conventions change, or new patterns emerge. Don't wait to be asked.
+
 - `docs/SPEC.md` — full specification, implementation plan, data model
 - `docs/API.md` — API reference for all endpoints (keep updated when adding/changing endpoints)
+- `docs/BACKLOG.md` — deferred work items, things identified as needed but withheld for now
 - `.amazonq/rules/project-context.md` — this file, AI context and project rules
+- Feature-specific READMEs — when building complex features, add a `README.md` in `docs/` (e.g. `docs/bookings.md`, `docs/availability.md`) documenting the design decisions, trade-offs, and non-obvious choices made along the way
+
+## Development environment
+
+Tool paths (may not be on default PATH):
+
+| Tool | Path | Install |
+|---|---|---|
+| Go | `/usr/local/go/bin/go` | Pre-installed |
+| Node | `/usr/local/bin/node` | Pre-installed |
+| pnpm | On PATH via snap or `corepack enable` | Pre-installed |
+| sqlc | `$HOME/go/bin/sqlc` | `go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest` |
+| Docker | `/usr/bin/docker` | Pre-installed |
+
+When running Go commands, ensure PATH includes Go:
+```bash
+export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin
+```
 
 ## Workflow instructions
 

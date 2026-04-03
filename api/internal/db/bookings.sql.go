@@ -374,6 +374,7 @@ SELECT bi.id, bi.group_id, bi.booking_id, bi.article_id, bi.pickup_status, bi.re
     a.commercial_name,
     a.common_name,
     a.place,
+    a.requires_approval,
     l.name AS location_name,
     c.name AS category_name
 FROM booking_items bi
@@ -390,18 +391,19 @@ type ListBookingItemsParams struct {
 }
 
 type ListBookingItemsRow struct {
-	ID             pgtype.UUID `json:"id"`
-	GroupID        string      `json:"group_id"`
-	BookingID      pgtype.UUID `json:"booking_id"`
-	ArticleID      pgtype.UUID `json:"article_id"`
-	PickupStatus   pgtype.Text `json:"pickup_status"`
-	ReturnStatus   pgtype.Text `json:"return_status"`
-	Notes          string      `json:"notes"`
-	CommercialName string      `json:"commercial_name"`
-	CommonName     string      `json:"common_name"`
-	Place          string      `json:"place"`
-	LocationName   string      `json:"location_name"`
-	CategoryName   string      `json:"category_name"`
+	ID               pgtype.UUID `json:"id"`
+	GroupID          string      `json:"group_id"`
+	BookingID        pgtype.UUID `json:"booking_id"`
+	ArticleID        pgtype.UUID `json:"article_id"`
+	PickupStatus     pgtype.Text `json:"pickup_status"`
+	ReturnStatus     pgtype.Text `json:"return_status"`
+	Notes            string      `json:"notes"`
+	CommercialName   string      `json:"commercial_name"`
+	CommonName       string      `json:"common_name"`
+	Place            string      `json:"place"`
+	RequiresApproval bool        `json:"requires_approval"`
+	LocationName     string      `json:"location_name"`
+	CategoryName     string      `json:"category_name"`
 }
 
 func (q *Queries) ListBookingItems(ctx context.Context, arg ListBookingItemsParams) ([]ListBookingItemsRow, error) {
@@ -424,6 +426,7 @@ func (q *Queries) ListBookingItems(ctx context.Context, arg ListBookingItemsPara
 			&i.CommercialName,
 			&i.CommonName,
 			&i.Place,
+			&i.RequiresApproval,
 			&i.LocationName,
 			&i.CategoryName,
 		); err != nil {

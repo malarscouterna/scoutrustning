@@ -387,6 +387,18 @@ func (h *BookingHandler) AddItems(w http.ResponseWriter, r *http.Request) {
 	}
 
 	WriteJSON(w, http.StatusCreated, added)
+
+	// Auto-transition: if confirmed booking now has approval-required items, go to submitted
+	if booking.Status == "confirmed" {
+		needsApproval, err := h.Q.BookingHasApprovalRequired(r.Context(), db.BookingHasApprovalRequiredParams{
+			BookingID: bookingID, GroupID: claims.GroupID,
+		})
+		if err == nil && needsApproval && !claims.HasRole("project_leader") {
+			h.Q.UpdateBookingStatus(r.Context(), db.UpdateBookingStatusParams{
+				ID: bookingID, GroupID: claims.GroupID, Status: "submitted",
+			})
+		}
+	}
 }
 
 func (h *BookingHandler) RemoveItem(w http.ResponseWriter, r *http.Request) {
@@ -423,6 +435,19 @@ func (h *BookingHandler) RemoveItem(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusNotFound, "item not found")
 		return
 	}
+
+	// Auto-transition: if submitted booking no longer needs approval, auto-confirm
+	if booking.Status == "submitted" {
+		needsApproval, err := h.Q.BookingHasApprovalRequired(r.Context(), db.BookingHasApprovalRequiredParams{
+			BookingID: bookingID, GroupID: claims.GroupID,
+		})
+		if err == nil && !needsApproval {
+			h.Q.UpdateBookingStatus(r.Context(), db.UpdateBookingStatusParams{
+				ID: bookingID, GroupID: claims.GroupID, Status: "confirmed",
+			})
+		}
+	}
+
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -439,8 +464,8 @@ func (h *BookingHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusNotFound, "booking not found")
 		return
 	}
-	if booking.Status != "draft" {
-		WriteError(w, http.StatusBadRequest, "can only submit draft bookings")
+	if !isEditable(booking.Status) {
+		WriteError(w, http.StatusBadRequest, "booking is not editable")
 		return
 	}
 

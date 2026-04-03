@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { createApiClient, type Booking, type BookingItem } from '$lib/api/client';
+	import BookingItemsList from '$lib/components/BookingItemsList.svelte';
 	import type { PageData } from './$types';
-	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 
 	let { data }: { data: PageData } = $props();
 
@@ -9,13 +10,13 @@
 
 	let booking = $state<Booking>(data.booking);
 	let items = $state<BookingItem[]>(data.items);
-	let editing = $state(false);
-	let editNotes = $state(booking.notes);
-	let editStartDate = $state(booking.start_date);
-	let editEndDate = $state(booking.end_date);
-	let editUnitId = $state(booking.used_by_unit_id ?? '');
 	let error = $state('');
-	let saving = $state(false);
+	let message = $state($page.url.searchParams.get('msg') ?? '');
+
+	if (message) {
+		history.replaceState({}, '', $page.url.pathname);
+		setTimeout(() => message = '', 4000);
+	}
 
 	const statusLabels: Record<string, string> = {
 		draft: 'Utkast',
@@ -46,47 +47,12 @@
 		booking.status !== 'returned' && booking.status !== 'cancelled'
 	);
 
-	// Group items by commercial_name
-	let itemGroups = $derived.by(() => {
-		const map = new Map<string, { commercialName: string; items: BookingItem[] }>();
-		for (const item of items) {
-			const existing = map.get(item.commercial_name);
-			if (existing) {
-				existing.items.push(item);
-			} else {
-				map.set(item.commercial_name, { commercialName: item.commercial_name, items: [item] });
-			}
-		}
-		return [...map.values()];
-	});
-
-	async function saveEdit() {
-		error = '';
-		saving = true;
-		try {
-			const updated: Record<string, unknown> = {};
-			if (editNotes !== booking.notes) updated.notes = editNotes;
-			if (editStartDate !== booking.start_date) updated.start_date = editStartDate;
-			if (editEndDate !== booking.end_date) updated.end_date = editEndDate;
-			const newUnitId = editUnitId || null;
-			if (newUnitId !== (booking.used_by_unit_id ?? null)) updated.used_by_unit_id = newUnitId;
-
-			if (Object.keys(updated).length > 0) {
-				booking = await api.updateBooking(booking.id, updated);
-			}
-			editing = false;
-		} catch (e: any) {
-			error = e.message;
-		}
-		saving = false;
-	}
-
-	async function removeItem(itemId: string) {
+	async function submitBooking() {
 		error = '';
 		try {
-			await api.removeBookingItem(booking.id, itemId);
-			const result = await api.getBooking(booking.id);
-			items = result.items;
+			booking = await api.submitBooking(booking.id);
+			message = booking.status === 'confirmed' ? 'Bokning bekräftad' : 'Bokning inskickad';
+			setTimeout(() => message = '', 4000);
 		} catch (e: any) {
 			error = e.message;
 		}
@@ -98,7 +64,7 @@
 		try {
 			await api.cancelBooking(booking.id);
 			if (booking.status === 'draft') {
-				goto('/bookings');
+				window.location.href = '/bookings';
 			} else {
 				booking = { ...booking, status: 'cancelled' };
 			}
@@ -107,121 +73,56 @@
 		}
 	}
 
-	async function copyBooking() {
-		error = '';
-		try {
-			const result = await api.copyBooking(booking.id);
-			goto('/bookings/' + result.booking.id);
-		} catch (e: any) {
-			error = e.message;
-		}
-	}
 </script>
 
 <div class="max-w-4xl mx-auto p-4">
 	<a href="/bookings" class="text-sm text-blue-700 underline">← Tillbaka</a>
+
+	{#if message}
+		<div class="bg-green-50 border border-green-200 rounded p-3 mt-4 text-green-800 text-sm">{message}</div>
+	{/if}
 
 	{#if error}
 		<div class="bg-red-50 border border-red-200 rounded p-3 mt-4 text-red-800 text-sm">{error}</div>
 	{/if}
 
 	<div class="mt-4 mb-6">
-		{#if editing}
-			<div class="space-y-3 border rounded p-4 bg-neutral-50">
-				<div class="flex flex-wrap gap-3">
-					<label class="flex flex-col gap-1">
-						<span class="text-sm">Startdatum</span>
-						<input type="date" bind:value={editStartDate} class="border rounded px-3 py-2" />
-					</label>
-					<label class="flex flex-col gap-1">
-						<span class="text-sm">Slutdatum</span>
-						<input type="date" bind:value={editEndDate} class="border rounded px-3 py-2" />
-					</label>
-				</div>
-				<label class="flex flex-col gap-1">
-					<span class="text-sm">Anteckningar</span>
-					<input type="text" bind:value={editNotes} class="border rounded px-3 py-2" />
-				</label>
-				<label class="flex flex-col gap-1">
-					<span class="text-sm">Bokas för</span>
-					<select bind:value={editUnitId} class="border rounded px-3 py-2">
-						<option value="">Personlig bokning</option>
-						{#each data.units as unit}
-							<option value={unit.id}>{unit.name}</option>
-						{/each}
-					</select>
-				</label>
-				<div class="flex gap-2">
-					<button onclick={saveEdit} disabled={saving} class="bg-blue-700 text-white px-4 py-2 rounded text-sm disabled:opacity-50">
-						{saving ? 'Sparar...' : 'Spara'}
-					</button>
-					<button onclick={() => { editing = false; error = ''; }} class="border rounded px-4 py-2 text-sm">Avbryt</button>
-				</div>
-			</div>
-		{:else}
-			<div class="flex items-center gap-3 mb-2">
-				<h1 class="text-heading-sm font-bold">
-					{booking.start_date} — {booking.end_date}
-				</h1>
-				<span class="text-sm px-2 py-0.5 rounded {statusColors[booking.status] ?? 'bg-neutral-100'}">
-					{statusLabels[booking.status] ?? booking.status}
-				</span>
-			</div>
-			{#if booking.notes}
-				<p class="text-neutral-600 mb-2">{booking.notes}</p>
-			{/if}
-			<p class="text-sm text-neutral-500 mb-2">
-				{#if booking.unit_name}
-					För: <span class="font-medium text-blue-700">{booking.unit_name}</span>
-				{:else if booking.used_by_external}
-					För: {booking.used_by_external}
-				{:else}
-					Personlig bokning
-				{/if}
-			</p>
-			<div class="flex gap-2">
-				{#if editable}
-					<button onclick={() => editing = true} class="text-sm text-blue-700 underline">Redigera</button>
-				{/if}
-				<button onclick={copyBooking} class="text-sm text-blue-700 underline">Kopiera</button>
-				{#if cancellable}
-					<button onclick={cancelBooking} class="text-sm text-red-600 underline">
-						{booking.status === 'draft' ? 'Ta bort utkast' : 'Avboka'}
-					</button>
-				{/if}
-			</div>
+		<div class="flex items-center gap-3 mb-2">
+			<h1 class="text-heading-sm font-bold">
+				{booking.start_date} — {booking.end_date}
+			</h1>
+			<span class="text-sm px-2 py-0.5 rounded {statusColors[booking.status] ?? 'bg-neutral-100'}">
+				{statusLabels[booking.status] ?? booking.status}
+			</span>
+		</div>
+		{#if booking.notes}
+			<p class="text-neutral-600 mb-2">{booking.notes}</p>
 		{/if}
+		<p class="text-sm text-neutral-500 mb-3">
+			{#if booking.unit_name}
+				För: <span class="font-medium text-blue-700">{booking.unit_name}</span>
+			{:else if booking.used_by_external}
+				För: {booking.used_by_external}
+			{:else}
+				Personlig bokning
+			{/if}
+		</p>
+
+		<div class="flex items-center gap-2">
+			{#if editable}
+				<a href="/book?id={booking.id}" class="bg-blue-700 text-white px-4 py-2 rounded text-sm">Redigera</a>
+			{/if}
+			{#if booking.status === 'draft'}
+				<button onclick={submitBooking} class="bg-green-700 text-white px-4 py-2 rounded text-sm">Skicka bokning</button>
+			{/if}
+			{#if cancellable}
+				<button onclick={cancelBooking} class="text-sm text-red-600 underline">
+					{booking.status === 'draft' ? 'Ta bort utkast' : 'Avboka'}
+				</button>
+			{/if}
+		</div>
 	</div>
 
 	<h2 class="font-medium mb-2">Utrustning ({items.length} artiklar)</h2>
-
-	{#if items.length === 0}
-		<p class="text-neutral-500">Inga artiklar i bokningen.</p>
-	{:else}
-		<div class="space-y-2">
-			{#each itemGroups as group}
-				<div class="border rounded">
-					<div class="px-4 py-2 font-medium bg-neutral-50 border-b">
-						{group.commercialName} × {group.items.length}
-					</div>
-					<table class="w-full text-sm">
-						<tbody>
-							{#each group.items as item}
-								<tr class="border-t first:border-t-0">
-									<td class="px-4 py-2">{item.common_name}</td>
-									<td class="px-4 py-2 text-neutral-600">{item.location_name}</td>
-									<td class="px-4 py-2 text-neutral-600">{item.place || ''}</td>
-									{#if editable}
-										<td class="px-4 py-2 text-right">
-											<button onclick={() => removeItem(item.id)} class="text-red-600 text-xs hover:underline">Ta bort</button>
-										</td>
-									{/if}
-								</tr>
-							{/each}
-						</tbody>
-					</table>
-				</div>
-			{/each}
-		</div>
-	{/if}
+	<BookingItemsList {items} />
 </div>

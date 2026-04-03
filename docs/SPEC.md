@@ -588,10 +588,6 @@ The core flow starts here:
 - Frontend: Cart UI, date picker, availability display, submit flow
 - Integration tests: availability, no double-booking
 
-Remaining UI polish for Step 4:
-- Show which items in the cart and booking detail require approval (badge/indicator)
-- Show approval status per item when booking is in submitted state
-
 #### Step 5: Booking — pickup checklist
 - API: Transition to picked_up, per-item pickup status, swap articles
 - Frontend: Checklist view showing assigned articles + locations, tick off, swap

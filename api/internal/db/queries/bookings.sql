@@ -91,6 +91,7 @@ SELECT bi.*,
     a.commercial_name,
     a.common_name,
     a.place,
+    a.requires_approval,
     l.name AS location_name,
     c.name AS category_name
 FROM booking_items bi
