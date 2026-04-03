@@ -29,9 +29,9 @@ Both types are modeled as individual article records in the database. For quanti
 **Article assignment**: When booking, users don't choose specific items — they book "3 tents" or "10 liggunderlag". The system assigns specific articles when the booking is confirmed (based on availability and location). At pickup, the checklist shows which specific items to collect (e.g. "Sibley 10 — shelf 3 in Hajkförrådet"). During pickup, the user can override assignments: swap one assigned article for another available one if needed.
 
 Article fields:
-- Commercial name (product name for ordering)
-- Common name (what the group calls it, e.g. "Luma")
-- Category / subcategory (e.g. Tält, Matlagning, Eld, Klättring)
+- Commercial name (product type for grouping and booking, e.g. "Sibley", "Stormkök"). Users browse and book by this name — "I need 3 Sibley tents". This is what distinguishes a Sibley from a Primus.
+- Common name (individual item identifier, e.g. "Sibley 1", "Sibley 2"). Used for physical identification at pickup — a label/sticker on the item. The numbering is just a convention; the database tracks by UUID.
+- Category / subcategory (broad grouping for filtering, e.g. Sova, Mat, Säkerhet, Verktyg)
 - Location (where it physically is)
 - Status (determines availability)
 - Image (stored locally)
@@ -309,8 +309,8 @@ All tables have `group_id` (text, FK → groups). Omitted below for brevity.
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
-| commercial_name | text | |
-| common_name | text | What the group calls it |
+| commercial_name | text | Product type (e.g. "Sibley") — what users browse and book by |
+| common_name | text | Individual item name (e.g. "Sibley 1") — for physical identification |
 | category_id | uuid | FK → categories |
 | location_id | uuid | FK → locations |
 | status | text | Enum: ok, reported_usable, reported_unusable, under_repair, loaned, drying, booked, archived, new |
@@ -554,9 +554,20 @@ Wire up the pieces every endpoint needs before building any feature:
 Everything depends on articles existing:
 - API: Create, read, update, delete articles. List with filtering (category, location, status, search).
 - API: Location and category CRUD (managers need to manage these too)
-- API: CSV import endpoint — parses the existing inventory spreadsheet, auto-creates categories and locations that don't exist, maps fields to article records
+- API: CSV import endpoint — parses inventory spreadsheets, auto-creates categories and locations that don't exist, maps fields to article records. See `docs/import-example.csv` for the expected format.
 - Frontend: Equipment manager inventory view — list, create, edit articles
 - Integration tests: manager can CRUD, leader gets 403, CSV import creates correct articles
+
+CSV column mapping:
+| CSV column | DB field | Notes |
+|---|---|---|
+| titelgrupp | commercial_name | Product type (e.g. "Sibley", "Stormkök") |
+| title | common_name | Individual item name (e.g. "Sibley 1") |
+| description | description | |
+| location | location_id | Resolved by name, "Karsvik" items use plats column |
+| plats | location_id | Sub-location for Karsvik items (Ladan, Östergården, Kallförrådet) |
+| rum + lage | place | Combined as free text |
+| tags | category_id | Auto-created if not exists, normalized to title case |
 
 #### Step 3: Article browsing (all users)
 Leaders need to see what's available:
@@ -612,6 +623,15 @@ The core flow starts here:
 - Loan history reporting (per article, per person, per location)
 - Group onboarding (second scout group)
 - Article image management improvements
+
+## Internationalization (i18n)
+
+The UI is internationalized from the start. Swedish (`sv`) is the default locale, English (`en`) is planned as the second language.
+
+- All user-facing strings in the SvelteKit frontend go through an i18n system — no hardcoded Swedish in components.
+- The Go API is language-agnostic: returns data as stored, uses error keys (not human-readable messages) so the frontend can translate them.
+- User-generated content (article names, category names, descriptions) is stored as-is — not translated.
+- Code, comments, API field names, and documentation are always in English.
 
 ## Open / TBD
 

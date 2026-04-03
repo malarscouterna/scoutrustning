@@ -63,6 +63,14 @@ func main() {
 			getenv("DEV_PERSONAS_PATH", "dev-personas.json"),
 		))
 		r.Use(handler.UpsertUserMiddleware(queries))
+
+		articles := &handler.ArticleHandler{Q: queries}
+		locations := &handler.LocationHandler{Q: queries}
+		categories := &handler.CategoryHandler{Q: queries}
+
+		r.Mount("/articles", articles.Routes())
+		r.Mount("/locations", locations.Routes())
+		r.Mount("/categories", categories.Routes())
 	})
 
 	addr := getenv("ADDR", ":8080")

@@ -15,6 +15,10 @@ web/build/
 # Docker
 docker-compose.override.yml
 
+# Real inventory data (not for git)
+docs/*.xlsx
+docs/*.xlsx - *.csv
+
 # IDE
 .idea/
 .vscode/

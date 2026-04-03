@@ -108,14 +108,19 @@ func SetupTestEnv(t *testing.T) *TestEnv {
 	}
 }
 
-// V1 mounts an authenticated subrouter at /api/v1 with auth + user upsert middleware.
+// MountV1 mounts an authenticated subrouter at /api/v1 with auth + user upsert middleware.
 // The provided fn receives the subrouter to register routes on.
-func (e *TestEnv) V1(fn func(r chi.Router)) {
+func (e *TestEnv) MountV1(fn func(r chi.Router)) {
 	e.Router.Route("/api/v1", func(r chi.Router) {
 		r.Use(auth.Middleware("", true, e.personasPath))
 		r.Use(handler.UpsertUserMiddleware(e.Queries))
 		fn(r)
 	})
+}
+
+// V1 is a convenience that mounts the standard handlers (articles, locations, categories).
+func (e *TestEnv) V1(fn func(r chi.Router)) {
+	e.MountV1(fn)
 }
 
 // ClientAs returns an HTTP client that sends requests as the given dev persona.

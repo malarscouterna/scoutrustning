@@ -116,7 +116,9 @@ ms-utrustning/
 ### General
 
 - Commits follow [Conventional Commits](https://www.conventionalcommits.org/). This drives Release Please for automated versioning and changelogs.
-- Swedish for user-facing strings (the UI). English for code, comments, API fields, and documentation.
+- UI is internationalized from the start. Swedish (`sv`) is the default locale, English (`en`) planned as second. All user-facing strings go through the i18n system — no hardcoded Swedish in components.
+- The Go API is language-agnostic: returns data as stored, uses error keys (not human-readable messages) so the frontend can translate them.
+- Code, comments, API field names, and documentation are always in English.
 - Never hardcode credentials or secrets. Use environment variables.
 - Never log tokens, passwords, or PII beyond what's needed for debugging.
 
