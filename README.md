@@ -31,16 +31,13 @@ Pre-release (`v0`). Breaking changes expected. Currently implements:
 # Start everything (builds and runs Go API + SvelteKit + Postgres)
 docker compose up --build
 
-# Import inventory (first time)
-curl -X POST http://localhost:8080/api/v0/articles/import \
-  -H "X-Dev-Role-Override: equipment-manager" \
-  -F "file=@path/to/inventory.csv"
+# In another terminal, seed the database (import inventory + create units)
+./dev-seed.sh
+```
 
-# Create units
-curl -X POST http://localhost:8080/api/v0/units \
-  -H "X-Dev-Role-Override: equipment-manager" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Yggdrasil"}'
+The seed script imports from `docs/Utrustningsregister MS.xlsx - data.csv` by default. Pass a different path as an argument:
+```bash
+./dev-seed.sh path/to/other.csv
 ```
 
 In dev mode (`DEV_MODE=true`), use the `X-Dev-Role-Override` header to switch personas. See `dev-personas.json` for available personas.

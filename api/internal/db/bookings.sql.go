@@ -38,6 +38,27 @@ func (q *Queries) AddBookingItem(ctx context.Context, arg AddBookingItemParams) 
 	return i, err
 }
 
+const allItemsPickedUp = `-- name: AllItemsPickedUp :one
+SELECT NOT EXISTS (
+    SELECT 1 FROM booking_items
+    WHERE booking_id = $1 AND group_id = $2
+        AND pickup_status IS NULL
+) AS all_picked_up
+`
+
+type AllItemsPickedUpParams struct {
+	BookingID pgtype.UUID `json:"booking_id"`
+	GroupID   string      `json:"group_id"`
+}
+
+// Returns true if every item in the booking has a non-null pickup_status.
+func (q *Queries) AllItemsPickedUp(ctx context.Context, arg AllItemsPickedUpParams) (bool, error) {
+	row := q.db.QueryRow(ctx, allItemsPickedUp, arg.BookingID, arg.GroupID)
+	var all_picked_up bool
+	err := row.Scan(&all_picked_up)
+	return all_picked_up, err
+}
+
 const availableArticles = `-- name: AvailableArticles :many
 SELECT a.id, a.commercial_name, a.common_name, a.category_id, a.location_id,
     l.name AS location_name, c.name AS category_name, a.place, a.status,
@@ -375,6 +396,7 @@ SELECT bi.id, bi.group_id, bi.booking_id, bi.article_id, bi.pickup_status, bi.re
     a.common_name,
     a.place,
     a.requires_approval,
+    a.individually_tracked,
     l.name AS location_name,
     c.name AS category_name
 FROM booking_items bi
@@ -391,19 +413,20 @@ type ListBookingItemsParams struct {
 }
 
 type ListBookingItemsRow struct {
-	ID               pgtype.UUID `json:"id"`
-	GroupID          string      `json:"group_id"`
-	BookingID        pgtype.UUID `json:"booking_id"`
-	ArticleID        pgtype.UUID `json:"article_id"`
-	PickupStatus     pgtype.Text `json:"pickup_status"`
-	ReturnStatus     pgtype.Text `json:"return_status"`
-	Notes            string      `json:"notes"`
-	CommercialName   string      `json:"commercial_name"`
-	CommonName       string      `json:"common_name"`
-	Place            string      `json:"place"`
-	RequiresApproval bool        `json:"requires_approval"`
-	LocationName     string      `json:"location_name"`
-	CategoryName     string      `json:"category_name"`
+	ID                  pgtype.UUID `json:"id"`
+	GroupID             string      `json:"group_id"`
+	BookingID           pgtype.UUID `json:"booking_id"`
+	ArticleID           pgtype.UUID `json:"article_id"`
+	PickupStatus        pgtype.Text `json:"pickup_status"`
+	ReturnStatus        pgtype.Text `json:"return_status"`
+	Notes               string      `json:"notes"`
+	CommercialName      string      `json:"commercial_name"`
+	CommonName          string      `json:"common_name"`
+	Place               string      `json:"place"`
+	RequiresApproval    bool        `json:"requires_approval"`
+	IndividuallyTracked bool        `json:"individually_tracked"`
+	LocationName        string      `json:"location_name"`
+	CategoryName        string      `json:"category_name"`
 }
 
 func (q *Queries) ListBookingItems(ctx context.Context, arg ListBookingItemsParams) ([]ListBookingItemsRow, error) {
@@ -427,6 +450,7 @@ func (q *Queries) ListBookingItems(ctx context.Context, arg ListBookingItemsPara
 			&i.CommonName,
 			&i.Place,
 			&i.RequiresApproval,
+			&i.IndividuallyTracked,
 			&i.LocationName,
 			&i.CategoryName,
 		); err != nil {
@@ -618,6 +642,39 @@ func (q *Queries) RemoveBookingItem(ctx context.Context, arg RemoveBookingItemPa
 	return err
 }
 
+const swapBookingItemArticle = `-- name: SwapBookingItemArticle :one
+UPDATE booking_items SET article_id = $1, pickup_status = 'swapped'
+WHERE id = $2 AND group_id = $3 AND booking_id = $4
+RETURNING id, group_id, booking_id, article_id, pickup_status, return_status, notes
+`
+
+type SwapBookingItemArticleParams struct {
+	NewArticleID pgtype.UUID `json:"new_article_id"`
+	ID           pgtype.UUID `json:"id"`
+	GroupID      string      `json:"group_id"`
+	BookingID    pgtype.UUID `json:"booking_id"`
+}
+
+func (q *Queries) SwapBookingItemArticle(ctx context.Context, arg SwapBookingItemArticleParams) (BookingItem, error) {
+	row := q.db.QueryRow(ctx, swapBookingItemArticle,
+		arg.NewArticleID,
+		arg.ID,
+		arg.GroupID,
+		arg.BookingID,
+	)
+	var i BookingItem
+	err := row.Scan(
+		&i.ID,
+		&i.GroupID,
+		&i.BookingID,
+		&i.ArticleID,
+		&i.PickupStatus,
+		&i.ReturnStatus,
+		&i.Notes,
+	)
+	return i, err
+}
+
 const updateBooking = `-- name: UpdateBooking :one
 UPDATE bookings SET
     start_date = $1,
@@ -667,6 +724,39 @@ func (q *Queries) UpdateBooking(ctx context.Context, arg UpdateBookingParams) (B
 		&i.Notes,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateBookingItemPickupStatus = `-- name: UpdateBookingItemPickupStatus :one
+UPDATE booking_items SET pickup_status = $1
+WHERE id = $2 AND group_id = $3 AND booking_id = $4
+RETURNING id, group_id, booking_id, article_id, pickup_status, return_status, notes
+`
+
+type UpdateBookingItemPickupStatusParams struct {
+	PickupStatus pgtype.Text `json:"pickup_status"`
+	ID           pgtype.UUID `json:"id"`
+	GroupID      string      `json:"group_id"`
+	BookingID    pgtype.UUID `json:"booking_id"`
+}
+
+func (q *Queries) UpdateBookingItemPickupStatus(ctx context.Context, arg UpdateBookingItemPickupStatusParams) (BookingItem, error) {
+	row := q.db.QueryRow(ctx, updateBookingItemPickupStatus,
+		arg.PickupStatus,
+		arg.ID,
+		arg.GroupID,
+		arg.BookingID,
+	)
+	var i BookingItem
+	err := row.Scan(
+		&i.ID,
+		&i.GroupID,
+		&i.BookingID,
+		&i.ArticleID,
+		&i.PickupStatus,
+		&i.ReturnStatus,
+		&i.Notes,
 	)
 	return i, err
 }

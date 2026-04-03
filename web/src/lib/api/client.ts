@@ -57,6 +57,7 @@ export interface BookingItem {
 	category_name: string;
 	place: string;
 	requires_approval: boolean;
+	individually_tracked: boolean;
 	pickup_status: string | null;
 	return_status: string | null;
 }
@@ -145,6 +146,18 @@ export function createApiClient(opts: FetchOptions = {}) {
 			requestMut<Booking | void>(`/bookings/${id}/cancel`, 'POST', {}, opts),
 		copyBooking: (id: string) =>
 			requestMut<{ booking: Booking; items_copied: number; items_total: number }>(`/bookings/${id}/copy`, 'POST', {}, opts),
+		pickupBooking: (id: string) =>
+			requestMut<Booking>(`/bookings/${id}/pickup`, 'POST', {}, opts),
+		updateItemPickup: (bookingId: string, itemId: string, pickupStatus: string) =>
+			requestMut<BookingItem>(`/bookings/${bookingId}/items/${itemId}/pickup`, 'PUT', { pickup_status: pickupStatus }, opts),
+		swapItem: (bookingId: string, itemId: string, newArticleId: string) =>
+			requestMut<BookingItem>(`/bookings/${bookingId}/items/${itemId}/swap`, 'POST', { new_article_id: newArticleId }, opts),
+		listAvailableArticles: (startDate: string, endDate: string, params?: { exclude_booking_id?: string; commercial_name?: string }) => {
+			const query = new URLSearchParams({ start_date: startDate, end_date: endDate });
+			if (params?.exclude_booking_id) query.set('exclude_booking_id', params.exclude_booking_id);
+			if (params?.commercial_name) query.set('commercial_name', params.commercial_name);
+			return request<{ id: string; commercial_name: string; common_name: string; location_name: string; place: string }[]>(`/articles/availability/articles?${query}`, opts);
+		},
 		listUnits: () => request<Unit[]>('/units', opts),
 	};
 }

@@ -96,6 +96,17 @@ Check available article counts grouped by commercial_name for a date range.
 Results are grouped by commercial_name + location. Same product in different locations shows as separate groups.
 
 **Response** `200`
+
+### `GET /api/v0/articles/availability/articles`
+List individual available articles for a date range. Used for swap selection during pickup.
+
+**Query parameters**:
+- `start_date` (required) — ISO date
+- `end_date` (required) — ISO date
+- `exclude_booking_id` — exclude items already in this booking from the unavailable set
+- `commercial_name` — filter by commercial name
+
+**Response** `200` — array of individual articles with `id`, `commercial_name`, `common_name`, `location_name`, `place`
 ```
 
 ---
@@ -194,6 +205,32 @@ Create a new draft booking with the same unit, notes, and items as the source. D
   "items_total": 5
 }
 ```
+
+### `POST /api/v0/bookings/{id}/pickup`
+Transition a confirmed or approved booking to `picked_up`. Access: creator, unit leaders, or equipment manager.
+
+**Response** `200` | `400` | `403` | `404`
+
+### `PUT /api/v0/bookings/{id}/items/{itemId}/pickup`
+Set the pickup status for a single booking item. Booking must be in `picked_up` status. Access: creator, unit leaders, or equipment manager.
+
+**Body**
+```json
+{"pickup_status": "picked_up"}
+```
+Valid values: `picked_up`, `not_available`.
+
+**Response** `200` | `400` | `403` | `404`
+
+### `POST /api/v0/bookings/{id}/items/{itemId}/swap`
+Replace the article on a booking item during pickup. The new article must be available for the booking's date range. Sets pickup_status to `swapped`. Booking must be in `picked_up` status. Access: creator, unit leaders, or equipment manager.
+
+**Body**
+```json
+{"new_article_id": "uuid"}
+```
+
+**Response** `200` | `400` | `403` | `404` | `409` (article not available)
 
 ---
 

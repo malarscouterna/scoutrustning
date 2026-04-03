@@ -30,6 +30,9 @@ func (h *BookingHandler) Routes() chi.Router {
 	r.Post("/{id}/submit", h.Submit)
 	r.Post("/{id}/cancel", h.Cancel)
 	r.Post("/{id}/copy", h.Copy)
+	r.Post("/{id}/pickup", h.Pickup)
+	r.Put("/{id}/items/{itemId}/pickup", h.UpdateItemPickup)
+	r.Post("/{id}/items/{itemId}/swap", h.SwapItem)
 	return r
 }
 
@@ -535,6 +538,174 @@ func (h *BookingHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	WriteJSON(w, http.StatusOK, updated)
+}
+
+// Pickup transitions a confirmed/approved booking to picked_up.
+func (h *BookingHandler) Pickup(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	bookingID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	booking, err := h.Q.GetBooking(r.Context(), db.GetBookingParams{ID: bookingID, GroupID: claims.GroupID})
+	if err != nil {
+		WriteError(w, http.StatusNotFound, "booking not found")
+		return
+	}
+	if !h.canAccessBooking(r.Context(), claims, accessFromGetBookingRow(booking)) {
+		WriteError(w, http.StatusForbidden, "forbidden")
+		return
+	}
+	if booking.Status != "confirmed" && booking.Status != "approved" {
+		WriteError(w, http.StatusBadRequest, "booking must be confirmed or approved")
+		return
+	}
+
+	updated, err := h.Q.UpdateBookingStatus(r.Context(), db.UpdateBookingStatusParams{
+		ID: bookingID, GroupID: claims.GroupID, Status: "picked_up",
+	})
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to update booking")
+		return
+	}
+	WriteJSON(w, http.StatusOK, updated)
+}
+
+// UpdateItemPickup sets the pickup_status for a single booking item.
+func (h *BookingHandler) UpdateItemPickup(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	bookingID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid booking id")
+		return
+	}
+	itemID, err := parseUUID(chi.URLParam(r, "itemId"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid item id")
+		return
+	}
+
+	booking, err := h.Q.GetBooking(r.Context(), db.GetBookingParams{ID: bookingID, GroupID: claims.GroupID})
+	if err != nil {
+		WriteError(w, http.StatusNotFound, "booking not found")
+		return
+	}
+	if !h.canAccessBooking(r.Context(), claims, accessFromGetBookingRow(booking)) {
+		WriteError(w, http.StatusForbidden, "forbidden")
+		return
+	}
+	if booking.Status != "picked_up" {
+		WriteError(w, http.StatusBadRequest, "booking must be in picked_up status")
+		return
+	}
+
+	var req struct {
+		PickupStatus string `json:"pickup_status"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	switch req.PickupStatus {
+	case "picked_up", "not_available", "":
+		// "" clears the status (undo)
+	default:
+		WriteError(w, http.StatusBadRequest, "pickup_status must be picked_up, not_available, or empty")
+		return
+	}
+
+	var pickupStatus pgtype.Text
+	if req.PickupStatus != "" {
+		pickupStatus = pgtype.Text{String: req.PickupStatus, Valid: true}
+	}
+
+	item, err := h.Q.UpdateBookingItemPickupStatus(r.Context(), db.UpdateBookingItemPickupStatusParams{
+		ID: itemID, GroupID: claims.GroupID, BookingID: bookingID,
+		PickupStatus: pickupStatus,
+	})
+	if err != nil {
+		WriteError(w, http.StatusNotFound, "item not found")
+		return
+	}
+	WriteJSON(w, http.StatusOK, item)
+}
+
+// SwapItem replaces the article on a booking item during pickup.
+func (h *BookingHandler) SwapItem(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	bookingID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid booking id")
+		return
+	}
+	itemID, err := parseUUID(chi.URLParam(r, "itemId"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid item id")
+		return
+	}
+
+	booking, err := h.Q.GetBooking(r.Context(), db.GetBookingParams{ID: bookingID, GroupID: claims.GroupID})
+	if err != nil {
+		WriteError(w, http.StatusNotFound, "booking not found")
+		return
+	}
+	if !h.canAccessBooking(r.Context(), claims, accessFromGetBookingRow(booking)) {
+		WriteError(w, http.StatusForbidden, "forbidden")
+		return
+	}
+	if booking.Status != "picked_up" {
+		WriteError(w, http.StatusBadRequest, "booking must be in picked_up status")
+		return
+	}
+
+	var req struct {
+		NewArticleID string `json:"new_article_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	newArticleID, err := parseUUID(req.NewArticleID)
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid new_article_id")
+		return
+	}
+
+	// Verify the new article is available for this booking's dates
+	available, err := h.Q.AvailableArticlesExcludingBooking(r.Context(), db.AvailableArticlesExcludingBookingParams{
+		GroupID:          claims.GroupID,
+		ExcludeBookingID: bookingID,
+		StartDate:        booking.StartDate,
+		EndDate:          booking.EndDate,
+	})
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to check availability")
+		return
+	}
+
+	found := false
+	for _, a := range available {
+		if a.ID == newArticleID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		WriteError(w, http.StatusConflict, "article not available")
+		return
+	}
+
+	item, err := h.Q.SwapBookingItemArticle(r.Context(), db.SwapBookingItemArticleParams{
+		ID: itemID, GroupID: claims.GroupID, BookingID: bookingID,
+		NewArticleID: newArticleID,
+	})
+	if err != nil {
+		WriteError(w, http.StatusNotFound, "item not found")
+		return
+	}
+	WriteJSON(w, http.StatusOK, item)
 }
 
 // Copy creates a new draft booking with the same unit and items as the source.

@@ -92,6 +92,7 @@ SELECT bi.*,
     a.common_name,
     a.place,
     a.requires_approval,
+    a.individually_tracked,
     l.name AS location_name,
     c.name AS category_name
 FROM booking_items bi
@@ -139,6 +140,24 @@ WHERE id = @id AND group_id = @group_id AND status = 'draft';
 SELECT * FROM units
 WHERE group_id = @group_id
 ORDER BY name;
+
+-- name: UpdateBookingItemPickupStatus :one
+UPDATE booking_items SET pickup_status = @pickup_status
+WHERE id = @id AND group_id = @group_id AND booking_id = @booking_id
+RETURNING *;
+
+-- name: SwapBookingItemArticle :one
+UPDATE booking_items SET article_id = @new_article_id, pickup_status = 'swapped'
+WHERE id = @id AND group_id = @group_id AND booking_id = @booking_id
+RETURNING *;
+
+-- name: AllItemsPickedUp :one
+-- Returns true if every item in the booking has a non-null pickup_status.
+SELECT NOT EXISTS (
+    SELECT 1 FROM booking_items
+    WHERE booking_id = @booking_id AND group_id = @group_id
+        AND pickup_status IS NULL
+) AS all_picked_up;
 
 -- name: CleanupStaleDrafts :exec
 -- Delete draft bookings older than the given threshold.

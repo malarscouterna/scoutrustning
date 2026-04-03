@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { createApiClient, type Booking, type BookingItem } from '$lib/api/client';
 	import BookingItemsList from '$lib/components/BookingItemsList.svelte';
+	import PickupChecklist from '$lib/components/PickupChecklist.svelte';
 	import type { PageData } from './$types';
 	import { page } from '$app/stores';
 
@@ -73,6 +74,21 @@
 		}
 	}
 
+	async function startPickup() {
+		error = '';
+		try {
+			booking = await api.pickupBooking(booking.id);
+			message = 'Utlämning startad';
+			setTimeout(() => message = '', 4000);
+		} catch (e: any) {
+			error = e.message;
+		}
+	}
+
+	function handlePickupUpdate(updatedItems: BookingItem[]) {
+		items = updatedItems;
+	}
+
 </script>
 
 <div class="max-w-4xl mx-auto p-4">
@@ -115,6 +131,9 @@
 			{#if booking.status === 'draft'}
 				<button onclick={submitBooking} class="bg-green-700 text-white px-4 py-2 rounded text-sm">Skicka bokning</button>
 			{/if}
+			{#if booking.status === 'confirmed' || booking.status === 'approved'}
+				<button onclick={startPickup} class="bg-blue-700 text-white px-4 py-2 rounded text-sm">Starta utlämning</button>
+			{/if}
 			{#if cancellable}
 				<button onclick={cancelBooking} class="text-sm text-red-600 underline">
 					{booking.status === 'draft' ? 'Ta bort utkast' : 'Avboka'}
@@ -124,5 +143,15 @@
 	</div>
 
 	<h2 class="font-medium mb-2">Utrustning ({items.length} artiklar)</h2>
-	<BookingItemsList {items} />
+	{#if booking.status === 'picked_up'}
+		<PickupChecklist
+			bookingId={booking.id}
+			{items}
+			startDate={booking.start_date}
+			endDate={booking.end_date}
+			onUpdate={handlePickupUpdate}
+		/>
+	{:else}
+		<BookingItemsList {items} />
+	{/if}
 </div>

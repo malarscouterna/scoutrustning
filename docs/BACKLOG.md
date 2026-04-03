@@ -49,3 +49,7 @@ When copying a booking, items that exist but are no longer available for the new
 ## Race conditions on concurrent edits
 
 Two users editing the same booking simultaneously could cause conflicts. No optimistic locking or conflict detection exists yet. Consider adding `updated_at` checks on write operations.
+
+## Pickup — report missing items
+
+When confirming pickup of quantity-tracked items with a count lower than booked, prompt the user to report the missing items. This could auto-create an issue report for the equipment manager. Currently the shortfall is silently marked as `not_available`.

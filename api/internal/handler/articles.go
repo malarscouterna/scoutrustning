@@ -26,6 +26,7 @@ func (h *ArticleHandler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Get("/", h.List)
 	r.Get("/availability", h.Availability)
+	r.Get("/availability/articles", h.AvailableArticlesList)
 	r.Get("/{id}", h.Get)
 	r.With(auth.RequireRole("equipment_manager")).Post("/", h.Create)
 	r.With(auth.RequireRole("equipment_manager")).Put("/{id}", h.Update)
@@ -293,6 +294,81 @@ func (h *ArticleHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// AvailableArticlesList returns individual available articles for a date range,
+// optionally excluding a specific booking (for swap scenarios).
+func (h *ArticleHandler) AvailableArticlesList(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+
+	startStr := r.URL.Query().Get("start_date")
+	endStr := r.URL.Query().Get("end_date")
+	if startStr == "" || endStr == "" {
+		WriteError(w, http.StatusBadRequest, "start_date and end_date required")
+		return
+	}
+	startDate, err := time.Parse("2006-01-02", startStr)
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid start_date")
+		return
+	}
+	endDate, err := time.Parse("2006-01-02", endStr)
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid end_date")
+		return
+	}
+
+	excludeBooking := r.URL.Query().Get("exclude_booking_id")
+	commercialName := r.URL.Query().Get("commercial_name")
+
+	if excludeBooking != "" {
+		bid, err := parseUUID(excludeBooking)
+		if err != nil {
+			WriteError(w, http.StatusBadRequest, "invalid exclude_booking_id")
+			return
+		}
+		articles, err := h.Q.AvailableArticlesExcludingBooking(r.Context(), db.AvailableArticlesExcludingBookingParams{
+			GroupID:          claims.GroupID,
+			ExcludeBookingID: bid,
+			StartDate:        pgtype.Date{Time: startDate, Valid: true},
+			EndDate:          pgtype.Date{Time: endDate, Valid: true},
+		})
+		if err != nil {
+			WriteError(w, http.StatusInternalServerError, "failed to check availability")
+			return
+		}
+		if commercialName != "" {
+			var filtered []db.AvailableArticlesExcludingBookingRow
+			for _, a := range articles {
+				if a.CommercialName == commercialName {
+					filtered = append(filtered, a)
+				}
+			}
+			articles = filtered
+		}
+		WriteJSON(w, http.StatusOK, articles)
+		return
+	}
+
+	articles, err := h.Q.AvailableArticles(r.Context(), db.AvailableArticlesParams{
+		GroupID:   claims.GroupID,
+		StartDate: pgtype.Date{Time: startDate, Valid: true},
+		EndDate:   pgtype.Date{Time: endDate, Valid: true},
+	})
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to check availability")
+		return
+	}
+	if commercialName != "" {
+		var filtered []db.AvailableArticlesRow
+		for _, a := range articles {
+			if a.CommercialName == commercialName {
+				filtered = append(filtered, a)
+			}
+		}
+		articles = filtered
+	}
+	WriteJSON(w, http.StatusOK, articles)
 }
 
 // Import handles CSV upload matching the Mälarscouterna inventory spreadsheet format.
