@@ -19,9 +19,14 @@ services:
     build: ./api
     ports:
       - "8080:8080"
+    volumes:
+      - ./dev-personas.json:/app/dev-personas.json:ro
     environment:
       DATABASE_URL: postgres://utrustning:utrustning@db:5432/utrustning?sslmode=disable
       ADDR: ":8080"
+      DEV_MODE: "true"
+      DEV_PERSONAS_PATH: /app/dev-personas.json
+      MIGRATIONS_DIR: /migrations
     depends_on:
       db:
         condition: service_healthy
