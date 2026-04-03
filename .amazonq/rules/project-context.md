@@ -8,7 +8,7 @@ The full specification is in `docs/SPEC.md` — read it before making architectu
 
 ## Architecture
 
-- **Go API** (Chi v5 + pgx v5 + sqlc) — JSON REST API at `/api/v0/*`
+- **Go API** (Chi v5 + pgx v5 + sqlc) — JSON REST API at `/api/v0/*` (pre-release, breaking changes allowed without version bump)
 - **SvelteKit 2 frontend** — Svelte 5, responsive web app, mobile-first for leaders, uses `@scouterna/ui-webc` web components and `@scouterna/tailwind-theme`
 - **PostgreSQL 17** — single database, all tables scoped by `group_id` for multi-tenancy
 - **Docker Compose** — Go API + SvelteKit + Postgres, behind a reverse proxy
@@ -119,11 +119,20 @@ ms-utrustning/
 ### General
 
 - Commits follow [Conventional Commits](https://www.conventionalcommits.org/). This drives Release Please for automated versioning and changelogs.
-- UI is internationalized from the start. Swedish (`sv`) is the default locale, English (`en`) planned as second. All user-facing strings go through the i18n system — no hardcoded Swedish in components.
+- API is versioned as `v0` (pre-release). Breaking changes don't require version bumps. Move to `v1` when ready for production.
+- UI is internationalized from the start. Swedish (`sv`) is the default locale, English (`en`) planned as second. All user-facing strings should go through an i18n system — no hardcoded Swedish in components. (i18n system not yet set up; current UI has hardcoded Swedish as a known debt.)
 - The Go API is language-agnostic: returns data as stored, uses error keys (not human-readable messages) so the frontend can translate them.
 - Code, comments, API field names, and documentation are always in English.
 - Never hardcode credentials or secrets. Use environment variables.
 - Never log tokens, passwords, or PII beyond what's needed for debugging.
+
+### Article model
+
+- `commercial_name` is the product type (e.g. "Sibley", "Stormkök") — what users browse and book by.
+- `common_name` is the individual item identifier (e.g. "Sibley 1") — for physical identification at pickup.
+- Availability is grouped by `commercial_name + location`. Same product in different locations shows as separate groups.
+- `requires_approval` is set per article. During CSV import, items in Hajkförrådet are freely bookable, others require approval.
+- Quantity-tracked items: each physical unit is a separate row with `individually_tracked = false`. Manager sets count via UI after import.
 
 ## Security practices
 
@@ -141,9 +150,11 @@ ms-utrustning/
 
 ## Workflow instructions
 
+- **Build minimal viable first**: Get things working end-to-end before adding complexity. Don't over-scaffold or create stubs for things not yet needed.
 - **Before writing code**: Read `docs/SPEC.md` for requirements. Clarify anything ambiguous before implementing.
 - **Multi-tenancy is non-negotiable**: Every new table gets `group_id`. Every new query filters on it. No shortcuts.
 - **Keep docs updated**: When adding or changing API endpoints, update `docs/API.md`. When making architectural decisions or discovering new conventions, update this file and `docs/SPEC.md` proactively — don't wait to be asked.
+- **Always show the commit message** for user approval before committing. Never commit without asking.
 - **Only the user decides when we're done.** Never assume a task is finished or offer a commit message unless the user explicitly says so.
 - **When the user says we're done or finished**: Review all changes. Verify:
   1. No TODO comments, placeholder logic, or incomplete implementations left behind
