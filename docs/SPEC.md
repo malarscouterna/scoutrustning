@@ -111,8 +111,9 @@ Draft → Submitted → [Approved] → Confirmed → Picked up → Returned
 
 An article is available for a date range if:
 - Its status is bookable (OK or Reported — usable)
-- It is not reserved by another confirmed/picked-up booking overlapping those dates
-- It is not in a drying period that overlaps those dates
+- It is not assigned to an overlapping confirmed/picked-up/submitted/approved booking where it hasn't been fully returned (return_status is NULL or 'pending')
+
+Drying is a return status on the booking item, not a separate availability concern. When an item is returned as "drying", the booking stays partially open and the booker remains responsible. The article's inventory status may change to "drying" for visibility, but availability is purely driven by booking state.
 
 ### Issue Reports
 

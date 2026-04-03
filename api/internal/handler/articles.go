@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -23,6 +24,7 @@ type ArticleHandler struct {
 func (h *ArticleHandler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Get("/", h.List)
+	r.Get("/availability", h.Availability)
 	r.Get("/{id}", h.Get)
 	r.With(auth.RequireRole("equipment_manager")).Post("/", h.Create)
 	r.With(auth.RequireRole("equipment_manager")).Put("/{id}", h.Update)
@@ -181,6 +183,60 @@ func (h *ArticleHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	WriteJSON(w, http.StatusOK, article)
+}
+
+// Availability returns available article counts grouped by commercial_name for a date range.
+func (h *ArticleHandler) Availability(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+
+	startStr := r.URL.Query().Get("start_date")
+	endStr := r.URL.Query().Get("end_date")
+	if startStr == "" || endStr == "" {
+		WriteError(w, http.StatusBadRequest, "start_date and end_date required")
+		return
+	}
+	startDate, err := time.Parse("2006-01-02", startStr)
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid start_date")
+		return
+	}
+	endDate, err := time.Parse("2006-01-02", endStr)
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid end_date")
+		return
+	}
+
+	available, err := h.Q.AvailableArticles(r.Context(), db.AvailableArticlesParams{
+		GroupID:   claims.GroupID,
+		StartDate: pgtype.Date{Time: startDate, Valid: true},
+		EndDate:   pgtype.Date{Time: endDate, Valid: true},
+	})
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to check availability")
+		return
+	}
+
+	// Group by commercial_name
+	type availGroup struct {
+		CommercialName   string `json:"commercial_name"`
+		AvailableCount   int    `json:"available_count"`
+		RequiresApproval bool   `json:"requires_approval"`
+	}
+	groups := map[string]*availGroup{}
+	for _, a := range available {
+		g, ok := groups[a.CommercialName]
+		if !ok {
+			g = &availGroup{CommercialName: a.CommercialName, RequiresApproval: a.RequiresApproval}
+			groups[a.CommercialName] = g
+		}
+		g.AvailableCount++
+	}
+
+	result := make([]availGroup, 0, len(groups))
+	for _, g := range groups {
+		result = append(result, *g)
+	}
+	WriteJSON(w, http.StatusOK, result)
 }
 
 func (h *ArticleHandler) Delete(w http.ResponseWriter, r *http.Request) {

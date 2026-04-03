@@ -83,6 +83,100 @@ Auto-creates categories and locations that don't exist. See `docs/import-example
 }
 ```
 
+### `GET /api/v0/articles/availability`
+Check available article counts grouped by commercial_name for a date range.
+
+**Query parameters** (required):
+- `start_date` — ISO date (e.g. `2026-06-01`)
+- `end_date` — ISO date (e.g. `2026-06-05`)
+
+**Response** `200`
+```json
+[
+  {"commercial_name": "Sibley", "available_count": 3, "requires_approval": false},
+  {"commercial_name": "Stormkök", "available_count": 12, "requires_approval": false}
+]
+```
+
+---
+
+## Bookings
+
+### `GET /api/v0/bookings`
+List bookings visible to the current user (own bookings + unit bookings).
+
+**Response** `200`
+
+### `POST /api/v0/bookings`
+Create a draft booking.
+
+**Body**
+```json
+{
+  "start_date": "2026-06-01",
+  "end_date": "2026-06-05",
+  "used_by_unit_id": "uuid or null",
+  "used_by_external": "string or null",
+  "used_by_external_contact": "string or null",
+  "notes": ""
+}
+```
+Required: `start_date`, `end_date`.
+
+**Response** `201` | `400`
+
+### `GET /api/v0/bookings/{id}`
+Get booking with its items (including article details).
+
+**Response** `200` | `404`
+```json
+{
+  "booking": { ... },
+  "items": [
+    {"id": "uuid", "commercial_name": "Sibley", "common_name": "Sibley 1", "location_name": "Hajkförrådet", ...}
+  ]
+}
+```
+
+### `PUT /api/v0/bookings/{id}`
+Update a booking. Allowed on draft, submitted, approved, confirmed, and picked_up bookings. Access: creator, unit leaders, or equipment manager.
+
+All fields are optional — only provided fields are updated. If dates change, all existing items are re-validated against availability.
+
+**Body**
+```json
+{
+  "start_date": "2026-06-02",
+  "end_date": "2026-06-06",
+  "used_by_unit_id": "uuid or null",
+  "used_by_external": "string or null",
+  "used_by_external_contact": "string or null",
+  "notes": "Updated notes"
+}
+```
+
+**Response** `200` | `400` | `403` | `404` | `409` (items not available for new dates)
+
+### `POST /api/v0/bookings/{id}/items`
+Add articles to a booking by commercial_name and quantity. Eagerly assigns specific available articles. Allowed on editable bookings (not returned/cancelled). Access: creator, unit leaders, or equipment manager.
+
+**Body**
+```json
+{"commercial_name": "Sibley", "quantity": 2}
+```
+
+**Response** `201` | `400` | `404` | `409` (not enough available)
+
+### `DELETE /api/v0/bookings/{id}/items/{itemId}`
+Remove an item from an editable booking. Access: creator, unit leaders, or equipment manager.
+
+**Response** `204` | `400` | `403` | `404`
+
+### `POST /api/v0/bookings/{id}/submit`
+Submit a draft booking. Auto-confirms if no articles require approval (or if user is project_leader). Otherwise transitions to `submitted` awaiting manager approval.
+
+**Response** `200` | `400` | `404`
+
 ---
 
 ## Locations
