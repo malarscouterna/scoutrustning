@@ -56,7 +56,7 @@ func main() {
 		w.Write([]byte(`{"status":"ok"}`))
 	})
 
-	r.Route("/api/v1", func(r chi.Router) {
+	r.Route("/api/v0", func(r chi.Router) {
 		r.Use(auth.Middleware(
 			getenv("JWKS_URL", ""),
 			devMode,

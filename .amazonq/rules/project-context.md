@@ -8,7 +8,7 @@ The full specification is in `docs/SPEC.md` — read it before making architectu
 
 ## Architecture
 
-- **Go API** (Chi v5 + pgx v5 + sqlc) — JSON REST API at `/api/v1/*`
+- **Go API** (Chi v5 + pgx v5 + sqlc) — JSON REST API at `/api/v0/*`
 - **SvelteKit 2 frontend** — Svelte 5, responsive web app, mobile-first for leaders, uses `@scouterna/ui-webc` web components and `@scouterna/tailwind-theme`
 - **PostgreSQL 17** — single database, all tables scoped by `group_id` for multi-tenancy
 - **Docker Compose** — Go API + SvelteKit + Postgres, behind a reverse proxy
@@ -48,7 +48,9 @@ ms-utrustning/
 │   ├── svelte.config.js
 │   └── Dockerfile
 ├── docs/
-│   └── SPEC.md             # Full specification
+│   ├── SPEC.md             # Full specification
+│   ├── API.md              # API reference (keep updated)
+│   └── import-example.csv  # Example CSV for article import
 ├── dev-personas.json       # Shared dev personas for role switching
 ├── docker-compose.yml
 ├── .env.example
@@ -130,10 +132,17 @@ ms-utrustning/
 - File uploads (images) are validated for type and size, stored outside the web root.
 - SQL injection is prevented by sqlc's parameterized queries.
 
+## Documentation
+
+- `docs/SPEC.md` — full specification, implementation plan, data model
+- `docs/API.md` — API reference for all endpoints (keep updated when adding/changing endpoints)
+- `.amazonq/rules/project-context.md` — this file, AI context and project rules
+
 ## Workflow instructions
 
 - **Before writing code**: Read `docs/SPEC.md` for requirements. Clarify anything ambiguous before implementing.
 - **Multi-tenancy is non-negotiable**: Every new table gets `group_id`. Every new query filters on it. No shortcuts.
+- **Keep docs updated**: When adding or changing API endpoints, update `docs/API.md`. When making architectural decisions or discovering new conventions, update this file and `docs/SPEC.md` proactively — don't wait to be asked.
 - **Only the user decides when we're done.** Never assume a task is finished or offer a commit message unless the user explicitly says so.
 - **When the user says we're done or finished**: Review all changes. Verify:
   1. No TODO comments, placeholder logic, or incomplete implementations left behind
@@ -141,7 +150,8 @@ ms-utrustning/
   3. `group_id` filtering on all new queries
   4. Code matches existing style and conventions
   5. New functionality has integration tests covering the happy path
-  6. `docs/SPEC.md` and this file are still accurate — update if needed
+  6. `docs/API.md` reflects any new or changed endpoints
+  7. `docs/SPEC.md` and this file are still accurate — update if needed
   Then suggest a commit message following Conventional Commits. The commit type drives semantic versioning via Release Please:
   - `feat:` → minor version bump
   - `fix:` → patch version bump

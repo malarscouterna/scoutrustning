@@ -33,7 +33,33 @@ func (h *ArticleHandler) Routes() chi.Router {
 
 func (h *ArticleHandler) List(w http.ResponseWriter, r *http.Request) {
 	claims, _ := auth.ClaimsFromContext(r.Context())
-	articles, err := h.Q.ListArticles(r.Context(), claims.GroupID)
+
+	params := db.ListArticlesParams{GroupID: claims.GroupID}
+
+	if v := r.URL.Query().Get("category_id"); v != "" {
+		id, err := parseUUID(v)
+		if err != nil {
+			WriteError(w, http.StatusBadRequest, "invalid category_id")
+			return
+		}
+		params.CategoryID = id
+	}
+	if v := r.URL.Query().Get("location_id"); v != "" {
+		id, err := parseUUID(v)
+		if err != nil {
+			WriteError(w, http.StatusBadRequest, "invalid location_id")
+			return
+		}
+		params.LocationID = id
+	}
+	if v := r.URL.Query().Get("status"); v != "" {
+		params.Status = pgtype.Text{String: v, Valid: true}
+	}
+	if v := r.URL.Query().Get("search"); v != "" {
+		params.Search = pgtype.Text{String: v, Valid: true}
+	}
+
+	articles, err := h.Q.ListArticles(r.Context(), params)
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, "failed to list articles")
 		return
@@ -351,6 +377,10 @@ func normalizeCategory(tag string) string {
 	if tag == "" {
 		return ""
 	}
-	// Capitalize first letter, lowercase rest
-	return strings.ToUpper(tag[:1]) + strings.ToLower(tag[1:])
+	runes := []rune(tag)
+	runes[0] = []rune(strings.ToUpper(string(runes[0])))[0]
+	for i := 1; i < len(runes); i++ {
+		runes[i] = []rune(strings.ToLower(string(runes[i])))[0]
+	}
+	return string(runes)
 }

@@ -239,8 +239,20 @@ FROM articles a
 JOIN locations l ON a.location_id = l.id
 JOIN categories c ON a.category_id = c.id
 WHERE a.group_id = $1
-ORDER BY c.sort_order, c.name, a.common_name
+    AND ($2::uuid IS NULL OR a.category_id = $2)
+    AND ($3::uuid IS NULL OR a.location_id = $3)
+    AND ($4::text IS NULL OR a.status = $4)
+    AND ($5::text IS NULL OR a.common_name ILIKE '%' || $5 || '%' OR a.commercial_name ILIKE '%' || $5 || '%')
+ORDER BY c.sort_order, c.name, a.commercial_name, a.common_name
 `
+
+type ListArticlesParams struct {
+	GroupID    string      `json:"group_id"`
+	CategoryID pgtype.UUID `json:"category_id"`
+	LocationID pgtype.UUID `json:"location_id"`
+	Status     pgtype.Text `json:"status"`
+	Search     pgtype.Text `json:"search"`
+}
 
 type ListArticlesRow struct {
 	ID                  pgtype.UUID        `json:"id"`
@@ -265,8 +277,14 @@ type ListArticlesRow struct {
 	CategoryName        string             `json:"category_name"`
 }
 
-func (q *Queries) ListArticles(ctx context.Context, groupID string) ([]ListArticlesRow, error) {
-	rows, err := q.db.Query(ctx, listArticles, groupID)
+func (q *Queries) ListArticles(ctx context.Context, arg ListArticlesParams) ([]ListArticlesRow, error) {
+	rows, err := q.db.Query(ctx, listArticles,
+		arg.GroupID,
+		arg.CategoryID,
+		arg.LocationID,
+		arg.Status,
+		arg.Search,
+	)
 	if err != nil {
 		return nil, err
 	}

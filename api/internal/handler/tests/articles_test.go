@@ -29,13 +29,13 @@ func TestArticleCRUD(t *testing.T) {
 	leader := env.ClientAs("leader-yggdrasil")
 
 	// Get seed location and category IDs
-	resp, _ := manager.Get("/api/v1/locations")
+	resp, _ := manager.Get("/api/v0/locations")
 	var locations []map[string]any
 	json.NewDecoder(resp.Body).Decode(&locations)
 	resp.Body.Close()
 	locID := locations[0]["id"].(string)
 
-	resp, _ = manager.Get("/api/v1/categories")
+	resp, _ = manager.Get("/api/v0/categories")
 	var categories []map[string]any
 	json.NewDecoder(resp.Body).Decode(&categories)
 	resp.Body.Close()
@@ -53,7 +53,7 @@ func TestArticleCRUD(t *testing.T) {
 			"place":               "Shelf 3",
 		}
 		b, _ := json.Marshal(body)
-		resp, err := manager.Post("/api/v1/articles", bytes.NewReader(b))
+		resp, err := manager.Post("/api/v0/articles", bytes.NewReader(b))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -77,7 +77,7 @@ func TestArticleCRUD(t *testing.T) {
 	})
 
 	t.Run("leader can list articles", func(t *testing.T) {
-		resp, err := leader.Get("/api/v1/articles")
+		resp, err := leader.Get("/api/v0/articles")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -104,7 +104,7 @@ func TestArticleCRUD(t *testing.T) {
 			"location_id": locID,
 		}
 		b, _ := json.Marshal(body)
-		resp, err := leader.Post("/api/v1/articles", bytes.NewReader(b))
+		resp, err := leader.Post("/api/v0/articles", bytes.NewReader(b))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -116,7 +116,7 @@ func TestArticleCRUD(t *testing.T) {
 	})
 
 	t.Run("manager can delete article", func(t *testing.T) {
-		resp, err := manager.Delete("/api/v1/articles/" + articleID)
+		resp, err := manager.Delete("/api/v0/articles/" + articleID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -152,7 +152,7 @@ func TestArticleCSVImport(t *testing.T) {
 		io.Copy(part, csvFile)
 		writer.Close()
 
-		req, _ := http.NewRequest("POST", env.Server.URL+"/api/v1/articles/import", &buf)
+		req, _ := http.NewRequest("POST", env.Server.URL+"/api/v0/articles/import", &buf)
 		req.Header.Set("X-Dev-Role-Override", "equipment-manager")
 		req.Header.Set("Content-Type", writer.FormDataContentType())
 
@@ -177,7 +177,7 @@ func TestArticleCSVImport(t *testing.T) {
 		t.Logf("imported %d articles, skipped %v", imported, result["skipped"])
 
 		// Verify articles were created
-		resp2, _ := manager.Get("/api/v1/articles")
+		resp2, _ := manager.Get("/api/v0/articles")
 		var articles []map[string]any
 		json.NewDecoder(resp2.Body).Decode(&articles)
 		resp2.Body.Close()
@@ -187,7 +187,7 @@ func TestArticleCSVImport(t *testing.T) {
 		}
 
 		// Verify categories were auto-created
-		resp3, _ := manager.Get("/api/v1/categories")
+		resp3, _ := manager.Get("/api/v0/categories")
 		var categories []map[string]any
 		json.NewDecoder(resp3.Body).Decode(&categories)
 		resp3.Body.Close()
@@ -207,11 +207,11 @@ func TestArticleCSVImport(t *testing.T) {
 		part.Write([]byte("a,b,c\n"))
 		writer.Close()
 
-		req, _ := http.NewRequest("POST", env.Server.URL+"/api/v1/articles/import", &buf)
+		req, _ := http.NewRequest("POST", env.Server.URL+"/api/v0/articles/import", &buf)
 		req.Header.Set("X-Dev-Role-Override", "leader-yggdrasil")
 		req.Header.Set("Content-Type", writer.FormDataContentType())
 
-		resp, err := leader.Do("POST", "/api/v1/articles/import", &buf)
+		resp, err := leader.Do("POST", "/api/v0/articles/import", &buf)
 		if err != nil {
 			t.Fatal(err)
 		}

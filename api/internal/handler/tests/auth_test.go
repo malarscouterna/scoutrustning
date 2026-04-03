@@ -24,7 +24,7 @@ func TestAuth_DevPersonaOverride(t *testing.T) {
 
 	t.Run("leader persona returns correct claims", func(t *testing.T) {
 		client := env.ClientAs("leader-yggdrasil")
-		resp, err := client.Get("/api/v1/me")
+		resp, err := client.Get("/api/v0/me")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -53,7 +53,7 @@ func TestAuth_DevPersonaOverride(t *testing.T) {
 
 	t.Run("unknown persona returns 400", func(t *testing.T) {
 		client := env.ClientAs("nonexistent")
-		resp, err := client.Get("/api/v1/me")
+		resp, err := client.Get("/api/v0/me")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -65,7 +65,7 @@ func TestAuth_DevPersonaOverride(t *testing.T) {
 	})
 
 	t.Run("no auth header returns 401", func(t *testing.T) {
-		resp, err := http.Get(env.Server.URL + "/api/v1/me")
+		resp, err := http.Get(env.Server.URL + "/api/v0/me")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -100,7 +100,7 @@ func TestAuth_RoleEnforcement(t *testing.T) {
 
 	t.Run("manager can access admin endpoint", func(t *testing.T) {
 		client := env.ClientAs("equipment-manager")
-		resp, err := client.Get("/api/v1/admin-only")
+		resp, err := client.Get("/api/v0/admin-only")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -113,7 +113,7 @@ func TestAuth_RoleEnforcement(t *testing.T) {
 
 	t.Run("leader gets 403 on admin endpoint", func(t *testing.T) {
 		client := env.ClientAs("leader-yggdrasil")
-		resp, err := client.Get("/api/v1/admin-only")
+		resp, err := client.Get("/api/v0/admin-only")
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -26,6 +26,10 @@ An article is either:
 
 Both types are modeled as individual article records in the database. For quantity-tracked items, each record represents one unit, but the UI groups them and users book by count.
 
+**Identifying tracking type**: Individually tracked items have distinct names (e.g. "Sibley 1", "Sibley 2"). Quantity-tracked items share the same name and don't need individual identification at pickup — the checklist just says "grab 5 Tältlampa LED" instead of listing specific items.
+
+**Setting up quantity-tracked items**: The CSV import creates one record per row. For items that should be quantity-tracked (e.g. LED tent lights where you have 47 but the spreadsheet only has 1 row), the equipment manager marks the item as quantity-tracked in the UI and sets the actual count, which creates the additional records. This keeps import simple and puts inventory knowledge with the manager.
+
 **Article assignment**: When booking, users don't choose specific items — they book "3 tents" or "10 liggunderlag". The system assigns specific articles when the booking is confirmed (based on availability and location). At pickup, the checklist shows which specific items to collect (e.g. "Sibley 10 — shelf 3 in Hajkförrådet"). During pickup, the user can override assignments: swap one assigned article for another available one if needed.
 
 Article fields:
@@ -184,7 +188,7 @@ What's deferred:
 │ ScoutID   │     │    SvelteKit       │     │    Go API        │
 │ Keycloak  │◄───►│                    │────►│    (Chi)         │
 │  (OIDC)   │     │  - @scouterna/     │     │                  │
-└───────────┘     │    ui-webc         │     │  - /api/v1/*     │
+└───────────┘     │    ui-webc         │     │  - /api/v0/*     │
                   │  - responsive      │     │  - JWT verify    │
                   │  - mobile-first    │     │  - group_id      │
                   └────────────────────┘     │    scoping       │
@@ -494,9 +498,9 @@ The project uses [Semantic Versioning](https://semver.org/). The API and fronten
 
 ### API versioning
 
-The API is served under `/api/v1/*`. The version in the URL is the API contract version, not the release version.
+The API is served under `/api/v0/*`. The version in the URL is the API contract version, not the release version.
 
-- `/api/v1/*` is the current stable API
+- `/api/v0/*` is the current stable API
 - When breaking changes are needed, introduce `/api/v2/*` and keep v1 running for a deprecation period
 - Non-breaking additions (new fields, new endpoints) are added to the current version
 
