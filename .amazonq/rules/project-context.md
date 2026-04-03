@@ -109,6 +109,7 @@ ms-utrustning/
 ### Testing
 
 - **API tests are integration tests**, not unit tests. Each test exercises a full user flow via HTTP against a real Postgres (testcontainers-go). No mocking the database.
+- **Every new API endpoint must have integration tests** covering the happy path, error cases, and access control before committing.
 - Tests are organized by flow (e.g. `TestBookingFlow`, `TestApprovalFlow`), not by handler or function.
 - Only write isolated unit tests for genuinely complex logic (availability calculation, article assignment).
 - Use a test helper that sets up a group, seeds data, and provides an HTTP client with a fake JWT for a given role.

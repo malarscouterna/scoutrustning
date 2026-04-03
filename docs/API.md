@@ -86,16 +86,16 @@ Auto-creates categories and locations that don't exist. See `docs/import-example
 ### `GET /api/v0/articles/availability`
 Check available article counts grouped by commercial_name for a date range.
 
-**Query parameters** (required):
-- `start_date` — ISO date (e.g. `2026-06-01`)
-- `end_date` — ISO date (e.g. `2026-06-05`)
+**Query parameters**:
+- `start_date` (required) — ISO date (e.g. `2026-06-01`)
+- `end_date` (required) — ISO date (e.g. `2026-06-05`)
+- `category_id` — filter by category UUID
+- `location_id` — filter by location UUID
+- `bookable_only` — `true` (default) hides items requiring approval, `false` shows all
+
+Results are grouped by commercial_name + location. Same product in different locations shows as separate groups.
 
 **Response** `200`
-```json
-[
-  {"commercial_name": "Sibley", "available_count": 3, "requires_approval": false},
-  {"commercial_name": "Stormkök", "available_count": 12, "requires_approval": false}
-]
 ```
 
 ---
@@ -162,8 +162,9 @@ Add articles to a booking by commercial_name and quantity. Eagerly assigns speci
 
 **Body**
 ```json
-{"commercial_name": "Sibley", "quantity": 2}
+{"commercial_name": "Sibley", "quantity": 2, "location_name": "Hajkförrådet"}
 ```
+`location_name` is optional — if omitted, assigns from any location.
 
 **Response** `201` | `400` | `404` | `409` (not enough available)
 
@@ -176,6 +177,38 @@ Remove an item from an editable booking. Access: creator, unit leaders, or equip
 Submit a draft booking. Auto-confirms if no articles require approval (or if user is project_leader). Otherwise transitions to `submitted` awaiting manager approval.
 
 **Response** `200` | `400` | `404`
+
+### `POST /api/v0/bookings/{id}/cancel`
+Cancel a booking. Drafts are deleted entirely (returns 204). Other bookings transition to `cancelled` (returns 200). Cannot cancel returned or already cancelled bookings.
+
+**Response** `200` | `204` | `400` | `403` | `404`
+
+### `POST /api/v0/bookings/{id}/copy`
+Create a new draft booking with the same unit, notes, and items as the source. Dates are set to today + 7 days as placeholders. Items that no longer exist are silently skipped.
+
+**Response** `201`
+```json
+{
+  "booking": { ... },
+  "items_copied": 5,
+  "items_total": 5
+}
+```
+
+---
+
+## Units
+
+### `GET /api/v0/units`
+List all units for the group.
+
+**Response** `200`
+
+### 🔒 `POST /api/v0/units`
+```json
+{"name": "Yggdrasil"}
+```
+**Response** `201` | `400` | `403`
 
 ---
 

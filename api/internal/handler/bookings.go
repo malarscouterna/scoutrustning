@@ -28,21 +28,33 @@ func (h *BookingHandler) Routes() chi.Router {
 	r.Post("/{id}/items", h.AddItems)
 	r.Delete("/{id}/items/{itemId}", h.RemoveItem)
 	r.Post("/{id}/submit", h.Submit)
+	r.Post("/{id}/cancel", h.Cancel)
+	r.Post("/{id}/copy", h.Copy)
 	return r
 }
 
+// bookingAccess holds the fields needed for access checking.
+type bookingAccess struct {
+	CreatedBy    string
+	UsedByUnitID pgtype.UUID
+	Status       string
+}
+
+func accessFromGetBookingRow(b db.GetBookingRow) bookingAccess {
+	return bookingAccess{CreatedBy: b.CreatedBy, UsedByUnitID: b.UsedByUnitID, Status: b.Status}
+}
+
 // canAccessBooking checks if the user can view/modify this booking.
-// Access is granted to: the creator, any leader in the booking's unit, or equipment managers.
-func (h *BookingHandler) canAccessBooking(ctx context.Context, claims auth.Claims, booking db.Booking) bool {
-	if claims.MemberID == booking.CreatedBy {
+func (h *BookingHandler) canAccessBooking(ctx context.Context, claims auth.Claims, b bookingAccess) bool {
+	if claims.MemberID == b.CreatedBy {
 		return true
 	}
 	if claims.HasRole("equipment_manager") {
 		return true
 	}
-	if booking.UsedByUnitID.Valid {
+	if b.UsedByUnitID.Valid {
 		unit, err := h.Q.GetUnitByID(ctx, db.GetUnitByIDParams{
-			ID: booking.UsedByUnitID, GroupID: claims.GroupID,
+			ID: b.UsedByUnitID, GroupID: claims.GroupID,
 		})
 		if err == nil {
 			for _, u := range claims.Units {
@@ -179,7 +191,7 @@ func (h *BookingHandler) Update(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusNotFound, "booking not found")
 		return
 	}
-	if !h.canAccessBooking(r.Context(), claims, booking) {
+	if !h.canAccessBooking(r.Context(), claims, accessFromGetBookingRow(booking)) {
 		WriteError(w, http.StatusForbidden, "forbidden")
 		return
 	}
@@ -272,16 +284,16 @@ func (h *BookingHandler) Update(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		availSet := map[string]bool{}
+		availSet := map[pgtype.UUID]bool{}
 		for _, a := range available {
-			availSet[fmt.Sprintf("%x", a.ID.Bytes)] = true
+			availSet[a.ID] = true
 		}
 
 		for _, item := range items {
 			if item.ReturnStatus.Valid && item.ReturnStatus.String != "pending" {
 				continue // already returned, skip
 			}
-			if !availSet[fmt.Sprintf("%x", item.ArticleID.Bytes)] {
+			if !availSet[item.ArticleID] {
 				WriteError(w, http.StatusConflict, fmt.Sprintf("article %s not available for new dates", item.CommonName))
 				return
 			}
@@ -311,7 +323,7 @@ func (h *BookingHandler) AddItems(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusNotFound, "booking not found")
 		return
 	}
-	if !h.canAccessBooking(r.Context(), claims, booking) {
+	if !h.canAccessBooking(r.Context(), claims, accessFromGetBookingRow(booking)) {
 		WriteError(w, http.StatusForbidden, "forbidden")
 		return
 	}
@@ -322,6 +334,7 @@ func (h *BookingHandler) AddItems(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
 		CommercialName string `json:"commercial_name"`
+		LocationName   string `json:"location_name"`
 		Quantity       int    `json:"quantity"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -347,7 +360,9 @@ func (h *BookingHandler) AddItems(w http.ResponseWriter, r *http.Request) {
 	var matching []db.AvailableArticlesExcludingBookingRow
 	for _, a := range available {
 		if a.CommercialName == req.CommercialName {
-			matching = append(matching, a)
+			if req.LocationName == "" || a.LocationName == req.LocationName {
+				matching = append(matching, a)
+			}
 		}
 	}
 
@@ -392,7 +407,7 @@ func (h *BookingHandler) RemoveItem(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusNotFound, "booking not found")
 		return
 	}
-	if !h.canAccessBooking(r.Context(), claims, booking) {
+	if !h.canAccessBooking(r.Context(), claims, accessFromGetBookingRow(booking)) {
 		WriteError(w, http.StatusForbidden, "forbidden")
 		return
 	}
@@ -451,4 +466,110 @@ func (h *BookingHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	WriteJSON(w, http.StatusOK, updated)
+}
+
+// Cancel transitions a booking to cancelled. Drafts are deleted entirely.
+func (h *BookingHandler) Cancel(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	bookingID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	booking, err := h.Q.GetBooking(r.Context(), db.GetBookingParams{ID: bookingID, GroupID: claims.GroupID})
+	if err != nil {
+		WriteError(w, http.StatusNotFound, "booking not found")
+		return
+	}
+	if !h.canAccessBooking(r.Context(), claims, accessFromGetBookingRow(booking)) {
+		WriteError(w, http.StatusForbidden, "forbidden")
+		return
+	}
+	if booking.Status == "returned" || booking.Status == "cancelled" {
+		WriteError(w, http.StatusBadRequest, "booking already completed")
+		return
+	}
+
+	if booking.Status == "draft" {
+		// Delete drafts entirely
+		err = h.Q.DeleteBooking(r.Context(), db.DeleteBookingParams{ID: bookingID, GroupID: claims.GroupID})
+		if err != nil {
+			WriteError(w, http.StatusInternalServerError, "failed to delete draft")
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	updated, err := h.Q.UpdateBookingStatus(r.Context(), db.UpdateBookingStatusParams{
+		ID: bookingID, GroupID: claims.GroupID, Status: "cancelled",
+	})
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to cancel booking")
+		return
+	}
+	WriteJSON(w, http.StatusOK, updated)
+}
+
+// Copy creates a new draft booking with the same unit and items as the source.
+// Dates are left as a placeholder (today + 7 days) since the user needs to pick new dates.
+// Items that no longer exist are silently skipped.
+func (h *BookingHandler) Copy(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	sourceID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	source, err := h.Q.GetBooking(r.Context(), db.GetBookingParams{ID: sourceID, GroupID: claims.GroupID})
+	if err != nil {
+		WriteError(w, http.StatusNotFound, "booking not found")
+		return
+	}
+
+	sourceItems, err := h.Q.ListBookingItems(r.Context(), db.ListBookingItemsParams{
+		BookingID: sourceID, GroupID: claims.GroupID,
+	})
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to list source items")
+		return
+	}
+
+	// Create new draft with same unit, placeholder dates
+	now := time.Now()
+	newBooking, err := h.Q.CreateBooking(r.Context(), db.CreateBookingParams{
+		GroupID:               claims.GroupID,
+		CreatedBy:             claims.MemberID,
+		UsedByUnitID:          source.UsedByUnitID,
+		UsedByExternal:        source.UsedByExternal,
+		UsedByExternalContact: source.UsedByExternalContact,
+		StartDate:             pgtype.Date{Time: now, Valid: true},
+		EndDate:               pgtype.Date{Time: now.AddDate(0, 0, 7), Valid: true},
+		Notes:                 source.Notes,
+	})
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to create copy")
+		return
+	}
+
+	// Copy items, skip any that fail (article may have been deleted)
+	var copied int
+	for _, item := range sourceItems {
+		_, err := h.Q.AddBookingItem(r.Context(), db.AddBookingItemParams{
+			GroupID:   claims.GroupID,
+			BookingID: newBooking.ID,
+			ArticleID: item.ArticleID,
+		})
+		if err == nil {
+			copied++
+		}
+	}
+
+	WriteJSON(w, http.StatusCreated, map[string]any{
+		"booking":      newBooking,
+		"items_copied": copied,
+		"items_total":  len(sourceItems),
+	})
 }

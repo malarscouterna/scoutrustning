@@ -39,11 +39,12 @@ func (q *Queries) AddBookingItem(ctx context.Context, arg AddBookingItemParams) 
 }
 
 const availableArticles = `-- name: AvailableArticles :many
-SELECT a.id, a.commercial_name, a.common_name, a.location_id,
-    l.name AS location_name, a.place, a.status,
+SELECT a.id, a.commercial_name, a.common_name, a.category_id, a.location_id,
+    l.name AS location_name, c.name AS category_name, a.place, a.status,
     a.individually_tracked, a.requires_approval
 FROM articles a
 JOIN locations l ON a.location_id = l.id
+JOIN categories c ON a.category_id = c.id
 WHERE a.group_id = $1
     AND a.status IN ('ok', 'reported_usable')
     AND a.id NOT IN (
@@ -68,8 +69,10 @@ type AvailableArticlesRow struct {
 	ID                  pgtype.UUID `json:"id"`
 	CommercialName      string      `json:"commercial_name"`
 	CommonName          string      `json:"common_name"`
+	CategoryID          pgtype.UUID `json:"category_id"`
 	LocationID          pgtype.UUID `json:"location_id"`
 	LocationName        string      `json:"location_name"`
+	CategoryName        string      `json:"category_name"`
 	Place               string      `json:"place"`
 	Status              string      `json:"status"`
 	IndividuallyTracked bool        `json:"individually_tracked"`
@@ -90,8 +93,10 @@ func (q *Queries) AvailableArticles(ctx context.Context, arg AvailableArticlesPa
 			&i.ID,
 			&i.CommercialName,
 			&i.CommonName,
+			&i.CategoryID,
 			&i.LocationID,
 			&i.LocationName,
+			&i.CategoryName,
 			&i.Place,
 			&i.Status,
 			&i.IndividuallyTracked,
@@ -124,6 +129,10 @@ WHERE a.group_id = $1
             AND b.start_date <= $3
             AND b.end_date >= $4
             AND (bi.return_status IS NULL OR bi.return_status = 'pending')
+    )
+    AND a.id NOT IN (
+        SELECT bi.article_id FROM booking_items bi
+        WHERE bi.booking_id = $2
     )
 ORDER BY a.commercial_name, a.common_name
 `
@@ -205,6 +214,23 @@ func (q *Queries) BookingHasApprovalRequired(ctx context.Context, arg BookingHas
 	return requires_approval, err
 }
 
+const cleanupStaleDrafts = `-- name: CleanupStaleDrafts :exec
+DELETE FROM bookings
+WHERE group_id = $1 AND status = 'draft'
+    AND created_at < $2
+`
+
+type CleanupStaleDraftsParams struct {
+	GroupID   string             `json:"group_id"`
+	OlderThan pgtype.Timestamptz `json:"older_than"`
+}
+
+// Delete draft bookings older than the given threshold.
+func (q *Queries) CleanupStaleDrafts(ctx context.Context, arg CleanupStaleDraftsParams) error {
+	_, err := q.db.Exec(ctx, cleanupStaleDrafts, arg.GroupID, arg.OlderThan)
+	return err
+}
+
 const createBooking = `-- name: CreateBooking :one
 INSERT INTO bookings (
     group_id, created_by, used_by_unit_id, used_by_external,
@@ -256,9 +282,26 @@ func (q *Queries) CreateBooking(ctx context.Context, arg CreateBookingParams) (B
 	return i, err
 }
 
+const deleteBooking = `-- name: DeleteBooking :exec
+DELETE FROM bookings
+WHERE id = $1 AND group_id = $2 AND status = 'draft'
+`
+
+type DeleteBookingParams struct {
+	ID      pgtype.UUID `json:"id"`
+	GroupID string      `json:"group_id"`
+}
+
+func (q *Queries) DeleteBooking(ctx context.Context, arg DeleteBookingParams) error {
+	_, err := q.db.Exec(ctx, deleteBooking, arg.ID, arg.GroupID)
+	return err
+}
+
 const getBooking = `-- name: GetBooking :one
-SELECT id, group_id, created_by, used_by_unit_id, used_by_external, used_by_external_contact, status, start_date, end_date, notes, created_at, updated_at FROM bookings
-WHERE id = $1 AND group_id = $2
+SELECT b.id, b.group_id, b.created_by, b.used_by_unit_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.notes, b.created_at, b.updated_at, u.name AS unit_name
+FROM bookings b
+LEFT JOIN units u ON b.used_by_unit_id = u.id
+WHERE b.id = $1 AND b.group_id = $2
 `
 
 type GetBookingParams struct {
@@ -266,9 +309,25 @@ type GetBookingParams struct {
 	GroupID string      `json:"group_id"`
 }
 
-func (q *Queries) GetBooking(ctx context.Context, arg GetBookingParams) (Booking, error) {
+type GetBookingRow struct {
+	ID                    pgtype.UUID        `json:"id"`
+	GroupID               string             `json:"group_id"`
+	CreatedBy             string             `json:"created_by"`
+	UsedByUnitID          pgtype.UUID        `json:"used_by_unit_id"`
+	UsedByExternal        pgtype.Text        `json:"used_by_external"`
+	UsedByExternalContact pgtype.Text        `json:"used_by_external_contact"`
+	Status                string             `json:"status"`
+	StartDate             pgtype.Date        `json:"start_date"`
+	EndDate               pgtype.Date        `json:"end_date"`
+	Notes                 string             `json:"notes"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	UnitName              pgtype.Text        `json:"unit_name"`
+}
+
+func (q *Queries) GetBooking(ctx context.Context, arg GetBookingParams) (GetBookingRow, error) {
 	row := q.db.QueryRow(ctx, getBooking, arg.ID, arg.GroupID)
-	var i Booking
+	var i GetBookingRow
 	err := row.Scan(
 		&i.ID,
 		&i.GroupID,
@@ -282,6 +341,7 @@ func (q *Queries) GetBooking(ctx context.Context, arg GetBookingParams) (Booking
 		&i.Notes,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.UnitName,
 	)
 	return i, err
 }
@@ -378,9 +438,11 @@ func (q *Queries) ListBookingItems(ctx context.Context, arg ListBookingItemsPara
 }
 
 const listBookingsByStatus = `-- name: ListBookingsByStatus :many
-SELECT id, group_id, created_by, used_by_unit_id, used_by_external, used_by_external_contact, status, start_date, end_date, notes, created_at, updated_at FROM bookings
-WHERE group_id = $1 AND status = $2
-ORDER BY start_date
+SELECT b.id, b.group_id, b.created_by, b.used_by_unit_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.notes, b.created_at, b.updated_at, u.name AS unit_name
+FROM bookings b
+LEFT JOIN units u ON b.used_by_unit_id = u.id
+WHERE b.group_id = $1 AND b.status = $2
+ORDER BY b.start_date
 `
 
 type ListBookingsByStatusParams struct {
@@ -388,15 +450,31 @@ type ListBookingsByStatusParams struct {
 	Status  string `json:"status"`
 }
 
-func (q *Queries) ListBookingsByStatus(ctx context.Context, arg ListBookingsByStatusParams) ([]Booking, error) {
+type ListBookingsByStatusRow struct {
+	ID                    pgtype.UUID        `json:"id"`
+	GroupID               string             `json:"group_id"`
+	CreatedBy             string             `json:"created_by"`
+	UsedByUnitID          pgtype.UUID        `json:"used_by_unit_id"`
+	UsedByExternal        pgtype.Text        `json:"used_by_external"`
+	UsedByExternalContact pgtype.Text        `json:"used_by_external_contact"`
+	Status                string             `json:"status"`
+	StartDate             pgtype.Date        `json:"start_date"`
+	EndDate               pgtype.Date        `json:"end_date"`
+	Notes                 string             `json:"notes"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	UnitName              pgtype.Text        `json:"unit_name"`
+}
+
+func (q *Queries) ListBookingsByStatus(ctx context.Context, arg ListBookingsByStatusParams) ([]ListBookingsByStatusRow, error) {
 	rows, err := q.db.Query(ctx, listBookingsByStatus, arg.GroupID, arg.Status)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Booking{}
+	items := []ListBookingsByStatusRow{}
 	for rows.Next() {
-		var i Booking
+		var i ListBookingsByStatusRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.GroupID,
@@ -410,6 +488,7 @@ func (q *Queries) ListBookingsByStatus(ctx context.Context, arg ListBookingsBySt
 			&i.Notes,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.UnitName,
 		); err != nil {
 			return nil, err
 		}
@@ -422,10 +501,12 @@ func (q *Queries) ListBookingsByStatus(ctx context.Context, arg ListBookingsBySt
 }
 
 const listBookingsByUser = `-- name: ListBookingsByUser :many
-SELECT b.id, b.group_id, b.created_by, b.used_by_unit_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.notes, b.created_at, b.updated_at FROM bookings b
+SELECT b.id, b.group_id, b.created_by, b.used_by_unit_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.notes, b.created_at, b.updated_at, u.name AS unit_name
+FROM bookings b
+LEFT JOIN units u ON b.used_by_unit_id = u.id
 WHERE b.group_id = $1
     AND (b.created_by = $2 OR b.used_by_unit_id = ANY(
-        SELECT u.id FROM units u WHERE u.group_id = $1 AND u.name = ANY($3::text[])
+        SELECT un.id FROM units un WHERE un.group_id = $1 AND un.name = ANY($3::text[])
     ))
 ORDER BY b.created_at DESC
 `
@@ -436,15 +517,31 @@ type ListBookingsByUserParams struct {
 	UnitNames []string `json:"unit_names"`
 }
 
-func (q *Queries) ListBookingsByUser(ctx context.Context, arg ListBookingsByUserParams) ([]Booking, error) {
+type ListBookingsByUserRow struct {
+	ID                    pgtype.UUID        `json:"id"`
+	GroupID               string             `json:"group_id"`
+	CreatedBy             string             `json:"created_by"`
+	UsedByUnitID          pgtype.UUID        `json:"used_by_unit_id"`
+	UsedByExternal        pgtype.Text        `json:"used_by_external"`
+	UsedByExternalContact pgtype.Text        `json:"used_by_external_contact"`
+	Status                string             `json:"status"`
+	StartDate             pgtype.Date        `json:"start_date"`
+	EndDate               pgtype.Date        `json:"end_date"`
+	Notes                 string             `json:"notes"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	UnitName              pgtype.Text        `json:"unit_name"`
+}
+
+func (q *Queries) ListBookingsByUser(ctx context.Context, arg ListBookingsByUserParams) ([]ListBookingsByUserRow, error) {
 	rows, err := q.db.Query(ctx, listBookingsByUser, arg.GroupID, arg.UserID, arg.UnitNames)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Booking{}
+	items := []ListBookingsByUserRow{}
 	for rows.Next() {
-		var i Booking
+		var i ListBookingsByUserRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.GroupID,
@@ -458,6 +555,39 @@ func (q *Queries) ListBookingsByUser(ctx context.Context, arg ListBookingsByUser
 			&i.Notes,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.UnitName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUnits = `-- name: ListUnits :many
+SELECT id, group_id, name, gchat_webhook_url, created_at FROM units
+WHERE group_id = $1
+ORDER BY name
+`
+
+func (q *Queries) ListUnits(ctx context.Context, groupID string) ([]Unit, error) {
+	rows, err := q.db.Query(ctx, listUnits, groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Unit{}
+	for rows.Next() {
+		var i Unit
+		if err := rows.Scan(
+			&i.ID,
+			&i.GroupID,
+			&i.Name,
+			&i.GchatWebhookUrl,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}

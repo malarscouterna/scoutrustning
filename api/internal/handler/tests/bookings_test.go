@@ -471,3 +471,411 @@ func TestBookingFlow_AccessControl(t *testing.T) {
 		}
 	})
 }
+
+func TestBookingFlow_CancelAndDeleteDraft(t *testing.T) {
+	env := testutil.SetupTestEnv(t)
+	env.V1(func(r chi.Router) {
+		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries}).Routes())
+		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
+		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
+		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries}).Routes())
+	})
+
+	leader := env.ClientAs("leader-yggdrasil")
+
+	t.Run("delete draft booking", func(t *testing.T) {
+		b, _ := json.Marshal(map[string]any{"start_date": "2026-09-01", "end_date": "2026-09-03"})
+		resp, _ := leader.Post("/api/v0/bookings", bytes.NewReader(b))
+		var booking map[string]any
+		json.NewDecoder(resp.Body).Decode(&booking)
+		resp.Body.Close()
+
+		resp, err := leader.Post("/api/v0/bookings/"+booking["id"].(string)+"/cancel", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusNoContent {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("expected 204, got %d: %s", resp.StatusCode, body)
+		}
+
+		// Verify it's gone
+		resp, _ = leader.Get("/api/v0/bookings/" + booking["id"].(string))
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Fatalf("expected 404 after delete, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("cancel confirmed booking", func(t *testing.T) {
+		manager := env.ClientAs("equipment-manager")
+
+		// Create an article so we can submit
+		resp, _ := manager.Get("/api/v0/locations")
+		var locations []map[string]any
+		json.NewDecoder(resp.Body).Decode(&locations)
+		resp.Body.Close()
+		locID := locations[0]["id"].(string)
+
+		resp, _ = manager.Get("/api/v0/categories")
+		var categories []map[string]any
+		json.NewDecoder(resp.Body).Decode(&categories)
+		resp.Body.Close()
+		catID := categories[0]["id"].(string)
+
+		b, _ := json.Marshal(map[string]any{
+			"commercial_name": "CancelTest", "common_name": "CancelTest 1",
+			"category_id": catID, "location_id": locID, "individually_tracked": true,
+		})
+		resp, _ = manager.Post("/api/v0/articles", bytes.NewReader(b))
+		resp.Body.Close()
+
+		// Create, add item, submit
+		b, _ = json.Marshal(map[string]any{"start_date": "2026-09-10", "end_date": "2026-09-12"})
+		resp, _ = leader.Post("/api/v0/bookings", bytes.NewReader(b))
+		var booking map[string]any
+		json.NewDecoder(resp.Body).Decode(&booking)
+		resp.Body.Close()
+		bookingID := booking["id"].(string)
+
+		b, _ = json.Marshal(map[string]any{"commercial_name": "CancelTest", "quantity": 1})
+		resp, _ = leader.Post("/api/v0/bookings/"+bookingID+"/items", bytes.NewReader(b))
+		resp.Body.Close()
+
+		resp, _ = leader.Post("/api/v0/bookings/"+bookingID+"/submit", nil)
+		resp.Body.Close()
+
+		// Cancel it
+		resp, err := leader.Post("/api/v0/bookings/"+bookingID+"/cancel", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("expected 200, got %d: %s", resp.StatusCode, body)
+		}
+
+		var cancelled map[string]any
+		json.NewDecoder(resp.Body).Decode(&cancelled)
+		if cancelled["status"] != "cancelled" {
+			t.Errorf("expected cancelled, got %v", cancelled["status"])
+		}
+	})
+}
+
+func TestBookingFlow_IncrementalAddNoDuplicates(t *testing.T) {
+	env := testutil.SetupTestEnv(t)
+	env.V1(func(r chi.Router) {
+		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries}).Routes())
+		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
+		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
+		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries}).Routes())
+	})
+
+	manager := env.ClientAs("equipment-manager")
+	leader := env.ClientAs("leader-yggdrasil")
+
+	// Setup: create 5 items of same type
+	resp, _ := manager.Get("/api/v0/locations")
+	var locations []map[string]any
+	json.NewDecoder(resp.Body).Decode(&locations)
+	resp.Body.Close()
+	locID := locations[0]["id"].(string)
+
+	resp, _ = manager.Get("/api/v0/categories")
+	var categories []map[string]any
+	json.NewDecoder(resp.Body).Decode(&categories)
+	resp.Body.Close()
+	catID := categories[0]["id"].(string)
+
+	for i := range 5 {
+		b, _ := json.Marshal(map[string]any{
+			"commercial_name":      "Handskar",
+			"common_name":          "Handskar " + string(rune('1'+i)),
+			"category_id":          catID,
+			"location_id":          locID,
+			"individually_tracked": true,
+		})
+		resp, _ := manager.Post("/api/v0/articles", bytes.NewReader(b))
+		resp.Body.Close()
+	}
+
+	// Create booking
+	b, _ := json.Marshal(map[string]any{"start_date": "2026-10-01", "end_date": "2026-10-03"})
+	resp, _ = leader.Post("/api/v0/bookings", bytes.NewReader(b))
+	var booking map[string]any
+	json.NewDecoder(resp.Body).Decode(&booking)
+	resp.Body.Close()
+	bookingID := booking["id"].(string)
+
+	// Add 2, then 2 more, then 1 more — should get 5 unique articles
+	for _, qty := range []int{2, 2, 1} {
+		b, _ := json.Marshal(map[string]any{"commercial_name": "Handskar", "quantity": qty})
+		resp, err := leader.Post("/api/v0/bookings/"+bookingID+"/items", bytes.NewReader(b))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resp.StatusCode != http.StatusCreated {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("expected 201, got %d: %s", resp.StatusCode, body)
+		}
+		resp.Body.Close()
+	}
+
+	// Verify 5 unique items
+	resp, _ = leader.Get("/api/v0/bookings/" + bookingID)
+	var result map[string]any
+	json.NewDecoder(resp.Body).Decode(&result)
+	resp.Body.Close()
+
+	items := result["items"].([]any)
+	if len(items) != 5 {
+		t.Fatalf("expected 5 items, got %d", len(items))
+	}
+
+	// Verify all article IDs are unique
+	seen := map[string]bool{}
+	for _, item := range items {
+		aid := item.(map[string]any)["article_id"].(string)
+		if seen[aid] {
+			t.Errorf("duplicate article_id: %s", aid)
+		}
+		seen[aid] = true
+	}
+
+	// Verify availability is now 0
+	resp, _ = leader.Get("/api/v0/articles/availability?start_date=2026-10-01&end_date=2026-10-03")
+	var avail []map[string]any
+	json.NewDecoder(resp.Body).Decode(&avail)
+	resp.Body.Close()
+
+	for _, a := range avail {
+		if a["commercial_name"] == "Handskar" {
+			t.Errorf("expected Handskar to not appear in availability (0 left), but got %v", a["available_count"])
+		}
+	}
+
+	// Adding 1 more should fail
+	b, _ = json.Marshal(map[string]any{"commercial_name": "Handskar", "quantity": 1})
+	resp, _ = leader.Post("/api/v0/bookings/"+bookingID+"/items", bytes.NewReader(b))
+	if resp.StatusCode != http.StatusConflict {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 409 when all booked, got %d: %s", resp.StatusCode, body)
+	}
+	resp.Body.Close()
+}
+
+func TestBookingFlow_LocationScopedAvailability(t *testing.T) {
+	env := testutil.SetupTestEnv(t)
+	env.V1(func(r chi.Router) {
+		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries}).Routes())
+		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
+		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
+		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries}).Routes())
+	})
+
+	manager := env.ClientAs("equipment-manager")
+	leader := env.ClientAs("leader-yggdrasil")
+
+	// Get seed location and category
+	resp, _ := manager.Get("/api/v0/locations")
+	var locations []map[string]any
+	json.NewDecoder(resp.Body).Decode(&locations)
+	resp.Body.Close()
+
+	// Need two locations — seed has multiple
+	if len(locations) < 2 {
+		t.Skip("need at least 2 seed locations")
+	}
+	loc1ID := locations[0]["id"].(string)
+	loc1Name := locations[0]["name"].(string)
+	loc2ID := locations[1]["id"].(string)
+	loc2Name := locations[1]["name"].(string)
+
+	resp, _ = manager.Get("/api/v0/categories")
+	var categories []map[string]any
+	json.NewDecoder(resp.Body).Decode(&categories)
+	resp.Body.Close()
+	catID := categories[0]["id"].(string)
+
+	// Create 2 "Flaska" in location 1, 3 "Flaska" in location 2
+	for i := range 2 {
+		b, _ := json.Marshal(map[string]any{
+			"commercial_name": "Flaska", "common_name": "Flaska L1-" + string(rune('1'+i)),
+			"category_id": catID, "location_id": loc1ID, "individually_tracked": true,
+		})
+		resp, _ := manager.Post("/api/v0/articles", bytes.NewReader(b))
+		resp.Body.Close()
+	}
+	for i := range 3 {
+		b, _ := json.Marshal(map[string]any{
+			"commercial_name": "Flaska", "common_name": "Flaska L2-" + string(rune('1'+i)),
+			"category_id": catID, "location_id": loc2ID, "individually_tracked": true,
+		})
+		resp, _ := manager.Post("/api/v0/articles", bytes.NewReader(b))
+		resp.Body.Close()
+	}
+
+	t.Run("availability shows two groups for same commercial_name", func(t *testing.T) {
+		resp, _ := leader.Get("/api/v0/articles/availability?start_date=2026-11-01&end_date=2026-11-03")
+		defer resp.Body.Close()
+
+		var avail []map[string]any
+		json.NewDecoder(resp.Body).Decode(&avail)
+
+		flaskaGroups := 0
+		for _, a := range avail {
+			if a["commercial_name"] == "Flaska" {
+				flaskaGroups++
+				locName := a["location_name"].(string)
+				count := int(a["available_count"].(float64))
+				if locName == loc1Name && count != 2 {
+					t.Errorf("expected 2 Flaska in %s, got %d", loc1Name, count)
+				}
+				if locName == loc2Name && count != 3 {
+					t.Errorf("expected 3 Flaska in %s, got %d", loc2Name, count)
+				}
+			}
+		}
+		if flaskaGroups != 2 {
+			t.Errorf("expected 2 Flaska groups (one per location), got %d", flaskaGroups)
+		}
+	})
+
+	t.Run("booking from location 1 does not affect location 2 availability", func(t *testing.T) {
+		b, _ := json.Marshal(map[string]any{"start_date": "2026-11-01", "end_date": "2026-11-03"})
+		resp, _ := leader.Post("/api/v0/bookings", bytes.NewReader(b))
+		var booking map[string]any
+		json.NewDecoder(resp.Body).Decode(&booking)
+		resp.Body.Close()
+		bookingID := booking["id"].(string)
+
+		// Book 2 Flaska from location 1
+		b, _ = json.Marshal(map[string]any{
+			"commercial_name": "Flaska", "location_name": loc1Name, "quantity": 2,
+		})
+		resp, err := leader.Post("/api/v0/bookings/"+bookingID+"/items", bytes.NewReader(b))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+
+		// Check availability — location 1 should have 0, location 2 still 3
+		resp, _ = leader.Get("/api/v0/articles/availability?start_date=2026-11-01&end_date=2026-11-03")
+		defer resp.Body.Close()
+
+		var avail []map[string]any
+		json.NewDecoder(resp.Body).Decode(&avail)
+
+		for _, a := range avail {
+			if a["commercial_name"] == "Flaska" {
+				locName := a["location_name"].(string)
+				count := int(a["available_count"].(float64))
+				if locName == loc1Name {
+					t.Errorf("expected Flaska in %s to not appear (0 available), but got %d", loc1Name, count)
+				}
+				if locName == loc2Name && count != 3 {
+					t.Errorf("expected 3 Flaska in %s, got %d", loc2Name, count)
+				}
+			}
+		}
+	})
+}
+
+func TestBookingFlow_Copy(t *testing.T) {
+	env := testutil.SetupTestEnv(t)
+	env.V1(func(r chi.Router) {
+		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries}).Routes())
+		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
+		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
+		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries}).Routes())
+	})
+
+	manager := env.ClientAs("equipment-manager")
+	leader := env.ClientAs("leader-yggdrasil")
+
+	// Setup
+	resp, _ := manager.Get("/api/v0/locations")
+	var locations []map[string]any
+	json.NewDecoder(resp.Body).Decode(&locations)
+	resp.Body.Close()
+	locID := locations[0]["id"].(string)
+
+	resp, _ = manager.Get("/api/v0/categories")
+	var categories []map[string]any
+	json.NewDecoder(resp.Body).Decode(&categories)
+	resp.Body.Close()
+	catID := categories[0]["id"].(string)
+
+	for i := range 3 {
+		b, _ := json.Marshal(map[string]any{
+			"commercial_name": "CopyTest", "common_name": "CopyTest " + string(rune('1'+i)),
+			"category_id": catID, "location_id": locID, "individually_tracked": true,
+		})
+		resp, _ := manager.Post("/api/v0/articles", bytes.NewReader(b))
+		resp.Body.Close()
+	}
+
+	// Create booking with 2 items, submit, then cancel
+	b, _ := json.Marshal(map[string]any{"start_date": "2026-12-01", "end_date": "2026-12-03", "notes": "Original"})
+	resp, _ = leader.Post("/api/v0/bookings", bytes.NewReader(b))
+	var booking map[string]any
+	json.NewDecoder(resp.Body).Decode(&booking)
+	resp.Body.Close()
+	bookingID := booking["id"].(string)
+
+	b, _ = json.Marshal(map[string]any{"commercial_name": "CopyTest", "quantity": 2})
+	resp, _ = leader.Post("/api/v0/bookings/"+bookingID+"/items", bytes.NewReader(b))
+	resp.Body.Close()
+
+	resp, _ = leader.Post("/api/v0/bookings/"+bookingID+"/submit", nil)
+	resp.Body.Close()
+
+	resp, _ = leader.Post("/api/v0/bookings/"+bookingID+"/cancel", nil)
+	resp.Body.Close()
+
+	t.Run("copy cancelled booking creates new draft with same items", func(t *testing.T) {
+		resp, err := leader.Post("/api/v0/bookings/"+bookingID+"/copy", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusCreated {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("expected 201, got %d: %s", resp.StatusCode, body)
+		}
+
+		var result map[string]any
+		json.NewDecoder(resp.Body).Decode(&result)
+
+		copied := int(result["items_copied"].(float64))
+		if copied != 2 {
+			t.Errorf("expected 2 items copied, got %d", copied)
+		}
+
+		newBooking := result["booking"].(map[string]any)
+		if newBooking["status"] != "draft" {
+			t.Errorf("expected draft, got %v", newBooking["status"])
+		}
+		if newBooking["notes"] != "Original" {
+			t.Errorf("expected notes preserved, got %v", newBooking["notes"])
+		}
+
+		// Verify the new booking has items
+		newID := newBooking["id"].(string)
+		resp2, _ := leader.Get("/api/v0/bookings/" + newID)
+		var detail map[string]any
+		json.NewDecoder(resp2.Body).Decode(&detail)
+		resp2.Body.Close()
+
+		items := detail["items"].([]any)
+		if len(items) != 2 {
+			t.Errorf("expected 2 items in copy, got %d", len(items))
+		}
+	})
+}

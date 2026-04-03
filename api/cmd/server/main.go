@@ -68,11 +68,13 @@ func main() {
 		locations := &handler.LocationHandler{Q: queries}
 		categories := &handler.CategoryHandler{Q: queries}
 		bookings := &handler.BookingHandler{Q: queries}
+		units := &handler.UnitHandler{Q: queries}
 
 		r.Mount("/articles", articles.Routes())
 		r.Mount("/locations", locations.Routes())
 		r.Mount("/categories", categories.Routes())
 		r.Mount("/bookings", bookings.Routes())
+		r.Mount("/units", units.Routes())
 	})
 
 	addr := getenv("ADDR", ":8080")

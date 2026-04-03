@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -216,18 +217,52 @@ func (h *ArticleHandler) Availability(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Group by commercial_name
+	// Optional filters
+	categoryFilter := r.URL.Query().Get("category_id")
+	locationFilter := r.URL.Query().Get("location_id")
+	bookableOnly := r.URL.Query().Get("bookable_only") != "false" // default true
+
+	// Group by commercial_name + location
 	type availGroup struct {
 		CommercialName   string `json:"commercial_name"`
 		AvailableCount   int    `json:"available_count"`
 		RequiresApproval bool   `json:"requires_approval"`
+		CategoryName     string `json:"category_name"`
+		LocationName     string `json:"location_name"`
 	}
-	groups := map[string]*availGroup{}
+	type groupKey struct {
+		name     string
+		location string
+	}
+	groups := map[groupKey]*availGroup{}
 	for _, a := range available {
-		g, ok := groups[a.CommercialName]
+		if bookableOnly && a.RequiresApproval {
+			continue
+		}
+		if categoryFilter != "" {
+			var catUUID pgtype.UUID
+			catUUID.Scan(categoryFilter)
+			if a.CategoryID != catUUID {
+				continue
+			}
+		}
+		if locationFilter != "" {
+			var locUUID pgtype.UUID
+			locUUID.Scan(locationFilter)
+			if a.LocationID != locUUID {
+				continue
+			}
+		}
+		key := groupKey{a.CommercialName, a.LocationName}
+		g, ok := groups[key]
 		if !ok {
-			g = &availGroup{CommercialName: a.CommercialName, RequiresApproval: a.RequiresApproval}
-			groups[a.CommercialName] = g
+			g = &availGroup{
+				CommercialName:   a.CommercialName,
+				RequiresApproval: a.RequiresApproval,
+				CategoryName:     a.CategoryName,
+				LocationName:     a.LocationName,
+			}
+			groups[key] = g
 		}
 		g.AvailableCount++
 	}
@@ -236,6 +271,13 @@ func (h *ArticleHandler) Availability(w http.ResponseWriter, r *http.Request) {
 	for _, g := range groups {
 		result = append(result, *g)
 	}
+	// Sort alphabetically
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].CommercialName != result[j].CommercialName {
+			return result[i].CommercialName < result[j].CommercialName
+		}
+		return result[i].LocationName < result[j].LocationName
+	})
 	WriteJSON(w, http.StatusOK, result)
 }
 
@@ -389,6 +431,10 @@ func (h *ArticleHandler) Import(w http.ResponseWriter, r *http.Request) {
 
 		commercialName := strings.TrimSpace(record[0])
 
+		// Determine if approval is required
+		// Default: items in Hajkförrådet don't require approval, others do
+		requiresApproval := !strings.EqualFold(locationName, "Hajkförrådet")
+
 		_, err = h.Q.CreateArticle(ctx, db.CreateArticleParams{
 			GroupID:             claims.GroupID,
 			CommercialName:      commercialName,
@@ -397,6 +443,7 @@ func (h *ArticleHandler) Import(w http.ResponseWriter, r *http.Request) {
 			LocationID:          locID,
 			Status:              "ok",
 			IndividuallyTracked: true,
+			RequiresApproval:    requiresApproval,
 			Description:         description,
 			Place:               place,
 		})

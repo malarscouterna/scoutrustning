@@ -9,21 +9,27 @@ INSERT INTO bookings (
 RETURNING *;
 
 -- name: GetBooking :one
-SELECT * FROM bookings
-WHERE id = @id AND group_id = @group_id;
+SELECT b.*, u.name AS unit_name
+FROM bookings b
+LEFT JOIN units u ON b.used_by_unit_id = u.id
+WHERE b.id = @id AND b.group_id = @group_id;
 
 -- name: ListBookingsByUser :many
-SELECT b.* FROM bookings b
+SELECT b.*, u.name AS unit_name
+FROM bookings b
+LEFT JOIN units u ON b.used_by_unit_id = u.id
 WHERE b.group_id = @group_id
     AND (b.created_by = @user_id OR b.used_by_unit_id = ANY(
-        SELECT u.id FROM units u WHERE u.group_id = @group_id AND u.name = ANY(@unit_names::text[])
+        SELECT un.id FROM units un WHERE un.group_id = @group_id AND un.name = ANY(@unit_names::text[])
     ))
 ORDER BY b.created_at DESC;
 
 -- name: ListBookingsByStatus :many
-SELECT * FROM bookings
-WHERE group_id = @group_id AND status = @status
-ORDER BY start_date;
+SELECT b.*, u.name AS unit_name
+FROM bookings b
+LEFT JOIN units u ON b.used_by_unit_id = u.id
+WHERE b.group_id = @group_id AND b.status = @status
+ORDER BY b.start_date;
 
 -- name: UpdateBookingStatus :one
 UPDATE bookings SET status = @status, updated_at = now()
@@ -65,6 +71,10 @@ WHERE a.group_id = @group_id
             AND b.end_date >= @start_date
             AND (bi.return_status IS NULL OR bi.return_status = 'pending')
     )
+    AND a.id NOT IN (
+        SELECT bi.article_id FROM booking_items bi
+        WHERE bi.booking_id = @exclude_booking_id
+    )
 ORDER BY a.commercial_name, a.common_name;
 
 -- name: AddBookingItem :one
@@ -92,11 +102,12 @@ ORDER BY c.name, a.commercial_name, a.common_name;
 
 -- name: AvailableArticles :many
 -- Returns articles that are bookable and not reserved by overlapping bookings.
-SELECT a.id, a.commercial_name, a.common_name, a.location_id,
-    l.name AS location_name, a.place, a.status,
+SELECT a.id, a.commercial_name, a.common_name, a.category_id, a.location_id,
+    l.name AS location_name, c.name AS category_name, a.place, a.status,
     a.individually_tracked, a.requires_approval
 FROM articles a
 JOIN locations l ON a.location_id = l.id
+JOIN categories c ON a.category_id = c.id
 WHERE a.group_id = @group_id
     AND a.status IN ('ok', 'reported_usable')
     AND a.id NOT IN (
@@ -118,3 +129,18 @@ SELECT EXISTS (
     WHERE bi.booking_id = @booking_id AND bi.group_id = @group_id
         AND a.requires_approval = true
 ) AS requires_approval;
+
+-- name: DeleteBooking :exec
+DELETE FROM bookings
+WHERE id = @id AND group_id = @group_id AND status = 'draft';
+
+-- name: ListUnits :many
+SELECT * FROM units
+WHERE group_id = @group_id
+ORDER BY name;
+
+-- name: CleanupStaleDrafts :exec
+-- Delete draft bookings older than the given threshold.
+DELETE FROM bookings
+WHERE group_id = @group_id AND status = 'draft'
+    AND created_at < @older_than;
