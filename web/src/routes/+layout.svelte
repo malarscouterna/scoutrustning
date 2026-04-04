@@ -2,12 +2,13 @@
 	import '../app.css';
 	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
+	import DevPersonaSwitcher from '$lib/components/DevPersonaSwitcher.svelte';
 
 	if (browser) {
 		import('@scouterna/ui-webc/loader');
 	}
 
-	let { children } = $props();
+	let { children, data } = $props();
 </script>
 
 <nav class="border-b bg-white sticky top-0 z-10">
@@ -21,3 +22,7 @@
 </nav>
 
 {@render children()}
+
+{#if data.dev}
+	<DevPersonaSwitcher personas={data.dev.personas} currentPersona={data.dev.currentPersona} />
+{/if}

@@ -35,9 +35,12 @@ services:
     build: ./web
     ports:
       - "3000:3000"
+    volumes:
+      - ./dev-personas.json:/app/dev-personas.json:ro
     environment:
       ORIGIN: http://localhost:3000
       API_URL: http://api:8080
+      DEV_MODE: "true"
     depends_on:
       - api
 

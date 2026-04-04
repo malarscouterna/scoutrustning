@@ -5,15 +5,52 @@
 	import ReturnChecklist from '$lib/components/ReturnChecklist.svelte';
 	import type { PageData } from './$types';
 	import { page } from '$app/stores';
+	import { onDestroy } from 'svelte';
 
 	let { data }: { data: PageData } = $props();
 
-	const api = createApiClient({ persona: 'leader-yggdrasil' });
+	const api = createApiClient();
 
 	let booking = $state<Booking>(data.booking);
 	let items = $state<BookingItem[]>(data.items);
 	let error = $state('');
 	let message = $state($page.url.searchParams.get('msg') ?? '');
+
+	if (message) {
+		history.replaceState({}, '', $page.url.pathname);
+		setTimeout(() => message = '', 4000);
+	}
+
+	// Poll for updates during active pickup/return
+	let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+	function startPolling() {
+		stopPolling();
+		pollTimer = setInterval(async () => {
+			try {
+				const result = await api.getBooking(booking.id);
+				items = result.items;
+				if (result.booking.status !== booking.status) {
+					booking = result.booking;
+				}
+			} catch { /* ignore poll errors */ }
+		}, 10_000);
+	}
+
+	function stopPolling() {
+		if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+	}
+
+	$effect(() => {
+		const active = !['returned', 'cancelled', 'rejected'].includes(booking.status);
+		if (active) {
+			startPolling();
+		} else {
+			stopPolling();
+		}
+	});
+
+	onDestroy(stopPolling);
 
 	if (message) {
 		history.replaceState({}, '', $page.url.pathname);

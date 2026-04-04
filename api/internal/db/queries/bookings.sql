@@ -24,6 +24,13 @@ WHERE b.group_id = @group_id
     ))
 ORDER BY b.created_at DESC;
 
+-- name: ListAllBookings :many
+SELECT b.*, u.name AS unit_name
+FROM bookings b
+LEFT JOIN units u ON b.used_by_unit_id = u.id
+WHERE b.group_id = @group_id
+ORDER BY b.created_at DESC;
+
 -- name: ListBookingsByStatus :many
 SELECT b.*, u.name AS unit_name
 FROM bookings b
@@ -139,7 +146,7 @@ WHERE id = @id AND group_id = @group_id AND status = 'draft';
 -- name: ListUnits :many
 SELECT * FROM units
 WHERE group_id = @group_id
-ORDER BY name;
+ORDER BY type, name;
 
 -- name: UpdateBookingItemPickupStatus :one
 UPDATE booking_items SET pickup_status = @pickup_status

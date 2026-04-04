@@ -22,7 +22,7 @@
       "name": "Maria Projektledare",
       "email": "maria@example.com",
       "roles": ["project_leader"],
-      "units": ["Yggdrasil"]
+      "units": ["Valborg 2026"]
     },
     "equipment-manager": {
       "member_id": "3000004",
@@ -39,6 +39,14 @@
       "email": "sofia@example.com",
       "roles": ["leader", "equipment_manager"],
       "units": ["Yggdrasil"]
+    },
+    "other-group-leader": {
+      "member_id": "4000001",
+      "group_id": "999",
+      "name": "Test Annan Kår",
+      "email": "test@other.example.com",
+      "roles": ["leader"],
+      "units": ["Avdelning 1"]
     }
   }
 }

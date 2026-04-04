@@ -392,7 +392,7 @@ func (q *Queries) GetBooking(ctx context.Context, arg GetBookingParams) (GetBook
 }
 
 const getUnitByID = `-- name: GetUnitByID :one
-SELECT id, group_id, name, gchat_webhook_url, created_at FROM units
+SELECT id, group_id, name, gchat_webhook_url, created_at, type FROM units
 WHERE id = $1 AND group_id = $2
 `
 
@@ -410,8 +410,67 @@ func (q *Queries) GetUnitByID(ctx context.Context, arg GetUnitByIDParams) (Unit,
 		&i.Name,
 		&i.GchatWebhookUrl,
 		&i.CreatedAt,
+		&i.Type,
 	)
 	return i, err
+}
+
+const listAllBookings = `-- name: ListAllBookings :many
+SELECT b.id, b.group_id, b.created_by, b.used_by_unit_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.notes, b.created_at, b.updated_at, u.name AS unit_name
+FROM bookings b
+LEFT JOIN units u ON b.used_by_unit_id = u.id
+WHERE b.group_id = $1
+ORDER BY b.created_at DESC
+`
+
+type ListAllBookingsRow struct {
+	ID                    pgtype.UUID        `json:"id"`
+	GroupID               string             `json:"group_id"`
+	CreatedBy             string             `json:"created_by"`
+	UsedByUnitID          pgtype.UUID        `json:"used_by_unit_id"`
+	UsedByExternal        pgtype.Text        `json:"used_by_external"`
+	UsedByExternalContact pgtype.Text        `json:"used_by_external_contact"`
+	Status                string             `json:"status"`
+	StartDate             pgtype.Date        `json:"start_date"`
+	EndDate               pgtype.Date        `json:"end_date"`
+	Notes                 string             `json:"notes"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	UnitName              pgtype.Text        `json:"unit_name"`
+}
+
+func (q *Queries) ListAllBookings(ctx context.Context, groupID string) ([]ListAllBookingsRow, error) {
+	rows, err := q.db.Query(ctx, listAllBookings, groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAllBookingsRow{}
+	for rows.Next() {
+		var i ListAllBookingsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.GroupID,
+			&i.CreatedBy,
+			&i.UsedByUnitID,
+			&i.UsedByExternal,
+			&i.UsedByExternalContact,
+			&i.Status,
+			&i.StartDate,
+			&i.EndDate,
+			&i.Notes,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.UnitName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listBookingItems = `-- name: ListBookingItems :many
@@ -619,9 +678,9 @@ func (q *Queries) ListBookingsByUser(ctx context.Context, arg ListBookingsByUser
 }
 
 const listUnits = `-- name: ListUnits :many
-SELECT id, group_id, name, gchat_webhook_url, created_at FROM units
+SELECT id, group_id, name, gchat_webhook_url, created_at, type FROM units
 WHERE group_id = $1
-ORDER BY name
+ORDER BY type, name
 `
 
 func (q *Queries) ListUnits(ctx context.Context, groupID string) ([]Unit, error) {
@@ -639,6 +698,7 @@ func (q *Queries) ListUnits(ctx context.Context, groupID string) ([]Unit, error)
 			&i.Name,
 			&i.GchatWebhookUrl,
 			&i.CreatedAt,
+			&i.Type,
 		); err != nil {
 			return nil, err
 		}

@@ -137,12 +137,12 @@ List individual available articles for a date range. Used for swap selection dur
 ## Bookings
 
 ### `GET /api/v0/bookings`
-List bookings visible to the current user (own bookings + unit bookings).
+List bookings visible to the current user. Leaders see their own bookings + bookings for their units/projects. Equipment managers see all bookings in the group.
 
 **Response** `200`
 
 ### `POST /api/v0/bookings`
-Create a draft booking.
+Create a draft booking. When `used_by_unit_id` is set, the user must be a member of that unit or project (name must appear in their token claims). Equipment managers are exempt from this check.
 
 **Body**
 ```json
@@ -157,7 +157,7 @@ Create a draft booking.
 ```
 Required: `start_date`, `end_date`.
 
-**Response** `201` | `400`
+**Response** `201` | `400` | `403` (not a member of the unit/project)
 
 ### `GET /api/v0/bookings/{id}`
 Get booking with its items (including article details).
@@ -235,18 +235,18 @@ Transition a confirmed or approved booking to `picked_up`. Access: creator, unit
 **Response** `200` | `400` | `403` | `404`
 
 ### `PUT /api/v0/bookings/{id}/items/{itemId}/pickup`
-Set the pickup status for a single booking item. Booking must be in `picked_up` status. Access: creator, unit leaders, or equipment manager.
+Set the pickup status for a single booking item. Booking must be in `picked_up` status. Access: creator, unit/project members, or equipment manager. Logs a `picked_up` article event with the acting user.
 
 **Body**
 ```json
 {"pickup_status": "picked_up"}
 ```
-Valid values: `picked_up`, `not_available`.
+Valid values: `picked_up`, `lost`.
 
 **Response** `200` | `400` | `403` | `404`
 
 ### `POST /api/v0/bookings/{id}/items/{itemId}/swap`
-Replace the article on a booking item during pickup. The new article must be available for the booking's date range. Sets pickup_status to `swapped`. Booking must be in `picked_up` status. Access: creator, unit leaders, or equipment manager.
+Replace the article on a booking item during pickup. The new article must be available for the booking's date range. Sets pickup_status to `swapped`. Booking must be in `picked_up` status. Access: creator, unit/project members, or equipment manager. Logs a `picked_up` article event for the new article.
 
 **Body**
 ```json
@@ -263,8 +263,8 @@ Transition a picked_up booking to `returned`. All items must have a final return
 ### `PUT /api/v0/bookings/{id}/items/{itemId}/return`
 Set the return status for a single booking item. Booking must be in `picked_up` status. Access: creator, unit leaders, or equipment manager.
 
-Side effects (all also log an article event):
-- `delayed` — no article status change, item stays on loan
+Side effects (all also log an article event with the acting user):
+- `delayed` — no article status change, item stays on loan, logs `returned` event with `delayed` status
 - `broken` — sets article status to `reported_unusable`, logs `issue_reported` event
 - `lost` — sets article status to `archived`, logs `issue_reported` event
 - `returned_ok` — sets article status back to `ok`, logs `returned` event
@@ -285,17 +285,27 @@ Valid values: `returned_ok`, `delayed`, `broken`, `lost`, `""` (undo). `expected
 
 ---
 
-## Units
+## Units & Projects
+
+Units (e.g. "Yggdrasil") and projects (e.g. "Valborg 2026") are both stored in the `units` table, distinguished by a `type` field. Both can be assigned to bookings via `used_by_unit_id`. Membership comes from OIDC token claims.
 
 ### `GET /api/v0/units`
-List all units for the group.
+List all units and projects for the group, ordered by type then name.
 
 **Response** `200`
+```json
+[
+  {"id": "uuid", "name": "Yggdrasil", "type": "unit", ...},
+  {"id": "uuid", "name": "Valborg 2026", "type": "project", ...}
+]
+```
 
 ### 🔒 `POST /api/v0/units`
 ```json
-{"name": "Yggdrasil"}
+{"name": "Yggdrasil", "type": "unit"}
 ```
+`type` defaults to `unit`. Valid values: `unit`, `project`.
+
 **Response** `201` | `400` | `403`
 
 ---
@@ -360,6 +370,7 @@ In production: `Authorization: Bearer <jwt>` header with a valid Keycloak token.
 In dev mode (`DEV_MODE=true`): `X-Dev-Role-Override: <persona>` header. Available personas:
 - `leader-yggdrasil` — leader, unit Yggdrasil
 - `leader-orneerna` — leader, unit Ornéerna
-- `project-leader` — can book without approval
+- `project-leader` — project leader, project Valborg 2026 (books without approval)
 - `equipment-manager` — full admin
-- `leader-and-manager` — combined roles
+- `leader-and-manager` — combined roles, unit Yggdrasil
+- `other-group-leader` — leader in group 999 (Testkåren), for multi-tenancy testing

@@ -10,18 +10,19 @@ import (
 )
 
 const createUnit = `-- name: CreateUnit :one
-INSERT INTO units (group_id, name)
-VALUES ($1, $2)
-RETURNING id, group_id, name, gchat_webhook_url, created_at
+INSERT INTO units (group_id, name, type)
+VALUES ($1, $2, $3)
+RETURNING id, group_id, name, gchat_webhook_url, created_at, type
 `
 
 type CreateUnitParams struct {
 	GroupID string `json:"group_id"`
 	Name    string `json:"name"`
+	Type    string `json:"type"`
 }
 
 func (q *Queries) CreateUnit(ctx context.Context, arg CreateUnitParams) (Unit, error) {
-	row := q.db.QueryRow(ctx, createUnit, arg.GroupID, arg.Name)
+	row := q.db.QueryRow(ctx, createUnit, arg.GroupID, arg.Name, arg.Type)
 	var i Unit
 	err := row.Scan(
 		&i.ID,
@@ -29,6 +30,7 @@ func (q *Queries) CreateUnit(ctx context.Context, arg CreateUnitParams) (Unit, e
 		&i.Name,
 		&i.GchatWebhookUrl,
 		&i.CreatedAt,
+		&i.Type,
 	)
 	return i, err
 }

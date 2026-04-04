@@ -6,7 +6,7 @@
 	}
 
 	let { articleId }: Props = $props();
-	const api = createApiClient({ persona: 'leader-yggdrasil' });
+	const api = createApiClient();
 
 	let events = $state<ArticleEvent[]>([]);
 	let loading = $state(true);

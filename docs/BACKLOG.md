@@ -48,7 +48,18 @@ When copying a booking, items that exist but are no longer available for the new
 
 ## Race conditions on concurrent edits
 
-Two users editing the same booking simultaneously could cause conflicts. No optimistic locking or conflict detection exists yet. Consider adding `updated_at` checks on write operations.
+Two users editing the same booking simultaneously could cause conflicts. No optimistic locking or conflict detection exists yet. The booking detail page now polls every 10s during active statuses (`draft`, `submitted`, `confirmed`, `picked_up`) so concurrent users see each other's progress. For a scout group with 2-3 leaders this is sufficient. Consider adding `updated_at` checks on write operations if conflicts become a real problem.
+
+## Project OIDC claims — investigation needed for Phase 3
+
+Projects (e.g. "Valborg 2026", "Scoutläger") are stored in the `units` table with `type = 'project'`. Project membership comes from OIDC token claims, same as unit membership. Before implementing real auth (Phase 3 Step 1), we need to:
+
+1. Inspect a real ScoutID token for a user with project roles (e.g. "Lägeransvarig", "Valborgsansvarig")
+2. Determine how projects are represented — same claim as units? Separate claim? Prefixed?
+3. Design the claim-to-project mapping in the Go API JWT validation
+4. Decide if projects need additional metadata (start/end dates, description, active/archived status)
+
+Currently in dev mode, project names are in `claims.Units` alongside unit names. This may need to change if the OIDC token separates them.
 
 ## Pickup — report missing items
 
@@ -89,14 +100,13 @@ Quantity-tracked items (e.g. 5× Tältlampa LED) need a grouped return UI simila
 
 ## Ärenden — role-scoped visibility
 
-The Ärenden (issues) page should be visible to all users, not just equipment managers. However, the scope differs by role:
+The Ärenden (issues) page is now visible to all users with role-appropriate controls:
+- **Equipment manager** — sees all articles with issue/repair/lost status, can change status
+- **Leader / project leader** — sees the same article list but read-only (no status change controls), filter options exclude manager-only statuses (under_repair, archived)
 
-- **Equipment manager** — sees all articles with issue/repair/lost status across the group
-- **Leader / project leader** — sees only articles they personally reported, or articles reported by members of their unit
+Future improvement: filter to only show articles the user personally reported, or articles reported by members of their unit. This requires a new query parameter (e.g. `reported_by=me`) that filters articles to those with an `issue_reported` event by the current user.
 
-This requires tracking "who reported" in the article events and filtering the article list accordingly. The API would need a new query parameter (e.g. `reported_by=me` or `reported_by_unit=true`) that filters articles to those with an `issue_reported` event by the current user or their unit members.
-
-Currently the issues page hardcodes `persona: 'equipment-manager'` — this needs to change when the persona switcher is implemented.
+**Status: partially resolved** — role-based UI implemented with leader status transitions, per-user filtering deferred.
 
 ## Article event history — limit display
 

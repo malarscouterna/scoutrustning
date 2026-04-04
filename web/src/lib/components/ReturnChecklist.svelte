@@ -9,7 +9,7 @@
 	}
 
 	let { bookingId, items, onUpdate, onBookingReturned }: Props = $props();
-	const api = createApiClient({ persona: 'leader-yggdrasil' });
+	const api = createApiClient();
 
 	let error = $state('');
 	let savedKey = $state<string | null>(null);

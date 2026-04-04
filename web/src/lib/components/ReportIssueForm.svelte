@@ -9,7 +9,7 @@
 	}
 
 	let { articleId, articleName, onReported, onCancel }: Props = $props();
-	const api = createApiClient({ persona: 'leader-yggdrasil' });
+	const api = createApiClient();
 
 	let description = $state('');
 	let status = $state('reported_usable');

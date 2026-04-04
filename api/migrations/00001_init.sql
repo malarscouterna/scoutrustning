@@ -191,6 +191,7 @@ CREATE INDEX idx_audit_log_entity ON audit_log(entity_type, entity_id);
 
 -- Seed data: Mälarscouterna
 INSERT INTO groups (id, name) VALUES ('766', 'Mälarscouterna');
+INSERT INTO groups (id, name) VALUES ('999', 'Testkåren');
 
 INSERT INTO locations (group_id, name, sort_order) VALUES
     ('766', 'Kammaren', 1),
@@ -199,10 +200,12 @@ INSERT INTO locations (group_id, name, sort_order) VALUES
     ('766', 'Kallförrådet', 4),
     ('766', 'Hajkförrådet', 5),
     ('766', 'Magasinet', 6),
-    ('766', 'Verkstan', 7);
+    ('766', 'Verkstan', 7),
+    ('999', 'Förrådet', 1);
 
 INSERT INTO categories (group_id, name, sort_order) VALUES
-    ('766', 'Övrigt', 1);
+    ('766', 'Övrigt', 1),
+    ('999', 'Övrigt', 1);
 
 -- +goose Down
 DROP TABLE IF EXISTS audit_log;

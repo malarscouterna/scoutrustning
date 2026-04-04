@@ -20,8 +20,8 @@ Auth: SvelteKit handles OIDC login with ScoutID (Keycloak) via Auth.js (`@auth/s
 - `groups.id` is `text`, using the Keycloak org ID directly (e.g. `"766"` for Mälarscouterna)
 - `users.id` is `text`, using the Keycloak member ID directly (e.g. `"3000924"`)
 - All other tables use `uuid` primary keys
-- Units are a managed table (`units`), not free text — populated from OIDC claims or created by admins
-- Booking approval is per-article (`articles.requires_approval`). If any item in a booking requires approval, the whole booking waits for approval.
+- Units are a managed table (`units`), not free text — populated from OIDC claims or created by admins. The `units` table has a `type` column (`unit` or `project`) to distinguish scout units from temporary projects.
+- Booking approval is per-article (`articles.requires_approval`). If any item in a booking requires approval, the whole booking waits for approval. Project leader bookings bypass approval.
 
 ## Project structure
 
@@ -40,8 +40,14 @@ ms-utrustning/
 │   └── Dockerfile
 ├── web/                    # SvelteKit frontend
 │   ├── src/
-│   │   ├── lib/            # Shared components, API client, stores
-│   │   ├── routes/         # SvelteKit routes (pages)
+│   │   ├── lib/
+│   │   │   ├── api/client.ts       # Typed API client
+│   │   │   ├── components/         # Shared Svelte components
+│   │   │   └── user.ts             # User type + role helpers (shared interface for auth)
+│   │   ├── routes/
+│   │   │   ├── +layout.server.ts   # Provides `user` + dev persona data to all pages
+│   │   │   └── +layout.svelte      # Nav, role-based UI, dev persona switcher
+│   │   ├── hooks.server.ts         # API proxy (injects auth header), dev persona cookie
 │   │   └── app.html
 │   ├── static/
 │   ├── package.json
@@ -98,12 +104,28 @@ ms-utrustning/
 - Mobile-first responsive design. Test layouts at 375px width.
 - Extract shared UI patterns into reusable components in `src/lib/components/` to reduce duplication. If the same UI appears in two or more pages, extract it.
 
+#### Identity & auth architecture
+
+The frontend has a clean separation between "who is the user" and "where does that info come from":
+
+- `$lib/user.ts` defines the `User` type and helpers like `hasRole()`. This is the stable interface all pages and components consume.
+- `+layout.server.ts` provides `data.user` (the current user) to all pages. Today this comes from the dev persona cookie; in production it will come from the OIDC session. Pages never care about the source.
+- `hooks.server.ts` proxies all `/api/*` requests to the Go API and injects the auth header. In dev mode: reads the `dev-persona` cookie and sets `X-Dev-Role-Override`. In production: will forward the real Bearer token.
+- `data.dev` (from layout) contains dev-only persona data. It's `null` in production. The `DevPersonaSwitcher` component only renders when `data.dev` is present.
+- **No page or component should ever reference personas, cookies, or auth headers directly.** They consume `data.user` from the layout and call `createApiClient()` without auth options — the hooks layer handles identity injection.
+
+When wiring real OIDC (Phase 3 Step 1):
+1. Add `@auth/sveltekit` session handling to `hooks.server.ts`
+2. In `+layout.server.ts`, populate `user` from the OIDC session instead of the persona cookie
+3. The proxy forwards the real JWT instead of the dev override header
+4. Dev mode keeps working alongside — persona cookie overrides the session when present
+
 ### Database
 
 - `groups` and `users` have `text` primary keys (Keycloak org ID and member ID respectively).
 - All other tables use `uuid` primary keys (`gen_random_uuid()`).
 - All tables have `group_id text NOT NULL REFERENCES groups(id)`.
-- Units are a managed table with FK from bookings, not free text.
+- Units are a managed table with FK from bookings, not free text. The `units` table stores both units (`type = 'unit'`) and projects (`type = 'project'`).
 - Timestamps are `timestamptz`, always UTC.
 - Migrations are sequential goose SQL files, never destructive in production.
 - **Never create a new database table without explicit user approval.** Propose the table and get confirmation first.

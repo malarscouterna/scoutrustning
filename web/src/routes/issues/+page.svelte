@@ -1,9 +1,13 @@
 <script lang="ts">
 	import { createApiClient, type Article, type ArticleEvent } from '$lib/api/client';
+	import { hasRole } from '$lib/user';
+	import { page } from '$app/stores';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
-	const api = createApiClient({ persona: 'equipment-manager' });
+	const api = createApiClient();
+
+	let isManager = $derived(hasRole($page.data.user, 'equipment_manager'));
 
 	let articles = $state<Article[]>(data.articles);
 	let expandedId = $state<string | null>(null);
@@ -14,13 +18,15 @@
 	let error = $state('');
 	let message = $state('');
 
-	const filterOptions = [
+	const allFilterOptions = [
 		{ value: 'reported_usable', label: 'Rapporterad — användbar', color: 'bg-orange-500' },
 		{ value: 'reported_unusable', label: 'Rapporterad — ej användbar', color: 'bg-red-500' },
-		{ value: 'under_repair', label: 'Under reparation', color: 'bg-blue-500' },
+		{ value: 'under_repair', label: 'Under reparation', color: 'bg-blue-500', managerOnly: true },
 		{ value: 'lost', label: 'Saknas', color: 'bg-challengerpink-500' },
-		{ value: 'archived', label: 'Arkiverad', color: 'bg-neutral-400' },
+		{ value: 'archived', label: 'Arkiverad', color: 'bg-neutral-400', managerOnly: true },
 	];
+
+	let filterOptions = $derived(isManager ? allFilterOptions : allFilterOptions.filter(o => !o.managerOnly));
 
 	let selectedStatuses = $state<Set<string>>(new Set(data.filter.split(',')));
 
@@ -170,20 +176,24 @@
 							<div class="space-y-2">
 								<div class="flex items-end gap-2">
 									<div>
-										<label class="text-xs text-neutral-600 block mb-1">Ändra status</label>
+										<label class="text-xs text-neutral-600 block mb-1">{isManager ? 'Ändra status' : 'Uppdatera rapport'}</label>
 										<select bind:value={newStatus} class="border rounded px-2 py-1 text-sm">
 											<option value="">Välj...</option>
-											<option value="ok">OK (löst)</option>
-											<option value="under_repair">Under reparation</option>
+											{#if isManager}
+												<option value="ok">OK (löst)</option>
+												<option value="under_repair">Under reparation</option>
+											{/if}
 											<option value="reported_usable">Rapporterad — användbar</option>
 											<option value="reported_unusable">Rapporterad — ej användbar</option>
 											<option value="lost">Saknas</option>
-											<option value="archived">Arkiverad</option>
+											{#if isManager}
+												<option value="archived">Arkiverad</option>
+											{/if}
 										</select>
 									</div>
 									<button onclick={() => updateStatus(article.id)} disabled={!newStatus} class="text-xs bg-blue-700 text-white px-3 py-1.5 rounded disabled:opacity-50">Uppdatera</button>
 								</div>
-								<textarea bind:value={comment} placeholder="Kommentar (valfritt)..." rows="2" class="block border rounded px-2 py-1 text-sm w-full"></textarea>
+								<textarea bind:value={comment} placeholder="Kommentar..." rows="2" class="block border rounded px-2 py-1 text-sm w-full"></textarea>
 							</div>
 
 							<hr class="border-neutral-200" />

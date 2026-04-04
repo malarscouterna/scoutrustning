@@ -12,7 +12,7 @@
 
 	let { bookingId, startDate, endDate, categories, locations, onItemsChanged }: Props = $props();
 
-	const api = createApiClient({ persona: 'leader-yggdrasil' });
+	const api = createApiClient();
 
 	let stableAvailability = $state<AvailabilityGroup[]>([]);
 	let selectedCategory = $state('');

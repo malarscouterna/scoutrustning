@@ -125,6 +125,7 @@ type Unit struct {
 	Name            string             `json:"name"`
 	GchatWebhookUrl pgtype.Text        `json:"gchat_webhook_url"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	Type            string             `json:"type"`
 }
 
 type User struct {

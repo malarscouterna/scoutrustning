@@ -4,7 +4,7 @@ import type { PageServerLoad } from './$types';
 const DEFAULT_STATUSES = 'ok,reported_usable,reported_unusable,under_repair,drying,new';
 
 export const load: PageServerLoad = async ({ fetch, url }) => {
-	const api = createApiClient({ fetch, persona: 'leader-yggdrasil' });
+	const api = createApiClient({ fetch });
 
 	const search = url.searchParams.get('search') || undefined;
 	const category_id = url.searchParams.get('category') || undefined;

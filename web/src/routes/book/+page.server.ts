@@ -2,7 +2,7 @@ import { createApiClient } from '$lib/api/client';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ fetch, url }) => {
-	const api = createApiClient({ fetch, persona: 'leader-yggdrasil' });
+	const api = createApiClient({ fetch });
 	const bookingId = url.searchParams.get('id');
 
 	const [locations, categories, units] = await Promise.all([

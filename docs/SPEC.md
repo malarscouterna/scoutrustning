@@ -82,9 +82,11 @@ Unit/group-level scoping deferred to later.
 A booking is a reservation of articles for a date range (day granularity), created by a person.
 
 **Booking ownership**: A booking has a creator (the logged-in user) and a "used by" field which can be:
-- A unit (e.g. "Yggdrasil") — all leaders of that unit can see the booking, do pickup, do (partial) returns, and manage it. Units are a managed entity (database table), populated from OIDC claims or created by equipment managers. Unit membership comes from OIDC group claims.
+- A unit (e.g. "Yggdrasil") — all leaders of that unit can see the booking, do pickup, do (partial) returns, and manage it. Units are a managed entity (database table), populated from OIDC claims or created by equipment managers. Unit membership comes from OIDC group claims. Leaders can only book for units they belong to.
+- A project (e.g. "Valborg 2026") — same as units but for temporary cross-unit activities. Project leaders can only book for projects they belong to. Projects bypass article approval requirements. Both units and projects are stored in the `units` table with a `type` column (`unit` or `project`).
 - An external person (free-text name + contact info) — only the creator and equipment managers can manage it.
 - Empty — personal booking, only the creator manages it.
+- Equipment managers can book for any unit, project, or external person.
 
 This means partial returns by different leaders are natural: leader A picks up on Friday, leader B returns half on Sunday, leader C returns the rest on Monday. All see the same booking because they share the unit.
 
@@ -209,7 +211,7 @@ Reverse proxy routes:
 3. Keycloak authenticates, redirects back with code
 4. SvelteKit exchanges code for tokens, stores in httpOnly cookie
 5. On API calls, SvelteKit passes the access token to Go API
-6. Go API validates JWT using Keycloak's JWKS endpoint, extracts claims (member_id, name, email, roles, units, group_id)
+6. Go API validates JWT using Keycloak's JWKS endpoint, extracts claims (member_id, name, email, roles, units, projects, group_id)
 7. Go API upserts user record (member_id + cached profile) and scopes all queries to the user's group
 
 ## User Flows
@@ -347,7 +349,8 @@ All tables have `group_id` (text, FK → groups). Omitted below for brevity.
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
-| name | text | e.g. "Yggdrasil", unique per group |
+| name | text | e.g. "Yggdrasil", unique per group + type |
+| type | text | `unit` or `project`, default `unit` |
 | gchat_webhook_url | text | Nullable, for unit notifications |
 | created_at | timestamptz | |
 
@@ -586,16 +589,26 @@ CSV column mapping:
 - Frontend: Return checklist with status options per item
 - Integration tests: partial return, delayed blocks availability, broken creates issue
 
-#### Step 7: Issue reporting (API ✅, frontend in progress)
+#### Step 7: Issue reporting (API ✅, frontend ✅)
 - API: Create issue report (any user), list/resolve (manager), article event history ✅
 - `article_events` table for per-article audit trail ✅
 - Integration tests ✅
-- Frontend: Report issue from article view, manager issue queue, article event history
+- Frontend: Report issue from article view, manager issue queue, article event history ✅
+- Frontend: Role-aware issues page (leaders see read-only, managers get status controls) ✅
 
-#### Step 8: Access control & multi-tenancy tests
+#### Step 8: Access control & multi-tenancy tests ✅
+- Dev persona switcher (cookie-based, floating panel, clean path to real OIDC)
+- Identity architecture: `User` type, `data.user` from layout, hooks proxy injects auth
 - Unit-scoped booking visibility (Yggdrasil leader sees it, Ornéerna doesn't)
-- Role enforcement across all endpoints
+- Unit membership enforcement on booking creation (leaders can only book for own units)
+- Projects as a unit type (`units.type = 'project'`), project leaders book for own projects
+- Equipment managers see all bookings
+- Role enforcement across all endpoints (leader gets 403 on manager endpoints)
+- Article status role restrictions (leaders can report, managers can set any status)
 - Group isolation test (two groups can't see each other's data)
+- Pickup/return/swap event logging with acting user
+- 10s polling on booking detail during active statuses for concurrent editing
+- Integration tests: 6 test suites, 23 subtests
 
 ### Phase 2 — Approval + manager tools
 
@@ -661,5 +674,6 @@ The UI is internationalized from the start. Swedish (`sv`) is the default locale
 
 - Exact OIDC role claim names for leader / project leader / equipment manager (inspect a real ScoutID token once auth is wired up)
 - Exact OIDC claim for unit membership
+- Exact OIDC claim for project membership — how are projects represented in the token? Are they in the same claim as units, or a separate one? Do they have a type/prefix to distinguish from units? Need to inspect a real token with project roles (e.g. "Lägeransvarig", "Valborgsansvarig") to design the claim mapping.
 - Overdue reminder schedule (daily? configurable?)
 - Whether booking date granularity needs to go below day level in the future

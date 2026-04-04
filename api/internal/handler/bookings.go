@@ -121,6 +121,24 @@ func (h *BookingHandler) Create(w http.ResponseWriter, r *http.Request) {
 			WriteError(w, http.StatusBadRequest, "invalid used_by_unit_id")
 			return
 		}
+		if !claims.HasRole("equipment_manager") {
+			unit, err := h.Q.GetUnitByID(r.Context(), db.GetUnitByIDParams{ID: id, GroupID: claims.GroupID})
+			if err != nil {
+				WriteError(w, http.StatusBadRequest, "unit not found")
+				return
+			}
+			allowed := false
+			for _, u := range claims.Units {
+				if u == unit.Name {
+					allowed = true
+					break
+				}
+			}
+			if !allowed {
+				WriteError(w, http.StatusForbidden, "you are not a member of this unit or project")
+				return
+			}
+		}
 		params.UsedByUnitID = id
 	}
 	if req.UsedByExternal != nil {
@@ -169,6 +187,17 @@ func (h *BookingHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 func (h *BookingHandler) List(w http.ResponseWriter, r *http.Request) {
 	claims, _ := auth.ClaimsFromContext(r.Context())
+
+	if claims.HasRole("equipment_manager") {
+		bookings, err := h.Q.ListAllBookings(r.Context(), claims.GroupID)
+		if err != nil {
+			slog.Error("failed to list bookings", "error", err)
+			WriteError(w, http.StatusInternalServerError, "failed to list bookings")
+			return
+		}
+		WriteJSON(w, http.StatusOK, bookings)
+		return
+	}
 
 	bookings, err := h.Q.ListBookingsByUser(r.Context(), db.ListBookingsByUserParams{
 		GroupID:   claims.GroupID,
@@ -639,6 +668,10 @@ func (h *BookingHandler) UpdateItemPickup(w http.ResponseWriter, r *http.Request
 		LogArticleEvent(r.Context(), h.Q, claims, item.ArticleID, "issue_reported", "Missing at pickup", map[string]string{
 			"new_status": "lost", "reason": "missing_at_pickup", "booking_id": formatUUID(bookingID),
 		})
+	} else if req.PickupStatus == "picked_up" {
+		LogArticleEvent(r.Context(), h.Q, claims, item.ArticleID, "picked_up", "Picked up", map[string]string{
+			"booking_id": formatUUID(bookingID),
+		})
 	} else if req.PickupStatus == "" {
 		// Undo: reset article to ok if it was set to lost
 		h.Q.UpdateArticleStatus(r.Context(), db.UpdateArticleStatusParams{
@@ -722,6 +755,9 @@ func (h *BookingHandler) SwapItem(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusNotFound, "item not found")
 		return
 	}
+	LogArticleEvent(r.Context(), h.Q, claims, newArticleID, "picked_up", "Swapped in during pickup", map[string]string{
+		"booking_id": formatUUID(bookingID),
+	})
 	WriteJSON(w, http.StatusOK, item)
 }
 
@@ -852,7 +888,9 @@ func (h *BookingHandler) UpdateItemReturn(w http.ResponseWriter, r *http.Request
 			"new_status": "ok", "booking_id": formatUUID(bookingID),
 		})
 	case "delayed":
-		// No article status change — item is still out on loan
+		LogArticleEvent(r.Context(), h.Q, claims, item.ArticleID, "returned", "Delayed return", map[string]string{
+			"return_status": "delayed", "booking_id": formatUUID(bookingID),
+		})
 	case "reported_usable":
 		h.Q.UpdateArticleStatus(r.Context(), db.UpdateArticleStatusParams{
 			ID: item.ArticleID, GroupID: claims.GroupID,

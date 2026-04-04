@@ -31,6 +31,7 @@ export interface Category {
 export interface Unit {
 	id: string;
 	name: string;
+	type: string;
 }
 
 export interface Booking {
@@ -83,17 +84,11 @@ export interface AvailabilityGroup {
 
 interface FetchOptions {
 	fetch?: typeof globalThis.fetch;
-	persona?: string;
 }
 
 async function request<T>(path: string, opts: FetchOptions = {}): Promise<T> {
 	const f = opts.fetch ?? globalThis.fetch;
-	const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-	if (opts.persona) {
-		headers['X-Dev-Role-Override'] = opts.persona;
-	}
-
-	const res = await f(`${API_BASE}${path}`, { headers });
+	const res = await f(`${API_BASE}${path}`, { headers: { 'Content-Type': 'application/json' } });
 	if (!res.ok) {
 		const body = await res.json().catch(() => ({}));
 		throw new Error(body.error || res.statusText);
@@ -103,14 +98,9 @@ async function request<T>(path: string, opts: FetchOptions = {}): Promise<T> {
 
 async function requestMut<T>(path: string, method: string, body: unknown, opts: FetchOptions = {}): Promise<T> {
 	const f = opts.fetch ?? globalThis.fetch;
-	const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-	if (opts.persona) {
-		headers['X-Dev-Role-Override'] = opts.persona;
-	}
-
 	const res = await f(`${API_BASE}${path}`, {
 		method,
-		headers,
+		headers: { 'Content-Type': 'application/json' },
 		body: body !== undefined ? JSON.stringify(body) : undefined
 	});
 	if (!res.ok) {

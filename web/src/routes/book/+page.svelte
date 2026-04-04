@@ -1,12 +1,22 @@
 <script lang="ts">
 	import { createApiClient, type BookingItem } from '$lib/api/client';
+	import { hasRole } from '$lib/user';
+	import { page } from '$app/stores';
 	import AvailabilityPicker from '$lib/components/AvailabilityPicker.svelte';
 	import BookingItemsList from '$lib/components/BookingItemsList.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 
-	const api = createApiClient({ persona: 'leader-yggdrasil' });
+	const api = createApiClient();
+
+	// Filter units/projects to those the user is a member of (managers see all)
+	let isManager = $derived(hasRole($page.data.user, 'equipment_manager'));
+	let userUnits = $derived(
+		isManager
+			? data.units
+			: data.units.filter(u => ($page.data.user?.units ?? []).includes(u.name))
+	);
 
 	const isEdit = !!data.existing;
 
@@ -149,8 +159,8 @@
 				<span class="text-sm">Bokas för</span>
 				<select bind:value={selectedUnit} class="border rounded px-3 py-2">
 					<option value="">Personlig bokning</option>
-					{#each data.units as unit}
-						<option value={unit.id}>{unit.name}</option>
+					{#each userUnits as unit}
+						<option value={unit.id}>{unit.name}{unit.type === 'project' ? ' (projekt)' : ''}</option>
 					{/each}
 				</select>
 			</label>

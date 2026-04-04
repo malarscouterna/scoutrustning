@@ -11,7 +11,7 @@
 
 	let { bookingId, items, startDate, endDate, onUpdate }: Props = $props();
 
-	const api = createApiClient({ persona: 'leader-yggdrasil' });
+	const api = createApiClient();
 
 	let error = $state('');
 	let swappingItemId = $state<string | null>(null);

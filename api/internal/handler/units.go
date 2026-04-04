@@ -35,13 +35,21 @@ func (h *UnitHandler) Create(w http.ResponseWriter, r *http.Request) {
 	claims, _ := auth.ClaimsFromContext(r.Context())
 	var req struct {
 		Name string `json:"name"`
+		Type string `json:"type"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" {
 		WriteError(w, http.StatusBadRequest, "name is required")
 		return
 	}
+	if req.Type == "" {
+		req.Type = "unit"
+	}
+	if req.Type != "unit" && req.Type != "project" {
+		WriteError(w, http.StatusBadRequest, "type must be unit or project")
+		return
+	}
 	unit, err := h.Q.CreateUnit(r.Context(), db.CreateUnitParams{
-		GroupID: claims.GroupID, Name: req.Name,
+		GroupID: claims.GroupID, Name: req.Name, Type: req.Type,
 	})
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, "failed to create unit")

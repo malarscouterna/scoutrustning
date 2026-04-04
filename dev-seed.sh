@@ -36,13 +36,17 @@ RESULT=$(curl -sf -X POST "$API/api/v0/articles/import" \
   -F "file=@$CSV")
 echo "$RESULT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'Imported: {d[\"imported\"]}, skipped: {d[\"skipped\"]}')"
 
-echo "Creating units..."
+echo "Creating units and projects..."
 for UNIT in Yggdrasil Ornéerna; do
   curl -sf -X POST "$API/api/v0/units" \
     -H "$HEADER" \
     -H "Content-Type: application/json" \
-    -d "{\"name\":\"$UNIT\"}" > /dev/null && echo "  Created: $UNIT" || echo "  Exists: $UNIT"
+    -d "{\"name\":\"$UNIT\",\"type\":\"unit\"}" > /dev/null && echo "  Created unit: $UNIT" || echo "  Exists: $UNIT"
 done
+curl -sf -X POST "$API/api/v0/units" \
+  -H "$HEADER" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Valborg 2026","type":"project"}' > /dev/null && echo "  Created project: Valborg 2026" || echo "  Exists: Valborg 2026"
 
 # Create quantity-tracked test articles (Tältlampa LED)
 # First delete the individually-tracked one from CSV import, then create 5 quantity-tracked
