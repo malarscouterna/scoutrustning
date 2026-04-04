@@ -30,7 +30,7 @@ ms-utrustning/
 ├── api/                    # Go API
 │   ├── cmd/server/         # main.go entrypoint
 │   ├── internal/           # (created as needed)
-│   │   ├── auth/           # JWT validation middleware
+│   │   ├── auth/           # JWT validation middleware + OIDC claim parsing
 │   │   ├── handler/        # HTTP handlers per resource
 │   │   ├── db/             # sqlc generated code + queries
 │   │   └── notify/         # Email + Google Chat notifications
@@ -57,6 +57,7 @@ ms-utrustning/
 │   ├── SPEC.md             # Full specification
 │   ├── API.md              # API reference (keep updated)
 │   └── import-example.csv  # Example CSV for article import
+├── role-mapping.json       # Scoutnet role → app role mapping (per group)
 ├── dev-personas.json       # Shared dev personas for role switching
 ├── docker-compose.yml
 ├── .env.example
@@ -70,6 +71,8 @@ ms-utrustning/
 | Go | 1.26 |
 | Chi | v5.2.5 |
 | pgx | v5.9.1 |
+| golang-jwt | v5.3.1 |
+| keyfunc | v3.8.0 |
 | goose | v3.27.0 |
 | Node | 24 LTS |
 | Svelte | 5.55+ |
@@ -114,11 +117,13 @@ The frontend has a clean separation between "who is the user" and "where does th
 - `data.dev` (from layout) contains dev-only persona data. It's `null` in production. The `DevPersonaSwitcher` component only renders when `data.dev` is present.
 - **No page or component should ever reference personas, cookies, or auth headers directly.** They consume `data.user` from the layout and call `createApiClient()` without auth options — the hooks layer handles identity injection.
 
-When wiring real OIDC (Phase 3 Step 1):
-1. Add `@auth/sveltekit` session handling to `hooks.server.ts`
-2. In `+layout.server.ts`, populate `user` from the OIDC session instead of the persona cookie
-3. The proxy forwards the real JWT instead of the dev override header
-4. Dev mode keeps working alongside — persona cookie overrides the session when present
+When wiring real OIDC (Phase 3 Step 1): ✅ Done.
+1. `@auth/sveltekit` handles OIDC login with Keycloak provider (`src/auth.ts`)
+2. `hooks.server.ts` gates all non-public routes — redirects to `/login` if no valid session
+3. `+layout.server.ts` parses the access token using `role-mapping.json` to build the `User` object
+4. The proxy forwards the real JWT to the Go API, which validates it via JWKS
+5. Dev mode keeps working alongside — persona cookie overrides the session when present
+6. `role-mapping.json` maps Scoutnet token roles (`group:766:it_manager`, `troop:17443:vice_leader`) to app roles and unit names
 
 ### Database
 

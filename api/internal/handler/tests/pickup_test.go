@@ -418,7 +418,7 @@ func TestPickupFlow_AccessControl(t *testing.T) {
 	mountPickupRoutes(env)
 
 	leader := env.ClientAs("leader-yggdrasil")
-	otherLeader := env.ClientAs("leader-orneerna")
+	otherLeader := env.ClientAs("leader-spindlarna")
 	bookingID, itemIDs, _ := setupPickupEnv(t, env)
 
 	// Transition to picked_up

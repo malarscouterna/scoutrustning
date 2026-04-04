@@ -179,7 +179,7 @@ func TestReturnFlow_DelayedBlocksAvailability(t *testing.T) {
 	mountReturnRoutes(env)
 
 	leader := env.ClientAs("leader-yggdrasil")
-	leaderB := env.ClientAs("leader-orneerna")
+	leaderB := env.ClientAs("leader-spindlarna")
 	bookingID, itemIDs, _ := setupReturnEnv(t, env, 2, 2)
 
 	// Return one as delayed
@@ -410,7 +410,7 @@ func TestReturnFlow_AccessControl(t *testing.T) {
 	env := testutil.SetupTestEnv(t)
 	mountReturnRoutes(env)
 
-	otherLeader := env.ClientAs("leader-orneerna")
+	otherLeader := env.ClientAs("leader-spindlarna")
 	bookingID, itemIDs, _ := setupReturnEnv(t, env, 1, 1)
 
 	t.Run("other leader cannot return items", func(t *testing.T) {

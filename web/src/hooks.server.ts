@@ -1,22 +1,92 @@
 import type { Handle } from '@sveltejs/kit';
+import { redirect } from '@sveltejs/kit';
+import { sequence } from '@sveltejs/kit/hooks';
+import { authHandle } from './auth';
 
 const API_URL = process.env.API_URL || 'http://localhost:8080';
 const DEV_MODE = process.env.DEV_MODE === 'true';
 const PERSONA_COOKIE = 'dev-persona';
 const DEFAULT_PERSONA = 'leader-yggdrasil';
 
-export const handle: Handle = async ({ event, resolve }) => {
-	// Dev mode: POST /dev/persona — set the active persona cookie
+function isPublicPath(pathname: string): boolean {
+	return pathname.startsWith('/auth/') || pathname === '/login';
+}
+
+function isTokenExpired(token: string): boolean {
+	try {
+		const payload = JSON.parse(atob(token.split('.')[1]));
+		return !payload.exp || payload.exp * 1000 < Date.now();
+	} catch {
+		return true;
+	}
+}
+
+async function getAccessToken(event: any): Promise<string | null> {
+	try {
+		const session = await event.locals.auth?.();
+		const token = (session as any)?.accessToken ?? null;
+		if (token && isTokenExpired(token)) return null;
+		return token;
+	} catch {
+		return null;
+	}
+}
+
+const appHandle: Handle = async ({ event, resolve }) => {
+	// Dev mode: POST /dev/persona — set or clear the active persona cookie
 	if (DEV_MODE && event.url.pathname === '/dev/persona' && event.request.method === 'POST') {
 		const { persona } = await event.request.json();
 		const maxAge = 60 * 60 * 24 * 30;
+		const cookie = persona
+			? `${PERSONA_COOKIE}=${persona}; Path=/; Max-Age=${maxAge}; SameSite=Lax`
+			: `${PERSONA_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax`;
 		return new Response(JSON.stringify({ ok: true }), {
 			status: 200,
 			headers: {
 				'Content-Type': 'application/json',
-				'Set-Cookie': `${PERSONA_COOKIE}=${persona}; Path=/; Max-Age=${maxAge}; SameSite=Lax`
+				'Set-Cookie': cookie
 			}
 		});
+	}
+
+	// Skip auth for public paths
+	if (isPublicPath(event.url.pathname)) {
+		return resolve(event);
+	}
+
+	// Determine auth state
+	let authMode: 'persona' | 'oidc' | 'none' = 'none';
+	let personaKey: string | undefined;
+	let accessToken: string | null = null;
+
+	if (DEV_MODE) {
+		personaKey = event.cookies.get(PERSONA_COOKIE);
+		if (personaKey) {
+			authMode = 'persona';
+		} else {
+			accessToken = await getAccessToken(event);
+			if (accessToken) {
+				authMode = 'oidc';
+			} else {
+				// Dev fallback: set default persona
+				event.cookies.set(PERSONA_COOKIE, DEFAULT_PERSONA, { path: '/', maxAge: 60 * 60 * 24 * 30 });
+				personaKey = DEFAULT_PERSONA;
+				authMode = 'persona';
+			}
+		}
+	} else {
+		accessToken = await getAccessToken(event);
+		if (accessToken) {
+			authMode = 'oidc';
+		} else {
+			// Production: redirect to Keycloak via Auth.js
+			// Auth.js handles /auth/signin as a GET — shows provider list
+			// With only one provider, user clicks once. We can't skip it from server-side.
+			// But we CAN use the CSRF-protected POST endpoint by redirecting to a
+			// small interstitial that auto-submits. Simpler: just use /auth/signin.
+			const callbackUrl = event.url.pathname + event.url.search;
+			throw redirect(302, `/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+		}
 	}
 
 	// Proxy /api/* to Go API
@@ -24,10 +94,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 		const target = `${API_URL}${event.url.pathname}${event.url.search}`;
 		const headers = new Headers(event.request.headers);
 
-		// Dev mode: inject persona header. Production: forward real auth (Phase 3).
-		if (DEV_MODE) {
-			const persona = event.cookies.get(PERSONA_COOKIE) || DEFAULT_PERSONA;
-			headers.set('X-Dev-Role-Override', persona);
+		if (authMode === 'persona') {
+			headers.set('X-Dev-Role-Override', personaKey!);
+		} else if (authMode === 'oidc' && accessToken) {
+			headers.set('Authorization', `Bearer ${accessToken}`);
 		}
 
 		const res = await fetch(target, {
@@ -49,3 +119,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	return resolve(event);
 };
+
+const hasOIDC = !!(process.env.AUTH_KEYCLOAK_ID && process.env.AUTH_KEYCLOAK_SECRET && process.env.AUTH_KEYCLOAK_ISSUER);
+
+export const handle: Handle = hasOIDC
+	? sequence(authHandle, appHandle)
+	: appHandle;

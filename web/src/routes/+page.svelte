@@ -1,6 +1,11 @@
 <div class="max-w-4xl mx-auto p-4">
-	<h1 class="text-heading-sm font-bold mb-2">ms-utrustning</h1>
-	<p class="mb-4">Utrustningsbokning för scoutkårer.</p>
+	<div class="flex items-center gap-4 mb-4">
+		<img src="/PNG Utrustningsgruppen - Logotyp.png" alt="Utrustningsgruppen" class="w-48" />
+		<div>
+			<h1 class="text-heading-sm font-bold">ms-utrustning</h1>
+			<p class="text-sm text-neutral-500">Utrustningsbokning för Mälarscouterna</p>
+		</div>
+	</div>
 	<nav class="space-y-2">
 		<a href="/browse" class="block underline text-blue-700">Bläddra utrustning →</a>
 		<a href="/book" class="block underline text-blue-700">Boka utrustning →</a>

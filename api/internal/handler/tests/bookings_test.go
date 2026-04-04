@@ -199,7 +199,7 @@ func TestBookingFlow_NoDoubleBooking(t *testing.T) {
 
 	manager := env.ClientAs("equipment-manager")
 	leaderA := env.ClientAs("leader-yggdrasil")
-	leaderB := env.ClientAs("leader-orneerna")
+	leaderB := env.ClientAs("leader-spindlarna")
 
 	// Setup: create 2 Sibley tents
 	resp, _ := manager.Get("/api/v0/locations")
@@ -419,7 +419,7 @@ func TestBookingFlow_AccessControl(t *testing.T) {
 	})
 
 	leaderYgg := env.ClientAs("leader-yggdrasil")
-	leaderOrn := env.ClientAs("leader-orneerna")
+	leaderOrn := env.ClientAs("leader-spindlarna")
 
 	// Create a personal booking (no unit)
 	b, _ := json.Marshal(map[string]any{"start_date": "2026-08-01", "end_date": "2026-08-05"})

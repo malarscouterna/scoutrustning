@@ -30,6 +30,18 @@ func main() {
 	dbURL := getenv("DATABASE_URL", "postgres://utrustning:utrustning@localhost:5432/utrustning?sslmode=disable")
 	devMode := getenv("DEV_MODE", "false") == "true"
 
+	// Load role mapping config
+	var roleMapping *auth.RoleMapping
+	if rmPath := getenv("ROLE_MAPPING_PATH", "role-mapping.json"); rmPath != "" {
+		rm, err := auth.LoadRoleMapping(rmPath)
+		if err != nil {
+			slog.Warn("could not load role mapping", "path", rmPath, "error", err)
+		} else {
+			roleMapping = rm
+			slog.Info("loaded role mapping", "groups", len(rm.Groups))
+		}
+	}
+
 	// Run migrations with database/sql (goose requirement)
 	if err := runMigrations(dbURL); err != nil {
 		slog.Error("failed to run migrations", "error", err)
@@ -57,11 +69,12 @@ func main() {
 	})
 
 	r.Route("/api/v0", func(r chi.Router) {
-		r.Use(auth.Middleware(
-			getenv("JWKS_URL", ""),
-			devMode,
-			getenv("DEV_PERSONAS_PATH", "dev-personas.json"),
-		))
+		r.Use(auth.Middleware(auth.MiddlewareConfig{
+			JWKSURL:      getenv("JWKS_URL", ""),
+			DevMode:      devMode,
+			PersonasPath: getenv("DEV_PERSONAS_PATH", "dev-personas.json"),
+			RoleMapping:  roleMapping,
+		}))
 		r.Use(handler.UpsertUserMiddleware(queries))
 
 		articles := &handler.ArticleHandler{Q: queries}

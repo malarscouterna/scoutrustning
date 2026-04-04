@@ -5,6 +5,7 @@ export interface User {
 	email: string;
 	roles: string[];
 	units: string[];
+	role_units?: Record<string, string[]>;
 }
 
 export function hasRole(user: User | null, role: string): boolean {

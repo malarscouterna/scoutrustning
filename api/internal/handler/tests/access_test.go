@@ -105,10 +105,10 @@ func TestAccess_UnitBookingVisibility(t *testing.T) {
 
 	manager := env.ClientAs("equipment-manager")
 	leaderYgg := env.ClientAs("leader-yggdrasil")
-	leaderOrn := env.ClientAs("leader-orneerna")
+	leaderSpi := env.ClientAs("leader-spindlarna")
 
 	// Create units
-	for _, name := range []string{"Yggdrasil", "Ornéerna"} {
+	for _, name := range []string{"Yggdrasil", "Spindlarna"} {
 		b, _ := json.Marshal(map[string]any{"name": name, "type": "unit"})
 		resp, _ := manager.Post("/api/v0/units", bytes.NewReader(b))
 		resp.Body.Close()
@@ -137,21 +137,21 @@ func TestAccess_UnitBookingVisibility(t *testing.T) {
 	})
 
 	t.Run("other unit leader cannot see booking in list", func(t *testing.T) {
-		resp, _ := leaderOrn.Get("/api/v0/bookings")
+		resp, _ := leaderSpi.Get("/api/v0/bookings")
 		defer resp.Body.Close()
 		var bookings []map[string]any
 		json.NewDecoder(resp.Body).Decode(&bookings)
 
 		for _, b := range bookings {
 			if b["id"] == bookingID {
-				t.Error("Ornéerna leader should not see Yggdrasil booking")
+				t.Error("Spindlarna leader should not see Yggdrasil booking")
 			}
 		}
 	})
 
 	t.Run("other unit leader cannot modify booking", func(t *testing.T) {
 		b, _ := json.Marshal(map[string]any{"notes": "hacked"})
-		resp, _ := leaderOrn.Put("/api/v0/bookings/"+bookingID, bytes.NewReader(b))
+		resp, _ := leaderSpi.Put("/api/v0/bookings/"+bookingID, bytes.NewReader(b))
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusForbidden {
 			t.Fatalf("expected 403, got %d", resp.StatusCode)
@@ -391,12 +391,12 @@ func TestAccess_UnitMembershipOnBooking(t *testing.T) {
 
 	manager := env.ClientAs("equipment-manager")
 	leaderYgg := env.ClientAs("leader-yggdrasil")
-	leaderOrn := env.ClientAs("leader-orneerna")
+	leaderSpi := env.ClientAs("leader-spindlarna")
 	projectLeader := env.ClientAs("project-leader")
 
 	// Create units and a project
 	for _, u := range []struct{ name, typ string }{
-		{"Yggdrasil", "unit"}, {"Ornéerna", "unit"}, {"Valborg 2026", "project"},
+		{"Yggdrasil", "unit"}, {"Spindlarna", "unit"}, {"Valborgskommittén", "project"},
 	} {
 		b, _ := json.Marshal(map[string]any{"name": u.name, "type": u.typ})
 		resp, _ := manager.Post("/api/v0/units", bytes.NewReader(b))
@@ -404,8 +404,8 @@ func TestAccess_UnitMembershipOnBooking(t *testing.T) {
 	}
 
 	yggID := getUnitID(t, leaderYgg, "Yggdrasil")
-	ornID := getUnitID(t, leaderOrn, "Ornéerna")
-	valborgID := getUnitID(t, projectLeader, "Valborg 2026")
+	spiID := getUnitID(t, leaderSpi, "Spindlarna")
+	valborgID := getUnitID(t, projectLeader, "Valborgskommittén")
 
 	t.Run("leader can book for own unit", func(t *testing.T) {
 		b, _ := json.Marshal(map[string]any{
@@ -423,7 +423,7 @@ func TestAccess_UnitMembershipOnBooking(t *testing.T) {
 	t.Run("leader cannot book for other unit", func(t *testing.T) {
 		b, _ := json.Marshal(map[string]any{
 			"start_date": "2026-06-01", "end_date": "2026-06-05",
-			"used_by_unit_id": ornID,
+			"used_by_unit_id": spiID,
 		})
 		resp, _ := leaderYgg.Post("/api/v0/bookings", bytes.NewReader(b))
 		defer resp.Body.Close()
@@ -458,7 +458,7 @@ func TestAccess_UnitMembershipOnBooking(t *testing.T) {
 	})
 
 	t.Run("manager can book for any unit or project", func(t *testing.T) {
-		for _, id := range []string{yggID, ornID, valborgID} {
+		for _, id := range []string{yggID, spiID, valborgID} {
 			b, _ := json.Marshal(map[string]any{
 				"start_date": "2026-07-01", "end_date": "2026-07-05",
 				"used_by_unit_id": id,

@@ -1,0 +1,21 @@
+{
+  "groups": {
+    "766": {
+      "name": "Mälarscouterna",
+      "admin_roles": {
+        "material_responsible": "Utrustningsgruppen",
+        "it_manager": "IT-gruppen"
+      },
+      "project_roles": {
+        "walpurgis_committee": "Valborgskommittén",
+        "group_camp_committee": "Läger"
+      },
+      "troops": {
+        "17443": "Yggdrasil",
+        "9109": "Spindlarna",
+        "19260": "Valarna",
+        "20956": "Flaskpostorné"
+      }
+    }
+  }
+}

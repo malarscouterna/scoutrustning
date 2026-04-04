@@ -112,7 +112,10 @@ func SetupTestEnv(t *testing.T) *TestEnv {
 // The provided fn receives the subrouter to register routes on.
 func (e *TestEnv) MountV1(fn func(r chi.Router)) {
 	e.Router.Route("/api/v0", func(r chi.Router) {
-		r.Use(auth.Middleware("", true, e.personasPath))
+		r.Use(auth.Middleware(auth.MiddlewareConfig{
+			DevMode:      true,
+			PersonasPath: e.personasPath,
+		}))
 		r.Use(handler.UpsertUserMiddleware(e.Queries))
 		fn(r)
 	})

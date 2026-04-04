@@ -16,6 +16,15 @@ until curl -sf "$API/api/health" > /dev/null 2>&1; do
 done
 echo "API ready."
 
+# Check that the API is in dev mode (X-Dev-Role-Override must work)
+HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v0/locations" -H "$HEADER")
+if [ "$HTTP_CODE" != "200" ]; then
+  echo "ERROR: API rejected dev persona header (HTTP $HTTP_CODE)."
+  echo "       The seed script requires DEV_MODE=true on the API."
+  echo "       Run with: docker compose up --build"
+  exit 1
+fi
+
 echo "Clearing existing seed data..."
 curl -sf -X POST "$API/api/v0/articles/import" \
   -H "$HEADER" \
@@ -37,16 +46,18 @@ RESULT=$(curl -sf -X POST "$API/api/v0/articles/import" \
 echo "$RESULT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'Imported: {d[\"imported\"]}, skipped: {d[\"skipped\"]}')"
 
 echo "Creating units and projects..."
-for UNIT in Yggdrasil Ornéerna; do
+for UNIT in Yggdrasil Spindlarna Valarna Flaskpostorné; do
   curl -sf -X POST "$API/api/v0/units" \
     -H "$HEADER" \
     -H "Content-Type: application/json" \
     -d "{\"name\":\"$UNIT\",\"type\":\"unit\"}" > /dev/null && echo "  Created unit: $UNIT" || echo "  Exists: $UNIT"
 done
-curl -sf -X POST "$API/api/v0/units" \
-  -H "$HEADER" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Valborg 2026","type":"project"}' > /dev/null && echo "  Created project: Valborg 2026" || echo "  Exists: Valborg 2026"
+for PROJECT in Valborgskommittén Läger Utrustningsgruppen IT-gruppen; do
+  curl -sf -X POST "$API/api/v0/units" \
+    -H "$HEADER" \
+    -H "Content-Type: application/json" \
+    -d "{\"name\":\"$PROJECT\",\"type\":\"project\"}" > /dev/null && echo "  Created project: $PROJECT" || echo "  Exists: $PROJECT"
+done
 
 # Create quantity-tracked test articles (Tältlampa LED)
 # First delete the individually-tracked one from CSV import, then create 5 quantity-tracked

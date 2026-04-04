@@ -21,11 +21,14 @@ services:
       - "8080:8080"
     volumes:
       - ./dev-personas.json:/app/dev-personas.json:ro
+      - ./role-mapping.json:/app/role-mapping.json:ro
     environment:
       DATABASE_URL: postgres://utrustning:utrustning@db:5432/utrustning?sslmode=disable
       ADDR: ":8080"
       DEV_MODE: "true"
       DEV_PERSONAS_PATH: /app/dev-personas.json
+      ROLE_MAPPING_PATH: /app/role-mapping.json
+      JWKS_URL: https://dev.id.scouterna.se/realms/scoutnet/protocol/openid-connect/certs
       MIGRATIONS_DIR: /migrations
     depends_on:
       db:
@@ -36,11 +39,17 @@ services:
     ports:
       - "3000:3000"
     volumes:
+      - ./role-mapping.json:/app/role-mapping.json:ro
       - ./dev-personas.json:/app/dev-personas.json:ro
     environment:
       ORIGIN: http://localhost:3000
       API_URL: http://api:8080
       DEV_MODE: "true"
+      AUTH_SECRET: dev-secret-change-in-production
+      AUTH_KEYCLOAK_ID: ms-utrustning
+      AUTH_KEYCLOAK_SECRET: ${AUTH_KEYCLOAK_SECRET:-}
+      AUTH_KEYCLOAK_ISSUER: https://dev.id.scouterna.se/realms/scoutnet
+      AUTH_TRUST_HOST: "true"
     depends_on:
       - api
 

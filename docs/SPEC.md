@@ -631,11 +631,19 @@ CSV column mapping:
 
 Connect real OIDC, add notifications, and make the system usable by actual users.
 
-#### Step 1: OIDC authentication
-- Real JWT validation against ScoutID (Keycloak) JWKS endpoint in Go API
-- OIDC login flow in SvelteKit via @auth/sveltekit
-- Map real Keycloak claims to roles and units
-- Remove dev persona switcher from production builds (keep in dev mode)
+#### Step 1: OIDC authentication ✅
+- Real JWT validation against ScoutID (Keycloak) JWKS endpoint in Go API using golang-jwt + keyfunc
+- OIDC login flow in SvelteKit via @auth/sveltekit with Keycloak provider
+- Scoutnet token claim mapping via `role-mapping.json` config:
+  - `preferred_username` (`scoutnet|MEMBER_ID`) → member ID
+  - `group:GROUP_ID:ROLE` → group ID + admin/project roles
+  - `troop:TROOP_ID:ROLE` → leader role + unit membership
+- Login page at `/login` with ScoutID branding, auto-redirects unauthenticated users
+- User profile page at `/profile` showing roles and units grouped by access type
+- Sign-out from profile page (clears Auth.js session)
+- Dev persona switcher kept in dev mode, includes "ScoutID login" option
+- Expired token detection — stale sessions trigger re-auth instead of 500s
+- Dev seed script checks for dev mode before running
 
 #### Step 2: Notifications
 - Email notifications (approval requests, booking confirmations, overdue reminders)
@@ -672,8 +680,7 @@ The UI is internationalized from the start. Swedish (`sv`) is the default locale
 
 ## Open / TBD
 
-- Exact OIDC role claim names for leader / project leader / equipment manager (inspect a real ScoutID token once auth is wired up)
-- Exact OIDC claim for unit membership
-- Exact OIDC claim for project membership — how are projects represented in the token? Are they in the same claim as units, or a separate one? Do they have a type/prefix to distinguish from units? Need to inspect a real token with project roles (e.g. "Lägeransvarig", "Valborgsansvarig") to design the claim mapping.
 - Overdue reminder schedule (daily? configurable?)
 - Whether booking date granularity needs to go below day level in the future
+- Token refresh — currently the access token from initial login is used until expiry, then the user is redirected to re-authenticate. Auth.js token rotation could be added to refresh tokens silently.
+- Per-organisation role mapping — currently hardcoded in `role-mapping.json`, eventually needs to be configurable per group

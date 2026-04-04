@@ -8,13 +8,13 @@
       "roles": ["leader"],
       "units": ["Yggdrasil"]
     },
-    "leader-orneerna": {
+    "leader-spindlarna": {
       "member_id": "3000002",
       "group_id": "766",
       "name": "Erik Ledare",
       "email": "erik@example.com",
       "roles": ["leader"],
-      "units": ["Ornéerna"]
+      "units": ["Spindlarna"]
     },
     "project-leader": {
       "member_id": "3000003",
@@ -22,7 +22,7 @@
       "name": "Maria Projektledare",
       "email": "maria@example.com",
       "roles": ["project_leader"],
-      "units": ["Valborg 2026"]
+      "units": ["Valborgskommittén"]
     },
     "equipment-manager": {
       "member_id": "3000004",
@@ -30,7 +30,7 @@
       "name": "Karl Materialare",
       "email": "karl@example.com",
       "roles": ["equipment_manager"],
-      "units": []
+      "units": ["Utrustningsgruppen"]
     },
     "leader-and-manager": {
       "member_id": "3000005",
@@ -38,7 +38,7 @@
       "name": "Sofia Dubbelroll",
       "email": "sofia@example.com",
       "roles": ["leader", "equipment_manager"],
-      "units": ["Yggdrasil"]
+      "units": ["Yggdrasil", "IT-gruppen"]
     },
     "other-group-leader": {
       "member_id": "4000001",
