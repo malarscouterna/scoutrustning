@@ -164,8 +164,8 @@ func TestPickupFlow_TransitionAndChecklist(t *testing.T) {
 		}
 	})
 
-	t.Run("mark item as not_available", func(t *testing.T) {
-		b, _ := json.Marshal(map[string]any{"pickup_status": "not_available"})
+	t.Run("mark item as lost", func(t *testing.T) {
+		b, _ := json.Marshal(map[string]any{"pickup_status": "lost"})
 		resp, err := leader.Put("/api/v0/bookings/"+bookingID+"/items/"+itemIDs[1]+"/pickup", bytes.NewReader(b))
 		if err != nil {
 			t.Fatal(err)
@@ -179,8 +179,8 @@ func TestPickupFlow_TransitionAndChecklist(t *testing.T) {
 
 		var item map[string]any
 		json.NewDecoder(resp.Body).Decode(&item)
-		if item["pickup_status"] != "not_available" {
-			t.Errorf("expected not_available, got %v", item["pickup_status"])
+		if item["pickup_status"] != "lost" {
+			t.Errorf("expected lost, got %v", item["pickup_status"])
 		}
 	})
 
@@ -212,7 +212,7 @@ func TestPickupFlow_TransitionAndChecklist(t *testing.T) {
 				statuses[ps.(string)] = true
 			}
 		}
-		if !statuses["picked_up"] || !statuses["not_available"] {
+		if !statuses["picked_up"] || !statuses["lost"] {
 			t.Errorf("expected both pickup statuses, got %v", statuses)
 		}
 	})
@@ -306,7 +306,7 @@ func TestPickupFlow_UndoPickupStatus(t *testing.T) {
 	})
 
 	t.Run("item can be re-marked after undo", func(t *testing.T) {
-		b, _ := json.Marshal(map[string]any{"pickup_status": "not_available"})
+		b, _ := json.Marshal(map[string]any{"pickup_status": "lost"})
 		resp, err := leader.Put("/api/v0/bookings/"+bookingID+"/items/"+itemIDs[0]+"/pickup", bytes.NewReader(b))
 		if err != nil {
 			t.Fatal(err)
@@ -320,8 +320,8 @@ func TestPickupFlow_UndoPickupStatus(t *testing.T) {
 
 		var item map[string]any
 		json.NewDecoder(resp.Body).Decode(&item)
-		if item["pickup_status"] != "not_available" {
-			t.Errorf("expected not_available, got %v", item["pickup_status"])
+		if item["pickup_status"] != "lost" {
+			t.Errorf("expected lost, got %v", item["pickup_status"])
 		}
 	})
 }

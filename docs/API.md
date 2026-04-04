@@ -97,6 +97,29 @@ Results are grouped by commercial_name + location. Same product in different loc
 
 **Response** `200`
 
+### `PUT /api/v0/articles/{id}/status`
+Update article status with an optional comment. Any user can set issue statuses (`reported_usable`, `reported_unusable`, `lost`) — comment is required for these. Manager-only statuses (`ok`, `under_repair`, `archived`, etc.) require the `equipment_manager` role. Logs an article event (`issue_reported` for issue statuses, `issue_resolved` when setting back to `ok`, `status_change` otherwise).
+
+**Body**
+```json
+{
+  "status": "reported_usable",
+  "comment": "Tent has a tear in the fabric"
+}
+```
+Required: `status`. `comment` required when reporting (reported_usable, reported_unusable, lost), optional for manager statuses.
+
+**Response** `200` (updated article) | `400` | `403` | `404`
+
+### `GET /api/v0/articles/{id}/events`
+Get the event history for an article. Returns all logged events (status changes, issue reports, resolutions, returns) ordered by most recent first.
+
+**Response** `200` — array of events with `id`, `event_type`, `description`, `metadata`, `actor_name`, `created_at`.
+
+Event types: `status_change`, `issue_reported`, `issue_resolved`, `booked`, `picked_up`, `returned`, `note`.
+
+---
+
 ### `GET /api/v0/articles/availability/articles`
 List individual available articles for a date range. Used for swap selection during pickup.
 
@@ -240,11 +263,11 @@ Transition a picked_up booking to `returned`. All items must have a final return
 ### `PUT /api/v0/bookings/{id}/items/{itemId}/return`
 Set the return status for a single booking item. Booking must be in `picked_up` status. Access: creator, unit leaders, or equipment manager.
 
-Side effects:
+Side effects (all also log an article event):
 - `delayed` — no article status change, item stays on loan
-- `broken` — sets article status to `reported_unusable`, creates issue report
-- `lost` — sets article status to `archived`, creates issue report
-- `returned_ok` — sets article status back to `ok`
+- `broken` — sets article status to `reported_unusable`, logs `issue_reported` event
+- `lost` — sets article status to `archived`, logs `issue_reported` event
+- `returned_ok` — sets article status back to `ok`, logs `returned` event
 
 When all items have a final return status (not pending/delayed), the booking auto-transitions to `returned`.
 

@@ -86,3 +86,35 @@ Quantity-tracked items (e.g. 5× Tältlampa LED) need a grouped return UI simila
 - Show one row per product group with a number input for how many are returned OK
 - Allow marking some as broken/lost/delayed with a count
 - Currently the return checklist shows individual rows for quantity-tracked items, which is confusing since they all have the same name
+
+## Ärenden — role-scoped visibility
+
+The Ärenden (issues) page should be visible to all users, not just equipment managers. However, the scope differs by role:
+
+- **Equipment manager** — sees all articles with issue/repair/lost status across the group
+- **Leader / project leader** — sees only articles they personally reported, or articles reported by members of their unit
+
+This requires tracking "who reported" in the article events and filtering the article list accordingly. The API would need a new query parameter (e.g. `reported_by=me` or `reported_by_unit=true`) that filters articles to those with an `issue_reported` event by the current user or their unit members.
+
+Currently the issues page hardcodes `persona: 'equipment-manager'` — this needs to change when the persona switcher is implemented.
+
+## Article event history — limit display
+
+The article event history currently shows all events. For articles with long histories, this should be limited to the most recent N events (e.g. 10) with a "Visa alla" button to expand. Requires an API change (add `limit` param to the events endpoint) and frontend truncation.
+
+## CSV import — quantity-tracked items
+
+The CSV import currently creates all items as individually tracked. Need a way to mark quantity-tracked items in the CSV (e.g. a column or naming convention) so the seed/import flow handles them without post-import scripting. The `import-example.csv` should demonstrate both types.
+
+## Pickup state management
+
+Several improvements needed for the pickup flow:
+
+### Undo all pickups → revert to confirmed/approved
+When all items in a picked_up booking have their pickup status cleared (undone), the booking should automatically transition back to confirmed (or approved, whichever it was before pickup). Currently it stays in picked_up with no items marked.
+
+### Partial pickup indication
+When some but not all items are picked up, the booking should visually indicate "partial pickup" status. A "Klar med uthämtning" (done with pickup) button should let the user confirm they're finished even if not all items were picked up. Items left unmarked would be treated as not collected.
+
+### Adding items after full pickup
+If new items are added to a booking that was fully picked up, the status should revert to partial pickup since the new items haven't been collected yet.

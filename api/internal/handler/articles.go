@@ -28,6 +28,8 @@ func (h *ArticleHandler) Routes() chi.Router {
 	r.Get("/availability", h.Availability)
 	r.Get("/availability/articles", h.AvailableArticlesList)
 	r.Get("/{id}", h.Get)
+	r.Get("/{id}/events", h.ListEvents)
+	r.Put("/{id}/status", h.UpdateStatus)
 	r.With(auth.RequireRole("equipment_manager")).Post("/", h.Create)
 	r.With(auth.RequireRole("equipment_manager")).Put("/{id}", h.Update)
 	r.With(auth.RequireRole("equipment_manager")).Delete("/{id}", h.Delete)
@@ -39,6 +41,12 @@ func (h *ArticleHandler) List(w http.ResponseWriter, r *http.Request) {
 	claims, _ := auth.ClaimsFromContext(r.Context())
 
 	params := db.ListArticlesParams{GroupID: claims.GroupID}
+
+	if v := r.URL.Query().Get("status"); v != "" {
+		params.Statuses = strings.Split(v, ",")
+	} else {
+		params.Statuses = []string{}
+	}
 
 	if v := r.URL.Query().Get("category_id"); v != "" {
 		id, err := parseUUID(v)
@@ -55,9 +63,6 @@ func (h *ArticleHandler) List(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		params.LocationID = id
-	}
-	if v := r.URL.Query().Get("status"); v != "" {
-		params.Status = pgtype.Text{String: v, Valid: true}
 	}
 	if v := r.URL.Query().Get("search"); v != "" {
 		params.Search = pgtype.Text{String: v, Valid: true}
@@ -294,6 +299,87 @@ func (h *ArticleHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *ArticleHandler) ListEvents(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	events, err := h.Q.ListArticleEvents(r.Context(), db.ListArticleEventsParams{ArticleID: id, GroupID: claims.GroupID})
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to list events")
+		return
+	}
+	WriteJSON(w, http.StatusOK, events)
+}
+
+// UpdateStatus changes article status with an optional comment.
+// Any user can set reported statuses (reported_usable, reported_unusable, lost).
+// Manager-only statuses (ok, under_repair, archived, etc.) require equipment_manager role.
+func (h *ArticleHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	var req struct {
+		Status  string `json:"status"`
+		Comment string `json:"comment"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.Status == "" {
+		WriteError(w, http.StatusBadRequest, "status required")
+		return
+	}
+
+	// Anyone can report issues; other statuses require manager
+	userStatuses := map[string]bool{"reported_usable": true, "reported_unusable": true, "lost": true}
+	if !userStatuses[req.Status] && !claims.HasRole("equipment_manager") {
+		WriteError(w, http.StatusForbidden, "forbidden")
+		return
+	}
+
+	// Reporting requires a comment
+	if userStatuses[req.Status] && req.Comment == "" {
+		WriteError(w, http.StatusBadRequest, "comment required when reporting an issue")
+		return
+	}
+
+	article, err := h.Q.GetArticle(r.Context(), db.GetArticleParams{ID: id, GroupID: claims.GroupID})
+	if err != nil {
+		WriteError(w, http.StatusNotFound, "article not found")
+		return
+	}
+
+	updated, err := h.Q.UpdateArticleStatus(r.Context(), db.UpdateArticleStatusParams{
+		ID: id, GroupID: claims.GroupID, Status: req.Status,
+	})
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to update article status")
+		return
+	}
+
+	eventType := "status_change"
+	if userStatuses[req.Status] {
+		eventType = "issue_reported"
+	} else if req.Status == "ok" && article.Status != "ok" {
+		eventType = "issue_resolved"
+	}
+
+	LogArticleEvent(r.Context(), h.Q, claims, id, eventType, req.Comment, map[string]string{
+		"old_status": article.Status,
+		"new_status": req.Status,
+	})
+
+	WriteJSON(w, http.StatusOK, updated)
 }
 
 // AvailableArticlesList returns individual available articles for a date range,

@@ -106,6 +106,7 @@ ms-utrustning/
 - Units are a managed table with FK from bookings, not free text.
 - Timestamps are `timestamptz`, always UTC.
 - Migrations are sequential goose SQL files, never destructive in production.
+- **Never create a new database table without explicit user approval.** Propose the table and get confirmation first.
 
 ### Testing
 
@@ -150,6 +151,7 @@ This rules file is **living documentation** — update it whenever decisions are
 - `docs/SPEC.md` — full specification, implementation plan, data model
 - `docs/API.md` — API reference for all endpoints (keep updated when adding/changing endpoints)
 - `docs/BACKLOG.md` — deferred work items, things identified as needed but withheld for now
+- `docs/issues-and-events.md` — issue reporting & article events design decisions and future plans
 - `.amazonq/rules/project-context.md` — this file, AI context and project rules
 - Feature-specific READMEs — when building complex features, add a `README.md` in `docs/` (e.g. `docs/bookings.md`, `docs/availability.md`) documenting the design decisions, trade-offs, and non-obvious choices made along the way
 

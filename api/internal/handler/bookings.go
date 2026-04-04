@@ -611,10 +611,10 @@ func (h *BookingHandler) UpdateItemPickup(w http.ResponseWriter, r *http.Request
 		return
 	}
 	switch req.PickupStatus {
-	case "picked_up", "not_available", "":
+	case "picked_up", "lost", "":
 		// "" clears the status (undo)
 	default:
-		WriteError(w, http.StatusBadRequest, "pickup_status must be picked_up, not_available, or empty")
+		WriteError(w, http.StatusBadRequest, "pickup_status must be picked_up, lost, or empty")
 		return
 	}
 
@@ -631,6 +631,21 @@ func (h *BookingHandler) UpdateItemPickup(w http.ResponseWriter, r *http.Request
 		WriteError(w, http.StatusNotFound, "item not found")
 		return
 	}
+
+	if req.PickupStatus == "lost" {
+		h.Q.UpdateArticleStatus(r.Context(), db.UpdateArticleStatusParams{
+			ID: item.ArticleID, GroupID: claims.GroupID, Status: "lost",
+		})
+		LogArticleEvent(r.Context(), h.Q, claims, item.ArticleID, "issue_reported", "Missing at pickup", map[string]string{
+			"new_status": "lost", "reason": "missing_at_pickup", "booking_id": formatUUID(bookingID),
+		})
+	} else if req.PickupStatus == "" {
+		// Undo: reset article to ok if it was set to lost
+		h.Q.UpdateArticleStatus(r.Context(), db.UpdateArticleStatusParams{
+			ID: item.ArticleID, GroupID: claims.GroupID, Status: "ok",
+		})
+	}
+
 	WriteJSON(w, http.StatusOK, item)
 }
 
@@ -801,9 +816,9 @@ func (h *BookingHandler) UpdateItemReturn(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	validStatuses := map[string]bool{"returned_ok": true, "delayed": true, "broken": true, "lost": true, "": true}
+	validStatuses := map[string]bool{"returned_ok": true, "delayed": true, "reported_usable": true, "reported_unusable": true, "lost": true, "": true}
 	if !validStatuses[req.ReturnStatus] {
-		WriteError(w, http.StatusBadRequest, "return_status must be returned_ok, delayed, broken, lost, or empty")
+		WriteError(w, http.StatusBadRequest, "return_status must be returned_ok, delayed, reported_usable, reported_unusable, lost, or empty")
 		return
 	}
 
@@ -829,41 +844,46 @@ func (h *BookingHandler) UpdateItemReturn(w http.ResponseWriter, r *http.Request
 	// Side effects based on return status
 	switch req.ReturnStatus {
 	case "":
-		// Undo: reset article to ok
 		h.Q.UpdateArticleStatus(r.Context(), db.UpdateArticleStatusParams{
 			ID: item.ArticleID, GroupID: claims.GroupID,
 			Status: "ok",
 		})
+		LogArticleEvent(r.Context(), h.Q, claims, item.ArticleID, "status_change", "Return status cleared, article reset to ok", map[string]string{
+			"new_status": "ok", "booking_id": formatUUID(bookingID),
+		})
 	case "delayed":
 		// No article status change — item is still out on loan
-	case "broken":
+	case "reported_usable":
+		h.Q.UpdateArticleStatus(r.Context(), db.UpdateArticleStatusParams{
+			ID: item.ArticleID, GroupID: claims.GroupID,
+			Status: "reported_usable",
+		})
+		LogArticleEvent(r.Context(), h.Q, claims, item.ArticleID, "issue_reported", req.Notes, map[string]string{
+			"new_status": "reported_usable", "booking_id": formatUUID(bookingID),
+		})
+	case "reported_unusable":
 		h.Q.UpdateArticleStatus(r.Context(), db.UpdateArticleStatusParams{
 			ID: item.ArticleID, GroupID: claims.GroupID,
 			Status: "reported_unusable",
 		})
-		h.Q.CreateIssueReport(r.Context(), db.CreateIssueReportParams{
-			GroupID:     claims.GroupID,
-			ArticleID:   item.ArticleID,
-			ReporterID:  claims.MemberID,
-			Description: req.Notes,
-			Severity:    "unusable",
+		LogArticleEvent(r.Context(), h.Q, claims, item.ArticleID, "issue_reported", req.Notes, map[string]string{
+			"new_status": "reported_unusable", "booking_id": formatUUID(bookingID),
 		})
 	case "lost":
 		h.Q.UpdateArticleStatus(r.Context(), db.UpdateArticleStatusParams{
 			ID: item.ArticleID, GroupID: claims.GroupID,
-			Status: "archived",
+			Status: "lost",
 		})
-		h.Q.CreateIssueReport(r.Context(), db.CreateIssueReportParams{
-			GroupID:     claims.GroupID,
-			ArticleID:   item.ArticleID,
-			ReporterID:  claims.MemberID,
-			Description: req.Notes,
-			Severity:    "unusable",
+		LogArticleEvent(r.Context(), h.Q, claims, item.ArticleID, "issue_reported", req.Notes, map[string]string{
+			"new_status": "lost", "reason": "lost", "booking_id": formatUUID(bookingID),
 		})
 	case "returned_ok":
 		h.Q.UpdateArticleStatus(r.Context(), db.UpdateArticleStatusParams{
 			ID: item.ArticleID, GroupID: claims.GroupID,
 			Status: "ok",
+		})
+		LogArticleEvent(r.Context(), h.Q, claims, item.ArticleID, "returned", "Returned OK", map[string]string{
+			"new_status": "ok", "booking_id": formatUUID(bookingID),
 		})
 	}
 

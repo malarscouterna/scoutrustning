@@ -62,6 +62,17 @@ export interface BookingItem {
 	return_status: string | null;
 }
 
+export interface ArticleEvent {
+	id: string;
+	article_id: string;
+	actor_id: string;
+	actor_name: string;
+	event_type: string;
+	description: string;
+	metadata: Record<string, string>;
+	created_at: string;
+}
+
 export interface AvailabilityGroup {
 	commercial_name: string;
 	available_count: number;
@@ -163,5 +174,10 @@ export function createApiClient(opts: FetchOptions = {}) {
 		updateItemReturn: (bookingId: string, itemId: string, data: { return_status: string; expected_return_date?: string; notes?: string }) =>
 			requestMut<BookingItem>(`/bookings/${bookingId}/items/${itemId}/return`, 'PUT', data, opts),
 		listUnits: () => request<Unit[]>('/units', opts),
+
+		// Article status & events
+		updateArticleStatus: (articleId: string, data: { status: string; comment?: string }) =>
+			requestMut<Article>(`/articles/${articleId}/status`, 'PUT', data, opts),
+		listArticleEvents: (articleId: string) => request<ArticleEvent[]>(`/articles/${articleId}/events`, opts),
 	};
 }

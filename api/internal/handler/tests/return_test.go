@@ -234,9 +234,9 @@ func TestReturnFlow_BrokenCreatesIssue(t *testing.T) {
 	leader := env.ClientAs("leader-yggdrasil")
 	bookingID, itemIDs, _ := setupReturnEnv(t, env, 2, 2)
 
-	t.Run("return as broken creates issue report", func(t *testing.T) {
+	t.Run("return as reported_unusable creates issue", func(t *testing.T) {
 		b, _ := json.Marshal(map[string]any{
-			"return_status": "broken",
+			"return_status": "reported_unusable",
 			"notes":         "Tent pole snapped",
 		})
 		resp, err := leader.Put("/api/v0/bookings/"+bookingID+"/items/"+itemIDs[0]+"/return", bytes.NewReader(b))
@@ -266,11 +266,11 @@ func TestReturnFlow_BrokenCreatesIssue(t *testing.T) {
 			}
 		}
 		if !found {
-			t.Error("expected broken article to have status reported_unusable")
+			t.Error("expected reported_unusable article to have status reported_unusable")
 		}
 	})
 
-	t.Run("return as lost creates issue and archives article", func(t *testing.T) {
+	t.Run("return as lost sets article to lost status", func(t *testing.T) {
 		b, _ := json.Marshal(map[string]any{
 			"return_status": "lost",
 			"notes":         "Cannot find it",
@@ -286,8 +286,8 @@ func TestReturnFlow_BrokenCreatesIssue(t *testing.T) {
 			t.Fatalf("expected 200, got %d: %s", resp.StatusCode, body)
 		}
 
-		// Check article is archived
-		resp2, _ := leader.Get("/api/v0/articles?status=archived")
+		// Check article is lost
+		resp2, _ := leader.Get("/api/v0/articles?status=lost")
 		defer resp2.Body.Close()
 		var articles []map[string]any
 		json.NewDecoder(resp2.Body).Decode(&articles)
@@ -299,7 +299,7 @@ func TestReturnFlow_BrokenCreatesIssue(t *testing.T) {
 			}
 		}
 		if !found {
-			t.Error("expected lost article to have status archived")
+			t.Error("expected lost article to have status lost")
 		}
 	})
 }

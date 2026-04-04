@@ -21,7 +21,7 @@
 
 	const pickupLabels: Record<string, string> = {
 		picked_up: 'Hämtad',
-		not_available: 'Ej tillgänglig',
+		lost: 'Saknas',
 		swapped: 'Bytt'
 	};
 
@@ -85,12 +85,12 @@
 					(i) => !i.individually_tracked && i.commercial_name === group.commercialName && i.location_name === group.locationName
 				);
 				for (let i = 0; i < updatedItems.length; i++) {
-					const status = i < pickedCount ? 'picked_up' : 'not_available';
+					const status = i < pickedCount ? 'picked_up' : 'lost';
 					await api.updateItemPickup(bookingId, updatedItems[i].id, status);
 				}
 			} else {
 				for (let i = 0; i < group.items.length; i++) {
-					const status = i < pickedCount ? 'picked_up' : 'not_available';
+					const status = i < pickedCount ? 'picked_up' : 'lost';
 					await api.updateItemPickup(bookingId, group.items[i].id, status);
 				}
 			}
@@ -244,21 +244,21 @@
 
 	<!-- Individually tracked items -->
 	{#each trackedItems as item}
-		<div class="border rounded px-4 py-3 flex items-center gap-3" class:bg-green-50={item.pickup_status === 'picked_up' || item.pickup_status === 'swapped'} class:bg-orange-50={item.pickup_status === 'not_available'}>
+		<div class="border rounded px-4 py-3 flex items-center gap-3" class:bg-green-50={item.pickup_status === 'picked_up' || item.pickup_status === 'swapped'} class:bg-challengerpink-50={item.pickup_status === 'lost'}>
 			<div class="flex-1 min-w-0">
 				<div class="font-medium text-sm">{item.common_name}</div>
 				<div class="text-xs text-neutral-500">{item.location_name}{item.place ? ` · ${item.place}` : ''}</div>
 			</div>
 
 			{#if item.pickup_status}
-				<span class="text-xs px-2 py-0.5 rounded" class:bg-green-100={item.pickup_status === 'picked_up' || item.pickup_status === 'swapped'} class:text-green-800={item.pickup_status === 'picked_up' || item.pickup_status === 'swapped'} class:bg-orange-100={item.pickup_status === 'not_available'} class:text-orange-800={item.pickup_status === 'not_available'}>
+				<span class="text-xs px-2 py-0.5 rounded" class:bg-green-100={item.pickup_status === 'picked_up' || item.pickup_status === 'swapped'} class:text-green-800={item.pickup_status === 'picked_up' || item.pickup_status === 'swapped'} class:bg-challengerpink-100={item.pickup_status === 'lost'} class:text-challengerpink-800={item.pickup_status === 'lost'}>
 					{pickupLabels[item.pickup_status] ?? item.pickup_status}
 				</span>
 				<button onclick={() => markPickup(item.id, '')} class="text-xs text-neutral-400 hover:text-neutral-600">Ångra</button>
 			{:else if swappingItemId !== item.id}
 				<div class="flex gap-1">
 					<button onclick={() => markPickup(item.id, 'picked_up')} class="text-xs bg-green-700 text-white px-2 py-1 rounded">Hämtad</button>
-					<button onclick={() => markPickup(item.id, 'not_available')} class="text-xs bg-orange-600 text-white px-2 py-1 rounded">Saknas</button>
+					<button onclick={() => markPickup(item.id, 'lost')} class="text-xs bg-challengerpink-600 text-white px-2 py-1 rounded">Saknas</button>
 					<button onclick={() => startSwap(item)} class="text-xs text-blue-700 underline px-1">Byt</button>
 				</div>
 			{/if}

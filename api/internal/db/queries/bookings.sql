@@ -171,7 +171,7 @@ RETURNING *;
 SELECT NOT EXISTS (
     SELECT 1 FROM booking_items
     WHERE booking_id = @booking_id AND group_id = @group_id
-        AND pickup_status IS NOT NULL AND pickup_status != 'not_available'
+        AND pickup_status IS NOT NULL AND pickup_status != 'lost'
         AND (return_status IS NULL OR return_status = 'delayed')
 ) AS all_returned;
 

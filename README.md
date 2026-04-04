@@ -12,6 +12,8 @@ Pre-release (`v0`). Breaking changes expected. Currently implements:
 - Booking flow: create, add items, submit, cancel, copy
 - Availability calculation with double-booking prevention
 - Location-scoped availability (same product in different locations shown separately)
+- Pickup and return checklists with swap support
+- Issue reporting with per-article event history
 - Role-based access (leader, project leader, equipment manager)
 - Multi-tenancy (group-scoped, ready for multiple organizations)
 

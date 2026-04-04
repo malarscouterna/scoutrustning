@@ -20,8 +20,8 @@
 	let delayWarning = $state('');
 	let quantityInputs = $state<Record<string, number>>({});
 
-	const labels: Record<string, string> = { returned_ok: 'OK', delayed: 'Försenad', broken: 'Trasig', lost: 'Förlorad' };
-	const colors: Record<string, string> = { returned_ok: 'bg-green-100 text-green-800', delayed: 'bg-orange-100 text-orange-800', broken: 'bg-red-100 text-red-800', lost: 'bg-red-100 text-red-800' };
+	const labels: Record<string, string> = { returned_ok: 'OK', delayed: 'Försenad', reported_usable: 'Problem — användbar', reported_unusable: 'Problem — ej användbar', lost: 'Saknas' };
+	const colors: Record<string, string> = { returned_ok: 'bg-green-100 text-green-800', delayed: 'bg-orange-100 text-orange-800', reported_usable: 'bg-orange-100 text-orange-800', reported_unusable: 'bg-red-100 text-red-800', lost: 'bg-challengerpink-100 text-challengerpink-800' };
 
 	interface QGroup { key: string; name: string; loc: string; place: string; picked: BookingItem[]; notPicked: number; }
 	interface QRow { status: string; count: number; items: BookingItem[]; }
@@ -32,7 +32,7 @@
 		for (const i of items) {
 			if (i.individually_tracked) continue;
 			const k = `${i.commercial_name}|${i.location_name}`;
-			const isPicked = i.pickup_status && i.pickup_status !== 'not_available';
+			const isPicked = i.pickup_status && i.pickup_status !== 'lost';
 			const g = m.get(k);
 			if (g) { if (isPicked) g.picked.push(i); else g.notPicked++; }
 			else m.set(k, { key: k, name: i.commercial_name, loc: i.location_name, place: i.place, picked: isPicked ? [i] : [], notPicked: isPicked ? 0 : 1 });
@@ -56,7 +56,7 @@
 		return rows;
 	}
 
-	let pickedUp = $derived(items.filter((i) => i.pickup_status && i.pickup_status !== 'not_available'));
+	let pickedUp = $derived(items.filter((i) => i.pickup_status && i.pickup_status !== 'lost'));
 	let returnedCount = $derived(pickedUp.filter((i) => i.return_status && i.return_status !== 'pending').length);
 	let canComplete = $derived(pickedUp.length > 0 && pickedUp.every((i) => i.return_status && i.return_status !== 'pending' && i.return_status !== 'delayed'));
 
@@ -160,8 +160,9 @@
 			{#each rows as row}
 				<div class="border rounded px-4 py-3 flex items-center gap-3"
 					class:bg-green-50={row.status === 'returned_ok'}
-					class:bg-orange-50={row.status === 'delayed'}
-					class:bg-red-50={row.status === 'broken' || row.status === 'lost'}
+					class:bg-orange-50={row.status === 'delayed' || row.status === 'reported_usable'}
+					class:bg-red-50={row.status === 'reported_unusable'}
+					class:bg-challengerpink-50={row.status === 'lost'}
 				>
 					<div class="flex-1">
 						<div class="font-medium text-sm">{g.name} × {row.count}</div>
@@ -192,7 +193,7 @@
 						<span class="text-neutral-500">av {unhandled.length} kvar</span>
 					</div>
 					<div class="flex gap-2">
-						{#each ['returned_ok', 'delayed', 'broken', 'lost'] as s}
+						{#each ['returned_ok', 'delayed', 'reported_usable', 'reported_unusable', 'lost'] as s}
 							<button onclick={() => form.status = s} class="text-xs px-3 py-1 rounded border" class:bg-blue-700={form.status === s} class:text-white={form.status === s}>{labels[s]}</button>
 						{/each}
 					</div>
@@ -201,7 +202,7 @@
 							<input type="date" bind:value={form.expectedReturnDate} oninput={() => checkConflict(g.name, form.expectedReturnDate)} class="block border rounded px-2 py-1 text-sm w-full" /></label>
 						{#if delayWarning}<p class="text-xs text-orange-600">⚠ {delayWarning}</p>{/if}
 					{/if}
-					{#if form.status === 'broken' || form.status === 'lost'}
+					{#if form.status === 'reported_usable' || form.status === 'reported_unusable' || form.status === 'lost'}
 						<label class="block"><span class="text-xs text-neutral-600">Beskrivning</span>
 							<input type="text" bind:value={form.notes} placeholder="Vad hände?" class="block border rounded px-2 py-1 text-sm w-full" /></label>
 					{/if}
@@ -215,9 +216,9 @@
 	{/each}
 
 	{#each tracked as item}
-		{@const notPicked = !item.pickup_status || item.pickup_status === 'not_available'}
+		{@const notPicked = !item.pickup_status || item.pickup_status === 'lost'}
 		{@const hasReturn = item.return_status && item.return_status !== 'pending'}
-		<div class="border rounded px-4 py-3 flex items-center gap-3" class:bg-green-50={item.return_status === 'returned_ok'} class:bg-orange-50={item.return_status === 'delayed'} class:bg-red-50={item.return_status === 'broken' || item.return_status === 'lost'} class:bg-neutral-50={notPicked}>
+		<div class="border rounded px-4 py-3 flex items-center gap-3" class:bg-green-50={item.return_status === 'returned_ok'} class:bg-orange-50={item.return_status === 'delayed' || item.return_status === 'reported_usable'} class:bg-red-50={item.return_status === 'reported_unusable'} class:bg-challengerpink-50={item.return_status === 'lost'} class:bg-neutral-50={notPicked}>
 			<div class="flex-1"><div class="font-medium text-sm">{item.common_name}</div><div class="text-xs text-neutral-500">{item.location_name}{item.place ? ` · ${item.place}` : ''}</div></div>
 			{#if notPicked}
 				<span class="text-xs text-neutral-400">Ej hämtad</span>
@@ -235,7 +236,7 @@
 		{#if activeItemId === item.id}
 			<div class="border rounded p-3 bg-neutral-50 text-sm space-y-2">
 				<div class="flex gap-2">
-					{#each ['returned_ok', 'delayed', 'broken', 'lost'] as s}
+					{#each ['returned_ok', 'delayed', 'reported_usable', 'reported_unusable', 'lost'] as s}
 						<button onclick={() => form.status = s} class="text-xs px-3 py-1 rounded border" class:bg-blue-700={form.status === s} class:text-white={form.status === s}>{labels[s]}</button>
 					{/each}
 				</div>
@@ -244,7 +245,7 @@
 						<input type="date" bind:value={form.expectedReturnDate} oninput={() => checkConflict(item.commercial_name, form.expectedReturnDate)} class="block border rounded px-2 py-1 text-sm w-full" /></label>
 					{#if delayWarning}<p class="text-xs text-orange-600">⚠ {delayWarning}</p>{/if}
 				{/if}
-				{#if form.status === 'broken' || form.status === 'lost'}
+				{#if form.status === 'reported_usable' || form.status === 'reported_unusable' || form.status === 'lost'}
 					<label class="block"><span class="text-xs text-neutral-600">Beskrivning</span>
 						<input type="text" bind:value={form.notes} placeholder="Vad hände?" class="block border rounded px-2 py-1 text-sm w-full" /></label>
 				{/if}

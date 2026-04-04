@@ -102,31 +102,25 @@ Draft → Submitted → [Approved] → Confirmed → Picked up → Returned
 - **Picked up** — user has collected the equipment. Per-article checklist shows which specific items to collect and where to find them. Tick off each item. Can swap assigned items for other available ones and add extras during pickup.
 - **Returned** — user has returned equipment. Per-article checklist on return. Each article can be marked with a return status:
   - Returned OK
-  - Drying (article goes to Drying status with expected available date)
+  - Delayed (item not returned yet, expected return date set, booking stays open)
   - Broken (triggers issue report)
   - Lost (triggers issue report, article status updated)
-  - To be returned later (partial return, booking stays partially open)
 
 #### Availability
 
 An article is available for a date range if:
 - Its status is bookable (OK or Reported — usable)
-- It is not assigned to an overlapping confirmed/picked-up/submitted/approved booking where it hasn't been fully returned (return_status is NULL or 'pending')
+- It is not assigned to an overlapping confirmed/picked-up/submitted/approved booking where it hasn't been fully returned (return_status is NULL or 'delayed')
 
-Drying is a return status on the booking item, not a separate availability concern. When an item is returned as "drying", the booking stays partially open and the booker remains responsible. The article's inventory status may change to "drying" for visibility, but availability is purely driven by booking state.
+Delayed items keep the booking open and the article unavailable. The booker remains responsible until the item is returned. Drying is handled as a separate article inventory status (set by the manager after return), not as a return status.
 
 ### Issue Reports
 
-Any authenticated user can report an issue on any article at any time (including while it's loaned out). An issue has:
-- Article reference
-- Reporter
-- Description
-- Severity (usable / unusable)
-- Created date
-- Resolution (free text, resolved by equipment manager)
-- Status (open / resolved)
+Any authenticated user can report an issue on any article at any time (including while it's loaned out). Reporting sets the article status to "Reported — usable" or "Reported — unusable" and creates an `issue_reported` article event with the description.
 
-Reporting an issue updates the article status to "Reported — usable" or "Reported — unusable".
+There is no separate issue table. An article with a reported status *is* an open issue. Equipment managers resolve issues by changing the article status back to OK (or to under repair, archived, etc.) via the Ärenden page. Every status change is logged as an article event with an optional comment, forming the full issue history.
+
+See `docs/issues-and-events.md` for design details.
 
 ### Users
 
@@ -248,9 +242,9 @@ Any leader with access to the booking can do (partial) returns. Different leader
 
 1. Open active (picked up) booking
 2. Per-article return checklist, filterable and sortable by category and location
-3. For each article, set return status: OK / Drying / Broken / Lost / To be returned later
+3. For each article, set return status: OK / Delayed / Broken / Lost
 4. Broken/Lost auto-creates issue report
-5. Drying sets article to Drying status (with expected available date)
+5. Delayed sets an expected return date, booking stays open
 6. Confirm return (partial returns keep booking open)
 
 ### Equipment manager: Inventory
@@ -378,21 +372,19 @@ All tables have `group_id` (text, FK → groups). Omitted below for brevity.
 | booking_id | uuid | FK → bookings |
 | article_id | uuid | FK → articles |
 | pickup_status | text | Nullable: picked_up, swapped, not_available |
-| return_status | text | Nullable: returned_ok, drying, broken, lost, pending |
+| return_status | text | Nullable: returned_ok, delayed, broken, lost, pending |
 | notes | text | |
 
-### issue_reports
+### article_events
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
 | article_id | uuid | FK → articles |
-| reporter_id | text | FK → users |
-| description | text | |
-| severity | text | usable, unusable |
-| status | text | open, resolved |
-| resolution | text | Nullable |
-| resolved_by | text | Nullable, FK → users |
-| created_at / resolved_at | timestamptz | |
+| actor_id | text | FK → users |
+| event_type | text | status_change, issue_reported, issue_resolved, booked, picked_up, returned, note |
+| description | text | Human-readable summary |
+| metadata | jsonb | Structured data (old/new status, booking_id, issue_id, etc.) |
+| created_at | timestamptz | |
 
 ### audit_log
 | Column | Type | Notes |
@@ -430,12 +422,12 @@ func TestBookingFlow(t *testing.T) {
 
 **Availability (highest risk — bugs here cause double-bookings):**
 - `TestAvailability_NoDoubleBooking` — leader A books 3 tents for June 5-8, leader B books same type for June 7-10, only remaining tents are offered, leader B gets different articles assigned
-- `TestAvailability_DryingBlocksBooking` — tent returned as drying (3 days), another leader can't book that article within drying period
+- `TestAvailability_DelayedBlocksBooking` — article returned as delayed, another leader can't book that article until it's actually returned
 - `TestAvailability_ReturnedArticleBecomesAvailable` — after full return, articles are bookable again
 
 **Booking lifecycle:**
 - `TestBookingFlow_FullLifecycle` — create → submit → confirm → pickup (tick all) → return (all OK), article statuses correct at each step
-- `TestBookingFlow_PartialReturn` — pick up 5 items, leader A returns 3 (OK, drying, broken), booking still open with 2 pending, leader B (same unit) returns rest, booking auto-completes
+- `TestBookingFlow_PartialReturn` — pick up 5 items, leader A returns 3 (OK, delayed, broken), booking still open with 2 pending, leader B (same unit) returns rest, booking auto-completes
 - `TestBookingFlow_SwapDuringPickup` — confirmed with article X assigned, swap for Y during pickup, X available again, Y loaned
 
 **Approval:**
@@ -545,22 +537,19 @@ The repository is on GitHub. Builds are done by Jenkins:
 
 ### Phase 1 — Core booking loop
 
-Each step produces a working, testable increment. Steps 1–2 are the foundation, steps 3–6 are the booking loop, steps 7–8 round out Phase 1.
+Each step produces a working, testable increment with both API and frontend. Steps 1–2 are the foundation, steps 3–6 are the booking loop, steps 7–8 round out Phase 1.
 
-#### Step 1: API foundation
-Wire up the pieces every endpoint needs before building any feature:
+#### Step 1: API foundation ✅
 - JWT auth middleware (validate token, extract claims, upsert user)
 - Dev mode override (`X-Dev-Role-Override` header using dev-personas.json)
 - sqlc config + first queries
 - Error response helpers
 - Test harness (testcontainers-go, fake JWT helper, HTTP client per role)
 
-#### Step 2: Article CRUD + CSV import (equipment manager)
-Everything depends on articles existing:
+#### Step 2: Article CRUD + CSV import (equipment manager) ✅
 - API: Create, read, update, delete articles. List with filtering (category, location, status, search).
-- API: Location and category CRUD (managers need to manage these too)
-- API: CSV import endpoint — parses inventory spreadsheets, auto-creates categories and locations that don't exist, maps fields to article records. See `docs/import-example.csv` for the expected format.
-- Frontend: Equipment manager inventory view — list, create, edit articles
+- API: Location and category CRUD
+- API: CSV import endpoint
 - Integration tests: manager can CRUD, leader gets 403, CSV import creates correct articles
 
 CSV column mapping:
@@ -574,60 +563,90 @@ CSV column mapping:
 | rum + lage | place | Combined as free text |
 | tags | category_id | Auto-created if not exists, normalized to title case |
 
-#### Step 3: Article browsing (all users)
-Leaders need to see what's available:
+#### Step 3: Article browsing (all users) ✅
 - API: Public article list/search (read-only, scoped to group)
-- Frontend: Browse page with category/location filters, search
-- This is the "catalog" view that feeds into booking
+- Frontend: Browse page with category/location filters, search, grouped by product + location
 
-#### Step 4: Booking — create & submit
-The core flow starts here:
+#### Step 4: Booking — create & submit ✅
 - API: Create draft booking, add/remove items, set used-by (unit/external/personal), submit
-- Availability calculation — the hardest logic (check status + overlapping bookings + drying)
+- Availability calculation (check status + overlapping bookings)
 - Article assignment on confirm (pick specific articles from available pool)
-- Frontend: Cart UI, date picker, availability display, submit flow
+- Frontend: Availability view, cart UI, date picker, booking list, booking detail, cancel, copy
 - Integration tests: availability, no double-booking
 
-#### Step 5: Booking — pickup checklist
+#### Step 5: Booking — pickup checklist ✅
 - API: Transition to picked_up, per-item pickup status, swap articles
 - Frontend: Checklist view showing assigned articles + locations, tick off, swap
 - Integration tests: pickup flow, swap during pickup
 
-#### Step 6: Booking — return checklist
-- API: Per-item return status (OK/drying/broken/lost/pending), partial returns, auto-complete when all returned
-- Drying: set article status + drying_until date
-- Broken/lost: auto-create issue report
+#### Step 6: Booking — return checklist ✅
+- API: Per-item return status (OK/delayed/broken/lost), partial returns, explicit complete
+- Delayed: item stays on loan, booking stays open, article remains unavailable for overlapping bookings
+- Broken/lost: auto-create issue report, update article status
 - Frontend: Return checklist with status options per item
-- Integration tests: partial return, drying blocks availability, broken creates issue
+- Integration tests: partial return, delayed blocks availability, broken creates issue
 
-#### Step 7: Issue reporting
-- API: Create issue report (any user), list/resolve (manager)
-- Frontend: Report issue from article view, manager issue queue
-- Integration tests: report updates article status, manager resolves
+#### Step 7: Issue reporting (API ✅, frontend in progress)
+- API: Create issue report (any user), list/resolve (manager), article event history ✅
+- `article_events` table for per-article audit trail ✅
+- Integration tests ✅
+- Frontend: Report issue from article view, manager issue queue, article event history
 
 #### Step 8: Access control & multi-tenancy tests
 - Unit-scoped booking visibility (Yggdrasil leader sees it, Ornéerna doesn't)
 - Role enforcement across all endpoints
 - Group isolation test (two groups can't see each other's data)
 
-### Phase 2 — Approval + notifications
-- Approval flow for restricted articles
-- Email notifications (approval requests, confirmations, overdue)
-- Google Chat webhook notifications
-- Per-user notification preferences
+### Phase 2 — Approval + manager tools
 
-### Phase 3 — Packages + polish
+#### Step 1: Equipment manager — inventory management
+- Article create/edit form (all fields)
+- Article list with bulk actions (status change, location move)
+- CSV import UI with progress/error feedback
+- Location and category CRUD pages
+
+#### Step 2: Issue report images
+- Image attachments on issue reports (upload + display)
+- `issue_report_images` table, upload endpoint, local storage
+
+#### Step 3: Approval flow
+- API: Approve/reject bookings with restricted articles, manager approval queue endpoint
+- Frontend: Manager approval queue, approve/reject with optional message
+- Frontend: Leader sees "awaiting approval" status, gets feedback on rejection
+
+### Phase 3 — Production auth + notifications
+
+Connect real OIDC, add notifications, and make the system usable by actual users.
+
+#### Step 1: OIDC authentication
+- Real JWT validation against ScoutID (Keycloak) JWKS endpoint in Go API
+- OIDC login flow in SvelteKit via @auth/sveltekit
+- Map real Keycloak claims to roles and units
+- Remove dev persona switcher from production builds (keep in dev mode)
+
+#### Step 2: Notifications
+- Email notifications (approval requests, booking confirmations, overdue reminders)
+- Google Chat webhook notifications (per-unit spaces, admin space)
+- Per-user notification channel preference (email / Google Chat)
+
+#### Step 3: Deployment + CI/CD
+- CI/CD pipeline: Jenkins builds, Docker image tagging, push to registry
+- Production Docker Compose with reverse proxy, TLS
+- Deployment automation (webhook or manual trigger)
+- User profile page (notification preferences)
+
+### Phase 4 — Packages + polish
 - Package CRUD (org-wide + personal)
 - Package → cart flow
-- Drying time tracking on return
 - Print-friendly checklist view
 - Booking history per user
 - Inventory dashboard (counts per location/status)
 
-### Phase 4 — Reporting + multi-tenancy prep
+### Phase 5 — Reporting + scale
 - Loan history reporting (per article, per person, per location)
-- Group onboarding (second scout group)
 - Article image management improvements
+- Group onboarding (second scout group)
+- Multi-tenancy hardening
 
 ## Internationalization (i18n)
 

@@ -8,7 +8,7 @@ JOIN categories c ON a.category_id = c.id
 WHERE a.group_id = @group_id
     AND (sqlc.narg('category_id')::uuid IS NULL OR a.category_id = sqlc.narg('category_id'))
     AND (sqlc.narg('location_id')::uuid IS NULL OR a.location_id = sqlc.narg('location_id'))
-    AND (sqlc.narg('status')::text IS NULL OR a.status = sqlc.narg('status'))
+    AND (COALESCE(array_length(@statuses::text[], 1), 0) = 0 OR a.status = ANY(@statuses))
     AND (sqlc.narg('search')::text IS NULL OR a.common_name ILIKE '%' || sqlc.narg('search') || '%' OR a.commercial_name ILIKE '%' || sqlc.narg('search') || '%')
 ORDER BY c.sort_order, c.name, a.commercial_name, a.common_name;
 

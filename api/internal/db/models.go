@@ -29,6 +29,17 @@ type Article struct {
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 }
 
+type ArticleEvent struct {
+	ID          pgtype.UUID        `json:"id"`
+	GroupID     string             `json:"group_id"`
+	ArticleID   pgtype.UUID        `json:"article_id"`
+	ActorID     string             `json:"actor_id"`
+	EventType   string             `json:"event_type"`
+	Description string             `json:"description"`
+	Metadata    []byte             `json:"metadata"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
 type AuditLog struct {
 	ID         pgtype.UUID        `json:"id"`
 	GroupID    string             `json:"group_id"`
@@ -78,20 +89,6 @@ type Group struct {
 	ID        string             `json:"id"`
 	Name      string             `json:"name"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
-}
-
-type IssueReport struct {
-	ID          pgtype.UUID        `json:"id"`
-	GroupID     string             `json:"group_id"`
-	ArticleID   pgtype.UUID        `json:"article_id"`
-	ReporterID  string             `json:"reporter_id"`
-	Description string             `json:"description"`
-	Severity    string             `json:"severity"`
-	Status      string             `json:"status"`
-	Resolution  pgtype.Text        `json:"resolution"`
-	ResolvedBy  pgtype.Text        `json:"resolved_by"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	ResolvedAt  pgtype.Timestamptz `json:"resolved_at"`
 }
 
 type Location struct {

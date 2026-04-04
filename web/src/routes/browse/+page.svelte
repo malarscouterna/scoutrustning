@@ -1,13 +1,32 @@
 <script lang="ts">
 	import type { PageData } from './$types';
 	import type { Article } from '$lib/api/client';
+	import ReportIssueForm from '$lib/components/ReportIssueForm.svelte';
+	import ArticleEventHistory from '$lib/components/ArticleEventHistory.svelte';
 
 	let { data }: { data: PageData } = $props();
 
 	let search = $state(data.filters.search ?? '');
 	let selectedCategory = $state(data.filters.category_id ?? '');
 	let selectedLocation = $state(data.filters.location_id ?? '');
+	let showArchived = $state(data.filters.status?.includes('archived') ?? false);
 	let expandedGroups = $state<Set<string>>(new Set());
+	let reportingArticleId = $state<string | null>(null);
+	let showHistoryFor = $state<string | null>(null);
+	let reportedMessage = $state('');
+
+	const statusLabels: Record<string, string> = {
+		ok: 'OK',
+		reported_usable: 'Rapporterad — användbar',
+		reported_unusable: 'Rapporterad — ej användbar',
+		under_repair: 'Under reparation',
+		lost: 'Saknas',
+		archived: 'Arkiverad',
+		drying: 'Torkar',
+		new: 'Ny',
+	};
+
+	let articles = $state(data.articles);
 
 	interface ArticleGroup {
 		key: string;
@@ -20,7 +39,7 @@
 
 	let groups = $derived.by(() => {
 		const map = new Map<string, ArticleGroup>();
-		for (const a of data.articles) {
+		for (const a of articles) {
 			const key = `${a.commercial_name}||${a.location_name}`;
 			const existing = map.get(key);
 			if (existing) {
@@ -57,6 +76,7 @@
 		if (search) params.set('search', search);
 		if (selectedCategory) params.set('category', selectedCategory);
 		if (selectedLocation) params.set('location', selectedLocation);
+		if (showArchived) params.set('status', 'ok,reported_usable,reported_unusable,under_repair,drying,new,archived');
 		const qs = params.toString();
 		window.location.href = `/browse${qs ? '?' + qs : ''}`;
 	}
@@ -66,6 +86,15 @@
 		selectedCategory = '';
 		selectedLocation = '';
 		window.location.href = '/browse';
+	}
+
+	function handleIssueReported(newStatus: string) {
+		if (reportingArticleId) {
+			articles = articles.map((a) => a.id === reportingArticleId ? { ...a, status: newStatus } : a);
+		}
+		reportingArticleId = null;
+		reportedMessage = 'Problem rapporterat!';
+		setTimeout(() => reportedMessage = '', 4000);
 	}
 </script>
 
@@ -97,9 +126,18 @@
 		{/if}
 	</div>
 
+	<label class="flex items-center gap-2 mb-4 text-sm">
+		<input type="checkbox" bind:checked={showArchived} onchange={applyFilters} />
+		Visa arkiverade
+	</label>
+
 	<p class="text-sm text-neutral-600 mb-4">
-		{data.articles.length} artiklar i {groups.length} grupper
+		{articles.length} artiklar i {groups.length} grupper
 	</p>
+
+	{#if reportedMessage}
+		<div class="bg-green-50 border border-green-200 rounded p-3 mb-4 text-green-800 text-sm">{reportedMessage}</div>
+	{/if}
 
 	<div class="space-y-1">
 		{#each groups as group (group.key)}
@@ -127,6 +165,7 @@
 									<th class="py-1">Namn</th>
 									<th class="py-1">Plats</th>
 									<th class="py-1">Status</th>
+									<th class="py-1"></th>
 								</tr>
 							</thead>
 							<tbody>
@@ -136,12 +175,26 @@
 										<td class="py-1 text-neutral-600">{article.place || '—'}</td>
 										<td class="py-1">
 											<span class="inline-block px-2 py-0.5 rounded text-xs
-												{article.status === 'ok' ? 'bg-green-100 text-green-800' : 'bg-neutral-100'}"
+												{article.status === 'ok' ? 'bg-green-100 text-green-800' : article.status.startsWith('reported') ? 'bg-orange-100 text-orange-800' : article.status === 'lost' ? 'bg-challengerpink-100 text-challengerpink-800' : article.status === 'archived' ? 'bg-neutral-100 text-neutral-500' : 'bg-neutral-100'}"
 											>
-												{article.status}
+												{statusLabels[article.status] ?? article.status}
 											</span>
 										</td>
+										<td class="py-1 text-right">
+											<button onclick={() => reportingArticleId = reportingArticleId === article.id ? null : article.id} class="text-xs text-blue-700 underline">Rapportera</button>
+											<button onclick={() => showHistoryFor = showHistoryFor === article.id ? null : article.id} class="text-xs text-neutral-500 underline ml-2">Historik</button>
+										</td>
 									</tr>
+									{#if reportingArticleId === article.id}
+										<tr><td colspan="4">
+											<ReportIssueForm articleId={article.id} articleName={article.common_name} onReported={handleIssueReported} onCancel={() => reportingArticleId = null} />
+										</td></tr>
+									{/if}
+									{#if showHistoryFor === article.id}
+										<tr><td colspan="4" class="py-2">
+											<ArticleEventHistory articleId={article.id} />
+										</td></tr>
+									{/if}
 								{/each}
 							</tbody>
 						</table>

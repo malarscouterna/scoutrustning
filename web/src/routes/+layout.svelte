@@ -16,6 +16,7 @@
 		<a href="/browse" class="text-sm hover:underline" class:font-medium={$page.url.pathname.startsWith('/browse')}>Utrustning</a>
 		<a href="/book" class="text-sm hover:underline" class:font-medium={$page.url.pathname.startsWith('/book')}>Boka</a>
 		<a href="/bookings" class="text-sm hover:underline" class:font-medium={$page.url.pathname.startsWith('/bookings')}>Bokningar</a>
+		<a href="/issues" class="text-sm hover:underline" class:font-medium={$page.url.pathname.startsWith('/issues')}>Ärenden</a>
 	</div>
 </nav>
 

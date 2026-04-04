@@ -56,9 +56,9 @@
 								{#if item.return_status && item.return_status !== 'returned_ok' && item.return_status !== 'pending'}
 									<td class="px-4 py-2">
 										<span class="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700"
-										>{{broken: 'Trasig', lost: 'Förlorad'}[item.return_status] ?? item.return_status}</span>
+										>{{returned_ok: 'OK', delayed: 'Försenad', reported_usable: 'Problem — användbar', reported_unusable: 'Problem — ej användbar', lost: 'Saknas'}[item.return_status] ?? item.return_status}</span>
 									</td>
-								{:else if !item.pickup_status || item.pickup_status === 'not_available'}
+								{:else if !item.pickup_status || item.pickup_status === 'lost'}
 									<td class="px-4 py-2"><span class="text-xs text-neutral-400">Ej hämtad</span></td>
 								{:else}
 									<td></td>

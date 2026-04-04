@@ -63,7 +63,7 @@ const allItemsReturned = `-- name: AllItemsReturned :one
 SELECT NOT EXISTS (
     SELECT 1 FROM booking_items
     WHERE booking_id = $1 AND group_id = $2
-        AND pickup_status IS NOT NULL AND pickup_status != 'not_available'
+        AND pickup_status IS NOT NULL AND pickup_status != 'lost'
         AND (return_status IS NULL OR return_status = 'delayed')
 ) AS all_returned
 `

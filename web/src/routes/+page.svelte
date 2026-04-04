@@ -5,5 +5,6 @@
 		<a href="/browse" class="block underline text-blue-700">Bläddra utrustning →</a>
 		<a href="/book" class="block underline text-blue-700">Boka utrustning →</a>
 		<a href="/bookings" class="block underline text-blue-700">Mina bokningar →</a>
+		<a href="/issues" class="block underline text-blue-700">Ärenden →</a>
 	</nav>
 </div>
