@@ -25,9 +25,12 @@ Draft bookings with zero items that are abandoned are automatically deleted afte
 
 ## Quantity-tracked items — manager UI
 
-After CSV import, quantity-tracked items (e.g. LED tent lights) have only 1 record. The equipment manager needs a UI to:
-- Mark an item as quantity-tracked (`individually_tracked = false`)
-- Set the actual count (creates additional records)
+After CSV import, the equipment manager needs a UI to:
+- Toggle an article group between individually tracked and quantity tracked
+- Adjust the count for quantity-tracked items (add/remove records)
+- View and edit tracking mode per article group
+
+**Status: deferred** — waiting for proper admin/management UI.
 
 ## Subcategories
 
@@ -124,7 +127,9 @@ The article event history endpoint now supports a `?limit=N` parameter. The fron
 
 ## CSV import — quantity-tracked items
 
-The CSV import currently creates all items as individually tracked. Need a way to mark quantity-tracked items in the CSV (e.g. a column or naming convention) so the seed/import flow handles them without post-import scripting. The `import-example.csv` should demonstrate both types.
+The CSV import supports a `count` column. Rows with `count > 1` create multiple quantity-tracked articles (`individually_tracked = false`) from a single row. Rows without a count (or count=1) are individually tracked. Column order doesn't matter — all columns are resolved by header name.
+
+**Status: resolved.**
 
 ## Pickup state management
 

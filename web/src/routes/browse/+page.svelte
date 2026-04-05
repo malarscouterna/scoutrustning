@@ -15,16 +15,24 @@
 	let showHistoryFor = $state<string | null>(null);
 	let reportedMessage = $state('');
 
+	const statusOrder = ['ok', 'reported_usable', 'reported_unusable', 'under_repair', 'drying', 'new', 'lost', 'archived'] as const;
+
 	const statusLabels: Record<string, string> = {
 		ok: 'OK',
 		reported_usable: 'Rapporterad — användbar',
 		reported_unusable: 'Rapporterad — ej användbar',
 		under_repair: 'Under reparation',
-		lost: 'Saknas',
-		archived: 'Arkiverad',
 		drying: 'Torkar',
 		new: 'Ny',
+		lost: 'Saknas',
+		archived: 'Arkiverad',
 	};
+
+	const usableStatuses = new Set(['ok', 'reported_usable']);
+
+	function sortByStatus<T extends { status: string }>(items: T[]): T[] {
+		return [...items].sort((a, b) => statusOrder.indexOf(a.status as any) - statusOrder.indexOf(b.status as any));
+	}
 
 	let articles = $state(data.articles);
 
@@ -35,6 +43,7 @@
 		locationName: string;
 		count: number;
 		articles: Article[];
+		individuallyTracked: boolean;
 	}
 
 	let groups = $derived.by(() => {
@@ -52,7 +61,8 @@
 					categoryName: a.category_name,
 					locationName: a.location_name,
 					count: 1,
-					articles: [a]
+					articles: [a],
+					individuallyTracked: a.individually_tracked
 				});
 			}
 		}
@@ -76,7 +86,7 @@
 		if (search) params.set('search', search);
 		if (selectedCategory) params.set('category', selectedCategory);
 		if (selectedLocation) params.set('location', selectedLocation);
-		if (showArchived) params.set('status', 'ok,reported_usable,reported_unusable,under_repair,drying,new,archived');
+		if (showArchived) params.set('status', 'ok,reported_usable,reported_unusable,under_repair,drying,new,lost,archived');
 		const qs = params.toString();
 		window.location.href = `/browse${qs ? '?' + qs : ''}`;
 	}
@@ -142,6 +152,7 @@
 	<div class="space-y-1">
 		{#each groups as group (group.key)}
 			{@const expanded = expandedGroups.has(group.key)}
+			{@const usableCount = group.articles.filter(a => usableStatuses.has(a.status)).length}
 			<div class="border rounded">
 				<button
 					onclick={() => toggleGroup(group.key)}
@@ -153,51 +164,69 @@
 					</div>
 					<div class="flex items-center gap-3 text-sm text-neutral-600">
 						<span>{group.locationName}</span>
-						<span class="bg-neutral-100 px-2 py-0.5 rounded">{group.count} st</span>
+						{#if group.individuallyTracked}
+							<span class="bg-blue-600 text-white px-2 py-0.5 rounded">{usableCount}/{group.count} st</span>
+						{:else}
+							<span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded">×{usableCount}/{group.count}</span>
+						{/if}
 						<span class="text-xs">{expanded ? '▲' : '▼'}</span>
 					</div>
 				</button>
 				{#if expanded}
 					<div class="border-t px-4 py-2 bg-neutral-50">
-						<table class="w-full text-sm">
-							<thead>
-								<tr class="text-left text-neutral-500">
-									<th class="py-1">Namn</th>
-									<th class="py-1">Plats</th>
-									<th class="py-1">Status</th>
-									<th class="py-1"></th>
-								</tr>
-							</thead>
-							<tbody>
-								{#each group.articles as article}
-									<tr class="border-t border-neutral-200">
-										<td class="py-1">{article.common_name}</td>
-										<td class="py-1 text-neutral-600">{article.place || '—'}</td>
-										<td class="py-1">
-											<span class="inline-block px-2 py-0.5 rounded text-xs
-												{article.status === 'ok' ? 'bg-green-100 text-green-800' : article.status.startsWith('reported') ? 'bg-orange-100 text-orange-800' : article.status === 'lost' ? 'bg-challengerpink-100 text-challengerpink-800' : article.status === 'archived' ? 'bg-neutral-100 text-neutral-500' : 'bg-neutral-100'}"
-											>
-												{statusLabels[article.status] ?? article.status}
-											</span>
-										</td>
-										<td class="py-1 text-right">
-											<button onclick={() => reportingArticleId = reportingArticleId === article.id ? null : article.id} class="text-xs text-blue-700 underline">Rapportera</button>
-											<button onclick={() => showHistoryFor = showHistoryFor === article.id ? null : article.id} class="text-xs text-neutral-500 underline ml-2">Historik</button>
-										</td>
+						{#if group.individuallyTracked}
+							<table class="w-full text-sm">
+								<thead>
+									<tr class="text-left text-neutral-500">
+										<th class="py-1">Namn</th>
+										<th class="py-1">Plats</th>
+										<th class="py-1">Status</th>
+										<th class="py-1"></th>
 									</tr>
-									{#if reportingArticleId === article.id}
-										<tr><td colspan="4">
-											<ReportIssueForm articleId={article.id} articleName={article.common_name} onReported={handleIssueReported} onCancel={() => reportingArticleId = null} />
-										</td></tr>
-									{/if}
-									{#if showHistoryFor === article.id}
-										<tr><td colspan="4" class="py-2">
-											<ArticleEventHistory articleId={article.id} />
-										</td></tr>
-									{/if}
+								</thead>
+								<tbody>
+									{#each sortByStatus(group.articles) as article}
+										<tr class="border-t border-neutral-200">
+											<td class="py-1">{article.common_name}</td>
+											<td class="py-1 text-neutral-600">{article.place || '—'}</td>
+											<td class="py-1">
+												<span class="inline-block px-2 py-0.5 rounded text-xs
+													{article.status === 'ok' ? 'bg-green-100 text-green-800' : article.status.startsWith('reported') ? 'bg-orange-100 text-orange-800' : article.status === 'lost' ? 'bg-challengerpink-100 text-challengerpink-800' : article.status === 'archived' ? 'bg-neutral-100 text-neutral-500' : 'bg-neutral-100'}"
+												>
+													{statusLabels[article.status] ?? article.status}
+												</span>
+											</td>
+											<td class="py-1 text-right">
+												<button onclick={() => reportingArticleId = reportingArticleId === article.id ? null : article.id} class="text-xs text-blue-700 underline">Rapportera</button>
+												<button onclick={() => showHistoryFor = showHistoryFor === article.id ? null : article.id} class="text-xs text-neutral-500 underline ml-2">Historik</button>
+											</td>
+										</tr>
+										{#if reportingArticleId === article.id}
+											<tr><td colspan="4">
+												<ReportIssueForm articleId={article.id} articleName={article.common_name} onReported={handleIssueReported} onCancel={() => reportingArticleId = null} />
+											</td></tr>
+										{/if}
+										{#if showHistoryFor === article.id}
+											<tr><td colspan="4" class="py-2">
+												<ArticleEventHistory articleId={article.id} />
+											</td></tr>
+										{/if}
+									{/each}
+								</tbody>
+							</table>
+						{:else}
+							{@const statusCounts = group.articles.reduce((acc, a) => { acc[a.status] = (acc[a.status] || 0) + 1; return acc; }, {} as Record<string, number>)}
+							<div class="flex flex-wrap gap-2 py-1 text-sm">
+								{#each statusOrder.filter(s => statusCounts[s]) as status}
+									{@const count = statusCounts[status]}
+									<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs
+										{status === 'ok' ? 'bg-green-100 text-green-800' : status.startsWith('reported') ? 'bg-orange-100 text-orange-800' : status === 'lost' ? 'bg-challengerpink-100 text-challengerpink-800' : status === 'archived' ? 'bg-neutral-100 text-neutral-500' : 'bg-neutral-100'}"
+									>
+										{count} {statusLabels[status] ?? status}
+									</span>
 								{/each}
-							</tbody>
-						</table>
+							</div>
+						{/if}
 					</div>
 				{/if}
 			</div>

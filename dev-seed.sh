@@ -56,21 +56,65 @@ for PROJECT in Valborgskommittén Läger Utrustningsgruppen IT-gruppen; do
     -d "{\"name\":\"$PROJECT\",\"type\":\"project\"}" > /dev/null && echo "  Created project: $PROJECT" || echo "  Exists: $PROJECT"
 done
 
-# Create quantity-tracked test articles (Tältlampa LED)
-echo "Creating quantity-tracked test articles..."
-LOC_ID=$(curl -s "$API/api/v0/locations" -H "$HEADER" | python3 -c "import json,sys; print([l['id'] for l in json.load(sys.stdin) if l['name']=='Hajkförrådet'][0])")
-CAT_ID=$(curl -s "$API/api/v0/categories" -H "$HEADER" | python3 -c "import json,sys; print([c['id'] for c in json.load(sys.stdin) if c['name']=='Sova'][0])")
-OLD_ID=$(curl -s "$API/api/v0/articles?search=T%C3%A4ltlampor" -H "$HEADER" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d[0]['id'] if d else '')")
-if [ -n "$OLD_ID" ]; then
-  curl -sf -X DELETE "$API/api/v0/articles/$OLD_ID" -H "$HEADER" > /dev/null
-fi
-for i in 1 2 3 4 5; do
-  curl -sf -X POST "$API/api/v0/articles" \
-    -H "$HEADER" \
-    -H "Content-Type: application/json" \
-    -d "{\"commercial_name\":\"Tältlampa LED\",\"common_name\":\"Tältlampa LED\",\"category_id\":\"$CAT_ID\",\"location_id\":\"$LOC_ID\",\"individually_tracked\":false,\"requires_approval\":false,\"place\":\"Hylla 2\"}" > /dev/null
-done
-echo "  Created: 5x Tältlampa LED (quantity-tracked)"
+# Report issues on some quantity-tracked articles to demo status mix
+echo ""
+echo "Reporting issues on quantity-tracked articles..."
+
+# Tältlampa LED: report 2 with issues
+LAMP_IDS=$(curl -s "$API/api/v0/articles?search=T%C3%A4ltlampa%20LED" -H "$HEADER" | python3 -c "
+import json,sys
+ids = [a['id'] for a in json.load(sys.stdin)]
+for i in ids: print(i)
+")
+LAMP1=$(echo "$LAMP_IDS" | sed -n '1p')
+LAMP2=$(echo "$LAMP_IDS" | sed -n '2p')
+LAMP3=$(echo "$LAMP_IDS" | sed -n '3p')
+
+curl -sf -X PUT "$API/api/v0/articles/$LAMP1/status" \
+  -H "$LEADER" -H "Content-Type: application/json" \
+  -d '{"status":"reported_usable","comment":"Blinkar ibland"}' > /dev/null
+echo "  Tältlampa LED: 1 reported usable (blinkar)"
+
+curl -sf -X PUT "$API/api/v0/articles/$LAMP2/status" \
+  -H "$LEADER" -H "Content-Type: application/json" \
+  -d '{"status":"reported_unusable","comment":"Helt trasig, lyser inte alls"}' > /dev/null
+echo "  Tältlampa LED: 1 reported unusable (trasig)"
+
+curl -sf -X PUT "$API/api/v0/articles/$LAMP3/status" \
+  -H "$HEADER" -H "Content-Type: application/json" \
+  -d '{"status":"under_repair","comment":"Skickad för batteribyte"}' > /dev/null
+echo "  Tältlampa LED: 1 under repair"
+
+# Pannlampa: archive one
+PANN_IDS=$(curl -s "$API/api/v0/articles?search=Pannlampa" -H "$HEADER" | python3 -c "
+import json,sys
+ids = [a['id'] for a in json.load(sys.stdin)]
+for i in ids: print(i)
+")
+PANN1=$(echo "$PANN_IDS" | sed -n '1p')
+curl -sf -X PUT "$API/api/v0/articles/$PANN1/status" \
+  -H "$HEADER" -H "Content-Type: application/json" \
+  -d '{"status":"archived","comment":"Uttjänt, ersätts inte"}' > /dev/null
+echo "  Pannlampa: 1 archived"
+
+# Stormkök: report issues on a couple
+STORM_IDS=$(curl -s "$API/api/v0/articles?search=Stormk%C3%B6k" -H "$HEADER" | python3 -c "
+import json,sys
+ids = [a['id'] for a in json.load(sys.stdin) if a['individually_tracked']]
+for i in ids: print(i)
+")
+STORM4=$(echo "$STORM_IDS" | sed -n '4p')
+STORM5=$(echo "$STORM_IDS" | sed -n '5p')
+
+curl -sf -X PUT "$API/api/v0/articles/$STORM4/status" \
+  -H "$LEADER" -H "Content-Type: application/json" \
+  -d '{"status":"reported_usable","comment":"Brännaren flämtar lite"}' > /dev/null
+echo "  Stormkök 4: reported usable (flämtar)"
+
+curl -sf -X PUT "$API/api/v0/articles/$STORM5/status" \
+  -H "$LEADER" -H "Content-Type: application/json" \
+  -d '{"status":"reported_unusable","comment":"Läcker bränsle, farligt"}' > /dev/null
+echo "  Stormkök 5: reported unusable (läcker)"
 
 # Helper: find booking item ID by article common_name
 find_item() {
@@ -116,7 +160,10 @@ curl -sf -X POST "$API/api/v0/bookings/$BOOKING_ID/items" \
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING_ID/items" \
   -H "$LEADER" -H "Content-Type: application/json" \
   -d '{"commercial_name":"T\u00e4ltlampa LED","quantity":3}' > /dev/null
-echo "  Added: 2x Sibley, 2x Stormkök, 3x Tältlampa LED"
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING_ID/items" \
+  -H "$LEADER" -H "Content-Type: application/json" \
+  -d '{"commercial_name":"Brandfilt","quantity":2}' > /dev/null
+echo "  Added: 2x Sibley, 2x Stormkök, 3x Tältlampa LED, 2x Brandfilt"
 
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING_ID/submit" -H "$LEADER" > /dev/null
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING_ID/pickup" -H "$LEADER" > /dev/null
@@ -193,18 +240,13 @@ echo ""
 echo "Creating standalone issue reports..."
 
 # Bryne: reported usable
-BRYNE_ID=$(curl -s "$API/api/v0/articles?search=Bryne" -H "$HEADER" | python3 -c "import json,sys; print(json.load(sys.stdin)[0]['id'])")
-curl -sf -X PUT "$API/api/v0/articles/$BRYNE_ID/status" \
-  -H "$LEADER" -H "Content-Type: application/json" \
-  -d '{"status":"reported_usable","comment":"Slitet och behöver slipas"}' > /dev/null
-echo "  Bryne: reported usable (slitet)"
-
-# Pannlampa: archived by manager
-PANN_ID=$(curl -s "$API/api/v0/articles?search=Pannlampa" -H "$HEADER" | python3 -c "import json,sys; print(json.load(sys.stdin)[0]['id'])")
-curl -sf -X PUT "$API/api/v0/articles/$PANN_ID/status" \
-  -H "$HEADER" -H "Content-Type: application/json" \
-  -d '{"status":"archived","comment":"Uttjänt, ersätts inte"}' > /dev/null
-echo "  Pannlampa: archived"
+BRYNE_ID=$(curl -s "$API/api/v0/articles?search=Bryne" -H "$HEADER" | python3 -c "import json,sys; arts=[a for a in json.load(sys.stdin) if a['location_name']=='Hajkförrådet']; print(arts[0]['id'] if arts else '')")
+if [ -n "$BRYNE_ID" ]; then
+  curl -sf -X PUT "$API/api/v0/articles/$BRYNE_ID/status" \
+    -H "$LEADER" -H "Content-Type: application/json" \
+    -d '{"status":"reported_usable","comment":"Slitet och behöver slipas"}' > /dev/null
+  echo "  Bryne: reported usable (slitet)"
+fi
 
 # ─── Booking 2: Confirmed, ready for pickup testing ───
 echo ""
@@ -218,8 +260,11 @@ curl -sf -X POST "$API/api/v0/bookings/$BOOKING2_ID/items" \
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING2_ID/items" \
   -H "$LEADER" -H "Content-Type: application/json" \
   -d '{"commercial_name":"Primus","quantity":1}' > /dev/null
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING2_ID/items" \
+  -H "$LEADER" -H "Content-Type: application/json" \
+  -d '{"commercial_name":"Liggunderlag","quantity":4}' > /dev/null
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING2_ID/submit" -H "$LEADER" > /dev/null
-echo "  Booking 2 (confirmed): 2x Brandfilt, 1x Primus"
+echo "  Booking 2 (confirmed): 2x Brandfilt, 1x Primus, 4x Liggunderlag"
 
 echo ""
 echo "Done."

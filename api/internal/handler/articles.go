@@ -515,10 +515,29 @@ func (h *ArticleHandler) Import(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 
 	reader := csv.NewReader(file)
-	// Skip header
-	if _, err := reader.Read(); err != nil {
+	header, err := reader.Read()
+	if err != nil {
 		WriteError(w, http.StatusBadRequest, "failed to read CSV header")
 		return
+	}
+	// Resolve column indices from header
+	colIdx := map[string]int{}
+	for i, col := range header {
+		key := strings.ToLower(strings.TrimSpace(col))
+		// Strip Haikuniq-style wrapping like `"cf: ...,type:text"`
+		if strings.HasPrefix(key, "cf: ") {
+			key = strings.TrimPrefix(key, "cf: ")
+			if j := strings.Index(key, ","); j >= 0 {
+				key = key[:j]
+			}
+		}
+		colIdx[key] = i
+	}
+	col := func(record []string, name string) string {
+		if i, ok := colIdx[name]; ok && i < len(record) {
+			return strings.TrimSpace(record[i])
+		}
+		return ""
 	}
 
 	// Cache lookups for locations and categories
@@ -577,25 +596,18 @@ func (h *ArticleHandler) Import(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		// CSV columns: 0=titelgrupp, 1=title, 2=description, 3=location, 4=plats, 5=rum, 6=lage, 7=tags, ...
-		if len(record) < 8 {
-			errors = append(errors, fmt.Sprintf("row %d: too few columns", imported+skipped+2))
-			skipped++
-			continue
-		}
-
-		commonName := strings.TrimSpace(record[1])
+		commonName := col(record, "title")
 		if commonName == "" {
 			skipped++
 			continue
 		}
 
-		description := strings.TrimSpace(record[2])
-		rawLocation := strings.TrimSpace(record[3])
-		plats := strings.TrimSpace(record[4])
-		rum := strings.TrimSpace(record[5])
-		lage := strings.TrimSpace(record[6])
-		tag := strings.TrimSpace(record[7])
+		description := col(record, "description")
+		rawLocation := col(record, "location")
+		plats := col(record, "plats")
+		rum := col(record, "rum")
+		lage := col(record, "lage")
+		tag := col(record, "tags")
 
 		// Resolve location: Karsvik items use plats as the real location
 		locationName := rawLocation
@@ -635,30 +647,44 @@ func (h *ArticleHandler) Import(w http.ResponseWriter, r *http.Request) {
 		}
 		place := strings.Join(placeParts, ", ")
 
-		commercialName := strings.TrimSpace(record[0])
+		commercialName := col(record, "titelgrupp")
 
 		// Determine if approval is required
 		// Default: items in Hajkförrådet don't require approval, others do
 		requiresApproval := !strings.EqualFold(locationName, "Hajkförrådet")
 
-		_, err = h.Q.CreateArticle(ctx, db.CreateArticleParams{
-			GroupID:             claims.GroupID,
-			CommercialName:      commercialName,
-			CommonName:          commonName,
-			CategoryID:          catID,
-			LocationID:          locID,
-			Status:              "ok",
-			IndividuallyTracked: true,
-			RequiresApproval:    requiresApproval,
-			Description:         description,
-			Place:               place,
-		})
-		if err != nil {
-			errors = append(errors, fmt.Sprintf("row %d: %v", imported+skipped+2, err))
+		// count column: if >1, create multiple quantity-tracked articles
+		count := 1
+		if c, err := strconv.Atoi(col(record, "count")); err == nil && c > 1 {
+			count = c
+		}
+		individuallyTracked := count <= 1
+
+		rowErr := false
+		for range count {
+			_, err = h.Q.CreateArticle(ctx, db.CreateArticleParams{
+				GroupID:             claims.GroupID,
+				CommercialName:      commercialName,
+				CommonName:          commonName,
+				CategoryID:          catID,
+				LocationID:          locID,
+				Status:              "ok",
+				IndividuallyTracked: individuallyTracked,
+				RequiresApproval:    requiresApproval,
+				Description:         description,
+				Place:               place,
+			})
+			if err != nil {
+				errors = append(errors, fmt.Sprintf("row %d: %v", imported+skipped+2, err))
+				rowErr = true
+				break
+			}
+		}
+		if rowErr {
 			skipped++
 			continue
 		}
-		imported++
+		imported += count
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]any{
