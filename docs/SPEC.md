@@ -96,8 +96,8 @@ Draft → Submitted → [Approved] → Confirmed → Picked up → Returned
 ```
 
 - **Draft** — user is building their cart
-- **Submitted** — booking requested. If no articles in the booking have `requires_approval = true`, auto-transitions to Confirmed. If any article requires approval, the whole booking waits.
-- **Approved/Rejected** — equipment manager acts on bookings that need approval. Approval auto-transitions to Confirmed.
+- **Submitted** — booking requested. If no articles have `approval_level` != `none`, auto-transitions to Confirmed. If any article has `low` approval and user is a project leader, auto-confirms. If any article has `high` approval, only managers auto-confirm. Otherwise waits for manager approval.
+- **Approved/Rejected** — equipment manager acts on bookings that need approval. Approval auto-transitions to Confirmed. Rejection reverts to Draft with a message so the leader can edit and resubmit.
 - **Confirmed** — booking is locked in, articles reserved
 - **Picked up** — user has collected the equipment. Per-article checklist shows which specific items to collect and where to find them. Tick off each item. Can swap assigned items for other available ones and add extras during pickup.
 - **Returned** — user has returned equipment. Per-article checklist on return. Each article can be marked with a return status:
@@ -316,7 +316,7 @@ All tables have `group_id` (text, FK → groups). Omitted below for brevity.
 | location_id | uuid | FK → locations |
 | status | text | Condition enum: ok, reported_usable, incoming, reported_unusable, under_repair, lost, archived |
 | individually_tracked | boolean | |
-| requires_approval | boolean | |
+| approval_level | text | none, low, high — controls booking approval flow |
 | image_path | text | Nullable |
 | description | text | |
 | instructions | text | |
@@ -387,6 +387,17 @@ All tables have `group_id` (text, FK → groups). Omitted below for brevity.
 | event_type | text | status_change, issue_reported, issue_resolved, booked, picked_up, returned, note |
 | description | text | Human-readable summary |
 | metadata | jsonb | Structured data (old/new status, booking_id, issue_id, etc.) |
+| created_at | timestamptz | |
+
+### booking_events
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| booking_id | uuid | FK → bookings |
+| actor_id | text | FK → users |
+| event_type | text | submitted, approved, rejected, cancelled, note, items_changed, dates_changed, details_changed |
+| message | text | Human-readable message (approval comment, leader explanation, etc.) |
+| metadata | jsonb | Structured data (items added/removed, old/new dates, etc.) |
 | created_at | timestamptz | |
 
 ### audit_log
@@ -612,20 +623,26 @@ CSV column mapping:
 
 ### Phase 2 — Approval + manager tools
 
-#### Step 1: Equipment manager — inventory management
+#### Step 1: Approval flow ✅
+- Three-level approval model: `none` (free), `low` (project leaders auto-approve), `high` (always needs manager approval)
+- API: `POST /bookings/{id}/approve` and `POST /bookings/{id}/reject` (manager only, with message)
+- API: `GET /bookings?status=submitted` for manager approval queue
+- Rejection reverts booking to draft so leader can edit and resubmit
+- CSV import reads `requires_approval` column (none/low/high/true/false), defaults to `none`
+- Frontend: Manager approval queue tab on bookings list with count badge
+- Frontend: Approve/reject buttons with message field on booking detail
+- Frontend: Leader sees approval/rejection message on booking detail
+- Integration tests: 9 subtests covering all approval level × role combinations
+
+#### Step 2: Equipment manager — inventory management
 - Article create/edit form (all fields)
 - Article list with bulk actions (status change, location move)
-- CSV import UI with progress/error feedback
-- Location and category CRUD pages
+- CSV import UI with progress/error feedback, duplicate handling
+- CSV export on browse page, booking export on bookings page
+- Print-friendly fetch list on booking detail
+- Admin settings page: location and category CRUD
 
-#### Step 2: Issue report images
-- Image attachments on issue reports (upload + display)
-- `issue_report_images` table, upload endpoint, local storage
-
-#### Step 3: Approval flow
-- API: Approve/reject bookings with restricted articles, manager approval queue endpoint
-- Frontend: Manager approval queue, approve/reject with optional message
-- Frontend: Leader sees "awaiting approval" status, gets feedback on rejection
+#### Step 3: Issue report images (deferred)
 
 ### Phase 3 — Production auth + notifications
 

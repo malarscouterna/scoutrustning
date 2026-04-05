@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { createApiClient, type Booking, type BookingItem } from '$lib/api/client';
+	import { createApiClient, type Booking, type BookingItem, type BookingEvent } from '$lib/api/client';
 	import BookingItemsList from '$lib/components/BookingItemsList.svelte';
 	import PickupChecklist from '$lib/components/PickupChecklist.svelte';
 	import ReturnChecklist from '$lib/components/ReturnChecklist.svelte';
@@ -59,7 +59,7 @@
 
 	const statusLabels: Record<string, string> = {
 		draft: 'Utkast',
-		submitted: 'Inskickad',
+		submitted: 'Väntar på godkännande',
 		approved: 'Godkänd',
 		confirmed: 'Bekräftad',
 		picked_up: 'Uthämtad',
@@ -89,9 +89,12 @@
 	async function submitBooking() {
 		error = '';
 		try {
-			booking = await api.submitBooking(booking.id);
+			booking = await api.submitBooking(booking.id, submitMessage || undefined, forceApproval || undefined);
 			message = booking.status === 'confirmed' ? 'Bokning bekräftad' : 'Bokning inskickad';
+			submitMessage = '';
+			forceApproval = false;
 			setTimeout(() => message = '', 4000);
+			loadEvents();
 		} catch (e: any) {
 			error = e.message;
 		}
@@ -154,6 +157,58 @@
 	);
 
 	let showReturn = $state(false);
+	let approvalMessage = $state('');
+	let submitMessage = $state('');
+	let forceApproval = $state(false);
+	let isManager = $derived(data.user?.roles.includes('equipment_manager') ?? false);
+	let bookingEvents = $state<BookingEvent[]>([]);
+
+	async function loadEvents() {
+		try {
+			bookingEvents = await api.listBookingEvents(booking.id);
+		} catch { /* ignore */ }
+	}
+	loadEvents();
+
+	let noteMessage = $state('');
+
+	async function addNote() {
+		if (!noteMessage.trim()) return;
+		error = '';
+		try {
+			await api.addBookingNote(booking.id, noteMessage);
+			noteMessage = '';
+			loadEvents();
+		} catch (e: any) {
+			error = e.message;
+		}
+	}
+
+	async function approveBooking() {
+		error = '';
+		try {
+			booking = await api.approveBooking(booking.id, approvalMessage);
+			message = 'Bokning godkänd';
+			approvalMessage = '';
+			setTimeout(() => message = '', 4000);
+			loadEvents();
+		} catch (e: any) {
+			error = e.message;
+		}
+	}
+
+	async function rejectBooking() {
+		error = '';
+		try {
+			booking = await api.rejectBooking(booking.id, approvalMessage);
+			message = 'Bokning nekad';
+			approvalMessage = '';
+			setTimeout(() => message = '', 4000);
+			loadEvents();
+		} catch (e: any) {
+			error = e.message;
+		}
+	}
 
 	// Auto-resume return mode if a return was already started
 	$effect(() => {
@@ -197,12 +252,78 @@
 			{/if}
 		</p>
 
+		{#if bookingEvents.length > 0}
+			<div class="border rounded mb-3 divide-y">
+				{#each bookingEvents as event}
+					<div class="px-4 py-2 text-sm {event.event_type === 'rejected' ? 'bg-red-50' : event.event_type === 'approved' ? 'bg-green-50' : 'bg-neutral-50'}">
+						<div class="flex items-center gap-2 text-xs text-neutral-500 mb-0.5">
+							<span class="font-medium text-neutral-700">{event.actor_name}</span>
+							<span>
+								{{
+									submitted: 'skickade för godkännande',
+									approved: 'godkände',
+									rejected: 'nekade',
+									cancelled: 'avbokade',
+									note: 'kommenterade'
+								}[event.event_type] ?? event.event_type}
+							</span>
+							<span>{new Date(event.created_at).toLocaleDateString('sv', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+						</div>
+						{#if event.message}
+							<p class="text-neutral-700">{event.message}</p>
+						{/if}
+					</div>
+				{/each}
+			</div>
+		{/if}
+
+		<div class="flex gap-2 mb-3">
+			<input
+				type="text"
+				bind:value={noteMessage}
+				placeholder="Lägg till en kommentar..."
+				class="flex-1 border rounded px-3 py-2 text-sm"
+				onkeydown={(e) => { if (e.key === 'Enter') addNote(); }}
+			/>
+			<button onclick={addNote} disabled={!noteMessage.trim()} class="bg-neutral-700 text-white px-3 py-2 rounded text-sm disabled:opacity-50">Skicka</button>
+		</div>
+
+		{#if isManager && booking.status === 'submitted'}
+			<div class="border rounded p-4 mb-3 bg-orange-50">
+				<p class="text-sm font-medium text-orange-800 mb-2">Denna bokning väntar på godkännande</p>
+				<textarea
+					bind:value={approvalMessage}
+					placeholder="Meddelande till bokaren (valfritt)"
+					class="w-full border rounded px-3 py-2 text-sm mb-2"
+					rows="2"
+				></textarea>
+				<div class="flex gap-2">
+					<button onclick={approveBooking} class="bg-green-700 text-white px-4 py-2 rounded text-sm">Godkänn</button>
+					<button onclick={rejectBooking} class="bg-red-600 text-white px-4 py-2 rounded text-sm">Neka</button>
+				</div>
+			</div>
+		{/if}
+
 		<div class="flex items-center gap-2">
 			{#if editable}
 				<a href="/book?id={booking.id}" class="bg-blue-700 text-white px-4 py-2 rounded text-sm">Redigera</a>
 			{/if}
 			{#if booking.status === 'draft'}
-				<button onclick={submitBooking} class="bg-green-700 text-white px-4 py-2 rounded text-sm">Skicka bokning</button>
+				<div class="border rounded p-4 mb-3 bg-neutral-50">
+					<textarea
+						bind:value={submitMessage}
+						placeholder="Meddelande till utrustningsansvarig (valfritt)"
+						class="w-full border rounded px-3 py-2 text-sm mb-2"
+						rows="2"
+					></textarea>
+					<div class="flex items-center gap-3">
+						<button onclick={submitBooking} class="bg-green-700 text-white px-4 py-2 rounded text-sm">Skicka bokning</button>
+						<label class="flex items-center gap-1.5 text-sm text-neutral-600">
+							<input type="checkbox" bind:checked={forceApproval} />
+							Vill ha bekräftelse från ansvarig
+						</label>
+					</div>
+				</div>
 			{/if}
 			{#if booking.status === 'confirmed' || booking.status === 'approved'}
 				<button onclick={startPickup} class="bg-blue-700 text-white px-4 py-2 rounded text-sm">Starta utlämning</button>

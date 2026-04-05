@@ -155,7 +155,7 @@ type articleRequest struct {
 	LocationID          string  `json:"location_id"`
 	Status              string  `json:"status"`
 	IndividuallyTracked bool    `json:"individually_tracked"`
-	RequiresApproval    bool    `json:"requires_approval"`
+	ApprovalLevel       string  `json:"approval_level"`
 	Description         string  `json:"description"`
 	Instructions        string  `json:"instructions"`
 	Place               string  `json:"place"`
@@ -186,6 +186,10 @@ func (h *ArticleHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if status == "" {
 		status = "ok"
 	}
+	approvalLevel := req.ApprovalLevel
+	if approvalLevel == "" {
+		approvalLevel = "none"
+	}
 	article, err := h.Q.CreateArticle(r.Context(), db.CreateArticleParams{
 		GroupID:             claims.GroupID,
 		CommercialName:      req.CommercialName,
@@ -194,7 +198,7 @@ func (h *ArticleHandler) Create(w http.ResponseWriter, r *http.Request) {
 		LocationID:          locID,
 		Status:              status,
 		IndividuallyTracked: req.IndividuallyTracked,
-		RequiresApproval:    req.RequiresApproval,
+		ApprovalLevel:       approvalLevel,
 		Description:         req.Description,
 		Instructions:        req.Instructions,
 		Place:               req.Place,
@@ -237,7 +241,7 @@ func (h *ArticleHandler) Update(w http.ResponseWriter, r *http.Request) {
 		LocationID:          locID,
 		Status:              req.Status,
 		IndividuallyTracked: req.IndividuallyTracked,
-		RequiresApproval:    req.RequiresApproval,
+		ApprovalLevel:       req.ApprovalLevel,
 		Description:         req.Description,
 		Instructions:        req.Instructions,
 		Place:               req.Place,
@@ -292,7 +296,7 @@ func (h *ArticleHandler) Availability(w http.ResponseWriter, r *http.Request) {
 		ReportedUsableCount int    `json:"reported_usable_count"`
 		IncomingCount       int    `json:"incoming_count"`
 		UnderRepairCount    int    `json:"under_repair_count"`
-		RequiresApproval    bool   `json:"requires_approval"`
+		ApprovalLevel       string `json:"approval_level"`
 		CategoryName        string `json:"category_name"`
 		LocationName        string `json:"location_name"`
 	}
@@ -302,7 +306,7 @@ func (h *ArticleHandler) Availability(w http.ResponseWriter, r *http.Request) {
 	}
 	groups := map[groupKey]*availGroup{}
 	for _, a := range available {
-		if bookableOnly && a.RequiresApproval {
+		if bookableOnly && a.ApprovalLevel != "none" {
 			continue
 		}
 		if categoryFilter != "" {
@@ -324,7 +328,7 @@ func (h *ArticleHandler) Availability(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			g = &availGroup{
 				CommercialName:   a.CommercialName,
-				RequiresApproval: a.RequiresApproval,
+				ApprovalLevel:   a.ApprovalLevel,
 				CategoryName:     a.CategoryName,
 				LocationName:     a.LocationName,
 			}
@@ -722,9 +726,18 @@ func (h *ArticleHandler) Import(w http.ResponseWriter, r *http.Request) {
 
 		commercialName := col(record, "titelgrupp")
 
-		// Determine if approval is required
-		// Default: items in Hajkförrådet don't require approval, others do
-		requiresApproval := !strings.EqualFold(locationName, "Hajkförrådet")
+		// Determine approval level from CSV column, default to 'none'
+		approvalLevel := "none"
+		if v := col(record, "requires_approval"); v != "" {
+			switch strings.ToLower(v) {
+			case "high":
+				approvalLevel = "high"
+			case "low", "true", "yes", "1":
+				approvalLevel = "low"
+			case "none", "false", "no", "0":
+				approvalLevel = "none"
+			}
+		}
 
 		// count column: if >1, create multiple quantity-tracked articles
 		count := 1
@@ -743,7 +756,7 @@ func (h *ArticleHandler) Import(w http.ResponseWriter, r *http.Request) {
 				LocationID:          locID,
 				Status:              "ok",
 				IndividuallyTracked: individuallyTracked,
-				RequiresApproval:    requiresApproval,
+				ApprovalLevel:       approvalLevel,
 				Description:         description,
 				Place:               place,
 			})

@@ -32,7 +32,7 @@
 	let selectedCategory = $state('');
 	let selectedLocation = $state('');
 	let searchQuery = $state('');
-	let showRequiresApproval = $state(false);
+	let showRestricted = $state(false);
 	let quantities = $state<Record<string, number>>({});
 	let error = $state('');
 	let expandedDetails = $state<string | null>(null);
@@ -84,7 +84,7 @@
 			const fresh = await api.checkAvailability(startDate, endDate, {
 				category_id: selectedCategory || undefined,
 				location_id: selectedLocation || undefined,
-				bookable_only: !showRequiresApproval
+				bookable_only: !showRestricted
 			});
 			if (stableAvailability.length === 0) {
 				stableAvailability = fresh;
@@ -147,7 +147,7 @@
 		{/each}
 	</select>
 	<label class="flex items-center gap-1.5 text-sm">
-		<input type="checkbox" bind:checked={showRequiresApproval} onchange={onFilterChange} />
+		<input type="checkbox" bind:checked={showRestricted} onchange={onFilterChange} />
 		Visa även låst utrustning
 	</label>
 </div>
@@ -162,8 +162,10 @@
 				<div>
 					<span class="font-medium">{group.commercial_name}</span>
 					<span class="text-xs text-neutral-500 ml-2">{group.category_name} · {group.location_name}</span>
-					{#if group.requires_approval}
+					{#if group.approval_level === 'low'}
 						<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded ml-1">Kräver godkännande</span>
+					{:else if group.approval_level === 'high'}
+						<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded ml-1">Kräver särskilt godkännande</span>
 					{/if}
 				</div>
 				<div class="flex items-center gap-2">

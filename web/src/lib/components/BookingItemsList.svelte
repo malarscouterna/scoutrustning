@@ -34,7 +34,7 @@
 
 	interface ItemGroup {
 		commercialName: string;
-		requiresApproval: boolean;
+		approvalLevel: string;
 		items: BookingItem[];
 	}
 
@@ -44,11 +44,12 @@
 			const existing = map.get(item.commercial_name);
 			if (existing) {
 				existing.items.push(item);
-				if (item.requires_approval) existing.requiresApproval = true;
+				if (item.approval_level === 'high') existing.approvalLevel = 'high';
+				else if (item.approval_level === 'low' && existing.approvalLevel !== 'high') existing.approvalLevel = 'low';
 			} else {
 				map.set(item.commercial_name, {
 					commercialName: item.commercial_name,
-					requiresApproval: item.requires_approval,
+					approvalLevel: item.approval_level,
 					items: [item]
 				});
 			}
@@ -65,8 +66,10 @@
 			<div class="border rounded">
 				<div class="px-4 py-2 font-medium bg-neutral-50 border-b">
 					{group.commercialName} × {group.items.length}
-					{#if group.requiresApproval}
+					{#if group.approvalLevel === 'low'}
 						<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded ml-1">Kräver godkännande</span>
+					{:else if group.approvalLevel === 'high'}
+						<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded ml-1">Kräver särskilt godkännande</span>
 					{/if}
 				</div>
 				<table class="w-full text-sm">

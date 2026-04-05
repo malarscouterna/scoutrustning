@@ -17,7 +17,6 @@ type Article struct {
 	LocationID            pgtype.UUID        `json:"location_id"`
 	Status                string             `json:"status"`
 	IndividuallyTracked   bool               `json:"individually_tracked"`
-	RequiresApproval      bool               `json:"requires_approval"`
 	ImagePath             pgtype.Text        `json:"image_path"`
 	Description           string             `json:"description"`
 	Instructions          string             `json:"instructions"`
@@ -27,6 +26,7 @@ type Article struct {
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 	ExpectedAvailableDate pgtype.Date        `json:"expected_available_date"`
+	ApprovalLevel         string             `json:"approval_level"`
 }
 
 type ArticleEvent struct {
@@ -65,6 +65,17 @@ type Booking struct {
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 	PrePickupStatus       pgtype.Text        `json:"pre_pickup_status"`
+}
+
+type BookingEvent struct {
+	ID        pgtype.UUID        `json:"id"`
+	GroupID   string             `json:"group_id"`
+	BookingID pgtype.UUID        `json:"booking_id"`
+	ActorID   string             `json:"actor_id"`
+	EventType string             `json:"event_type"`
+	Message   string             `json:"message"`
+	Metadata  []byte             `json:"metadata"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 type BookingItem struct {

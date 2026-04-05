@@ -24,11 +24,11 @@ WHERE a.id = @id AND a.group_id = @group_id;
 -- name: CreateArticle :one
 INSERT INTO articles (
     group_id, commercial_name, common_name, category_id, location_id,
-    status, individually_tracked, requires_approval,
+    status, individually_tracked, approval_level,
     description, instructions, purchase_date, purchase_price, place
 ) VALUES (
     @group_id, @commercial_name, @common_name, @category_id, @location_id,
-    @status, @individually_tracked, @requires_approval,
+    @status, @individually_tracked, @approval_level,
     @description, @instructions, @purchase_date, @purchase_price, @place
 )
 RETURNING *;
@@ -41,7 +41,7 @@ UPDATE articles SET
     location_id = @location_id,
     status = @status,
     individually_tracked = @individually_tracked,
-    requires_approval = @requires_approval,
+    approval_level = @approval_level,
     description = @description,
     instructions = @instructions,
     purchase_date = @purchase_date,

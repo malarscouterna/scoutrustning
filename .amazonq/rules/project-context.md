@@ -21,7 +21,7 @@ Auth: SvelteKit handles OIDC login with ScoutID (Keycloak) via Auth.js (`@auth/s
 - `users.id` is `text`, using the Keycloak member ID directly (e.g. `"3000924"`)
 - All other tables use `uuid` primary keys
 - Units are a managed table (`units`), not free text — populated from OIDC claims or created by admins. The `units` table has a `type` column (`unit` or `project`) to distinguish scout units from temporary projects.
-- Booking approval is per-article (`articles.requires_approval`). If any item in a booking requires approval, the whole booking waits for approval. Project leader bookings bypass approval.
+- Booking approval is per-article (`articles.approval_level`). Three levels: `none` (freely bookable), `low` (project leaders auto-approve, regular leaders need manager approval), `high` (always needs manager approval, except managers themselves). If any item in a booking requires approval for the current user, the whole booking waits.
 
 ## Project structure
 
@@ -161,7 +161,7 @@ When wiring real OIDC (Phase 3 Step 1): ✅ Done.
 - `commercial_name` is the product type (e.g. "Sibley", "Stormkök") — what users browse and book by.
 - `common_name` is the individual item identifier (e.g. "Sibley 1") — for physical identification at pickup.
 - Availability is grouped by `commercial_name + location`. Same product in different locations shows as separate groups.
-- `requires_approval` is set per article. During CSV import, items in Hajkförrådet are freely bookable, others require approval.
+- `approval_level` is set per article (`none`, `low`, `high`). During CSV import, read from the `requires_approval` column; defaults to `none` if absent. Managers can change per-article or in bulk.
 - Quantity-tracked items: each physical unit is a separate row with `individually_tracked = false`. Manager sets count via UI after import.
 - Article `status` represents **condition** (ok, reported_usable, incoming, reported_unusable, under_repair, lost, archived) — orthogonal to booking state (reserved, loaned out), which is computed from booking data.
 - `expected_available_date` (nullable) is used with `incoming` and `under_repair` statuses. Articles with these statuses become bookable for date ranges starting on or after this date.

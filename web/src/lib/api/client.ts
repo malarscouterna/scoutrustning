@@ -10,7 +10,7 @@ export interface Article {
 	location_name: string;
 	status: string;
 	individually_tracked: boolean;
-	requires_approval: boolean;
+	approval_level: string;
 	description: string;
 	place: string;
 	expected_available_date: string | null;
@@ -64,7 +64,7 @@ export interface BookingItem {
 	place: string;
 	article_status: string;
 	article_expected_available_date: string | null;
-	requires_approval: boolean;
+	approval_level: string;
 	individually_tracked: boolean;
 	pickup_status: string | null;
 	return_status: string | null;
@@ -81,13 +81,24 @@ export interface ArticleEvent {
 	created_at: string;
 }
 
+export interface BookingEvent {
+	id: string;
+	booking_id: string;
+	actor_id: string;
+	actor_name: string;
+	event_type: string;
+	message: string;
+	metadata: Record<string, any>;
+	created_at: string;
+}
+
 export interface AvailabilityGroup {
 	commercial_name: string;
 	available_count: number;
 	reported_usable_count: number;
 	incoming_count: number;
 	under_repair_count: number;
-	requires_approval: boolean;
+	approval_level: string;
 	category_name: string;
 	location_name: string;
 }
@@ -154,8 +165,6 @@ export function createApiClient(opts: FetchOptions = {}) {
 			requestMut<BookingItem[]>(`/bookings/${bookingId}/items`, 'POST', { commercial_name: commercialName, quantity, location_name: locationName }, opts),
 		removeBookingItem: (bookingId: string, itemId: string) =>
 			requestMut<void>(`/bookings/${bookingId}/items/${itemId}`, 'DELETE', undefined, opts),
-		submitBooking: (id: string) =>
-			requestMut<Booking>(`/bookings/${id}/submit`, 'POST', {}, opts),
 		cancelBooking: (id: string) =>
 			requestMut<Booking | void>(`/bookings/${id}/cancel`, 'POST', {}, opts),
 		copyBooking: (id: string) =>
@@ -181,6 +190,22 @@ export function createApiClient(opts: FetchOptions = {}) {
 		updateItemReturn: (bookingId: string, itemId: string, data: { return_status: string; expected_return_date?: string; notes?: string }) =>
 			requestMut<BookingItem>(`/bookings/${bookingId}/items/${itemId}/return`, 'PUT', data, opts),
 		listUnits: () => request<Unit[]>('/units', opts),
+
+		// Approval
+		approveBooking: (id: string, message?: string) =>
+			requestMut<Booking>(`/bookings/${id}/approve`, 'POST', { message: message ?? '' }, opts),
+		rejectBooking: (id: string, message?: string) =>
+			requestMut<Booking>(`/bookings/${id}/reject`, 'POST', { message: message ?? '' }, opts),
+		submitBooking: (id: string, message?: string, forceApproval?: boolean) =>
+			requestMut<Booking>(`/bookings/${id}/submit`, 'POST', {
+				...(message ? { message } : {}),
+				...(forceApproval ? { force_approval: true } : {})
+			}, opts),
+		listBookingEvents: (bookingId: string) =>
+			request<BookingEvent[]>(`/bookings/${bookingId}/events`, opts),
+		addBookingNote: (bookingId: string, message: string) =>
+			requestMut<BookingEvent>(`/bookings/${bookingId}/events`, 'POST', { message }, opts),
+		listPendingApprovals: () => request<Booking[]>('/bookings?status=submitted', opts),
 
 		// Article status & events
 		updateArticleStatus: (articleId: string, data: { status: string; comment?: string }) =>

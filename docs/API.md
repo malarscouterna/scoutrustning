@@ -40,6 +40,11 @@ When `with_availability=true`, each article includes:
 - `current_booking_end_date` — when the booking ends, or null
 - `current_booking_unit_name` — name of the unit/project using it, or null
 
+Article `approval_level` values:
+- `none` — freely bookable
+- `low` — project leaders auto-approve, regular leaders need manager approval
+- `high` — always needs manager approval (except for managers themselves)
+
 **Response** `200` — array of articles ordered by category, then commercial name, then common name.
 
 ### `GET /api/v0/articles/{id}`
@@ -59,13 +64,13 @@ Create an article.
   "location_id": "uuid",
   "status": "ok",
   "individually_tracked": true,
-  "requires_approval": false,
+  "approval_level": "none",
   "description": "",
   "instructions": "",
   "place": "Shelf 3"
 }
 ```
-Required: `common_name`, `category_id`, `location_id`. Status defaults to `ok`.
+Required: `common_name`, `category_id`, `location_id`. Status defaults to `ok`. `approval_level` defaults to `none`.
 
 **Response** `201` | `400` | `403`
 
@@ -100,7 +105,7 @@ Check available article counts grouped by commercial_name for a date range.
 - `end_date` (required) — ISO date (e.g. `2026-06-05`)
 - `category_id` — filter by category UUID
 - `location_id` — filter by location UUID
-- `bookable_only` — `true` (default) hides items requiring approval, `false` shows all
+- `bookable_only` — `true` (default) hides items with `approval_level` != `none`, `false` shows all
 
 Results are grouped by commercial_name + location. Same product in different locations shows as separate groups.
 
@@ -231,9 +236,79 @@ Remove an item from an editable booking. Access: creator, unit leaders, or equip
 **Response** `204` | `400` | `403` | `404`
 
 ### `POST /api/v0/bookings/{id}/submit`
-Submit a draft booking. Auto-confirms if no articles require approval (or if user is project_leader). Otherwise transitions to `submitted` awaiting manager approval.
+Submit a draft booking. Auto-confirms based on approval levels:
+- `none` items: always auto-confirmed
+- `low` items: auto-confirmed for project leaders and managers, needs manager approval for regular leaders
+- `high` items: auto-confirmed for managers only, needs manager approval for everyone else
+
+If `force_approval` is true, the booking always goes to `submitted` regardless of approval levels — useful when the leader wants a manager to review even freely bookable items.
+
+If any item triggers approval (or `force_approval` is set), the whole booking transitions to `submitted` and a `submitted` booking event is created with the optional message.
+
+**Body**
+```json
+{
+  "message": "Vi behöver detta för hajk, kort varsel",
+  "force_approval": false
+}
+```
+All fields optional.
 
 **Response** `200` | `400` | `404`
+
+### 🔒 `POST /api/v0/bookings/{id}/approve`
+Approve a submitted booking. Transitions to `confirmed`. Creates an `approved` booking event.
+
+**Body**
+```json
+{"message": "Godkänt, lycka till!"}
+```
+`message` is optional.
+
+**Response** `200` | `403` | `404`
+
+### 🔒 `POST /api/v0/bookings/{id}/reject`
+Reject a submitted booking. Transitions back to `draft` so the leader can edit and resubmit. Creates a `rejected` booking event.
+
+**Body**
+```json
+{"message": "Boka färre, vi har inte tillräckligt"}
+```
+`message` is optional.
+
+**Response** `200` | `403` | `404`
+
+### `GET /api/v0/bookings/{id}/events`
+Get the event history for a booking. Returns all booking events ordered chronologically (oldest first).
+
+**Response** `200`
+```json
+[
+  {
+    "id": "uuid",
+    "booking_id": "uuid",
+    "actor_id": "3000005",
+    "actor_name": "Hanna Yggdrasil",
+    "event_type": "submitted",
+    "message": "Vi behöver detta för hajk",
+    "metadata": {},
+    "created_at": "2026-06-01T10:00:00Z"
+  }
+]
+```
+
+Event types: `submitted`, `approved`, `rejected`, `cancelled`, `note`, `items_changed`, `dates_changed`, `details_changed`.
+
+### `POST /api/v0/bookings/{id}/events`
+Add a note to a booking. Any user with access to the booking can add notes regardless of booking status.
+
+**Body**
+```json
+{"message": "Glömde säga — vi behöver hämta tidigt på morgonen"}
+```
+`message` is required.
+
+**Response** `201` | `400` | `403` | `404`
 
 ### `POST /api/v0/bookings/{id}/cancel`
 Cancel a booking. Drafts are deleted entirely (returns 204). Other bookings transition to `cancelled` (returns 200). Cannot cancel returned or already cancelled bookings.

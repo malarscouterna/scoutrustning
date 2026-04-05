@@ -83,10 +83,42 @@ func (q *Queries) AllItemsReturned(ctx context.Context, arg AllItemsReturnedPara
 	return all_returned, err
 }
 
+const approveBooking = `-- name: ApproveBooking :one
+UPDATE bookings SET status = 'confirmed', updated_at = now()
+WHERE id = $1 AND group_id = $2 AND status = 'submitted'
+RETURNING id, group_id, created_by, used_by_unit_id, used_by_external, used_by_external_contact, status, start_date, end_date, notes, created_at, updated_at, pre_pickup_status
+`
+
+type ApproveBookingParams struct {
+	ID      pgtype.UUID `json:"id"`
+	GroupID string      `json:"group_id"`
+}
+
+func (q *Queries) ApproveBooking(ctx context.Context, arg ApproveBookingParams) (Booking, error) {
+	row := q.db.QueryRow(ctx, approveBooking, arg.ID, arg.GroupID)
+	var i Booking
+	err := row.Scan(
+		&i.ID,
+		&i.GroupID,
+		&i.CreatedBy,
+		&i.UsedByUnitID,
+		&i.UsedByExternal,
+		&i.UsedByExternalContact,
+		&i.Status,
+		&i.StartDate,
+		&i.EndDate,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PrePickupStatus,
+	)
+	return i, err
+}
+
 const availableArticles = `-- name: AvailableArticles :many
 SELECT a.id, a.commercial_name, a.common_name, a.category_id, a.location_id,
     l.name AS location_name, c.name AS category_name, a.place, a.status,
-    a.individually_tracked, a.requires_approval,
+    a.individually_tracked, a.approval_level,
     a.expected_available_date
 FROM articles a
 JOIN locations l ON a.location_id = l.id
@@ -126,7 +158,7 @@ type AvailableArticlesRow struct {
 	Place                 string      `json:"place"`
 	Status                string      `json:"status"`
 	IndividuallyTracked   bool        `json:"individually_tracked"`
-	RequiresApproval      bool        `json:"requires_approval"`
+	ApprovalLevel         string      `json:"approval_level"`
 	ExpectedAvailableDate pgtype.Date `json:"expected_available_date"`
 }
 
@@ -151,7 +183,7 @@ func (q *Queries) AvailableArticles(ctx context.Context, arg AvailableArticlesPa
 			&i.Place,
 			&i.Status,
 			&i.IndividuallyTracked,
-			&i.RequiresApproval,
+			&i.ApprovalLevel,
 			&i.ExpectedAvailableDate,
 		); err != nil {
 			return nil, err
@@ -167,7 +199,7 @@ func (q *Queries) AvailableArticles(ctx context.Context, arg AvailableArticlesPa
 const availableArticlesExcludingBooking = `-- name: AvailableArticlesExcludingBooking :many
 SELECT a.id, a.commercial_name, a.common_name, a.location_id,
     l.name AS location_name, a.place, a.status,
-    a.individually_tracked, a.requires_approval,
+    a.individually_tracked, a.approval_level,
     a.expected_available_date
 FROM articles a
 JOIN locations l ON a.location_id = l.id
@@ -210,7 +242,7 @@ type AvailableArticlesExcludingBookingRow struct {
 	Place                 string      `json:"place"`
 	Status                string      `json:"status"`
 	IndividuallyTracked   bool        `json:"individually_tracked"`
-	RequiresApproval      bool        `json:"requires_approval"`
+	ApprovalLevel         string      `json:"approval_level"`
 	ExpectedAvailableDate pgtype.Date `json:"expected_available_date"`
 }
 
@@ -238,7 +270,7 @@ func (q *Queries) AvailableArticlesExcludingBooking(ctx context.Context, arg Ava
 			&i.Place,
 			&i.Status,
 			&i.IndividuallyTracked,
-			&i.RequiresApproval,
+			&i.ApprovalLevel,
 			&i.ExpectedAvailableDate,
 		); err != nil {
 			return nil, err
@@ -251,26 +283,28 @@ func (q *Queries) AvailableArticlesExcludingBooking(ctx context.Context, arg Ava
 	return items, nil
 }
 
-const bookingHasApprovalRequired = `-- name: BookingHasApprovalRequired :one
-SELECT EXISTS (
-    SELECT 1 FROM booking_items bi
-    JOIN articles a ON bi.article_id = a.id
-    WHERE bi.booking_id = $1 AND bi.group_id = $2
-        AND a.requires_approval = true
-) AS requires_approval
+const bookingMaxApprovalLevel = `-- name: BookingMaxApprovalLevel :one
+SELECT COALESCE(
+    (SELECT CASE
+        WHEN EXISTS (SELECT 1 FROM booking_items bi JOIN articles a ON bi.article_id = a.id WHERE bi.booking_id = $1 AND bi.group_id = $2 AND a.approval_level = 'high') THEN 'high'
+        WHEN EXISTS (SELECT 1 FROM booking_items bi JOIN articles a ON bi.article_id = a.id WHERE bi.booking_id = $1 AND bi.group_id = $2 AND a.approval_level = 'low') THEN 'low'
+        ELSE 'none'
+    END),
+    'none'
+) AS max_approval_level
 `
 
-type BookingHasApprovalRequiredParams struct {
+type BookingMaxApprovalLevelParams struct {
 	BookingID pgtype.UUID `json:"booking_id"`
 	GroupID   string      `json:"group_id"`
 }
 
-// Returns true if any article in the booking requires approval.
-func (q *Queries) BookingHasApprovalRequired(ctx context.Context, arg BookingHasApprovalRequiredParams) (bool, error) {
-	row := q.db.QueryRow(ctx, bookingHasApprovalRequired, arg.BookingID, arg.GroupID)
-	var requires_approval bool
-	err := row.Scan(&requires_approval)
-	return requires_approval, err
+// Returns the highest approval level across all articles in the booking.
+func (q *Queries) BookingMaxApprovalLevel(ctx context.Context, arg BookingMaxApprovalLevelParams) (interface{}, error) {
+	row := q.db.QueryRow(ctx, bookingMaxApprovalLevel, arg.BookingID, arg.GroupID)
+	var max_approval_level interface{}
+	err := row.Scan(&max_approval_level)
+	return max_approval_level, err
 }
 
 const cleanupEmptyDrafts = `-- name: CleanupEmptyDrafts :execrows
@@ -356,6 +390,44 @@ func (q *Queries) CreateBooking(ctx context.Context, arg CreateBookingParams) (B
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.PrePickupStatus,
+	)
+	return i, err
+}
+
+const createBookingEvent = `-- name: CreateBookingEvent :one
+INSERT INTO booking_events (group_id, booking_id, actor_id, event_type, message, metadata)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, group_id, booking_id, actor_id, event_type, message, metadata, created_at
+`
+
+type CreateBookingEventParams struct {
+	GroupID   string      `json:"group_id"`
+	BookingID pgtype.UUID `json:"booking_id"`
+	ActorID   string      `json:"actor_id"`
+	EventType string      `json:"event_type"`
+	Message   string      `json:"message"`
+	Metadata  []byte      `json:"metadata"`
+}
+
+func (q *Queries) CreateBookingEvent(ctx context.Context, arg CreateBookingEventParams) (BookingEvent, error) {
+	row := q.db.QueryRow(ctx, createBookingEvent,
+		arg.GroupID,
+		arg.BookingID,
+		arg.ActorID,
+		arg.EventType,
+		arg.Message,
+		arg.Metadata,
+	)
+	var i BookingEvent
+	err := row.Scan(
+		&i.ID,
+		&i.GroupID,
+		&i.BookingID,
+		&i.ActorID,
+		&i.EventType,
+		&i.Message,
+		&i.Metadata,
+		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -527,6 +599,61 @@ func (q *Queries) ListAllBookings(ctx context.Context, groupID string) ([]ListAl
 	return items, nil
 }
 
+const listBookingEvents = `-- name: ListBookingEvents :many
+SELECT be.id, be.group_id, be.booking_id, be.actor_id, be.event_type, be.message, be.metadata, be.created_at, u.name AS actor_name
+FROM booking_events be
+JOIN users u ON be.actor_id = u.id
+WHERE be.booking_id = $1 AND be.group_id = $2
+ORDER BY be.created_at ASC
+`
+
+type ListBookingEventsParams struct {
+	BookingID pgtype.UUID `json:"booking_id"`
+	GroupID   string      `json:"group_id"`
+}
+
+type ListBookingEventsRow struct {
+	ID        pgtype.UUID        `json:"id"`
+	GroupID   string             `json:"group_id"`
+	BookingID pgtype.UUID        `json:"booking_id"`
+	ActorID   string             `json:"actor_id"`
+	EventType string             `json:"event_type"`
+	Message   string             `json:"message"`
+	Metadata  []byte             `json:"metadata"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	ActorName string             `json:"actor_name"`
+}
+
+func (q *Queries) ListBookingEvents(ctx context.Context, arg ListBookingEventsParams) ([]ListBookingEventsRow, error) {
+	rows, err := q.db.Query(ctx, listBookingEvents, arg.BookingID, arg.GroupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBookingEventsRow{}
+	for rows.Next() {
+		var i ListBookingEventsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.GroupID,
+			&i.BookingID,
+			&i.ActorID,
+			&i.EventType,
+			&i.Message,
+			&i.Metadata,
+			&i.CreatedAt,
+			&i.ActorName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listBookingItems = `-- name: ListBookingItems :many
 SELECT bi.id, bi.group_id, bi.booking_id, bi.article_id, bi.pickup_status, bi.return_status, bi.notes,
     a.commercial_name,
@@ -534,7 +661,7 @@ SELECT bi.id, bi.group_id, bi.booking_id, bi.article_id, bi.pickup_status, bi.re
     a.place,
     a.status AS article_status,
     a.expected_available_date AS article_expected_available_date,
-    a.requires_approval,
+    a.approval_level,
     a.individually_tracked,
     l.name AS location_name,
     c.name AS category_name
@@ -564,7 +691,7 @@ type ListBookingItemsRow struct {
 	Place                        string      `json:"place"`
 	ArticleStatus                string      `json:"article_status"`
 	ArticleExpectedAvailableDate pgtype.Date `json:"article_expected_available_date"`
-	RequiresApproval             bool        `json:"requires_approval"`
+	ApprovalLevel                string      `json:"approval_level"`
 	IndividuallyTracked          bool        `json:"individually_tracked"`
 	LocationName                 string      `json:"location_name"`
 	CategoryName                 string      `json:"category_name"`
@@ -592,7 +719,7 @@ func (q *Queries) ListBookingItems(ctx context.Context, arg ListBookingItemsPara
 			&i.Place,
 			&i.ArticleStatus,
 			&i.ArticleExpectedAvailableDate,
-			&i.RequiresApproval,
+			&i.ApprovalLevel,
 			&i.IndividuallyTracked,
 			&i.LocationName,
 			&i.CategoryName,
@@ -793,6 +920,38 @@ func (q *Queries) NoItemsPickedUp(ctx context.Context, arg NoItemsPickedUpParams
 	var none_picked_up bool
 	err := row.Scan(&none_picked_up)
 	return none_picked_up, err
+}
+
+const rejectBooking = `-- name: RejectBooking :one
+UPDATE bookings SET status = 'draft', updated_at = now()
+WHERE id = $1 AND group_id = $2 AND status = 'submitted'
+RETURNING id, group_id, created_by, used_by_unit_id, used_by_external, used_by_external_contact, status, start_date, end_date, notes, created_at, updated_at, pre_pickup_status
+`
+
+type RejectBookingParams struct {
+	ID      pgtype.UUID `json:"id"`
+	GroupID string      `json:"group_id"`
+}
+
+func (q *Queries) RejectBooking(ctx context.Context, arg RejectBookingParams) (Booking, error) {
+	row := q.db.QueryRow(ctx, rejectBooking, arg.ID, arg.GroupID)
+	var i Booking
+	err := row.Scan(
+		&i.ID,
+		&i.GroupID,
+		&i.CreatedBy,
+		&i.UsedByUnitID,
+		&i.UsedByExternal,
+		&i.UsedByExternalContact,
+		&i.Status,
+		&i.StartDate,
+		&i.EndDate,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PrePickupStatus,
+	)
+	return i, err
 }
 
 const removeBookingItem = `-- name: RemoveBookingItem :exec

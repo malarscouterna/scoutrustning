@@ -24,12 +24,16 @@ func (h *BookingHandler) Routes() chi.Router {
 	r.Get("/", h.List)
 	r.Post("/", h.Create)
 	r.Get("/{id}", h.Get)
+	r.Get("/{id}/events", h.ListEvents)
+	r.Post("/{id}/events", h.AddNote)
 	r.Put("/{id}", h.Update)
 	r.Post("/{id}/items", h.AddItems)
 	r.Delete("/{id}/items/{itemId}", h.RemoveItem)
 	r.Post("/{id}/submit", h.Submit)
 	r.Post("/{id}/cancel", h.Cancel)
 	r.Post("/{id}/copy", h.Copy)
+	r.Post("/{id}/approve", auth.RequireRole("equipment_manager")(http.HandlerFunc(h.Approve)).ServeHTTP)
+	r.Post("/{id}/reject", auth.RequireRole("equipment_manager")(http.HandlerFunc(h.Reject)).ServeHTTP)
 	r.Post("/{id}/pickup", h.Pickup)
 	r.Put("/{id}/items/{itemId}/pickup", h.UpdateItemPickup)
 	r.Post("/{id}/items/{itemId}/swap", h.SwapItem)
@@ -187,6 +191,22 @@ func (h *BookingHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 func (h *BookingHandler) List(w http.ResponseWriter, r *http.Request) {
 	claims, _ := auth.ClaimsFromContext(r.Context())
+
+	// Status filter (e.g. ?status=submitted for approval queue)
+	statusFilter := r.URL.Query().Get("status")
+
+	if statusFilter != "" && claims.HasRole("equipment_manager") {
+		bookings, err := h.Q.ListBookingsByStatus(r.Context(), db.ListBookingsByStatusParams{
+			GroupID: claims.GroupID, Status: statusFilter,
+		})
+		if err != nil {
+			slog.Error("failed to list bookings", "error", err)
+			WriteError(w, http.StatusInternalServerError, "failed to list bookings")
+			return
+		}
+		WriteJSON(w, http.StatusOK, bookings)
+		return
+	}
 
 	if claims.HasRole("equipment_manager") {
 		bookings, err := h.Q.ListAllBookings(r.Context(), claims.GroupID)
@@ -425,15 +445,28 @@ func (h *BookingHandler) AddItems(w http.ResponseWriter, r *http.Request) {
 
 	WriteJSON(w, http.StatusCreated, added)
 
-	// Auto-transition: if confirmed booking now has approval-required items, go to submitted
+	// Auto-transition: if confirmed booking now has approval-required items, check level
 	if booking.Status == "confirmed" {
-		needsApproval, err := h.Q.BookingHasApprovalRequired(r.Context(), db.BookingHasApprovalRequiredParams{
+		maxLevel, err := h.Q.BookingMaxApprovalLevel(r.Context(), db.BookingMaxApprovalLevelParams{
 			BookingID: bookingID, GroupID: claims.GroupID,
 		})
-		if err == nil && needsApproval && !claims.HasRole("project_leader") {
-			h.Q.UpdateBookingStatus(r.Context(), db.UpdateBookingStatusParams{
-				ID: bookingID, GroupID: claims.GroupID, Status: "submitted",
-			})
+		if err == nil && maxLevel != "none" {
+			needsApproval := false
+			switch maxLevel {
+			case "high":
+				if !claims.HasRole("equipment_manager") {
+					needsApproval = true
+				}
+			case "low":
+				if !claims.HasRole("project_leader") && !claims.HasRole("equipment_manager") {
+					needsApproval = true
+				}
+			}
+			if needsApproval {
+				h.Q.UpdateBookingStatus(r.Context(), db.UpdateBookingStatusParams{
+					ID: bookingID, GroupID: claims.GroupID, Status: "submitted",
+				})
+			}
 		}
 	}
 }
@@ -475,10 +508,10 @@ func (h *BookingHandler) RemoveItem(w http.ResponseWriter, r *http.Request) {
 
 	// Auto-transition: if submitted booking no longer needs approval, auto-confirm
 	if booking.Status == "submitted" {
-		needsApproval, err := h.Q.BookingHasApprovalRequired(r.Context(), db.BookingHasApprovalRequiredParams{
+		maxLevel, err := h.Q.BookingMaxApprovalLevel(r.Context(), db.BookingMaxApprovalLevelParams{
 			BookingID: bookingID, GroupID: claims.GroupID,
 		})
-		if err == nil && !needsApproval {
+		if err == nil && maxLevel == "none" {
 			h.Q.UpdateBookingStatus(r.Context(), db.UpdateBookingStatusParams{
 				ID: bookingID, GroupID: claims.GroupID, Status: "confirmed",
 			})
@@ -496,6 +529,14 @@ func (h *BookingHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var req struct {
+		Message       string `json:"message"`
+		ForceApproval bool   `json:"force_approval"`
+	}
+	if r.Body != nil {
+		json.NewDecoder(r.Body).Decode(&req)
+	}
+
 	booking, err := h.Q.GetBooking(r.Context(), db.GetBookingParams{ID: bookingID, GroupID: claims.GroupID})
 	if err != nil {
 		WriteError(w, http.StatusNotFound, "booking not found")
@@ -506,16 +547,30 @@ func (h *BookingHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	needsApproval, err := h.Q.BookingHasApprovalRequired(r.Context(), db.BookingHasApprovalRequiredParams{
-		BookingID: bookingID, GroupID: claims.GroupID,
-	})
-	if err != nil {
-		WriteError(w, http.StatusInternalServerError, "failed to check approval")
-		return
+	needsApproval := req.ForceApproval
+	if !needsApproval {
+		maxLevel, err := h.Q.BookingMaxApprovalLevel(r.Context(), db.BookingMaxApprovalLevelParams{
+			BookingID: bookingID, GroupID: claims.GroupID,
+		})
+		if err != nil {
+			WriteError(w, http.StatusInternalServerError, "failed to check approval")
+			return
+		}
+
+		switch maxLevel {
+		case "high":
+			if !claims.HasRole("equipment_manager") {
+				needsApproval = true
+			}
+		case "low":
+			if !claims.HasRole("project_leader") && !claims.HasRole("equipment_manager") {
+				needsApproval = true
+			}
+		}
 	}
 
 	newStatus := "confirmed"
-	if needsApproval && !claims.HasRole("project_leader") {
+	if needsApproval {
 		newStatus = "submitted"
 	}
 
@@ -527,7 +582,143 @@ func (h *BookingHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if newStatus == "submitted" || req.Message != "" {
+		h.Q.CreateBookingEvent(r.Context(), db.CreateBookingEventParams{
+			GroupID: claims.GroupID, BookingID: bookingID,
+			ActorID: claims.MemberID, EventType: "submitted",
+			Metadata: []byte("{}"),
+			Message: req.Message,
+		})
+	}
+
 	WriteJSON(w, http.StatusOK, updated)
+}
+
+// Approve transitions a submitted booking to confirmed.
+func (h *BookingHandler) Approve(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	bookingID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	var req struct {
+		Message string `json:"message"`
+	}
+	if r.Body != nil {
+		json.NewDecoder(r.Body).Decode(&req)
+	}
+
+	updated, err := h.Q.ApproveBooking(r.Context(), db.ApproveBookingParams{
+		ID: bookingID, GroupID: claims.GroupID,
+	})
+	if err != nil {
+		WriteError(w, http.StatusNotFound, "booking not found or not in submitted status")
+		return
+	}
+
+	h.Q.CreateBookingEvent(r.Context(), db.CreateBookingEventParams{
+		GroupID: claims.GroupID, BookingID: bookingID,
+		ActorID: claims.MemberID, EventType: "approved",
+			Metadata: []byte("{}"),
+		Message: req.Message,
+	})
+
+	WriteJSON(w, http.StatusOK, updated)
+}
+
+// Reject transitions a submitted booking back to draft.
+func (h *BookingHandler) Reject(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	bookingID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	var req struct {
+		Message string `json:"message"`
+	}
+	if r.Body != nil {
+		json.NewDecoder(r.Body).Decode(&req)
+	}
+
+	updated, err := h.Q.RejectBooking(r.Context(), db.RejectBookingParams{
+		ID: bookingID, GroupID: claims.GroupID,
+	})
+	if err != nil {
+		WriteError(w, http.StatusNotFound, "booking not found or not in submitted status")
+		return
+	}
+
+	h.Q.CreateBookingEvent(r.Context(), db.CreateBookingEventParams{
+		GroupID: claims.GroupID, BookingID: bookingID,
+		ActorID: claims.MemberID, EventType: "rejected",
+			Metadata: []byte("{}"),
+		Message: req.Message,
+	})
+
+	WriteJSON(w, http.StatusOK, updated)
+}
+
+// ListEvents returns the event history for a booking.
+func (h *BookingHandler) ListEvents(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	bookingID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	events, err := h.Q.ListBookingEvents(r.Context(), db.ListBookingEventsParams{
+		BookingID: bookingID, GroupID: claims.GroupID,
+	})
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to list events")
+		return
+	}
+	WriteJSON(w, http.StatusOK, events)
+}
+
+// AddNote adds a note event to a booking. Any user with access can add notes regardless of status.
+func (h *BookingHandler) AddNote(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	bookingID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	booking, err := h.Q.GetBooking(r.Context(), db.GetBookingParams{ID: bookingID, GroupID: claims.GroupID})
+	if err != nil {
+		WriteError(w, http.StatusNotFound, "booking not found")
+		return
+	}
+	if !h.canAccessBooking(r.Context(), claims, accessFromGetBookingRow(booking)) {
+		WriteError(w, http.StatusForbidden, "forbidden")
+		return
+	}
+
+	var req struct {
+		Message string `json:"message"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Message == "" {
+		WriteError(w, http.StatusBadRequest, "message required")
+		return
+	}
+
+	event, err := h.Q.CreateBookingEvent(r.Context(), db.CreateBookingEventParams{
+		GroupID: claims.GroupID, BookingID: bookingID,
+		ActorID: claims.MemberID, EventType: "note",
+		Message:  req.Message,
+		Metadata: []byte("{}"),
+	})
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to add note")
+		return
+	}
+	WriteJSON(w, http.StatusCreated, event)
 }
 
 // Cancel transitions a booking to cancelled. Drafts are deleted entirely.

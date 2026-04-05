@@ -29,6 +29,7 @@ fi
 echo "Clearing existing seed data..."
 docker compose exec -T db psql -U utrustning -d utrustning -c "
   DELETE FROM article_events;
+  DELETE FROM booking_events;
   DELETE FROM booking_items;
   DELETE FROM bookings;
   DELETE FROM articles;
@@ -180,6 +181,10 @@ curl -sf -X POST "$API/api/v0/bookings/$BOOKING_ID/items" \
 echo "  Added: 2x Sibley, 2x Stormkök, 3x Tältlampa LED, 2x Brandfilt"
 
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING_ID/submit" -H "$LEADER" > /dev/null
+# Sibley is low-approval, so manager needs to approve before pickup
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING_ID/approve" \
+  -H "$HEADER" -H "Content-Type: application/json" \
+  -d '{"message":"Godkänt, ha en bra hajk!"}' > /dev/null
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING_ID/pickup" -H "$LEADER" > /dev/null
 echo "  Status: picked_up"
 
@@ -268,7 +273,7 @@ END_12D=$(date -d "+12 days" +%Y-%m-%d 2>/dev/null || date -v+12d +%Y-%m-%d)
 echo "Creating booking 2 (confirmed, $START_7D to $END_12D)..."
 BOOKING2_ID=$(curl -s -X POST "$API/api/v0/bookings" \
   -H "$LEADER" -H "Content-Type: application/json" \
-  -d "{\"start_date\":\"$START_7D\",\"end_date\":\"$END_12D\",\"used_by_unit_id\":\"$UNIT_ID\",\"notes\":\"Sommarläger\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+  -d "{\"start_date\":\"$START_7D\",\"end_date\":\"$END_12D\",\"used_by_unit_id\":\"$UNIT_ID\",\"notes\":\"Sommarläger vid Karsvik, 12 utmanare + 3 ledare\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
 
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING2_ID/items" \
   -H "$LEADER" -H "Content-Type: application/json" \
@@ -279,8 +284,173 @@ curl -sf -X POST "$API/api/v0/bookings/$BOOKING2_ID/items" \
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING2_ID/items" \
   -H "$LEADER" -H "Content-Type: application/json" \
   -d '{"commercial_name":"Liggunderlag","quantity":4}' > /dev/null
-curl -sf -X POST "$API/api/v0/bookings/$BOOKING2_ID/submit" -H "$LEADER" > /dev/null
-echo "  Booking 2 (confirmed, next week): 2x Brandfilt, 1x Primus, 4x Liggunderlag"
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING2_ID/submit" \
+  -H "$LEADER" -H "Content-Type: application/json" \
+  -d '{"message":"Behöver hämta på fredag kväll, går det bra?"}' > /dev/null
+echo "  Booking 2 (confirmed): 2x Brandfilt, 1x Primus, 4x Liggunderlag"
+
+# ─── Booking 3: Submitted, waiting for approval (leader booked Sibley = low) ───
+echo ""
+FLASKPOST="X-Dev-Role-Override: leader-flaskpost"
+FLASK_UNIT_ID=$(curl -s "$API/api/v0/units" -H "$FLASKPOST" | python3 -c "import json,sys; print([u['id'] for u in json.load(sys.stdin) if u['name']=='Flaskpostorné'][0])")
+START_14D=$(date -d "+14 days" +%Y-%m-%d 2>/dev/null || date -v+14d +%Y-%m-%d)
+END_16D=$(date -d "+16 days" +%Y-%m-%d 2>/dev/null || date -v+16d +%Y-%m-%d)
+echo "Creating booking 3 (submitted, awaiting approval, $START_14D to $END_16D)..."
+BOOKING3_ID=$(curl -s -X POST "$API/api/v0/bookings" \
+  -H "$FLASKPOST" -H "Content-Type: application/json" \
+  -d "{\"start_date\":\"$START_14D\",\"end_date\":\"$END_16D\",\"used_by_unit_id\":\"$FLASK_UNIT_ID\",\"notes\":\"Helgutflykt med Flaskpostorné, övernattning vid sjön\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING3_ID/items" \
+  -H "$FLASKPOST" -H "Content-Type: application/json" \
+  -d '{"commercial_name":"Sibley","quantity":1}' > /dev/null
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING3_ID/items" \
+  -H "$FLASKPOST" -H "Content-Type: application/json" \
+  -d "{\"commercial_name\":\"Stormkök\",\"quantity\":2}" > /dev/null
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING3_ID/submit" \
+  -H "$FLASKPOST" -H "Content-Type: application/json" \
+  -d '{"message":"Vi är 8 scouter och 2 ledare, behöver ett stort tält för samling"}' > /dev/null
+echo "  Booking 3 (submitted): 1x Sibley (low), 2x Stormkök — waiting for approval"
+
+# ─── Booking 4: Project leader booking (auto-confirmed despite low approval) ───
+echo ""
+PROJECT_LEADER="X-Dev-Role-Override: project-unit-leader"
+VALBORG_ID=$(curl -s "$API/api/v0/units" -H "$PROJECT_LEADER" | python3 -c "import json,sys; print([u['id'] for u in json.load(sys.stdin) if u['name']=='Valborgskommittén'][0])")
+START_21D=$(date -d "+21 days" +%Y-%m-%d 2>/dev/null || date -v+21d +%Y-%m-%d)
+END_22D=$(date -d "+22 days" +%Y-%m-%d 2>/dev/null || date -v+22d +%Y-%m-%d)
+echo "Creating booking 4 (project leader, auto-confirmed, $START_21D to $END_22D)..."
+BOOKING4_ID=$(curl -s -X POST "$API/api/v0/bookings" \
+  -H "$PROJECT_LEADER" -H "Content-Type: application/json" \
+  -d "{\"start_date\":\"$START_21D\",\"end_date\":\"$END_22D\",\"used_by_unit_id\":\"$VALBORG_ID\",\"notes\":\"Valborg 2026 — uppställning och fest\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING4_ID/items" \
+  -H "$PROJECT_LEADER" -H "Content-Type: application/json" \
+  -d '{"commercial_name":"Sibley","quantity":1}' > /dev/null
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING4_ID/items" \
+  -H "$PROJECT_LEADER" -H "Content-Type: application/json" \
+  -d '{"commercial_name":"Brandfilt","quantity":3}' > /dev/null
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING4_ID/submit" -H "$PROJECT_LEADER" > /dev/null
+echo "  Booking 4 (confirmed): 1x Sibley (low, auto-approved), 3x Brandfilt"
+
+# ─── Booking 5: Returned booking from two weeks ago ───
+echo ""
+START_PAST=$(date -d "-14 days" +%Y-%m-%d 2>/dev/null || date -v-14d +%Y-%m-%d)
+END_PAST=$(date -d "-10 days" +%Y-%m-%d 2>/dev/null || date -v-10d +%Y-%m-%d)
+echo "Creating booking 5 (returned, $START_PAST to $END_PAST)..."
+BOOKING5_ID=$(curl -s -X POST "$API/api/v0/bookings" \
+  -H "$LEADER" -H "Content-Type: application/json" \
+  -d "{\"start_date\":\"$START_PAST\",\"end_date\":\"$END_PAST\",\"used_by_unit_id\":\"$UNIT_ID\",\"notes\":\"Helgövning i skogen\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING5_ID/items" \
+  -H "$LEADER" -H "Content-Type: application/json" \
+  -d '{"commercial_name":"Vindskydd","quantity":2}' > /dev/null
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING5_ID/items" \
+  -H "$LEADER" -H "Content-Type: application/json" \
+  -d '{"commercial_name":"Presenning","quantity":1}' > /dev/null
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING5_ID/submit" -H "$LEADER" > /dev/null
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING5_ID/pickup" -H "$LEADER" > /dev/null
+
+ITEMS5_JSON=$(curl -s "$API/api/v0/bookings/$BOOKING5_ID" -H "$LEADER")
+echo "$ITEMS5_JSON" | python3 -c "
+import json,sys
+d = json.load(sys.stdin)
+for i in d['items']:
+    print(i['id'])
+" | while read ID; do
+  curl -sf -X PUT "$API/api/v0/bookings/$BOOKING5_ID/items/$ID/pickup" \
+    -H "$LEADER" -H "Content-Type: application/json" \
+    -d '{"pickup_status":"picked_up"}' > /dev/null
+  curl -sf -X PUT "$API/api/v0/bookings/$BOOKING5_ID/items/$ID/return" \
+    -H "$LEADER" -H "Content-Type: application/json" \
+    -d '{"return_status":"returned_ok"}' > /dev/null
+done
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING5_ID/return" -H "$LEADER" > /dev/null
+echo "  Booking 5 (returned): 2x Vindskydd, 1x Presenning"
+
+# ─── Booking 6: Manager's own booking (confirmed) ───
+echo ""
+MANAGER="X-Dev-Role-Override: manager-equipment"
+START_10D=$(date -d "+10 days" +%Y-%m-%d 2>/dev/null || date -v+10d +%Y-%m-%d)
+END_11D=$(date -d "+11 days" +%Y-%m-%d 2>/dev/null || date -v+11d +%Y-%m-%d)
+echo "Creating booking 6 (manager's own, confirmed, $START_10D to $END_11D)..."
+BOOKING6_ID=$(curl -s -X POST "$API/api/v0/bookings" \
+  -H "$MANAGER" -H "Content-Type: application/json" \
+  -d "{\"start_date\":\"$START_10D\",\"end_date\":\"$END_11D\",\"notes\":\"Inventering av Hajkförrådet\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING6_ID/items" \
+  -H "$MANAGER" -H "Content-Type: application/json" \
+  -d '{"commercial_name":"Pannlampa","quantity":2}' > /dev/null
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING6_ID/submit" -H "$MANAGER" > /dev/null
+echo "  Booking 6 (confirmed): 2x Pannlampa (manager's personal booking)"
+
+# ─── Booking 7: Rejected → edited → resubmitted (approval conversation) ───
+echo ""
+START_25D=$(date -d "+25 days" +%Y-%m-%d 2>/dev/null || date -v+25d +%Y-%m-%d)
+END_27D=$(date -d "+27 days" +%Y-%m-%d 2>/dev/null || date -v+27d +%Y-%m-%d)
+echo "Creating booking 7 (rejected then resubmitted, $START_25D to $END_27D)..."
+BOOKING7_ID=$(curl -s -X POST "$API/api/v0/bookings" \
+  -H "$LEADER" -H "Content-Type: application/json" \
+  -d "{\"start_date\":\"$START_25D\",\"end_date\":\"$END_27D\",\"used_by_unit_id\":\"$UNIT_ID\",\"notes\":\"Hajk med Yggdrasil — behöver tält och yxor\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING7_ID/items" \
+  -H "$LEADER" -H "Content-Type: application/json" \
+  -d '{"commercial_name":"Sibley","quantity":2}' > /dev/null
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING7_ID/items" \
+  -H "$LEADER" -H "Content-Type: application/json" \
+  -d '{"commercial_name":"Yxa","quantity":2}' > /dev/null
+
+# Leader submits with explanation
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING7_ID/submit" \
+  -H "$LEADER" -H "Content-Type: application/json" \
+  -d '{"message":"Vi ska på hajk med 15 utmanare, behöver 2 Sibley för att alla ska få plats. Yxorna behövs för vedhuggning."}' > /dev/null
+echo "  Submitted with message"
+
+# Manager rejects
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING7_ID/reject" \
+  -H "$HEADER" -H "Content-Type: application/json" \
+  -d '{"message":"Sibley 2 är under reparation just nu, boka bara 1 Sibley + 1 Vindskydd istället. Yxorna är ok."}' > /dev/null
+echo "  Manager rejected with feedback"
+
+# Leader removes one Sibley, adds a Vindskydd
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING7_ID/items" \
+  -H "$LEADER" -H "Content-Type: application/json" \
+  -d '{"commercial_name":"Vindskydd","quantity":1}' > /dev/null
+
+SIBLEY_ITEM=$(curl -s "$API/api/v0/bookings/$BOOKING7_ID" -H "$LEADER" | python3 -c "
+import json,sys
+d = json.load(sys.stdin)
+for i in d['items']:
+    if i['commercial_name'] == 'Sibley':
+        print(i['id'])
+        break
+")
+curl -sf -X DELETE "$API/api/v0/bookings/$BOOKING7_ID/items/$SIBLEY_ITEM" -H "$LEADER" > /dev/null
+
+# Leader resubmits with response
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING7_ID/submit" \
+  -H "$LEADER" -H "Content-Type: application/json" \
+  -d '{"message":"Ändrat till 1x Sibley + 1x Vindskydd som du föreslog, tack!"}' > /dev/null
+echo "  Leader edited and resubmitted"
+echo "  Booking 7 (submitted): approval conversation with 3 events"
+
+# ─── Booking 8: Force-approval on freely bookable items ───
+echo ""
+START_30D=$(date -d "+30 days" +%Y-%m-%d 2>/dev/null || date -v+30d +%Y-%m-%d)
+END_32D=$(date -d "+32 days" +%Y-%m-%d 2>/dev/null || date -v+32d +%Y-%m-%d)
+echo "Creating booking 8 (force-approval, $START_30D to $END_32D)..."
+BOOKING8_ID=$(curl -s -X POST "$API/api/v0/bookings" \
+  -H "$LEADER" -H "Content-Type: application/json" \
+  -d "{\"start_date\":\"$START_30D\",\"end_date\":\"$END_32D\",\"used_by_unit_id\":\"$UNIT_ID\",\"notes\":\"Prova-på-dag för nya scouter\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING8_ID/items" \
+  -H "$LEADER" -H "Content-Type: application/json" \
+  -d "{\"commercial_name\":\"Stormkök\",\"quantity\":3}" > /dev/null
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING8_ID/items" \
+  -H "$LEADER" -H "Content-Type: application/json" \
+  -d '{"commercial_name":"Brandfilt","quantity":2}' > /dev/null
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING8_ID/submit" \
+  -H "$LEADER" -H "Content-Type: application/json" \
+  -d '{"message":"Första gången vi gör detta, vill gärna att ni kollar att vi bokar rätt grejer?","force_approval":true}' > /dev/null
+echo "  Booking 8 (submitted, force-approval): 3x Stormkök, 2x Brandfilt — leader asked for review"
 
 echo ""
 echo "Done."

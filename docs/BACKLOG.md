@@ -10,12 +10,22 @@ When changing dates on a booking, the API validates that all existing items are 
 
 Copying a booking needs availability checking against the new dates. This ties into the package/kit feature (Phase 3) since both involve populating a booking from a template. The API endpoint (`POST /api/v0/bookings/{id}/copy`) exists but the UI is deferred.
 
-## Booking editing — undo/restore
+## Booking editing — change tracking via booking_events
 
-When editing a confirmed booking, it currently transitions to draft. There's no way to undo changes and restore the previous state. Options to explore:
-- Copy-on-edit: snapshot the booking before editing, restore on cancel
-- Versioned bookings: track changes as a history, allow rollback
-- For now: editing puts booking in draft, user must re-submit. Abandoned drafts cleaned up automatically.
+The `booking_events` table now supports mutation tracking event types (`items_changed`, `dates_changed`, `details_changed`) with a `metadata` jsonb column for structured diffs. This enables:
+
+- **Change history**: log what changed when items are added/removed, dates are moved, or unit/notes are updated. The metadata captures old/new values.
+- **Undo/restore**: with a full change history, we can implement "revert to previous state" by replaying events backwards.
+- **Audit trail**: managers can see exactly what the leader changed between rejection and resubmission.
+
+Currently only approval-flow events (`submitted`, `approved`, `rejected`) and `note` events are logged. Mutation events are the next step.
+
+**Implementation plan:**
+1. Log `items_changed` events in AddItems/RemoveItem handlers with metadata like `{"added": ["Sibley 1"], "removed": []}` or `{"added": [], "removed": ["Stormkök 3"]}`
+2. Log `dates_changed` events in Update handler with `{"old_start": "2026-06-01", "new_start": "2026-06-05", ...}`
+3. Log `details_changed` for unit/notes changes
+4. Show these in the booking event thread alongside approval messages
+5. Eventually: "revert this change" button that undoes a specific mutation
 
 ## Draft auto-cleanup
 

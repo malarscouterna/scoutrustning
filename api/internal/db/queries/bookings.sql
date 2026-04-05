@@ -63,7 +63,7 @@ WHERE id = @id AND group_id = @group_id;
 -- Same as AvailableArticles but excludes items already in the given booking.
 SELECT a.id, a.commercial_name, a.common_name, a.location_id,
     l.name AS location_name, a.place, a.status,
-    a.individually_tracked, a.requires_approval,
+    a.individually_tracked, a.approval_level,
     a.expected_available_date
 FROM articles a
 JOIN locations l ON a.location_id = l.id
@@ -105,7 +105,7 @@ SELECT bi.*,
     a.place,
     a.status AS article_status,
     a.expected_available_date AS article_expected_available_date,
-    a.requires_approval,
+    a.approval_level,
     a.individually_tracked,
     l.name AS location_name,
     c.name AS category_name
@@ -120,7 +120,7 @@ ORDER BY c.name, a.commercial_name, a.common_name;
 -- Returns articles that are bookable and not reserved by overlapping bookings.
 SELECT a.id, a.commercial_name, a.common_name, a.category_id, a.location_id,
     l.name AS location_name, c.name AS category_name, a.place, a.status,
-    a.individually_tracked, a.requires_approval,
+    a.individually_tracked, a.approval_level,
     a.expected_available_date
 FROM articles a
 JOIN locations l ON a.location_id = l.id
@@ -142,14 +142,38 @@ WHERE a.group_id = @group_id
     )
 ORDER BY CASE a.status WHEN 'ok' THEN 0 WHEN 'incoming' THEN 1 WHEN 'under_repair' THEN 2 WHEN 'reported_usable' THEN 3 ELSE 4 END, a.commercial_name, a.common_name;
 
--- name: BookingHasApprovalRequired :one
--- Returns true if any article in the booking requires approval.
-SELECT EXISTS (
-    SELECT 1 FROM booking_items bi
-    JOIN articles a ON bi.article_id = a.id
-    WHERE bi.booking_id = @booking_id AND bi.group_id = @group_id
-        AND a.requires_approval = true
-) AS requires_approval;
+-- name: BookingMaxApprovalLevel :one
+-- Returns the highest approval level across all articles in the booking.
+SELECT COALESCE(
+    (SELECT CASE
+        WHEN EXISTS (SELECT 1 FROM booking_items bi JOIN articles a ON bi.article_id = a.id WHERE bi.booking_id = @booking_id AND bi.group_id = @group_id AND a.approval_level = 'high') THEN 'high'
+        WHEN EXISTS (SELECT 1 FROM booking_items bi JOIN articles a ON bi.article_id = a.id WHERE bi.booking_id = @booking_id AND bi.group_id = @group_id AND a.approval_level = 'low') THEN 'low'
+        ELSE 'none'
+    END),
+    'none'
+) AS max_approval_level;
+
+-- name: ApproveBooking :one
+UPDATE bookings SET status = 'confirmed', updated_at = now()
+WHERE id = @id AND group_id = @group_id AND status = 'submitted'
+RETURNING *;
+
+-- name: RejectBooking :one
+UPDATE bookings SET status = 'draft', updated_at = now()
+WHERE id = @id AND group_id = @group_id AND status = 'submitted'
+RETURNING *;
+
+-- name: CreateBookingEvent :one
+INSERT INTO booking_events (group_id, booking_id, actor_id, event_type, message, metadata)
+VALUES (@group_id, @booking_id, @actor_id, @event_type, @message, @metadata)
+RETURNING *;
+
+-- name: ListBookingEvents :many
+SELECT be.*, u.name AS actor_name
+FROM booking_events be
+JOIN users u ON be.actor_id = u.id
+WHERE be.booking_id = @booking_id AND be.group_id = @group_id
+ORDER BY be.created_at ASC;
 
 -- name: DeleteBooking :exec
 DELETE FROM bookings

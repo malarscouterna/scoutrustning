@@ -76,7 +76,7 @@ func TestUnits_CRUD(t *testing.T) {
 	})
 }
 
-func TestImport_RequiresApprovalByLocation(t *testing.T) {
+func TestImport_ApprovalLevelFromCSV(t *testing.T) {
 	env := testutil.SetupTestEnv(t)
 	env.V1(func(r chi.Router) {
 		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries}).Routes())
@@ -87,9 +87,11 @@ func TestImport_RequiresApprovalByLocation(t *testing.T) {
 	manager := env.ClientAs("manager-equipment")
 
 	csvContent := strings.Join([]string{
-		"titelgrupp,title,description,location,plats,rum,lage,tags,secondtag,kit,custodian,status,inventory_date,inventory_status,available,repair,instock,reserved,purchasedate,value,retailer,retailname",
-		"Sibley,Sibley 1,,Hajkförrådet,,,,Sova,,,,,,,,,,,,,,",
-		"Boombox,Boombox 1,,Karsvik,Ladan,,,Elektronik,,,,,,,,,,,,,,",
+		"titelgrupp,title,description,location,plats,rum,lage,tags,requires_approval",
+		"Sibley,Sibley 1,,Hajkförrådet,,,,Sova,",
+		"Boombox,Boombox 1,,Karsvik,Ladan,,,Elektronik,low",
+		"Chainsaw,Chainsaw 1,,Verkstan,,,,Verktyg,high",
+		"Tent,Tent 1,,Hajkförrådet,,,,Sova,false",
 	}, "\n")
 
 	var buf bytes.Buffer
@@ -108,20 +110,25 @@ func TestImport_RequiresApprovalByLocation(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	// List articles and check requires_approval
+	// List articles and check approval_level
 	resp, _ = manager.Get("/api/v0/articles")
 	var articles []map[string]any
 	json.NewDecoder(resp.Body).Decode(&articles)
 	resp.Body.Close()
 
+	expected := map[string]string{
+		"Sibley 1":    "none",
+		"Boombox 1":   "low",
+		"Chainsaw 1":  "high",
+		"Tent 1":      "none",
+	}
 	for _, a := range articles {
 		name := a["common_name"].(string)
-		approval := a["requires_approval"].(bool)
-		if name == "Sibley 1" && approval {
-			t.Error("Sibley 1 (Hajkförrådet) should NOT require approval")
-		}
-		if name == "Boombox 1" && !approval {
-			t.Error("Boombox 1 (Ladan) SHOULD require approval")
+		level := a["approval_level"].(string)
+		if want, ok := expected[name]; ok {
+			if level != want {
+				t.Errorf("%s: expected approval_level %q, got %q", name, want, level)
+			}
 		}
 	}
 }

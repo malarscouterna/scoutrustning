@@ -7,9 +7,12 @@ See [docs/SPEC.md](docs/SPEC.md) for the full specification and [docs/API.md](do
 ## Status
 
 Pre-release (`v0`). Breaking changes expected. Currently implements:
-- Article inventory with CSV import
+- Article inventory with CSV import (including approval level per article)
 - Article browsing with category/location/search filters
 - Booking flow: create, add items, submit, cancel, copy
+- Three-level approval: none (free), low (project leaders auto-approve), high (always needs manager)
+- Approval conversation thread with booking events (submit/reject/resubmit/approve with messages)
+- Force-approval option for leaders who want manager review on freely bookable items
 - Availability calculation with double-booking prevention
 - Location-scoped availability (same product in different locations shown separately)
 - Pickup and return checklists with swap support
