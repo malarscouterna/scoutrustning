@@ -53,19 +53,17 @@ Kammaren, Östergården, Ladan, Kallförrådet, Hajkförrådet, Magasinet, Verks
 
 ### Statuses
 
-Statuses determine whether an article is bookable. Per-group configurable in the future, but start with a fixed set:
+Article status represents the item's **condition** — an orthogonal concern from booking state (reserved, loaned out, etc.), which is computed from booking data.
 
-| Status | Bookable? |
-|---|---|
-| OK | Yes |
-| Reported — usable | Yes |
-| Reported — unusable | No |
-| Under repair | No |
-| Loaned | No |
-| Drying | No |
-| Booked | No |
-| Archived | No |
-| New (not in circulation) | No |
+| Status | Bookable? | Notes |
+|---|---|---|
+| OK | Yes | Working, no issues |
+| Reported — usable | Yes | Flagged issue, still usable |
+| Incoming | Yes (future) | Ordered/planned, bookable for dates after `expected_available_date` |
+| Reported — unusable | No | Flagged issue, not usable |
+| Under repair | No (until date) | Out for repair, bookable for dates after `expected_available_date` |
+| Lost | No | Gone |
+| Archived | No | Retired from inventory |
 
 ### Packages
 
@@ -111,10 +109,12 @@ Draft → Submitted → [Approved] → Confirmed → Picked up → Returned
 #### Availability
 
 An article is available for a date range if:
-- Its status is bookable (OK or Reported — usable)
+- Its condition is bookable: status is OK, Reported — usable, or (Incoming/Under repair with `expected_available_date` <= booking start date)
 - It is not assigned to an overlapping confirmed/picked-up/submitted/approved booking where it hasn't been fully returned (return_status is NULL or 'delayed')
 
-Delayed items keep the booking open and the article unavailable. The booker remains responsible until the item is returned. Drying is handled as a separate article inventory status (set by the manager after return), not as a return status.
+Availability is always **computed** from article condition + booking data — never stored as a column. This means the same article can be "available now, reserved next week, available again in August".
+
+Delayed items keep the booking open and the article unavailable. The booker remains responsible until the item is returned.
 
 ### Issue Reports
 
@@ -314,7 +314,7 @@ All tables have `group_id` (text, FK → groups). Omitted below for brevity.
 | common_name | text | Individual item name (e.g. "Sibley 1") — for physical identification |
 | category_id | uuid | FK → categories |
 | location_id | uuid | FK → locations |
-| status | text | Enum: ok, reported_usable, reported_unusable, under_repair, loaned, drying, booked, archived, new |
+| status | text | Condition enum: ok, reported_usable, incoming, reported_unusable, under_repair, lost, archived |
 | individually_tracked | boolean | |
 | requires_approval | boolean | |
 | image_path | text | Nullable |
@@ -323,7 +323,7 @@ All tables have `group_id` (text, FK → groups). Omitted below for brevity.
 | purchase_date | date | Nullable |
 | purchase_price | numeric | Nullable |
 | place | text | Free text, where within location |
-| drying_until | date | Nullable, set on return |
+| expected_available_date | date | Nullable, for incoming/under_repair — when the article is expected to be usable |
 | created_at / updated_at | timestamptz | |
 
 ### packages

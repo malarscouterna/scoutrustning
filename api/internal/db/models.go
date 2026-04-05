@@ -9,24 +9,24 @@ import (
 )
 
 type Article struct {
-	ID                  pgtype.UUID        `json:"id"`
-	GroupID             string             `json:"group_id"`
-	CommercialName      string             `json:"commercial_name"`
-	CommonName          string             `json:"common_name"`
-	CategoryID          pgtype.UUID        `json:"category_id"`
-	LocationID          pgtype.UUID        `json:"location_id"`
-	Status              string             `json:"status"`
-	IndividuallyTracked bool               `json:"individually_tracked"`
-	RequiresApproval    bool               `json:"requires_approval"`
-	ImagePath           pgtype.Text        `json:"image_path"`
-	Description         string             `json:"description"`
-	Instructions        string             `json:"instructions"`
-	PurchaseDate        pgtype.Date        `json:"purchase_date"`
-	PurchasePrice       pgtype.Numeric     `json:"purchase_price"`
-	Place               string             `json:"place"`
-	DryingUntil         pgtype.Date        `json:"drying_until"`
-	CreatedAt           pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	ID                    pgtype.UUID        `json:"id"`
+	GroupID               string             `json:"group_id"`
+	CommercialName        string             `json:"commercial_name"`
+	CommonName            string             `json:"common_name"`
+	CategoryID            pgtype.UUID        `json:"category_id"`
+	LocationID            pgtype.UUID        `json:"location_id"`
+	Status                string             `json:"status"`
+	IndividuallyTracked   bool               `json:"individually_tracked"`
+	RequiresApproval      bool               `json:"requires_approval"`
+	ImagePath             pgtype.Text        `json:"image_path"`
+	Description           string             `json:"description"`
+	Instructions          string             `json:"instructions"`
+	PurchaseDate          pgtype.Date        `json:"purchase_date"`
+	PurchasePrice         pgtype.Numeric     `json:"purchase_price"`
+	Place                 string             `json:"place"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	ExpectedAvailableDate pgtype.Date        `json:"expected_available_date"`
 }
 
 type ArticleEvent struct {

@@ -52,7 +52,7 @@ WHERE id = @id AND group_id = @group_id
 RETURNING *;
 
 -- name: UpdateArticleStatus :one
-UPDATE articles SET status = @status, drying_until = @drying_until, updated_at = now()
+UPDATE articles SET status = @status, expected_available_date = @expected_available_date, updated_at = now()
 WHERE id = @id AND group_id = @group_id
 RETURNING *;
 
@@ -86,6 +86,38 @@ WHERE a.group_id = @group_id
             WHERE ae.group_id = @group_id AND ae.actor_id = @user_id
         )
     )
+ORDER BY c.sort_order, c.name, a.commercial_name, a.common_name;
+
+-- name: ListArticlesWithAvailability :many
+SELECT a.*,
+    l.name AS location_name,
+    c.name AS category_name,
+    cur_booking.id AS current_booking_id,
+    cur_booking.status AS current_booking_status,
+    cur_booking.end_date AS current_booking_end_date,
+    cur_unit.name AS current_booking_unit_name
+FROM articles a
+JOIN locations l ON a.location_id = l.id
+JOIN categories c ON a.category_id = c.id
+LEFT JOIN LATERAL (
+    SELECT b.id, b.status, b.end_date, b.used_by_unit_id
+    FROM booking_items bi
+    JOIN bookings b ON bi.booking_id = b.id
+    WHERE bi.article_id = a.id
+        AND b.group_id = a.group_id
+        AND b.status IN ('confirmed', 'approved', 'picked_up')
+        AND b.start_date <= CURRENT_DATE
+        AND b.end_date >= CURRENT_DATE
+        AND (bi.return_status IS NULL OR bi.return_status IN ('pending', 'delayed'))
+    ORDER BY b.start_date
+    LIMIT 1
+) cur_booking ON true
+LEFT JOIN units cur_unit ON cur_booking.used_by_unit_id = cur_unit.id
+WHERE a.group_id = @group_id
+    AND (sqlc.narg('category_id')::uuid IS NULL OR a.category_id = sqlc.narg('category_id'))
+    AND (sqlc.narg('location_id')::uuid IS NULL OR a.location_id = sqlc.narg('location_id'))
+    AND (COALESCE(array_length(@statuses::text[], 1), 0) = 0 OR a.status = ANY(@statuses))
+    AND (sqlc.narg('search')::text IS NULL OR a.common_name ILIKE '%' || sqlc.narg('search') || '%' OR a.commercial_name ILIKE '%' || sqlc.narg('search') || '%')
 ORDER BY c.sort_order, c.name, a.commercial_name, a.common_name;
 
 -- name: CountArticlesByLocation :many

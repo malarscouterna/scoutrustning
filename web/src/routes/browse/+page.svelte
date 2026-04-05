@@ -15,15 +15,14 @@
 	let showHistoryFor = $state<string | null>(null);
 	let reportedMessage = $state('');
 
-	const statusOrder = ['ok', 'reported_usable', 'reported_unusable', 'under_repair', 'drying', 'new', 'lost', 'archived'] as const;
+	const statusOrder = ['ok', 'reported_usable', 'incoming', 'reported_unusable', 'under_repair', 'lost', 'archived'] as const;
 
 	const statusLabels: Record<string, string> = {
 		ok: 'OK',
 		reported_usable: 'Rapporterad — användbar',
+		incoming: 'Inkommande',
 		reported_unusable: 'Rapporterad — ej användbar',
 		under_repair: 'Under reparation',
-		drying: 'Torkar',
-		new: 'Ny',
 		lost: 'Saknas',
 		archived: 'Arkiverad',
 	};
@@ -86,7 +85,7 @@
 		if (search) params.set('search', search);
 		if (selectedCategory) params.set('category', selectedCategory);
 		if (selectedLocation) params.set('location', selectedLocation);
-		if (showArchived) params.set('status', 'ok,reported_usable,reported_unusable,under_repair,drying,new,lost,archived');
+		if (showArchived) params.set('status', 'ok,reported_usable,incoming,reported_unusable,under_repair,lost,archived');
 		const qs = params.toString();
 		window.location.href = `/browse${qs ? '?' + qs : ''}`;
 	}

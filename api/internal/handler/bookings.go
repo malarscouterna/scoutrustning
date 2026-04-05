@@ -679,10 +679,13 @@ func (h *BookingHandler) UpdateItemPickup(w http.ResponseWriter, r *http.Request
 			"booking_id": formatUUID(bookingID),
 		})
 	} else if req.PickupStatus == "" {
-		// Undo: reset article to ok if it was set to lost
-		h.Q.UpdateArticleStatus(r.Context(), db.UpdateArticleStatusParams{
-			ID: item.ArticleID, GroupID: claims.GroupID, Status: "ok",
-		})
+		// Undo: if the article was set to lost by this pickup, restore to ok
+		art, err := h.Q.GetArticle(r.Context(), db.GetArticleParams{ID: item.ArticleID, GroupID: claims.GroupID})
+		if err == nil && art.Status == "lost" {
+			h.Q.UpdateArticleStatus(r.Context(), db.UpdateArticleStatusParams{
+				ID: item.ArticleID, GroupID: claims.GroupID, Status: "ok",
+			})
+		}
 		// If all pickups are now undone, revert booking to pre-pickup status
 		nonePickedUp, err := h.Q.NoItemsPickedUp(r.Context(), db.NoItemsPickedUpParams{
 			BookingID: bookingID, GroupID: claims.GroupID,
@@ -897,15 +900,14 @@ func (h *BookingHandler) UpdateItemReturn(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Side effects based on return status
+	// Side effects: only condition-changing return statuses update the article
 	switch req.ReturnStatus {
 	case "":
-		h.Q.UpdateArticleStatus(r.Context(), db.UpdateArticleStatusParams{
-			ID: item.ArticleID, GroupID: claims.GroupID,
-			Status: "ok",
-		})
-		LogArticleEvent(r.Context(), h.Q, claims, item.ArticleID, "status_change", "Return status cleared, article reset to ok", map[string]string{
-			"new_status": "ok", "booking_id": formatUUID(bookingID),
+		// Undo — no-op on article status (orthogonal)
+	case "returned_ok":
+		// No-op on article status — condition is orthogonal to booking state
+		LogArticleEvent(r.Context(), h.Q, claims, item.ArticleID, "returned", "Returned OK", map[string]string{
+			"booking_id": formatUUID(bookingID),
 		})
 	case "delayed":
 		LogArticleEvent(r.Context(), h.Q, claims, item.ArticleID, "returned", "Delayed return", map[string]string{
@@ -934,14 +936,6 @@ func (h *BookingHandler) UpdateItemReturn(w http.ResponseWriter, r *http.Request
 		})
 		LogArticleEvent(r.Context(), h.Q, claims, item.ArticleID, "issue_reported", req.Notes, map[string]string{
 			"new_status": "lost", "reason": "lost", "booking_id": formatUUID(bookingID),
-		})
-	case "returned_ok":
-		h.Q.UpdateArticleStatus(r.Context(), db.UpdateArticleStatusParams{
-			ID: item.ArticleID, GroupID: claims.GroupID,
-			Status: "ok",
-		})
-		LogArticleEvent(r.Context(), h.Q, claims, item.ArticleID, "returned", "Returned OK", map[string]string{
-			"new_status": "ok", "booking_id": formatUUID(bookingID),
 		})
 	}
 

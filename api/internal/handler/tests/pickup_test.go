@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -49,8 +50,9 @@ func setupPickupEnv(t *testing.T, env *testutil.TestEnv) (bookingID string, item
 		articleIDs = append(articleIDs, article["id"].(string))
 	}
 
-	// Create booking, add 2 items, submit (auto-confirms)
-	b, _ := json.Marshal(map[string]any{"start_date": "2026-06-01", "end_date": "2026-06-05"})
+	// Create booking spanning today (realistic for pickup)
+	start, end := todayRange(5)
+	b, _ := json.Marshal(map[string]any{"start_date": start, "end_date": end})
 	resp, _ = leader.Post("/api/v0/bookings", bytes.NewReader(b))
 	var booking map[string]any
 	json.NewDecoder(resp.Body).Decode(&booking)
@@ -108,7 +110,8 @@ func TestPickupFlow_TransitionAndChecklist(t *testing.T) {
 
 	t.Run("cannot pickup a draft booking", func(t *testing.T) {
 		// Create a draft (don't submit)
-		b, _ := json.Marshal(map[string]any{"start_date": "2026-07-01", "end_date": "2026-07-03"})
+		start, end := todayRange(3)
+		b, _ := json.Marshal(map[string]any{"start_date": start, "end_date": end})
 		resp, _ := leader.Post("/api/v0/bookings", bytes.NewReader(b))
 		var draft map[string]any
 		json.NewDecoder(resp.Body).Decode(&draft)
@@ -480,4 +483,11 @@ func TestPickupFlow_AccessControl(t *testing.T) {
 			t.Fatalf("expected 200, got %d: %s", resp.StatusCode, body)
 		}
 	})
+}
+
+// todayRange returns a start date (today) and end date (today + days) as ISO strings.
+// Use for tests that exercise pickup/return — the booking should span the current date.
+func todayRange(days int) (string, string) {
+	now := time.Now()
+	return now.Format("2006-01-02"), now.AddDate(0, 0, days).Format("2006-01-02")
 }

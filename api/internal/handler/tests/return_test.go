@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -47,8 +48,11 @@ func setupReturnEnv(t *testing.T, env *testutil.TestEnv, articleCount, bookCount
 		articleIDs = append(articleIDs, article["id"].(string))
 	}
 
-	// Create booking, add items, submit, pickup
-	b, _ := json.Marshal(map[string]any{"start_date": "2026-06-01", "end_date": "2026-06-05"})
+	// Create booking spanning today (realistic for pickup/return)
+	now := time.Now()
+	startStr := now.Format("2006-01-02")
+	endStr := now.AddDate(0, 0, 5).Format("2006-01-02")
+	b, _ := json.Marshal(map[string]any{"start_date": startStr, "end_date": endStr})
 	resp, _ = leader.Post("/api/v0/bookings", bytes.NewReader(b))
 	var booking map[string]any
 	json.NewDecoder(resp.Body).Decode(&booking)
@@ -183,9 +187,11 @@ func TestReturnFlow_DelayedBlocksAvailability(t *testing.T) {
 	bookingID, itemIDs, _ := setupReturnEnv(t, env, 2, 2)
 
 	// Return one as delayed
+	now := time.Now()
+	expectedReturn := now.AddDate(0, 0, 10).Format("2006-01-02")
 	b, _ := json.Marshal(map[string]any{
 		"return_status":        "delayed",
-		"expected_return_date": "2026-06-10",
+		"expected_return_date": expectedReturn,
 	})
 	resp, _ := leader.Put("/api/v0/bookings/"+bookingID+"/items/"+itemIDs[0]+"/return", bytes.NewReader(b))
 	resp.Body.Close()
@@ -207,7 +213,10 @@ func TestReturnFlow_DelayedBlocksAvailability(t *testing.T) {
 	})
 
 	t.Run("delayed article not available for overlapping dates", func(t *testing.T) {
-		resp, err := leaderB.Get("/api/v0/articles/availability?start_date=2026-06-01&end_date=2026-06-05")
+		now := time.Now()
+		startStr := now.Format("2006-01-02")
+		endStr := now.AddDate(0, 0, 5).Format("2006-01-02")
+		resp, err := leaderB.Get("/api/v0/articles/availability?start_date=" + startStr + "&end_date=" + endStr)
 		if err != nil {
 			t.Fatal(err)
 		}

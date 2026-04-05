@@ -67,7 +67,11 @@ SELECT a.id, a.commercial_name, a.common_name, a.location_id,
 FROM articles a
 JOIN locations l ON a.location_id = l.id
 WHERE a.group_id = @group_id
-    AND a.status IN ('ok', 'reported_usable')
+    AND (
+        a.status IN ('ok', 'reported_usable')
+        OR (a.status = 'incoming' AND a.expected_available_date IS NOT NULL AND a.expected_available_date <= @start_date)
+        OR (a.status = 'under_repair' AND a.expected_available_date IS NOT NULL AND a.expected_available_date <= @start_date)
+    )
     AND a.id NOT IN (
         SELECT bi.article_id FROM booking_items bi
         JOIN bookings b ON bi.booking_id = b.id
@@ -118,7 +122,11 @@ FROM articles a
 JOIN locations l ON a.location_id = l.id
 JOIN categories c ON a.category_id = c.id
 WHERE a.group_id = @group_id
-    AND a.status IN ('ok', 'reported_usable')
+    AND (
+        a.status IN ('ok', 'reported_usable')
+        OR (a.status = 'incoming' AND a.expected_available_date IS NOT NULL AND a.expected_available_date <= @start_date)
+        OR (a.status = 'under_repair' AND a.expected_available_date IS NOT NULL AND a.expected_available_date <= @start_date)
+    )
     AND a.id NOT IN (
         SELECT bi.article_id FROM booking_items bi
         JOIN bookings b ON bi.booking_id = b.id

@@ -40,10 +40,9 @@
 	const statusLabels: Record<string, string> = {
 		ok: 'OK',
 		reported_usable: 'Rapporterad — användbar',
+		incoming: 'Inkommande',
 		reported_unusable: 'Rapporterad — ej användbar',
 		under_repair: 'Under reparation',
-		drying: 'Torkar',
-		new: 'Ny',
 		lost: 'Saknas',
 		archived: 'Arkiverad',
 	};

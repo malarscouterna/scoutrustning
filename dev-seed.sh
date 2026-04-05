@@ -82,8 +82,8 @@ echo "  Tältlampa LED: 1 reported unusable (trasig)"
 
 curl -sf -X PUT "$API/api/v0/articles/$LAMP3/status" \
   -H "$HEADER" -H "Content-Type: application/json" \
-  -d '{"status":"under_repair","comment":"Skickad för batteribyte"}' > /dev/null
-echo "  Tältlampa LED: 1 under repair"
+  -d '{"status":"under_repair","comment":"Skickad för batteribyte","expected_available_date":"2026-07-10"}' > /dev/null
+echo "  Tältlampa LED: 1 under repair (beräknas klar 10 jul)"
 
 # Pannlampa: archive one
 PANN_IDS=$(curl -s "$API/api/v0/articles?search=Pannlampa" -H "$HEADER" | python3 -c "
@@ -143,12 +143,14 @@ for a in json.load(sys.stdin):
 
 UNIT_ID=$(curl -s "$API/api/v0/units" -H "$LEADER" | python3 -c "import json,sys; print([u['id'] for u in json.load(sys.stdin) if u['name']=='Yggdrasil'][0])")
 
-# ─── Booking 1: Active booking in picked_up state (for testing pickup/return) ───
+# ─── Booking 1: Active booking in picked_up state (checked out right now) ───
 echo ""
-echo "Creating booking 1 (active, picked_up)..."
+TODAY=$(date +%Y-%m-%d)
+END_5D=$(date -d "+5 days" +%Y-%m-%d 2>/dev/null || date -v+5d +%Y-%m-%d)
+echo "Creating booking 1 (active, picked_up, $TODAY to $END_5D)..."
 BOOKING_ID=$(curl -s -X POST "$API/api/v0/bookings" \
   -H "$LEADER" -H "Content-Type: application/json" \
-  -d "{\"start_date\":\"2026-06-01\",\"end_date\":\"2026-06-05\",\"used_by_unit_id\":\"$UNIT_ID\",\"notes\":\"Hajk med Yggdrasil\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+  -d "{\"start_date\":\"$TODAY\",\"end_date\":\"$END_5D\",\"used_by_unit_id\":\"$UNIT_ID\",\"notes\":\"Hajk med Yggdrasil\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
 echo "  Booking: $BOOKING_ID"
 
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING_ID/items" \
@@ -248,12 +250,15 @@ if [ -n "$BRYNE_ID" ]; then
   echo "  Bryne: reported usable (slitet)"
 fi
 
-# ─── Booking 2: Confirmed, ready for pickup testing ───
+# ─── Booking 2: Confirmed, reserved for next week (not yet picked up) ───
 echo ""
-echo "Creating booking 2 (confirmed, for pickup testing)..."
+START_7D=$(date -d "+7 days" +%Y-%m-%d 2>/dev/null || date -v+7d +%Y-%m-%d)
+END_12D=$(date -d "+12 days" +%Y-%m-%d 2>/dev/null || date -v+12d +%Y-%m-%d)
+echo "Creating booking 2 (confirmed, $START_7D to $END_12D)..."
 BOOKING2_ID=$(curl -s -X POST "$API/api/v0/bookings" \
   -H "$LEADER" -H "Content-Type: application/json" \
-  -d "{\"start_date\":\"2026-07-01\",\"end_date\":\"2026-07-05\",\"used_by_unit_id\":\"$UNIT_ID\",\"notes\":\"Sommarläger\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+  -d "{\"start_date\":\"$START_7D\",\"end_date\":\"$END_12D\",\"used_by_unit_id\":\"$UNIT_ID\",\"notes\":\"Sommarläger\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING2_ID/items" \
   -H "$LEADER" -H "Content-Type: application/json" \
   -d '{"commercial_name":"Brandfilt","quantity":2}' > /dev/null
@@ -264,7 +269,7 @@ curl -sf -X POST "$API/api/v0/bookings/$BOOKING2_ID/items" \
   -H "$LEADER" -H "Content-Type: application/json" \
   -d '{"commercial_name":"Liggunderlag","quantity":4}' > /dev/null
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING2_ID/submit" -H "$LEADER" > /dev/null
-echo "  Booking 2 (confirmed): 2x Brandfilt, 1x Primus, 4x Liggunderlag"
+echo "  Booking 2 (confirmed, next week): 2x Brandfilt, 1x Primus, 4x Liggunderlag"
 
 echo ""
 echo "Done."

@@ -91,7 +91,7 @@ INSERT INTO articles (
     $6, $7, $8,
     $9, $10, $11, $12, $13
 )
-RETURNING id, group_id, commercial_name, common_name, category_id, location_id, status, individually_tracked, requires_approval, image_path, description, instructions, purchase_date, purchase_price, place, drying_until, created_at, updated_at
+RETURNING id, group_id, commercial_name, common_name, category_id, location_id, status, individually_tracked, requires_approval, image_path, description, instructions, purchase_date, purchase_price, place, created_at, updated_at, expected_available_date
 `
 
 type CreateArticleParams struct {
@@ -143,9 +143,9 @@ func (q *Queries) CreateArticle(ctx context.Context, arg CreateArticleParams) (A
 		&i.PurchaseDate,
 		&i.PurchasePrice,
 		&i.Place,
-		&i.DryingUntil,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ExpectedAvailableDate,
 	)
 	return i, err
 }
@@ -166,7 +166,7 @@ func (q *Queries) DeleteArticle(ctx context.Context, arg DeleteArticleParams) er
 }
 
 const getArticle = `-- name: GetArticle :one
-SELECT a.id, a.group_id, a.commercial_name, a.common_name, a.category_id, a.location_id, a.status, a.individually_tracked, a.requires_approval, a.image_path, a.description, a.instructions, a.purchase_date, a.purchase_price, a.place, a.drying_until, a.created_at, a.updated_at,
+SELECT a.id, a.group_id, a.commercial_name, a.common_name, a.category_id, a.location_id, a.status, a.individually_tracked, a.requires_approval, a.image_path, a.description, a.instructions, a.purchase_date, a.purchase_price, a.place, a.created_at, a.updated_at, a.expected_available_date,
     l.name AS location_name,
     c.name AS category_name
 FROM articles a
@@ -181,26 +181,26 @@ type GetArticleParams struct {
 }
 
 type GetArticleRow struct {
-	ID                  pgtype.UUID        `json:"id"`
-	GroupID             string             `json:"group_id"`
-	CommercialName      string             `json:"commercial_name"`
-	CommonName          string             `json:"common_name"`
-	CategoryID          pgtype.UUID        `json:"category_id"`
-	LocationID          pgtype.UUID        `json:"location_id"`
-	Status              string             `json:"status"`
-	IndividuallyTracked bool               `json:"individually_tracked"`
-	RequiresApproval    bool               `json:"requires_approval"`
-	ImagePath           pgtype.Text        `json:"image_path"`
-	Description         string             `json:"description"`
-	Instructions        string             `json:"instructions"`
-	PurchaseDate        pgtype.Date        `json:"purchase_date"`
-	PurchasePrice       pgtype.Numeric     `json:"purchase_price"`
-	Place               string             `json:"place"`
-	DryingUntil         pgtype.Date        `json:"drying_until"`
-	CreatedAt           pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
-	LocationName        string             `json:"location_name"`
-	CategoryName        string             `json:"category_name"`
+	ID                    pgtype.UUID        `json:"id"`
+	GroupID               string             `json:"group_id"`
+	CommercialName        string             `json:"commercial_name"`
+	CommonName            string             `json:"common_name"`
+	CategoryID            pgtype.UUID        `json:"category_id"`
+	LocationID            pgtype.UUID        `json:"location_id"`
+	Status                string             `json:"status"`
+	IndividuallyTracked   bool               `json:"individually_tracked"`
+	RequiresApproval      bool               `json:"requires_approval"`
+	ImagePath             pgtype.Text        `json:"image_path"`
+	Description           string             `json:"description"`
+	Instructions          string             `json:"instructions"`
+	PurchaseDate          pgtype.Date        `json:"purchase_date"`
+	PurchasePrice         pgtype.Numeric     `json:"purchase_price"`
+	Place                 string             `json:"place"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	ExpectedAvailableDate pgtype.Date        `json:"expected_available_date"`
+	LocationName          string             `json:"location_name"`
+	CategoryName          string             `json:"category_name"`
 }
 
 func (q *Queries) GetArticle(ctx context.Context, arg GetArticleParams) (GetArticleRow, error) {
@@ -222,9 +222,9 @@ func (q *Queries) GetArticle(ctx context.Context, arg GetArticleParams) (GetArti
 		&i.PurchaseDate,
 		&i.PurchasePrice,
 		&i.Place,
-		&i.DryingUntil,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ExpectedAvailableDate,
 		&i.LocationName,
 		&i.CategoryName,
 	)
@@ -232,7 +232,7 @@ func (q *Queries) GetArticle(ctx context.Context, arg GetArticleParams) (GetArti
 }
 
 const listArticles = `-- name: ListArticles :many
-SELECT a.id, a.group_id, a.commercial_name, a.common_name, a.category_id, a.location_id, a.status, a.individually_tracked, a.requires_approval, a.image_path, a.description, a.instructions, a.purchase_date, a.purchase_price, a.place, a.drying_until, a.created_at, a.updated_at,
+SELECT a.id, a.group_id, a.commercial_name, a.common_name, a.category_id, a.location_id, a.status, a.individually_tracked, a.requires_approval, a.image_path, a.description, a.instructions, a.purchase_date, a.purchase_price, a.place, a.created_at, a.updated_at, a.expected_available_date,
     l.name AS location_name,
     c.name AS category_name
 FROM articles a
@@ -255,26 +255,26 @@ type ListArticlesParams struct {
 }
 
 type ListArticlesRow struct {
-	ID                  pgtype.UUID        `json:"id"`
-	GroupID             string             `json:"group_id"`
-	CommercialName      string             `json:"commercial_name"`
-	CommonName          string             `json:"common_name"`
-	CategoryID          pgtype.UUID        `json:"category_id"`
-	LocationID          pgtype.UUID        `json:"location_id"`
-	Status              string             `json:"status"`
-	IndividuallyTracked bool               `json:"individually_tracked"`
-	RequiresApproval    bool               `json:"requires_approval"`
-	ImagePath           pgtype.Text        `json:"image_path"`
-	Description         string             `json:"description"`
-	Instructions        string             `json:"instructions"`
-	PurchaseDate        pgtype.Date        `json:"purchase_date"`
-	PurchasePrice       pgtype.Numeric     `json:"purchase_price"`
-	Place               string             `json:"place"`
-	DryingUntil         pgtype.Date        `json:"drying_until"`
-	CreatedAt           pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
-	LocationName        string             `json:"location_name"`
-	CategoryName        string             `json:"category_name"`
+	ID                    pgtype.UUID        `json:"id"`
+	GroupID               string             `json:"group_id"`
+	CommercialName        string             `json:"commercial_name"`
+	CommonName            string             `json:"common_name"`
+	CategoryID            pgtype.UUID        `json:"category_id"`
+	LocationID            pgtype.UUID        `json:"location_id"`
+	Status                string             `json:"status"`
+	IndividuallyTracked   bool               `json:"individually_tracked"`
+	RequiresApproval      bool               `json:"requires_approval"`
+	ImagePath             pgtype.Text        `json:"image_path"`
+	Description           string             `json:"description"`
+	Instructions          string             `json:"instructions"`
+	PurchaseDate          pgtype.Date        `json:"purchase_date"`
+	PurchasePrice         pgtype.Numeric     `json:"purchase_price"`
+	Place                 string             `json:"place"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	ExpectedAvailableDate pgtype.Date        `json:"expected_available_date"`
+	LocationName          string             `json:"location_name"`
+	CategoryName          string             `json:"category_name"`
 }
 
 func (q *Queries) ListArticles(ctx context.Context, arg ListArticlesParams) ([]ListArticlesRow, error) {
@@ -308,9 +308,9 @@ func (q *Queries) ListArticles(ctx context.Context, arg ListArticlesParams) ([]L
 			&i.PurchaseDate,
 			&i.PurchasePrice,
 			&i.Place,
-			&i.DryingUntil,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ExpectedAvailableDate,
 			&i.LocationName,
 			&i.CategoryName,
 		); err != nil {
@@ -325,7 +325,7 @@ func (q *Queries) ListArticles(ctx context.Context, arg ListArticlesParams) ([]L
 }
 
 const listArticlesByUserBookings = `-- name: ListArticlesByUserBookings :many
-SELECT a.id, a.group_id, a.commercial_name, a.common_name, a.category_id, a.location_id, a.status, a.individually_tracked, a.requires_approval, a.image_path, a.description, a.instructions, a.purchase_date, a.purchase_price, a.place, a.drying_until, a.created_at, a.updated_at,
+SELECT a.id, a.group_id, a.commercial_name, a.common_name, a.category_id, a.location_id, a.status, a.individually_tracked, a.requires_approval, a.image_path, a.description, a.instructions, a.purchase_date, a.purchase_price, a.place, a.created_at, a.updated_at, a.expected_available_date,
     l.name AS location_name,
     c.name AS category_name
 FROM articles a
@@ -358,26 +358,26 @@ type ListArticlesByUserBookingsParams struct {
 }
 
 type ListArticlesByUserBookingsRow struct {
-	ID                  pgtype.UUID        `json:"id"`
-	GroupID             string             `json:"group_id"`
-	CommercialName      string             `json:"commercial_name"`
-	CommonName          string             `json:"common_name"`
-	CategoryID          pgtype.UUID        `json:"category_id"`
-	LocationID          pgtype.UUID        `json:"location_id"`
-	Status              string             `json:"status"`
-	IndividuallyTracked bool               `json:"individually_tracked"`
-	RequiresApproval    bool               `json:"requires_approval"`
-	ImagePath           pgtype.Text        `json:"image_path"`
-	Description         string             `json:"description"`
-	Instructions        string             `json:"instructions"`
-	PurchaseDate        pgtype.Date        `json:"purchase_date"`
-	PurchasePrice       pgtype.Numeric     `json:"purchase_price"`
-	Place               string             `json:"place"`
-	DryingUntil         pgtype.Date        `json:"drying_until"`
-	CreatedAt           pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
-	LocationName        string             `json:"location_name"`
-	CategoryName        string             `json:"category_name"`
+	ID                    pgtype.UUID        `json:"id"`
+	GroupID               string             `json:"group_id"`
+	CommercialName        string             `json:"commercial_name"`
+	CommonName            string             `json:"common_name"`
+	CategoryID            pgtype.UUID        `json:"category_id"`
+	LocationID            pgtype.UUID        `json:"location_id"`
+	Status                string             `json:"status"`
+	IndividuallyTracked   bool               `json:"individually_tracked"`
+	RequiresApproval      bool               `json:"requires_approval"`
+	ImagePath             pgtype.Text        `json:"image_path"`
+	Description           string             `json:"description"`
+	Instructions          string             `json:"instructions"`
+	PurchaseDate          pgtype.Date        `json:"purchase_date"`
+	PurchasePrice         pgtype.Numeric     `json:"purchase_price"`
+	Place                 string             `json:"place"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	ExpectedAvailableDate pgtype.Date        `json:"expected_available_date"`
+	LocationName          string             `json:"location_name"`
+	CategoryName          string             `json:"category_name"`
 }
 
 // Returns articles with given statuses that are linked to the user's bookings
@@ -413,11 +413,130 @@ func (q *Queries) ListArticlesByUserBookings(ctx context.Context, arg ListArticl
 			&i.PurchaseDate,
 			&i.PurchasePrice,
 			&i.Place,
-			&i.DryingUntil,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ExpectedAvailableDate,
 			&i.LocationName,
 			&i.CategoryName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listArticlesWithAvailability = `-- name: ListArticlesWithAvailability :many
+SELECT a.id, a.group_id, a.commercial_name, a.common_name, a.category_id, a.location_id, a.status, a.individually_tracked, a.requires_approval, a.image_path, a.description, a.instructions, a.purchase_date, a.purchase_price, a.place, a.created_at, a.updated_at, a.expected_available_date,
+    l.name AS location_name,
+    c.name AS category_name,
+    cur_booking.id AS current_booking_id,
+    cur_booking.status AS current_booking_status,
+    cur_booking.end_date AS current_booking_end_date,
+    cur_unit.name AS current_booking_unit_name
+FROM articles a
+JOIN locations l ON a.location_id = l.id
+JOIN categories c ON a.category_id = c.id
+LEFT JOIN LATERAL (
+    SELECT b.id, b.status, b.end_date, b.used_by_unit_id
+    FROM booking_items bi
+    JOIN bookings b ON bi.booking_id = b.id
+    WHERE bi.article_id = a.id
+        AND b.group_id = a.group_id
+        AND b.status IN ('confirmed', 'approved', 'picked_up')
+        AND b.start_date <= CURRENT_DATE
+        AND b.end_date >= CURRENT_DATE
+        AND (bi.return_status IS NULL OR bi.return_status IN ('pending', 'delayed'))
+    ORDER BY b.start_date
+    LIMIT 1
+) cur_booking ON true
+LEFT JOIN units cur_unit ON cur_booking.used_by_unit_id = cur_unit.id
+WHERE a.group_id = $1
+    AND ($2::uuid IS NULL OR a.category_id = $2)
+    AND ($3::uuid IS NULL OR a.location_id = $3)
+    AND (COALESCE(array_length($4::text[], 1), 0) = 0 OR a.status = ANY($4))
+    AND ($5::text IS NULL OR a.common_name ILIKE '%' || $5 || '%' OR a.commercial_name ILIKE '%' || $5 || '%')
+ORDER BY c.sort_order, c.name, a.commercial_name, a.common_name
+`
+
+type ListArticlesWithAvailabilityParams struct {
+	GroupID    string      `json:"group_id"`
+	CategoryID pgtype.UUID `json:"category_id"`
+	LocationID pgtype.UUID `json:"location_id"`
+	Statuses   []string    `json:"statuses"`
+	Search     pgtype.Text `json:"search"`
+}
+
+type ListArticlesWithAvailabilityRow struct {
+	ID                     pgtype.UUID        `json:"id"`
+	GroupID                string             `json:"group_id"`
+	CommercialName         string             `json:"commercial_name"`
+	CommonName             string             `json:"common_name"`
+	CategoryID             pgtype.UUID        `json:"category_id"`
+	LocationID             pgtype.UUID        `json:"location_id"`
+	Status                 string             `json:"status"`
+	IndividuallyTracked    bool               `json:"individually_tracked"`
+	RequiresApproval       bool               `json:"requires_approval"`
+	ImagePath              pgtype.Text        `json:"image_path"`
+	Description            string             `json:"description"`
+	Instructions           string             `json:"instructions"`
+	PurchaseDate           pgtype.Date        `json:"purchase_date"`
+	PurchasePrice          pgtype.Numeric     `json:"purchase_price"`
+	Place                  string             `json:"place"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+	ExpectedAvailableDate  pgtype.Date        `json:"expected_available_date"`
+	LocationName           string             `json:"location_name"`
+	CategoryName           string             `json:"category_name"`
+	CurrentBookingID       pgtype.UUID        `json:"current_booking_id"`
+	CurrentBookingStatus   string             `json:"current_booking_status"`
+	CurrentBookingEndDate  pgtype.Date        `json:"current_booking_end_date"`
+	CurrentBookingUnitName pgtype.Text        `json:"current_booking_unit_name"`
+}
+
+func (q *Queries) ListArticlesWithAvailability(ctx context.Context, arg ListArticlesWithAvailabilityParams) ([]ListArticlesWithAvailabilityRow, error) {
+	rows, err := q.db.Query(ctx, listArticlesWithAvailability,
+		arg.GroupID,
+		arg.CategoryID,
+		arg.LocationID,
+		arg.Statuses,
+		arg.Search,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListArticlesWithAvailabilityRow{}
+	for rows.Next() {
+		var i ListArticlesWithAvailabilityRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.GroupID,
+			&i.CommercialName,
+			&i.CommonName,
+			&i.CategoryID,
+			&i.LocationID,
+			&i.Status,
+			&i.IndividuallyTracked,
+			&i.RequiresApproval,
+			&i.ImagePath,
+			&i.Description,
+			&i.Instructions,
+			&i.PurchaseDate,
+			&i.PurchasePrice,
+			&i.Place,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ExpectedAvailableDate,
+			&i.LocationName,
+			&i.CategoryName,
+			&i.CurrentBookingID,
+			&i.CurrentBookingStatus,
+			&i.CurrentBookingEndDate,
+			&i.CurrentBookingUnitName,
 		); err != nil {
 			return nil, err
 		}
@@ -445,7 +564,7 @@ UPDATE articles SET
     place = $12,
     updated_at = now()
 WHERE id = $13 AND group_id = $14
-RETURNING id, group_id, commercial_name, common_name, category_id, location_id, status, individually_tracked, requires_approval, image_path, description, instructions, purchase_date, purchase_price, place, drying_until, created_at, updated_at
+RETURNING id, group_id, commercial_name, common_name, category_id, location_id, status, individually_tracked, requires_approval, image_path, description, instructions, purchase_date, purchase_price, place, created_at, updated_at, expected_available_date
 `
 
 type UpdateArticleParams struct {
@@ -499,30 +618,30 @@ func (q *Queries) UpdateArticle(ctx context.Context, arg UpdateArticleParams) (A
 		&i.PurchaseDate,
 		&i.PurchasePrice,
 		&i.Place,
-		&i.DryingUntil,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ExpectedAvailableDate,
 	)
 	return i, err
 }
 
 const updateArticleStatus = `-- name: UpdateArticleStatus :one
-UPDATE articles SET status = $1, drying_until = $2, updated_at = now()
+UPDATE articles SET status = $1, expected_available_date = $2, updated_at = now()
 WHERE id = $3 AND group_id = $4
-RETURNING id, group_id, commercial_name, common_name, category_id, location_id, status, individually_tracked, requires_approval, image_path, description, instructions, purchase_date, purchase_price, place, drying_until, created_at, updated_at
+RETURNING id, group_id, commercial_name, common_name, category_id, location_id, status, individually_tracked, requires_approval, image_path, description, instructions, purchase_date, purchase_price, place, created_at, updated_at, expected_available_date
 `
 
 type UpdateArticleStatusParams struct {
-	Status      string      `json:"status"`
-	DryingUntil pgtype.Date `json:"drying_until"`
-	ID          pgtype.UUID `json:"id"`
-	GroupID     string      `json:"group_id"`
+	Status                string      `json:"status"`
+	ExpectedAvailableDate pgtype.Date `json:"expected_available_date"`
+	ID                    pgtype.UUID `json:"id"`
+	GroupID               string      `json:"group_id"`
 }
 
 func (q *Queries) UpdateArticleStatus(ctx context.Context, arg UpdateArticleStatusParams) (Article, error) {
 	row := q.db.QueryRow(ctx, updateArticleStatus,
 		arg.Status,
-		arg.DryingUntil,
+		arg.ExpectedAvailableDate,
 		arg.ID,
 		arg.GroupID,
 	)
@@ -543,9 +662,9 @@ func (q *Queries) UpdateArticleStatus(ctx context.Context, arg UpdateArticleStat
 		&i.PurchaseDate,
 		&i.PurchasePrice,
 		&i.Place,
-		&i.DryingUntil,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ExpectedAvailableDate,
 	)
 	return i, err
 }

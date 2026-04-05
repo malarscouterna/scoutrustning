@@ -91,14 +91,18 @@ FROM articles a
 JOIN locations l ON a.location_id = l.id
 JOIN categories c ON a.category_id = c.id
 WHERE a.group_id = $1
-    AND a.status IN ('ok', 'reported_usable')
+    AND (
+        a.status IN ('ok', 'reported_usable')
+        OR (a.status = 'incoming' AND a.expected_available_date IS NOT NULL AND a.expected_available_date <= $2)
+        OR (a.status = 'under_repair' AND a.expected_available_date IS NOT NULL AND a.expected_available_date <= $2)
+    )
     AND a.id NOT IN (
         SELECT bi.article_id FROM booking_items bi
         JOIN bookings b ON bi.booking_id = b.id
         WHERE b.group_id = $1
             AND b.status IN ('draft', 'confirmed', 'picked_up', 'submitted', 'approved')
-            AND b.start_date <= $2
-            AND b.end_date >= $3
+            AND b.start_date <= $3
+            AND b.end_date >= $2
             AND (bi.return_status IS NULL OR bi.return_status IN ('pending', 'delayed'))
     )
 ORDER BY a.commercial_name, a.common_name
@@ -106,8 +110,8 @@ ORDER BY a.commercial_name, a.common_name
 
 type AvailableArticlesParams struct {
 	GroupID   string      `json:"group_id"`
-	EndDate   pgtype.Date `json:"end_date"`
 	StartDate pgtype.Date `json:"start_date"`
+	EndDate   pgtype.Date `json:"end_date"`
 }
 
 type AvailableArticlesRow struct {
@@ -126,7 +130,7 @@ type AvailableArticlesRow struct {
 
 // Returns articles that are bookable and not reserved by overlapping bookings.
 func (q *Queries) AvailableArticles(ctx context.Context, arg AvailableArticlesParams) ([]AvailableArticlesRow, error) {
-	rows, err := q.db.Query(ctx, availableArticles, arg.GroupID, arg.EndDate, arg.StartDate)
+	rows, err := q.db.Query(ctx, availableArticles, arg.GroupID, arg.StartDate, arg.EndDate)
 	if err != nil {
 		return nil, err
 	}
@@ -164,29 +168,33 @@ SELECT a.id, a.commercial_name, a.common_name, a.location_id,
 FROM articles a
 JOIN locations l ON a.location_id = l.id
 WHERE a.group_id = $1
-    AND a.status IN ('ok', 'reported_usable')
+    AND (
+        a.status IN ('ok', 'reported_usable')
+        OR (a.status = 'incoming' AND a.expected_available_date IS NOT NULL AND a.expected_available_date <= $2)
+        OR (a.status = 'under_repair' AND a.expected_available_date IS NOT NULL AND a.expected_available_date <= $2)
+    )
     AND a.id NOT IN (
         SELECT bi.article_id FROM booking_items bi
         JOIN bookings b ON bi.booking_id = b.id
         WHERE b.group_id = $1
-            AND b.id != $2
+            AND b.id != $3
             AND b.status IN ('draft', 'confirmed', 'picked_up', 'submitted', 'approved')
-            AND b.start_date <= $3
-            AND b.end_date >= $4
+            AND b.start_date <= $4
+            AND b.end_date >= $2
             AND (bi.return_status IS NULL OR bi.return_status IN ('pending', 'delayed'))
     )
     AND a.id NOT IN (
         SELECT bi.article_id FROM booking_items bi
-        WHERE bi.booking_id = $2
+        WHERE bi.booking_id = $3
     )
 ORDER BY a.commercial_name, a.common_name
 `
 
 type AvailableArticlesExcludingBookingParams struct {
 	GroupID          string      `json:"group_id"`
+	StartDate        pgtype.Date `json:"start_date"`
 	ExcludeBookingID pgtype.UUID `json:"exclude_booking_id"`
 	EndDate          pgtype.Date `json:"end_date"`
-	StartDate        pgtype.Date `json:"start_date"`
 }
 
 type AvailableArticlesExcludingBookingRow struct {
@@ -205,9 +213,9 @@ type AvailableArticlesExcludingBookingRow struct {
 func (q *Queries) AvailableArticlesExcludingBooking(ctx context.Context, arg AvailableArticlesExcludingBookingParams) ([]AvailableArticlesExcludingBookingRow, error) {
 	rows, err := q.db.Query(ctx, availableArticlesExcludingBooking,
 		arg.GroupID,
+		arg.StartDate,
 		arg.ExcludeBookingID,
 		arg.EndDate,
-		arg.StartDate,
 	)
 	if err != nil {
 		return nil, err

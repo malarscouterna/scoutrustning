@@ -163,6 +163,9 @@ When wiring real OIDC (Phase 3 Step 1): ✅ Done.
 - Availability is grouped by `commercial_name + location`. Same product in different locations shows as separate groups.
 - `requires_approval` is set per article. During CSV import, items in Hajkförrådet are freely bookable, others require approval.
 - Quantity-tracked items: each physical unit is a separate row with `individually_tracked = false`. Manager sets count via UI after import.
+- Article `status` represents **condition** (ok, reported_usable, incoming, reported_unusable, under_repair, lost, archived) — orthogonal to booking state (reserved, loaned out), which is computed from booking data.
+- `expected_available_date` (nullable) is used with `incoming` and `under_repair` statuses. Articles with these statuses become bookable for date ranges starting on or after this date.
+- Availability is always computed at query time from article condition + booking overlaps — never stored as a column.
 
 ## Security practices
 

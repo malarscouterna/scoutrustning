@@ -1,7 +1,7 @@
 import { createApiClient } from '$lib/api/client';
 import type { PageServerLoad } from './$types';
 
-const DEFAULT_STATUSES = 'ok,reported_usable,reported_unusable,under_repair,drying,new';
+const DEFAULT_STATUSES = 'ok,reported_usable,reported_unusable,under_repair,incoming';
 
 export const load: PageServerLoad = async ({ fetch, url }) => {
 	const api = createApiClient({ fetch });

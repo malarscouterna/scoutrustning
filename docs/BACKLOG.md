@@ -145,3 +145,9 @@ When some but not all items are picked up, the booking should visually indicate 
 
 ### Adding items after full pickup
 If new items are added to a booking that was fully picked up, the status should revert to partial pickup since the new items haven't been collected yet.
+
+## Pickup date validation
+
+The API currently allows transitioning a booking to `picked_up` regardless of the booking's start date. Pickup should only be allowed on or after the booking's start date — the booking dates represent the full period you have the gear, including any prep days. Picking up before the start date would mean unaccounted-for gear outside the booked window, breaking availability for others. Picking up *after* the start date is normal (book Wednesday for prep flexibility, actually pick up Friday).
+
+The browse/inventory view should distinguish between "reserved for today but not yet picked up" and "currently checked out" — both matter when you're physically at the storage and need to know what's spoken for.

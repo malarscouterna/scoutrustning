@@ -372,8 +372,9 @@ func (h *ArticleHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Status  string `json:"status"`
-		Comment string `json:"comment"`
+		Status                string  `json:"status"`
+		Comment               string  `json:"comment"`
+		ExpectedAvailableDate *string `json:"expected_available_date"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		WriteError(w, http.StatusBadRequest, "invalid request body")
@@ -381,6 +382,15 @@ func (h *ArticleHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Status == "" {
 		WriteError(w, http.StatusBadRequest, "status required")
+		return
+	}
+
+	validStatuses := map[string]bool{
+		"ok": true, "reported_usable": true, "incoming": true,
+		"reported_unusable": true, "under_repair": true, "lost": true, "archived": true,
+	}
+	if !validStatuses[req.Status] {
+		WriteError(w, http.StatusBadRequest, "invalid status")
 		return
 	}
 
@@ -397,6 +407,21 @@ func (h *ArticleHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// expected_available_date only valid for incoming and under_repair
+	var expectedDate pgtype.Date
+	if req.ExpectedAvailableDate != nil {
+		if req.Status != "incoming" && req.Status != "under_repair" {
+			WriteError(w, http.StatusBadRequest, "expected_available_date only valid for incoming and under_repair")
+			return
+		}
+		t, err := time.Parse("2006-01-02", *req.ExpectedAvailableDate)
+		if err != nil {
+			WriteError(w, http.StatusBadRequest, "invalid expected_available_date")
+			return
+		}
+		expectedDate = pgtype.Date{Time: t, Valid: true}
+	}
+
 	article, err := h.Q.GetArticle(r.Context(), db.GetArticleParams{ID: id, GroupID: claims.GroupID})
 	if err != nil {
 		WriteError(w, http.StatusNotFound, "article not found")
@@ -405,6 +430,7 @@ func (h *ArticleHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 
 	updated, err := h.Q.UpdateArticleStatus(r.Context(), db.UpdateArticleStatusParams{
 		ID: id, GroupID: claims.GroupID, Status: req.Status,
+		ExpectedAvailableDate: expectedDate,
 	})
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, "failed to update article status")

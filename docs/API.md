@@ -29,7 +29,7 @@ List all articles for the group. Returns joined location and category names.
 - `search` — filter by commercial_name or common_name (case-insensitive substring match)
 - `category_id` — filter by category UUID
 - `location_id` — filter by location UUID
-- `status` — filter by status (e.g. `ok`, `drying`, `under_repair`)
+- `status` — filter by status (e.g. `ok`, `incoming`, `under_repair`)
 
 **Response** `200` — array of articles ordered by category, then commercial name, then common name.
 
@@ -98,16 +98,21 @@ Results are grouped by commercial_name + location. Same product in different loc
 **Response** `200`
 
 ### `PUT /api/v0/articles/{id}/status`
-Update article status with an optional comment. Any user can set issue statuses (`reported_usable`, `reported_unusable`, `lost`) — comment is required for these. Manager-only statuses (`ok`, `under_repair`, `archived`, etc.) require the `equipment_manager` role. Logs an article event (`issue_reported` for issue statuses, `issue_resolved` when setting back to `ok`, `status_change` otherwise).
+Update article status with an optional comment. Any user can set issue statuses (`reported_usable`, `reported_unusable`, `lost`) — comment is required for these. Manager-only statuses (`ok`, `incoming`, `under_repair`, `archived`, etc.) require the `equipment_manager` role. Logs an article event (`issue_reported` for issue statuses, `issue_resolved` when setting back to `ok`, `status_change` otherwise).
+
+Valid statuses: `ok`, `reported_usable`, `incoming`, `reported_unusable`, `under_repair`, `lost`, `archived`.
+
+`expected_available_date` is only valid for `incoming` and `under_repair` statuses. When set, the article becomes bookable for date ranges starting on or after this date.
 
 **Body**
 ```json
 {
-  "status": "reported_usable",
-  "comment": "Tent has a tear in the fabric"
+  "status": "under_repair",
+  "comment": "Sent for repair",
+  "expected_available_date": "2026-07-01"
 }
 ```
-Required: `status`. `comment` required when reporting (reported_usable, reported_unusable, lost), optional for manager statuses.
+Required: `status`. `comment` required when reporting (reported_usable, reported_unusable, lost), optional for manager statuses. `expected_available_date` optional, only for incoming/under_repair.
 
 **Response** `200` (updated article) | `400` | `403` | `404`
 
@@ -267,20 +272,20 @@ Replace the article on a booking item during pickup. The new article must be ava
 **Response** `200` | `400` | `403` | `404` | `409` (article not available)
 
 ### `POST /api/v0/bookings/{id}/return`
-Transition a picked_up booking to `returned`. All items must have a final return status (not null, not pending, not drying). Access: creator, unit leaders, or equipment manager.
+Transition a picked_up booking to `returned`. All items must have a final return status (not null, not delayed). Access: creator, unit leaders, or equipment manager.
 
 **Response** `200` | `400` | `403` | `404`
 
 ### `PUT /api/v0/bookings/{id}/items/{itemId}/return`
 Set the return status for a single booking item. Booking must be in `picked_up` status. Access: creator, unit leaders, or equipment manager.
 
-Side effects (all also log an article event with the acting user):
+Side effects — article status is orthogonal to booking state. Only explicit condition reports change the article:
+- `returned_ok` — no change to article status (condition preserved), logs `returned` event
 - `delayed` — no article status change, item stays on loan, logs `returned` event with `delayed` status
-- `broken` — sets article status to `reported_unusable`, logs `issue_reported` event
-- `lost` — sets article status to `archived`, logs `issue_reported` event
-- `returned_ok` — sets article status back to `ok`, logs `returned` event
-
-When all items have a final return status (not pending/delayed), the booking auto-transitions to `returned`.
+- `reported_usable` — sets article status to `reported_usable`, logs `issue_reported` event
+- `reported_unusable` — sets article status to `reported_unusable`, logs `issue_reported` event
+- `lost` — sets article status to `lost`, logs `issue_reported` event
+- `""` (undo) — no change to article status
 
 **Body**
 ```json
@@ -290,7 +295,7 @@ When all items have a final return status (not pending/delayed), the booking aut
   "notes": "Optional, used as issue description for broken/lost"
 }
 ```
-Valid values: `returned_ok`, `delayed`, `broken`, `lost`, `""` (undo). `expected_return_date` required when status is `delayed`.
+Valid values: `returned_ok`, `delayed`, `reported_usable`, `reported_unusable`, `lost`, `""` (undo). `expected_return_date` required when status is `delayed`.
 
 **Response** `200` | `400` | `403` | `404`
 
