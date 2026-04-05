@@ -12,7 +12,7 @@ export const load: PageServerLoad = async ({ fetch, url }) => {
 	const status = url.searchParams.get('status') || DEFAULT_STATUSES;
 
 	const [articles, locations, categories] = await Promise.all([
-		api.listArticles({ search, category_id, location_id, status }),
+		api.listArticles({ search, category_id, location_id, status, with_availability: true }),
 		api.listLocations(),
 		api.listCategories()
 	]);

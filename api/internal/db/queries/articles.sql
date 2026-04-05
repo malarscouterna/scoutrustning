@@ -89,11 +89,12 @@ WHERE a.group_id = @group_id
 ORDER BY c.sort_order, c.name, a.commercial_name, a.common_name;
 
 -- name: ListArticlesWithAvailability :many
+-- Returns articles enriched with current booking context for a given date.
 SELECT a.*,
     l.name AS location_name,
     c.name AS category_name,
     cur_booking.id AS current_booking_id,
-    cur_booking.status AS current_booking_status,
+    COALESCE(cur_booking.status, '') AS current_booking_status,
     cur_booking.end_date AS current_booking_end_date,
     cur_unit.name AS current_booking_unit_name
 FROM articles a
@@ -106,8 +107,8 @@ LEFT JOIN LATERAL (
     WHERE bi.article_id = a.id
         AND b.group_id = a.group_id
         AND b.status IN ('confirmed', 'approved', 'picked_up')
-        AND b.start_date <= CURRENT_DATE
-        AND b.end_date >= CURRENT_DATE
+        AND b.start_date <= @as_of_date
+        AND b.end_date >= @as_of_date
         AND (bi.return_status IS NULL OR bi.return_status IN ('pending', 'delayed'))
     ORDER BY b.start_date
     LIMIT 1

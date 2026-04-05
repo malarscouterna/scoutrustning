@@ -434,7 +434,7 @@ SELECT a.id, a.group_id, a.commercial_name, a.common_name, a.category_id, a.loca
     l.name AS location_name,
     c.name AS category_name,
     cur_booking.id AS current_booking_id,
-    cur_booking.status AS current_booking_status,
+    COALESCE(cur_booking.status, '') AS current_booking_status,
     cur_booking.end_date AS current_booking_end_date,
     cur_unit.name AS current_booking_unit_name
 FROM articles a
@@ -447,22 +447,23 @@ LEFT JOIN LATERAL (
     WHERE bi.article_id = a.id
         AND b.group_id = a.group_id
         AND b.status IN ('confirmed', 'approved', 'picked_up')
-        AND b.start_date <= CURRENT_DATE
-        AND b.end_date >= CURRENT_DATE
+        AND b.start_date <= $1
+        AND b.end_date >= $1
         AND (bi.return_status IS NULL OR bi.return_status IN ('pending', 'delayed'))
     ORDER BY b.start_date
     LIMIT 1
 ) cur_booking ON true
 LEFT JOIN units cur_unit ON cur_booking.used_by_unit_id = cur_unit.id
-WHERE a.group_id = $1
-    AND ($2::uuid IS NULL OR a.category_id = $2)
-    AND ($3::uuid IS NULL OR a.location_id = $3)
-    AND (COALESCE(array_length($4::text[], 1), 0) = 0 OR a.status = ANY($4))
-    AND ($5::text IS NULL OR a.common_name ILIKE '%' || $5 || '%' OR a.commercial_name ILIKE '%' || $5 || '%')
+WHERE a.group_id = $2
+    AND ($3::uuid IS NULL OR a.category_id = $3)
+    AND ($4::uuid IS NULL OR a.location_id = $4)
+    AND (COALESCE(array_length($5::text[], 1), 0) = 0 OR a.status = ANY($5))
+    AND ($6::text IS NULL OR a.common_name ILIKE '%' || $6 || '%' OR a.commercial_name ILIKE '%' || $6 || '%')
 ORDER BY c.sort_order, c.name, a.commercial_name, a.common_name
 `
 
 type ListArticlesWithAvailabilityParams struct {
+	AsOfDate   pgtype.Date `json:"as_of_date"`
 	GroupID    string      `json:"group_id"`
 	CategoryID pgtype.UUID `json:"category_id"`
 	LocationID pgtype.UUID `json:"location_id"`
@@ -497,8 +498,10 @@ type ListArticlesWithAvailabilityRow struct {
 	CurrentBookingUnitName pgtype.Text        `json:"current_booking_unit_name"`
 }
 
+// Returns articles enriched with current booking context for a given date.
 func (q *Queries) ListArticlesWithAvailability(ctx context.Context, arg ListArticlesWithAvailabilityParams) ([]ListArticlesWithAvailabilityRow, error) {
 	rows, err := q.db.Query(ctx, listArticlesWithAvailability,
+		arg.AsOfDate,
 		arg.GroupID,
 		arg.CategoryID,
 		arg.LocationID,

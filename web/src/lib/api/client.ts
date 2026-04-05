@@ -13,6 +13,11 @@ export interface Article {
 	requires_approval: boolean;
 	description: string;
 	place: string;
+	expected_available_date: string | null;
+	current_booking_id: string | null;
+	current_booking_status: string | null;
+	current_booking_end_date: string | null;
+	current_booking_unit_name: string | null;
 }
 
 export interface Location {
@@ -57,6 +62,8 @@ export interface BookingItem {
 	location_name: string;
 	category_name: string;
 	place: string;
+	article_status: string;
+	article_expected_available_date: string | null;
 	requires_approval: boolean;
 	individually_tracked: boolean;
 	pickup_status: string | null;
@@ -77,6 +84,9 @@ export interface ArticleEvent {
 export interface AvailabilityGroup {
 	commercial_name: string;
 	available_count: number;
+	reported_usable_count: number;
+	incoming_count: number;
+	under_repair_count: number;
 	requires_approval: boolean;
 	category_name: string;
 	location_name: string;
@@ -113,13 +123,15 @@ async function requestMut<T>(path: string, method: string, body: unknown, opts: 
 
 export function createApiClient(opts: FetchOptions = {}) {
 	return {
-		listArticles: (params?: { search?: string; category_id?: string; location_id?: string; status?: string; mine?: boolean }) => {
+		listArticles: (params?: { search?: string; category_id?: string; location_id?: string; status?: string; mine?: boolean; with_availability?: boolean; date?: string }) => {
 			const query = new URLSearchParams();
 			if (params?.search) query.set('search', params.search);
 			if (params?.category_id) query.set('category_id', params.category_id);
 			if (params?.location_id) query.set('location_id', params.location_id);
 			if (params?.status) query.set('status', params.status);
 			if (params?.mine) query.set('mine', 'true');
+			if (params?.with_availability) query.set('with_availability', 'true');
+			if (params?.date) query.set('date', params.date);
 			const qs = query.toString();
 			return request<Article[]>(`/articles${qs ? '?' + qs : ''}`, opts);
 		},
@@ -150,15 +162,19 @@ export function createApiClient(opts: FetchOptions = {}) {
 			requestMut<{ booking: Booking; items_copied: number; items_total: number }>(`/bookings/${id}/copy`, 'POST', {}, opts),
 		pickupBooking: (id: string) =>
 			requestMut<Booking>(`/bookings/${id}/pickup`, 'POST', {}, opts),
-		updateItemPickup: (bookingId: string, itemId: string, pickupStatus: string) =>
-			requestMut<BookingItem>(`/bookings/${bookingId}/items/${itemId}/pickup`, 'PUT', { pickup_status: pickupStatus }, opts),
+		updateItemPickup: (bookingId: string, itemId: string, pickupStatus: string, articleStatus?: string, comment?: string) =>
+			requestMut<BookingItem>(`/bookings/${bookingId}/items/${itemId}/pickup`, 'PUT', {
+				pickup_status: pickupStatus,
+				...(articleStatus ? { article_status: articleStatus } : {}),
+				...(comment ? { comment } : {})
+			}, opts),
 		swapItem: (bookingId: string, itemId: string, newArticleId: string) =>
 			requestMut<BookingItem>(`/bookings/${bookingId}/items/${itemId}/swap`, 'POST', { new_article_id: newArticleId }, opts),
 		listAvailableArticles: (startDate: string, endDate: string, params?: { exclude_booking_id?: string; commercial_name?: string }) => {
 			const query = new URLSearchParams({ start_date: startDate, end_date: endDate });
 			if (params?.exclude_booking_id) query.set('exclude_booking_id', params.exclude_booking_id);
 			if (params?.commercial_name) query.set('commercial_name', params.commercial_name);
-			return request<{ id: string; commercial_name: string; common_name: string; location_name: string; place: string }[]>(`/articles/availability/articles?${query}`, opts);
+			return request<{ id: string; commercial_name: string; common_name: string; location_name: string; place: string; status: string; expected_available_date: string | null }[]>(`/articles/availability/articles?${query}`, opts);
 		},
 		returnBooking: (id: string) =>
 			requestMut<Booking>(`/bookings/${id}/return`, 'POST', {}, opts),

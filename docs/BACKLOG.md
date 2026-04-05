@@ -151,3 +151,22 @@ If new items are added to a booking that was fully picked up, the status should 
 The API currently allows transitioning a booking to `picked_up` regardless of the booking's start date. Pickup should only be allowed on or after the booking's start date — the booking dates represent the full period you have the gear, including any prep days. Picking up before the start date would mean unaccounted-for gear outside the booked window, breaking availability for others. Picking up *after* the start date is normal (book Wednesday for prep flexibility, actually pick up Friday).
 
 The browse/inventory view should distinguish between "reserved for today but not yet picked up" and "currently checked out" — both matter when you're physically at the storage and need to know what's spoken for.
+
+## Browse page — date picker for time-travel view
+
+The browse page shows inventory state for today by default (`with_availability=true&date=today`). Add a date picker that lets users view the state at any date — "what was checked out last Tuesday?" or "what's reserved for next Friday?". The API already supports a `date` param on the availability-enriched article list.
+
+The booking page should also use this: when viewing a booking for June 15-20, the availability view should show what's available for *those* dates, not today.
+
+## Seed script — date sprawl for realistic history
+
+Article events created by the seed script all have `created_at = now()`, making the history timeline unrealistic. After creating events through the API, the seed script should backdate them via direct SQL (`docker compose exec db psql -c "UPDATE article_events SET created_at = ... WHERE ..."`). This gives a realistic spread: issue reported 2 weeks ago, manager set under_repair 10 days ago, resolved 3 days ago, etc.
+
+No API changes needed — this is purely a seed script improvement for dev/demo purposes.
+
+## Booking flow — date change with items in cart
+
+When a booking already has items in the cart and the user changes the dates, the existing items are not re-validated against the new date range. This can lead to double-bookings or items that aren't actually available for the new dates. Currently the dates are editable after items are added, which breaks the flow.
+
+Temporary fix: disable date editing after items have been added to the booking. Proper fix: re-validate all items when dates change (the API already does this on `PUT /bookings/{id}` with date changes, returning 409 for conflicts — the UI needs to handle this gracefully, showing which items conflict and letting the user remove them).
+

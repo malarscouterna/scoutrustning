@@ -418,6 +418,9 @@ func (h *BookingHandler) AddItems(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		added = append(added, item)
+		LogArticleEvent(r.Context(), h.Q, claims, matching[i].ID, "booked", "Added to booking", map[string]string{
+			"booking_id": formatUUID(bookingID),
+		})
 	}
 
 	WriteJSON(w, http.StatusCreated, added)
@@ -639,7 +642,9 @@ func (h *BookingHandler) UpdateItemPickup(w http.ResponseWriter, r *http.Request
 	}
 
 	var req struct {
-		PickupStatus string `json:"pickup_status"`
+		PickupStatus  string `json:"pickup_status"`
+		ArticleStatus string `json:"article_status"`
+		Comment       string `json:"comment"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		WriteError(w, http.StatusBadRequest, "invalid request body")
@@ -651,6 +656,19 @@ func (h *BookingHandler) UpdateItemPickup(w http.ResponseWriter, r *http.Request
 	default:
 		WriteError(w, http.StatusBadRequest, "pickup_status must be picked_up, lost, or empty")
 		return
+	}
+
+	// Validate article_status if provided
+	if req.ArticleStatus != "" {
+		validReportStatuses := map[string]bool{"reported_usable": true, "reported_unusable": true, "lost": true}
+		if !validReportStatuses[req.ArticleStatus] {
+			WriteError(w, http.StatusBadRequest, "article_status must be reported_usable, reported_unusable, or lost")
+			return
+		}
+		if req.Comment == "" {
+			WriteError(w, http.StatusBadRequest, "comment required when reporting article condition")
+			return
+		}
 	}
 
 	var pickupStatus pgtype.Text
@@ -668,13 +686,30 @@ func (h *BookingHandler) UpdateItemPickup(w http.ResponseWriter, r *http.Request
 	}
 
 	if req.PickupStatus == "lost" {
+		articleStatus := "lost"
+		if req.ArticleStatus != "" {
+			articleStatus = req.ArticleStatus
+		}
 		h.Q.UpdateArticleStatus(r.Context(), db.UpdateArticleStatusParams{
-			ID: item.ArticleID, GroupID: claims.GroupID, Status: "lost",
+			ID: item.ArticleID, GroupID: claims.GroupID, Status: articleStatus,
 		})
-		LogArticleEvent(r.Context(), h.Q, claims, item.ArticleID, "issue_reported", "Missing at pickup", map[string]string{
-			"new_status": "lost", "reason": "missing_at_pickup", "booking_id": formatUUID(bookingID),
+		comment := req.Comment
+		if comment == "" {
+			comment = "Missing at pickup"
+		}
+		LogArticleEvent(r.Context(), h.Q, claims, item.ArticleID, "issue_reported", comment, map[string]string{
+			"new_status": articleStatus, "reason": "pickup", "booking_id": formatUUID(bookingID),
 		})
 	} else if req.PickupStatus == "picked_up" {
+		// If reporting a condition at pickup, update article status
+		if req.ArticleStatus != "" {
+			h.Q.UpdateArticleStatus(r.Context(), db.UpdateArticleStatusParams{
+				ID: item.ArticleID, GroupID: claims.GroupID, Status: req.ArticleStatus,
+			})
+			LogArticleEvent(r.Context(), h.Q, claims, item.ArticleID, "issue_reported", req.Comment, map[string]string{
+				"new_status": req.ArticleStatus, "booking_id": formatUUID(bookingID),
+			})
+		}
 		LogArticleEvent(r.Context(), h.Q, claims, item.ArticleID, "picked_up", "Picked up", map[string]string{
 			"booking_id": formatUUID(bookingID),
 		})

@@ -15,7 +15,10 @@
 
 	let error = $state('');
 	let swappingItemId = $state<string | null>(null);
-	let swapCandidates = $state<{ id: string; common_name: string; location_name: string; place: string }[]>([]);
+	let reportingItemId = $state<string | null>(null);
+	let reportStatus = $state('');
+	let reportComment = $state('');
+	let swapCandidates = $state<{ id: string; common_name: string; location_name: string; place: string; status: string; expected_available_date: string | null }[]>([]);
 	let selectedSwapArticle = $state('');
 	let loading = $state(false);
 
@@ -109,6 +112,33 @@
 				}
 			}
 			await reload();
+		} catch (e: any) {
+			error = e.message;
+		}
+	}
+
+	function startReport(itemId: string) {
+		reportingItemId = itemId;
+		reportStatus = '';
+		reportComment = '';
+	}
+
+	function cancelReport() {
+		reportingItemId = null;
+		reportStatus = '';
+		reportComment = '';
+	}
+
+	async function confirmReport(itemId: string) {
+		if (!reportStatus || !reportComment.trim()) return;
+		error = '';
+		try {
+			// reported_unusable and lost → don't pick up (mark as lost in booking)
+			// reported_usable → pick up but flag the issue
+			const pickupStatus = reportStatus === 'reported_usable' ? 'picked_up' : 'lost';
+			await api.updateItemPickup(bookingId, itemId, pickupStatus, reportStatus, reportComment.trim());
+			await reload();
+			cancelReport();
 		} catch (e: any) {
 			error = e.message;
 		}
@@ -246,7 +276,16 @@
 	{#each trackedItems as item}
 		<div class="border rounded px-4 py-3 flex items-center gap-3" class:bg-green-50={item.pickup_status === 'picked_up' || item.pickup_status === 'swapped'} class:bg-challengerpink-50={item.pickup_status === 'lost'}>
 			<div class="flex-1 min-w-0">
-				<div class="font-medium text-sm">{item.common_name}</div>
+				<div class="font-medium text-sm">
+					{item.common_name}
+					{#if item.article_status === 'reported_usable'}
+						<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded ml-1">Felrapporterad</span>
+					{:else if item.article_status === 'incoming'}
+						<span class="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded ml-1">Inkommande{#if item.article_expected_available_date} — {new Date(item.article_expected_available_date).toLocaleDateString('sv', { day: 'numeric', month: 'short' })}{/if}</span>
+					{:else if item.article_status === 'under_repair'}
+						<span class="text-xs bg-neutral-100 text-neutral-700 px-1.5 py-0.5 rounded ml-1">Under reparation{#if item.article_expected_available_date} — klar {new Date(item.article_expected_available_date).toLocaleDateString('sv', { day: 'numeric', month: 'short' })}{/if}</span>
+					{/if}
+				</div>
 				<div class="text-xs text-neutral-500">{item.location_name}{item.place ? ` · ${item.place}` : ''}</div>
 			</div>
 
@@ -255,14 +294,39 @@
 					{pickupLabels[item.pickup_status] ?? item.pickup_status}
 				</span>
 				<button onclick={() => markPickup(item.id, '')} class="text-xs text-neutral-400 hover:text-neutral-600">Ångra</button>
-			{:else if swappingItemId !== item.id}
+			{:else if swappingItemId !== item.id && reportingItemId !== item.id}
 				<div class="flex gap-1">
 					<button onclick={() => markPickup(item.id, 'picked_up')} class="text-xs bg-green-700 text-white px-2 py-1 rounded">Hämtad</button>
-					<button onclick={() => markPickup(item.id, 'lost')} class="text-xs bg-challengerpink-600 text-white px-2 py-1 rounded">Saknas</button>
+					<button onclick={() => startReport(item.id)} class="text-xs bg-orange-600 text-white px-2 py-1 rounded">Rapportera</button>
 					<button onclick={() => startSwap(item)} class="text-xs text-blue-700 underline px-1">Byt</button>
 				</div>
 			{/if}
 		</div>
+
+		{#if reportingItemId === item.id}
+			<div class="border rounded p-3 bg-orange-50 text-sm mt-1">
+				<p class="mb-2 font-medium">Rapportera {item.common_name}:</p>
+				<div class="space-y-2">
+					<label class="flex items-center gap-2">
+						<input type="radio" name="report-{item.id}" value="reported_usable" bind:group={reportStatus} />
+						Användbar men felaktig <span class="text-xs text-neutral-500">(hämtas ändå)</span>
+					</label>
+					<label class="flex items-center gap-2">
+						<input type="radio" name="report-{item.id}" value="reported_unusable" bind:group={reportStatus} />
+						Ej användbar <span class="text-xs text-neutral-500">(hämtas inte)</span>
+					</label>
+					<label class="flex items-center gap-2">
+						<input type="radio" name="report-{item.id}" value="lost" bind:group={reportStatus} />
+						Saknas
+					</label>
+					<textarea bind:value={reportComment} placeholder="Beskriv problemet..." rows="2" class="block border rounded px-2 py-1 text-sm w-full"></textarea>
+					<div class="flex gap-2">
+						<button onclick={() => confirmReport(item.id)} disabled={!reportStatus || !reportComment.trim()} class="text-xs bg-orange-600 text-white px-3 py-1 rounded disabled:opacity-50">Bekräfta</button>
+						<button onclick={cancelReport} class="text-xs text-neutral-600 underline">Avbryt</button>
+					</div>
+				</div>
+			</div>
+		{/if}
 
 		{#if swappingItemId === item.id}
 			<div class="border rounded p-3 bg-blue-50 text-sm">
@@ -275,6 +339,13 @@
 							<label class="flex items-center gap-2">
 								<input type="radio" name="swap-{item.id}" value={candidate.id} bind:group={selectedSwapArticle} />
 								{candidate.common_name}
+								{#if candidate.status === 'reported_usable'}
+									<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">Felrapporterad</span>
+								{:else if candidate.status === 'incoming'}
+									<span class="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">Inkommande{#if candidate.expected_available_date} — {new Date(candidate.expected_available_date).toLocaleDateString('sv', { day: 'numeric', month: 'short' })}{/if}</span>
+								{:else if candidate.status === 'under_repair'}
+									<span class="text-xs bg-neutral-100 text-neutral-700 px-1.5 py-0.5 rounded">Under reparation{#if candidate.expected_available_date} — klar {new Date(candidate.expected_available_date).toLocaleDateString('sv', { day: 'numeric', month: 'short' })}{/if}</span>
+								{/if}
 								<span class="text-xs text-neutral-500">{candidate.location_name}{candidate.place ? ` · ${candidate.place}` : ''}</span>
 							</label>
 						{/each}

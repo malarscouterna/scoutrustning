@@ -307,15 +307,15 @@ func TestIssueFlow_FullLifecycleHistory(t *testing.T) {
 		}
 		json.NewDecoder(resp.Body).Decode(&result)
 
-		if len(result.Events) != 4 {
-			t.Fatalf("expected 4 events, got %d", len(result.Events))
+		if len(result.Events) != 5 {
+			t.Fatalf("expected 5 events, got %d", len(result.Events))
 		}
 		if result.HasMore {
 			t.Error("expected has_more=false")
 		}
 
 		// Verify order: newest first
-		expectedTypes := []string{"issue_resolved", "status_change", "issue_reported", "picked_up"}
+		expectedTypes := []string{"issue_resolved", "status_change", "issue_reported", "picked_up", "booked"}
 		for i, expected := range expectedTypes {
 			if result.Events[i]["event_type"] != expected {
 				t.Errorf("event[%d]: expected %s, got %v", i, expected, result.Events[i]["event_type"])
@@ -348,7 +348,7 @@ func TestIssueFlow_FullLifecycleHistory(t *testing.T) {
 	})
 
 	t.Run("limit equal to total returns has_more false", func(t *testing.T) {
-		resp, _ := leader.Get("/api/v0/articles/" + articleIDs[0] + "/events?limit=4")
+		resp, _ := leader.Get("/api/v0/articles/" + articleIDs[0] + "/events?limit=5")
 		defer resp.Body.Close()
 		var result struct {
 			Events  []map[string]any `json:"events"`
@@ -356,8 +356,8 @@ func TestIssueFlow_FullLifecycleHistory(t *testing.T) {
 		}
 		json.NewDecoder(resp.Body).Decode(&result)
 
-		if len(result.Events) != 4 {
-			t.Fatalf("expected 4 events, got %d", len(result.Events))
+		if len(result.Events) != 5 {
+			t.Fatalf("expected 5 events, got %d", len(result.Events))
 		}
 		if result.HasMore {
 			t.Error("expected has_more=false when limit >= total")

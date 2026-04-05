@@ -34,8 +34,8 @@
 
 	const statusLabels: Record<string, string> = {
 		ok: 'OK',
-		reported_usable: 'Rapporterad — användbar',
-		reported_unusable: 'Rapporterad — ej användbar',
+		reported_usable: 'Felrapporterad — användbar',
+		reported_unusable: 'Felrapporterad — ej användbar',
 		under_repair: 'Under reparation',
 		lost: 'Saknas',
 		archived: 'Arkiverad',
@@ -44,12 +44,10 @@
 	function formatMeta(event: ArticleEvent): string {
 		const m = event.metadata ?? {};
 		const parts: string[] = [];
-		if (m.severity === 'usable') parts.push('användbar');
-		if (m.severity === 'unusable') parts.push('ej användbar');
 		if (m.reason === 'lost' || m.reason === 'missing_at_pickup') parts.push('saknas');
 		if (m.new_status && m.old_status) {
 			parts.push(`${statusLabels[m.old_status] ?? m.old_status} → ${statusLabels[m.new_status] ?? m.new_status}`);
-		} else if (m.new_status) {
+		} else if (m.new_status && event.event_type !== 'issue_reported') {
 			parts.push(`→ ${statusLabels[m.new_status] ?? m.new_status}`);
 		}
 		return parts.join(' · ');

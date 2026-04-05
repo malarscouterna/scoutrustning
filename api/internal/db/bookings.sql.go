@@ -86,7 +86,8 @@ func (q *Queries) AllItemsReturned(ctx context.Context, arg AllItemsReturnedPara
 const availableArticles = `-- name: AvailableArticles :many
 SELECT a.id, a.commercial_name, a.common_name, a.category_id, a.location_id,
     l.name AS location_name, c.name AS category_name, a.place, a.status,
-    a.individually_tracked, a.requires_approval
+    a.individually_tracked, a.requires_approval,
+    a.expected_available_date
 FROM articles a
 JOIN locations l ON a.location_id = l.id
 JOIN categories c ON a.category_id = c.id
@@ -105,7 +106,7 @@ WHERE a.group_id = $1
             AND b.end_date >= $2
             AND (bi.return_status IS NULL OR bi.return_status IN ('pending', 'delayed'))
     )
-ORDER BY a.commercial_name, a.common_name
+ORDER BY CASE a.status WHEN 'ok' THEN 0 WHEN 'incoming' THEN 1 WHEN 'under_repair' THEN 2 WHEN 'reported_usable' THEN 3 ELSE 4 END, a.commercial_name, a.common_name
 `
 
 type AvailableArticlesParams struct {
@@ -115,17 +116,18 @@ type AvailableArticlesParams struct {
 }
 
 type AvailableArticlesRow struct {
-	ID                  pgtype.UUID `json:"id"`
-	CommercialName      string      `json:"commercial_name"`
-	CommonName          string      `json:"common_name"`
-	CategoryID          pgtype.UUID `json:"category_id"`
-	LocationID          pgtype.UUID `json:"location_id"`
-	LocationName        string      `json:"location_name"`
-	CategoryName        string      `json:"category_name"`
-	Place               string      `json:"place"`
-	Status              string      `json:"status"`
-	IndividuallyTracked bool        `json:"individually_tracked"`
-	RequiresApproval    bool        `json:"requires_approval"`
+	ID                    pgtype.UUID `json:"id"`
+	CommercialName        string      `json:"commercial_name"`
+	CommonName            string      `json:"common_name"`
+	CategoryID            pgtype.UUID `json:"category_id"`
+	LocationID            pgtype.UUID `json:"location_id"`
+	LocationName          string      `json:"location_name"`
+	CategoryName          string      `json:"category_name"`
+	Place                 string      `json:"place"`
+	Status                string      `json:"status"`
+	IndividuallyTracked   bool        `json:"individually_tracked"`
+	RequiresApproval      bool        `json:"requires_approval"`
+	ExpectedAvailableDate pgtype.Date `json:"expected_available_date"`
 }
 
 // Returns articles that are bookable and not reserved by overlapping bookings.
@@ -150,6 +152,7 @@ func (q *Queries) AvailableArticles(ctx context.Context, arg AvailableArticlesPa
 			&i.Status,
 			&i.IndividuallyTracked,
 			&i.RequiresApproval,
+			&i.ExpectedAvailableDate,
 		); err != nil {
 			return nil, err
 		}
@@ -164,7 +167,8 @@ func (q *Queries) AvailableArticles(ctx context.Context, arg AvailableArticlesPa
 const availableArticlesExcludingBooking = `-- name: AvailableArticlesExcludingBooking :many
 SELECT a.id, a.commercial_name, a.common_name, a.location_id,
     l.name AS location_name, a.place, a.status,
-    a.individually_tracked, a.requires_approval
+    a.individually_tracked, a.requires_approval,
+    a.expected_available_date
 FROM articles a
 JOIN locations l ON a.location_id = l.id
 WHERE a.group_id = $1
@@ -187,7 +191,7 @@ WHERE a.group_id = $1
         SELECT bi.article_id FROM booking_items bi
         WHERE bi.booking_id = $3
     )
-ORDER BY a.commercial_name, a.common_name
+ORDER BY CASE a.status WHEN 'ok' THEN 0 WHEN 'incoming' THEN 1 WHEN 'under_repair' THEN 2 WHEN 'reported_usable' THEN 3 ELSE 4 END, a.commercial_name, a.common_name
 `
 
 type AvailableArticlesExcludingBookingParams struct {
@@ -198,15 +202,16 @@ type AvailableArticlesExcludingBookingParams struct {
 }
 
 type AvailableArticlesExcludingBookingRow struct {
-	ID                  pgtype.UUID `json:"id"`
-	CommercialName      string      `json:"commercial_name"`
-	CommonName          string      `json:"common_name"`
-	LocationID          pgtype.UUID `json:"location_id"`
-	LocationName        string      `json:"location_name"`
-	Place               string      `json:"place"`
-	Status              string      `json:"status"`
-	IndividuallyTracked bool        `json:"individually_tracked"`
-	RequiresApproval    bool        `json:"requires_approval"`
+	ID                    pgtype.UUID `json:"id"`
+	CommercialName        string      `json:"commercial_name"`
+	CommonName            string      `json:"common_name"`
+	LocationID            pgtype.UUID `json:"location_id"`
+	LocationName          string      `json:"location_name"`
+	Place                 string      `json:"place"`
+	Status                string      `json:"status"`
+	IndividuallyTracked   bool        `json:"individually_tracked"`
+	RequiresApproval      bool        `json:"requires_approval"`
+	ExpectedAvailableDate pgtype.Date `json:"expected_available_date"`
 }
 
 // Same as AvailableArticles but excludes items already in the given booking.
@@ -234,6 +239,7 @@ func (q *Queries) AvailableArticlesExcludingBooking(ctx context.Context, arg Ava
 			&i.Status,
 			&i.IndividuallyTracked,
 			&i.RequiresApproval,
+			&i.ExpectedAvailableDate,
 		); err != nil {
 			return nil, err
 		}
@@ -526,6 +532,8 @@ SELECT bi.id, bi.group_id, bi.booking_id, bi.article_id, bi.pickup_status, bi.re
     a.commercial_name,
     a.common_name,
     a.place,
+    a.status AS article_status,
+    a.expected_available_date AS article_expected_available_date,
     a.requires_approval,
     a.individually_tracked,
     l.name AS location_name,
@@ -544,20 +552,22 @@ type ListBookingItemsParams struct {
 }
 
 type ListBookingItemsRow struct {
-	ID                  pgtype.UUID `json:"id"`
-	GroupID             string      `json:"group_id"`
-	BookingID           pgtype.UUID `json:"booking_id"`
-	ArticleID           pgtype.UUID `json:"article_id"`
-	PickupStatus        pgtype.Text `json:"pickup_status"`
-	ReturnStatus        pgtype.Text `json:"return_status"`
-	Notes               string      `json:"notes"`
-	CommercialName      string      `json:"commercial_name"`
-	CommonName          string      `json:"common_name"`
-	Place               string      `json:"place"`
-	RequiresApproval    bool        `json:"requires_approval"`
-	IndividuallyTracked bool        `json:"individually_tracked"`
-	LocationName        string      `json:"location_name"`
-	CategoryName        string      `json:"category_name"`
+	ID                           pgtype.UUID `json:"id"`
+	GroupID                      string      `json:"group_id"`
+	BookingID                    pgtype.UUID `json:"booking_id"`
+	ArticleID                    pgtype.UUID `json:"article_id"`
+	PickupStatus                 pgtype.Text `json:"pickup_status"`
+	ReturnStatus                 pgtype.Text `json:"return_status"`
+	Notes                        string      `json:"notes"`
+	CommercialName               string      `json:"commercial_name"`
+	CommonName                   string      `json:"common_name"`
+	Place                        string      `json:"place"`
+	ArticleStatus                string      `json:"article_status"`
+	ArticleExpectedAvailableDate pgtype.Date `json:"article_expected_available_date"`
+	RequiresApproval             bool        `json:"requires_approval"`
+	IndividuallyTracked          bool        `json:"individually_tracked"`
+	LocationName                 string      `json:"location_name"`
+	CategoryName                 string      `json:"category_name"`
 }
 
 func (q *Queries) ListBookingItems(ctx context.Context, arg ListBookingItemsParams) ([]ListBookingItemsRow, error) {
@@ -580,6 +590,8 @@ func (q *Queries) ListBookingItems(ctx context.Context, arg ListBookingItemsPara
 			&i.CommercialName,
 			&i.CommonName,
 			&i.Place,
+			&i.ArticleStatus,
+			&i.ArticleExpectedAvailableDate,
 			&i.RequiresApproval,
 			&i.IndividuallyTracked,
 			&i.LocationName,

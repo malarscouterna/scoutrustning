@@ -80,10 +80,13 @@
 		}
 	}
 
+	let prevCartCount = $state(cartItems.length);
+
 	async function refreshCart() {
 		if (!bookingId) return;
 		const result = await api.getBooking(bookingId);
 		cartItems = result.items;
+		prevCartCount = result.items.length;
 	}
 
 	async function removeFromCart(itemId: string) {
@@ -145,11 +148,11 @@
 		<div class="flex flex-wrap gap-3 mb-4">
 			<label class="flex flex-col gap-1">
 				<span class="text-sm">Startdatum</span>
-				<input type="date" bind:value={startDate} class="border rounded px-3 py-2" />
+				<input type="date" bind:value={startDate} disabled={cartItems.length > 0} class="border rounded px-3 py-2 disabled:opacity-50" />
 			</label>
 			<label class="flex flex-col gap-1">
 				<span class="text-sm">Slutdatum</span>
-				<input type="date" bind:value={endDate} class="border rounded px-3 py-2" />
+				<input type="date" bind:value={endDate} disabled={cartItems.length > 0} class="border rounded px-3 py-2 disabled:opacity-50" />
 			</label>
 			<label class="flex flex-col gap-1">
 				<span class="text-sm">Anteckningar</span>
@@ -187,6 +190,7 @@
 						{endDate}
 						categories={data.categories}
 						locations={data.locations}
+						{cartItems}
 						onItemsChanged={refreshCart}
 					/>
 				{/if}

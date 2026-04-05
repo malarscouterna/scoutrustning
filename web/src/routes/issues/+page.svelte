@@ -25,8 +25,8 @@
 	let message = $state('');
 
 	const allFilterOptions = [
-		{ value: 'reported_usable', label: 'Rapporterad — användbar', color: 'bg-orange-500' },
-		{ value: 'reported_unusable', label: 'Rapporterad — ej användbar', color: 'bg-red-500' },
+		{ value: 'reported_usable', label: 'Felrapporterad — användbar', color: 'bg-orange-500' },
+		{ value: 'reported_unusable', label: 'Felrapporterad — ej användbar', color: 'bg-red-500' },
 		{ value: 'under_repair', label: 'Under reparation', color: 'bg-blue-500', managerOnly: true },
 		{ value: 'lost', label: 'Saknas', color: 'bg-challengerpink-500' },
 		{ value: 'archived', label: 'Arkiverad', color: 'bg-neutral-400', managerOnly: true },
@@ -39,9 +39,9 @@
 
 	const statusLabels: Record<string, string> = {
 		ok: 'OK',
-		reported_usable: 'Rapporterad — användbar',
+		reported_usable: 'Felrapporterad — användbar',
 		incoming: 'Inkommande',
-		reported_unusable: 'Rapporterad — ej användbar',
+		reported_unusable: 'Felrapporterad — ej användbar',
 		under_repair: 'Under reparation',
 		lost: 'Saknas',
 		archived: 'Arkiverad',
@@ -67,8 +67,8 @@
 
 	const metaStatusLabels: Record<string, string> = {
 		ok: 'OK',
-		reported_usable: 'Rapporterad — användbar',
-		reported_unusable: 'Rapporterad — ej användbar',
+		reported_usable: 'Felrapporterad — användbar',
+		reported_unusable: 'Felrapporterad — ej användbar',
 		under_repair: 'Under reparation',
 		lost: 'Saknas',
 		archived: 'Arkiverad',
@@ -200,8 +200,8 @@
 												<option value="ok">OK (löst)</option>
 												<option value="under_repair">Under reparation</option>
 											{/if}
-											<option value="reported_usable">Rapporterad — användbar</option>
-											<option value="reported_unusable">Rapporterad — ej användbar</option>
+											<option value="reported_usable">Felrapporterad — användbar</option>
+											<option value="reported_unusable">Felrapporterad — ej användbar</option>
 											<option value="lost">Saknas</option>
 											{#if isManager}
 												<option value="archived">Arkiverad</option>

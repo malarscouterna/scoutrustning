@@ -78,7 +78,19 @@ echo "  Tältlampa LED: 1 reported usable (blinkar)"
 curl -sf -X PUT "$API/api/v0/articles/$LAMP2/status" \
   -H "$LEADER" -H "Content-Type: application/json" \
   -d '{"status":"reported_unusable","comment":"Helt trasig, lyser inte alls"}' > /dev/null
-echo "  Tältlampa LED: 1 reported unusable (trasig)"
+# Manager investigates, sets under repair
+curl -sf -X PUT "$API/api/v0/articles/$LAMP2/status" \
+  -H "$HEADER" -H "Content-Type: application/json" \
+  -d '{"status":"under_repair","comment":"Skickat för reparation"}' > /dev/null
+# Repaired, back to ok
+curl -sf -X PUT "$API/api/v0/articles/$LAMP2/status" \
+  -H "$HEADER" -H "Content-Type: application/json" \
+  -d '{"status":"ok","comment":"Reparerad, fungerar igen"}' > /dev/null
+# Breaks again
+curl -sf -X PUT "$API/api/v0/articles/$LAMP2/status" \
+  -H "$LEADER" -H "Content-Type: application/json" \
+  -d '{"status":"reported_unusable","comment":"Trasig igen, samma problem"}' > /dev/null
+echo "  Tältlampa LED: 1 reported unusable (trasig, reparerad, trasig igen)"
 
 curl -sf -X PUT "$API/api/v0/articles/$LAMP3/status" \
   -H "$HEADER" -H "Content-Type: application/json" \
@@ -171,20 +183,19 @@ curl -sf -X POST "$API/api/v0/bookings/$BOOKING_ID/submit" -H "$LEADER" > /dev/n
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING_ID/pickup" -H "$LEADER" > /dev/null
 echo "  Status: picked_up"
 
-# Pick up everything except Stormkök (left for pickup testing)
+# Pick up everything
 ITEMS_JSON=$(curl -s "$API/api/v0/bookings/$BOOKING_ID" -H "$LEADER")
 echo "$ITEMS_JSON" | python3 -c "
 import json,sys
 d = json.load(sys.stdin)
 for i in d['items']:
-    if not i['common_name'].startswith('Stormkök'):
-        print(i['id'], i['common_name'])
+    print(i['id'], i['common_name'])
 " | while read ID NAME; do
   curl -sf -X PUT "$API/api/v0/bookings/$BOOKING_ID/items/$ID/pickup" \
     -H "$LEADER" -H "Content-Type: application/json" \
     -d '{"pickup_status":"picked_up"}' > /dev/null
 done
-echo "  Picked up all except Stormkök"
+echo "  Picked up all items"
 
 # Return Sibley 1 as OK
 SIBLEY1_ITEM=$(find_item "$BOOKING_ID" "Sibley 1" "leader-yggdrasil")

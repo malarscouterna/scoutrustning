@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { BookingItem } from '$lib/api/client';
+	import { createApiClient, type BookingItem } from '$lib/api/client';
 
 	interface Props {
 		items: BookingItem[];
@@ -8,6 +8,29 @@
 	}
 
 	let { items, editable = false, onRemove }: Props = $props();
+
+	const api = createApiClient();
+	let latestComments = $state<Map<string, string>>(new Map());
+
+	$effect(() => {
+		const needsFetch = items.filter(i => i.article_status !== 'ok' && !latestComments.has(i.article_id));
+		if (needsFetch.length === 0) return;
+		Promise.all(needsFetch.map(async (i) => {
+			try {
+				const { events } = await api.listArticleEvents(i.article_id);
+				const issueEvent = events.find(e => e.event_type === 'issue_reported' || e.event_type === 'status_change');
+				return [i.article_id, issueEvent?.description ?? ''] as const;
+			} catch {
+				return [i.article_id, ''] as const;
+			}
+		})).then(results => {
+			const next = new Map(latestComments);
+			for (const [id, comment] of results) {
+				if (comment) next.set(id, comment);
+			}
+			latestComments = next;
+		});
+	});
 
 	interface ItemGroup {
 		commercialName: string;
@@ -50,7 +73,19 @@
 					<tbody>
 						{#each group.items as item}
 							<tr class="border-t first:border-t-0">
-								<td class="px-4 py-2">{item.common_name}</td>
+								<td class="px-4 py-2">
+									{item.common_name}
+									{#if item.article_status === 'reported_usable'}
+										<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded ml-1">Felrapporterad</span>
+									{:else if item.article_status === 'incoming'}
+										<span class="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded ml-1">Inkommande{#if item.article_expected_available_date} — {new Date(item.article_expected_available_date).toLocaleDateString('sv', { day: 'numeric', month: 'short' })}{/if}</span>
+									{:else if item.article_status === 'under_repair'}
+										<span class="text-xs bg-neutral-100 text-neutral-700 px-1.5 py-0.5 rounded ml-1">Under reparation{#if item.article_expected_available_date} — klar {new Date(item.article_expected_available_date).toLocaleDateString('sv', { day: 'numeric', month: 'short' })}{/if}</span>
+									{/if}
+									{#if latestComments.has(item.article_id)}
+										<p class="text-xs text-neutral-500 italic mt-0.5">“{latestComments.get(item.article_id)}”</p>
+									{/if}
+								</td>
 								<td class="px-4 py-2 text-neutral-600">{item.location_name}</td>
 								<td class="px-4 py-2 text-neutral-600">{item.place || ''}</td>
 								{#if item.return_status && item.return_status !== 'returned_ok' && item.return_status !== 'pending'}

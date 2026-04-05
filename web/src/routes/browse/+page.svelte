@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { PageData } from './$types';
-	import type { Article } from '$lib/api/client';
+	import { createApiClient, type Article } from '$lib/api/client';
 	import ReportIssueForm from '$lib/components/ReportIssueForm.svelte';
 	import ArticleEventHistory from '$lib/components/ArticleEventHistory.svelte';
 
@@ -13,27 +13,64 @@
 	let expandedGroups = $state<Set<string>>(new Set());
 	let reportingArticleId = $state<string | null>(null);
 	let showHistoryFor = $state<string | null>(null);
+	let showIssueHistoryFor = $state<string | null>(null);
+	let issueHistory = $state<Map<string, { events: any[]; loading: boolean }>>(new Map());
 	let reportedMessage = $state('');
+	let latestComments = $state<Map<string, string>>(new Map());
+
+	const api = createApiClient();
 
 	const statusOrder = ['ok', 'reported_usable', 'incoming', 'reported_unusable', 'under_repair', 'lost', 'archived'] as const;
 
 	const statusLabels: Record<string, string> = {
 		ok: 'OK',
-		reported_usable: 'Rapporterad — användbar',
+		reported_usable: 'Felrapporterad — användbar',
 		incoming: 'Inkommande',
-		reported_unusable: 'Rapporterad — ej användbar',
+		reported_unusable: 'Felrapporterad — ej användbar',
 		under_repair: 'Under reparation',
 		lost: 'Saknas',
 		archived: 'Arkiverad',
 	};
 
-	const usableStatuses = new Set(['ok', 'reported_usable']);
+	const bookableStatuses = new Set(['ok', 'reported_usable']);
 
-	function sortByStatus<T extends { status: string }>(items: T[]): T[] {
-		return [...items].sort((a, b) => statusOrder.indexOf(a.status as any) - statusOrder.indexOf(b.status as any));
+	function isAvailable(a: Article): boolean {
+		return bookableStatuses.has(a.status) && !a.current_booking_id;
 	}
 
-	let articles = $state(data.articles);
+	function bookingLabel(a: Article): string | null {
+		if (!a.current_booking_id) return null;
+		const unit = a.current_booking_unit_name ?? 'Okänd';
+		const endDate = a.current_booking_end_date ? formatDate(a.current_booking_end_date) : '?';
+		if (a.current_booking_status === 'picked_up') return `Utlånad till ${unit}, tillbaka ${endDate}`;
+		return `Reserverad för ${unit}, ${endDate}`;
+	}
+
+	function expectedDateLabel(a: Article): string | null {
+		if (!a.expected_available_date) return null;
+		if (a.status === 'incoming') return `beräknas levereras ${formatDate(a.expected_available_date)}`;
+		if (a.status === 'under_repair') return `beräknas klar ${formatDate(a.expected_available_date)}`;
+		return null;
+	}
+
+	function formatDate(iso: string): string {
+		const d = new Date(iso);
+		return d.toLocaleDateString('sv', { day: 'numeric', month: 'short' });
+	}
+
+	function sortArticles(items: Article[]): Article[] {
+		return [...items].sort((a, b) => {
+			const ai = statusOrder.indexOf(a.status as any);
+			const bi = statusOrder.indexOf(b.status as any);
+			if (ai !== bi) return ai - bi;
+			// Within same status: available before booked
+			const aBooked = a.current_booking_id ? 1 : 0;
+			const bBooked = b.current_booking_id ? 1 : 0;
+			return aBooked - bBooked;
+		});
+	}
+
+	let articles: Article[] = $state(data.articles);
 
 	interface ArticleGroup {
 		key: string;
@@ -76,8 +113,61 @@
 			expandedGroups.delete(key);
 		} else {
 			expandedGroups.add(key);
+			fetchLatestComments(key);
 		}
 		expandedGroups = new Set(expandedGroups);
+	}
+
+	async function fetchLatestComments(groupKey: string) {
+		const group = groups.find(g => g.key === groupKey);
+		if (!group) return;
+		const needsFetch = group.articles.filter(a => a.status !== 'ok' && !latestComments.has(a.id));
+		const results = await Promise.all(
+			needsFetch.map(async (a) => {
+				try {
+					const { events } = await api.listArticleEvents(a.id);
+					const issueEvent = events.find(e => e.event_type === 'issue_reported' || e.event_type === 'status_change');
+					return [a.id, issueEvent?.description ?? ''] as const;
+				} catch {
+					return [a.id, ''] as const;
+				}
+			})
+		);
+		const next = new Map(latestComments);
+		for (const [id, comment] of results) {
+			if (comment) next.set(id, comment);
+		}
+		latestComments = next;
+	}
+
+	async function toggleIssueHistory(articleId: string) {
+		if (showIssueHistoryFor === articleId) {
+			showIssueHistoryFor = null;
+			return;
+		}
+		showIssueHistoryFor = articleId;
+		if (issueHistory.has(articleId)) return;
+		const next = new Map(issueHistory);
+		next.set(articleId, { events: [], loading: true });
+		issueHistory = next;
+		try {
+			const { events } = await api.listArticleEvents(articleId);
+				let filtered: typeof events;
+			// Show events since last time status was set to ok (current issue cycle)
+			filtered = [];
+			for (const e of events) {
+				const meta = e.metadata ?? {};
+				if (meta.new_status === 'ok') break;
+				filtered.push(e);
+			}
+			const updated = new Map(issueHistory);
+			updated.set(articleId, { events: filtered, loading: false });
+			issueHistory = updated;
+		} catch {
+			const updated = new Map(issueHistory);
+			updated.set(articleId, { events: [], loading: false });
+			issueHistory = updated;
+		}
 	}
 
 	function applyFilters() {
@@ -104,6 +194,50 @@
 		reportingArticleId = null;
 		reportedMessage = 'Problem rapporterat!';
 		setTimeout(() => reportedMessage = '', 4000);
+	}
+
+	function statusBadgeClass(status: string): string {
+		if (status === 'ok') return 'bg-green-100 text-green-800';
+		if (status.startsWith('reported')) return 'bg-orange-100 text-orange-800';
+		if (status === 'lost') return 'bg-challengerpink-100 text-challengerpink-800';
+		if (status === 'archived') return 'bg-neutral-100 text-neutral-500';
+		if (status === 'incoming') return 'bg-blue-50 text-blue-700 border border-blue-200';
+		if (status === 'under_repair') return 'bg-neutral-100 text-neutral-700';
+		return 'bg-neutral-100';
+	}
+
+	interface StateRow {
+		key: string;
+		status: string;
+		count: number;
+		bookingInfo: string | null;
+		expectedDate: string | null;
+		articleIds: string[];
+	}
+
+	function groupByState(items: Article[]): StateRow[] {
+		const map = new Map<string, StateRow>();
+		for (const a of items) {
+			const booking = bookingLabel(a);
+			const expected = expectedDateLabel(a);
+			const key = `${a.status}||${booking ?? ''}||${expected ?? ''}`;
+			const existing = map.get(key);
+			if (existing) {
+				existing.count++;
+				existing.articleIds.push(a.id);
+			} else {
+				map.set(key, { key, status: a.status, count: 1, bookingInfo: booking, expectedDate: expected, articleIds: [a.id] });
+			}
+		}
+		// Sort: status order, then non-booked before booked
+		return [...map.values()].sort((a, b) => {
+			const ai = statusOrder.indexOf(a.status as any);
+			const bi = statusOrder.indexOf(b.status as any);
+			if (ai !== bi) return ai - bi;
+			const aBooked = a.bookingInfo ? 1 : 0;
+			const bBooked = b.bookingInfo ? 1 : 0;
+			return aBooked - bBooked;
+		});
 	}
 </script>
 
@@ -151,7 +285,7 @@
 	<div class="space-y-1">
 		{#each groups as group (group.key)}
 			{@const expanded = expandedGroups.has(group.key)}
-			{@const usableCount = group.articles.filter(a => usableStatuses.has(a.status)).length}
+			{@const availableCount = group.articles.filter(isAvailable).length}
 			<div class="border rounded">
 				<button
 					onclick={() => toggleGroup(group.key)}
@@ -164,9 +298,9 @@
 					<div class="flex items-center gap-3 text-sm text-neutral-600">
 						<span>{group.locationName}</span>
 						{#if group.individuallyTracked}
-							<span class="bg-blue-600 text-white px-2 py-0.5 rounded">{usableCount}/{group.count} st</span>
+							<span class="bg-blue-600 text-white px-2 py-0.5 rounded">{availableCount}/{group.count} st</span>
 						{:else}
-							<span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded">×{usableCount}/{group.count}</span>
+							<span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded">×{availableCount}/{group.count}</span>
 						{/if}
 						<span class="text-xs">{expanded ? '▲' : '▼'}</span>
 					</div>
@@ -184,16 +318,45 @@
 									</tr>
 								</thead>
 								<tbody>
-									{#each sortByStatus(group.articles) as article}
+									{#each sortArticles(group.articles) as article}
 										<tr class="border-t border-neutral-200">
 											<td class="py-1">{article.common_name}</td>
 											<td class="py-1 text-neutral-600">{article.place || '—'}</td>
 											<td class="py-1">
-												<span class="inline-block px-2 py-0.5 rounded text-xs
-													{article.status === 'ok' ? 'bg-green-100 text-green-800' : article.status.startsWith('reported') ? 'bg-orange-100 text-orange-800' : article.status === 'lost' ? 'bg-challengerpink-100 text-challengerpink-800' : article.status === 'archived' ? 'bg-neutral-100 text-neutral-500' : 'bg-neutral-100'}"
-												>
-													{statusLabels[article.status] ?? article.status}
-												</span>
+												{#if article.status !== 'ok' || article.current_booking_id}
+													<button onclick={() => toggleIssueHistory(article.id)} class="inline-block px-2 py-0.5 rounded text-xs cursor-pointer {statusBadgeClass(article.status)}">
+														{statusLabels[article.status] ?? article.status}
+													</button>
+												{:else}
+													<span class="inline-block px-2 py-0.5 rounded text-xs {statusBadgeClass(article.status)}">
+														{statusLabels[article.status] ?? article.status}
+													</span>
+												{/if}
+												{#if bookingLabel(article)}
+													<span class="text-xs text-purple-700 ml-1">{bookingLabel(article)}</span>
+												{/if}
+												{#if expectedDateLabel(article)}
+													<span class="text-xs text-blue-600 ml-1">({expectedDateLabel(article)})</span>
+												{/if}
+												{#if latestComments.has(article.id) && showIssueHistoryFor !== article.id}
+													<p class="text-xs text-neutral-500 mt-0.5 italic">“{latestComments.get(article.id)}”</p>
+												{/if}
+												{#if showIssueHistoryFor === article.id}
+													{@const ih = issueHistory.get(article.id)}
+													{#if ih?.loading}
+														<p class="text-xs text-neutral-400 mt-1">Laddar...</p>
+													{:else if ih && ih.events.length > 0}
+														<div class="mt-1 space-y-0.5">
+															{#each ih.events as event}
+																<div class="text-xs text-neutral-600">
+																	<span class="text-neutral-400">{new Date(event.created_at).toLocaleDateString('sv')}</span>
+																	{#if event.description}<span class="italic">“{event.description}”</span>{/if}
+																	<span class="text-neutral-400">— {event.actor_name}</span>
+																</div>
+															{/each}
+														</div>
+													{/if}
+												{/if}
 											</td>
 											<td class="py-1 text-right">
 												<button onclick={() => reportingArticleId = reportingArticleId === article.id ? null : article.id} class="text-xs text-blue-700 underline">Rapportera</button>
@@ -214,15 +377,49 @@
 								</tbody>
 							</table>
 						{:else}
-							{@const statusCounts = group.articles.reduce((acc, a) => { acc[a.status] = (acc[a.status] || 0) + 1; return acc; }, {} as Record<string, number>)}
-							<div class="flex flex-wrap gap-2 py-1 text-sm">
-								{#each statusOrder.filter(s => statusCounts[s]) as status}
-									{@const count = statusCounts[status]}
-									<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs
-										{status === 'ok' ? 'bg-green-100 text-green-800' : status.startsWith('reported') ? 'bg-orange-100 text-orange-800' : status === 'lost' ? 'bg-challengerpink-100 text-challengerpink-800' : status === 'archived' ? 'bg-neutral-100 text-neutral-500' : 'bg-neutral-100'}"
-									>
-										{count} {statusLabels[status] ?? status}
-									</span>
+							{@const rows = groupByState(group.articles)}
+							<div class="space-y-1 py-1 text-sm">
+								{#each rows as row}
+									{@const comment = row.articleIds.map(id => latestComments.get(id)).find(c => c)}
+									{@const representativeId = row.articleIds[0]}
+									<div class="flex items-start gap-2">
+										{#if row.status !== 'ok'}
+											<button onclick={() => toggleIssueHistory(representativeId)} class="inline-block px-2 py-0.5 rounded text-xs shrink-0 cursor-pointer {statusBadgeClass(row.status)}">
+												×{row.count} {statusLabels[row.status] ?? row.status}
+											</button>
+										{:else}
+											<span class="inline-block px-2 py-0.5 rounded text-xs shrink-0 {statusBadgeClass(row.status)}">
+												×{row.count} {statusLabels[row.status] ?? row.status}
+											</span>
+										{/if}
+										<div>
+											{#if row.bookingInfo}
+												<span class="text-xs text-purple-700">{row.bookingInfo}</span>
+											{/if}
+											{#if row.expectedDate}
+												<span class="text-xs text-blue-600">({row.expectedDate})</span>
+											{/if}
+											{#if comment && showIssueHistoryFor !== representativeId}
+												<p class="text-xs text-neutral-500 italic">“{comment}”</p>
+											{/if}
+											{#if showIssueHistoryFor === representativeId}
+												{@const ih = issueHistory.get(representativeId)}
+												{#if ih?.loading}
+													<p class="text-xs text-neutral-400">Laddar...</p>
+												{:else if ih && ih.events.length > 0}
+													<div class="space-y-0.5">
+														{#each ih.events as event}
+															<div class="text-xs text-neutral-600">
+																<span class="text-neutral-400">{new Date(event.created_at).toLocaleDateString('sv')}</span>
+																{#if event.description}<span class="italic">“{event.description}”</span>{/if}
+																<span class="text-neutral-400">— {event.actor_name}</span>
+															</div>
+														{/each}
+													</div>
+												{/if}
+											{/if}
+										</div>
+									</div>
 								{/each}
 							</div>
 						{/if}

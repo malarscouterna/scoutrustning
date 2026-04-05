@@ -30,6 +30,15 @@ List all articles for the group. Returns joined location and category names.
 - `category_id` — filter by category UUID
 - `location_id` — filter by location UUID
 - `status` — filter by status (e.g. `ok`, `incoming`, `under_repair`)
+- `mine` — `true` to only show articles linked to the user's bookings or issue reports
+- `with_availability` — `true` to enrich each article with current booking context (who has it, when it's coming back)
+- `date` — ISO date (e.g. `2026-06-15`), used with `with_availability=true`. Defaults to today. Shows booking state as of this date.
+
+When `with_availability=true`, each article includes:
+- `current_booking_id` — UUID of the active booking (confirmed/approved/picked_up) overlapping the date, or null
+- `current_booking_status` — booking status (`confirmed`, `approved`, `picked_up`), or empty
+- `current_booking_end_date` — when the booking ends, or null
+- `current_booking_unit_name` — name of the unit/project using it, or null
 
 **Response** `200` — array of articles ordered by category, then commercial name, then common name.
 
@@ -253,11 +262,16 @@ Set the pickup status for a single booking item. Booking must be in `picked_up` 
 
 Sending an empty string clears the pickup status (undo). If all items in the booking have their pickup status cleared, the booking automatically reverts to its pre-pickup status (`confirmed` or `approved`).
 
+Optionally report the article's condition at pickup via `article_status` and `comment`. When `article_status` is set, `comment` is required.
+- `reported_usable` with `pickup_status: picked_up` — pick it up but flag the issue
+- `reported_unusable` with `pickup_status: lost` — don't pick it up, report as unusable
+- `lost` with `pickup_status: lost` — article is missing
+
 **Body**
 ```json
-{"pickup_status": "picked_up"}
+{"pickup_status": "picked_up", "article_status": "reported_usable", "comment": "Burner is wobbly"}
 ```
-Valid values: `picked_up`, `lost`, `""` (undo).
+Valid `pickup_status` values: `picked_up`, `lost`, `""` (undo). `article_status` is optional: `reported_usable`, `reported_unusable`, `lost`.
 
 **Response** `200` | `400` | `403` | `404`
 

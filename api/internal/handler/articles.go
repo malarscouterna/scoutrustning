@@ -41,34 +41,6 @@ func (h *ArticleHandler) Routes() chi.Router {
 func (h *ArticleHandler) List(w http.ResponseWriter, r *http.Request) {
 	claims, _ := auth.ClaimsFromContext(r.Context())
 
-	params := db.ListArticlesParams{GroupID: claims.GroupID}
-
-	if v := r.URL.Query().Get("status"); v != "" {
-		params.Statuses = strings.Split(v, ",")
-	} else {
-		params.Statuses = []string{}
-	}
-
-	if v := r.URL.Query().Get("category_id"); v != "" {
-		id, err := parseUUID(v)
-		if err != nil {
-			WriteError(w, http.StatusBadRequest, "invalid category_id")
-			return
-		}
-		params.CategoryID = id
-	}
-	if v := r.URL.Query().Get("location_id"); v != "" {
-		id, err := parseUUID(v)
-		if err != nil {
-			WriteError(w, http.StatusBadRequest, "invalid location_id")
-			return
-		}
-		params.LocationID = id
-	}
-	if v := r.URL.Query().Get("search"); v != "" {
-		params.Search = pgtype.Text{String: v, Valid: true}
-	}
-
 	// mine=true: only articles linked to user's bookings
 	if r.URL.Query().Get("mine") == "true" {
 		var statuses []string
@@ -89,7 +61,71 @@ func (h *ArticleHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	articles, err := h.Q.ListArticles(r.Context(), params)
+	var statuses []string
+	if v := r.URL.Query().Get("status"); v != "" {
+		statuses = strings.Split(v, ",")
+	}
+
+	var categoryID pgtype.UUID
+	if v := r.URL.Query().Get("category_id"); v != "" {
+		id, err := parseUUID(v)
+		if err != nil {
+			WriteError(w, http.StatusBadRequest, "invalid category_id")
+			return
+		}
+		categoryID = id
+	}
+
+	var locationID pgtype.UUID
+	if v := r.URL.Query().Get("location_id"); v != "" {
+		id, err := parseUUID(v)
+		if err != nil {
+			WriteError(w, http.StatusBadRequest, "invalid location_id")
+			return
+		}
+		locationID = id
+	}
+
+	var search pgtype.Text
+	if v := r.URL.Query().Get("search"); v != "" {
+		search = pgtype.Text{String: v, Valid: true}
+	}
+
+	// with_availability=true: return articles enriched with current booking context
+	if r.URL.Query().Get("with_availability") == "true" {
+		asOfDate := pgtype.Date{Time: time.Now(), Valid: true}
+		if v := r.URL.Query().Get("date"); v != "" {
+			t, err := time.Parse("2006-01-02", v)
+			if err != nil {
+				WriteError(w, http.StatusBadRequest, "invalid date")
+				return
+			}
+			asOfDate = pgtype.Date{Time: t, Valid: true}
+		}
+		articles, err := h.Q.ListArticlesWithAvailability(r.Context(), db.ListArticlesWithAvailabilityParams{
+			GroupID:    claims.GroupID,
+			AsOfDate:   asOfDate,
+			CategoryID: categoryID,
+			LocationID: locationID,
+			Statuses:   statuses,
+			Search:     search,
+		})
+		if err != nil {
+			slog.Error("failed to list articles with availability", "error", err)
+			WriteError(w, http.StatusInternalServerError, "failed to list articles")
+			return
+		}
+		WriteJSON(w, http.StatusOK, articles)
+		return
+	}
+
+	articles, err := h.Q.ListArticles(r.Context(), db.ListArticlesParams{
+		GroupID:    claims.GroupID,
+		Statuses:   statuses,
+		CategoryID: categoryID,
+		LocationID: locationID,
+		Search:     search,
+	})
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, "failed to list articles")
 		return
@@ -251,11 +287,14 @@ func (h *ArticleHandler) Availability(w http.ResponseWriter, r *http.Request) {
 
 	// Group by commercial_name + location
 	type availGroup struct {
-		CommercialName   string `json:"commercial_name"`
-		AvailableCount   int    `json:"available_count"`
-		RequiresApproval bool   `json:"requires_approval"`
-		CategoryName     string `json:"category_name"`
-		LocationName     string `json:"location_name"`
+		CommercialName      string `json:"commercial_name"`
+		AvailableCount      int    `json:"available_count"`
+		ReportedUsableCount int    `json:"reported_usable_count"`
+		IncomingCount       int    `json:"incoming_count"`
+		UnderRepairCount    int    `json:"under_repair_count"`
+		RequiresApproval    bool   `json:"requires_approval"`
+		CategoryName        string `json:"category_name"`
+		LocationName        string `json:"location_name"`
 	}
 	type groupKey struct {
 		name     string
@@ -292,6 +331,14 @@ func (h *ArticleHandler) Availability(w http.ResponseWriter, r *http.Request) {
 			groups[key] = g
 		}
 		g.AvailableCount++
+		switch a.Status {
+		case "reported_usable":
+			g.ReportedUsableCount++
+		case "incoming":
+			g.IncomingCount++
+		case "under_repair":
+			g.UnderRepairCount++
+		}
 	}
 
 	result := make([]availGroup, 0, len(groups))
