@@ -98,6 +98,15 @@ Quantity-tracked items (e.g. 5× Tältlampa LED) need a grouped return UI simila
 - Allow marking some as broken/lost/delayed with a count
 - Currently the return checklist shows individual rows for quantity-tracked items, which is confusing since they all have the same name
 
+## Issue reporting — booking context in event history
+
+Article event history should clearly indicate whether an issue was reported:
+- Before a borrow (pre-existing issue discovered during browse/inventory)
+- During a borrow (reported as part of pickup or return flow)
+- As a standalone report (not related to any active booking)
+
+This could be done by linking article events to booking IDs when they originate from a booking flow, and showing that context in the history UI (e.g. “Rapporterad vid återlämning av bokning #X”).
+
 ## Ärenden — role-scoped visibility
 
 The Ärenden (issues) page is now visible to all users with role-appropriate controls:

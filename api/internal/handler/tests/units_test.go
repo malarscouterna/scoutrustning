@@ -21,7 +21,7 @@ func TestUnits_CRUD(t *testing.T) {
 		r.Mount("/units", (&handler.UnitHandler{Q: env.Queries}).Routes())
 	})
 
-	manager := env.ClientAs("equipment-manager")
+	manager := env.ClientAs("manager-equipment")
 	leader := env.ClientAs("leader-yggdrasil")
 
 	t.Run("manager can create unit", func(t *testing.T) {
@@ -84,7 +84,7 @@ func TestImport_RequiresApprovalByLocation(t *testing.T) {
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
 	})
 
-	manager := env.ClientAs("equipment-manager")
+	manager := env.ClientAs("manager-equipment")
 
 	csvContent := strings.Join([]string{
 		"titelgrupp,title,description,location,plats,rum,lage,tags,secondtag,kit,custodian,status,inventory_date,inventory_status,available,repair,instock,reserved,purchasedate,value,retailer,retailname",
@@ -99,7 +99,7 @@ func TestImport_RequiresApprovalByLocation(t *testing.T) {
 	writer.Close()
 
 	req, _ := http.NewRequest("POST", env.Server.URL+"/api/v0/articles/import", &buf)
-	req.Header.Set("X-Dev-Role-Override", "equipment-manager")
+	req.Header.Set("X-Dev-Role-Override", "manager-equipment")
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	resp, err := http.DefaultClient.Do(req)

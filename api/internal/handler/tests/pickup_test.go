@@ -17,7 +17,7 @@ import (
 // Returns the booking ID and the item IDs.
 func setupPickupEnv(t *testing.T, env *testutil.TestEnv) (bookingID string, itemIDs []string, extraArticleID string) {
 	t.Helper()
-	manager := env.ClientAs("equipment-manager")
+	manager := env.ClientAs("manager-equipment")
 	leader := env.ClientAs("leader-yggdrasil")
 
 	resp, _ := manager.Get("/api/v0/locations")
@@ -330,7 +330,7 @@ func TestPickupFlow_AvailableArticlesEndpoint(t *testing.T) {
 	env := testutil.SetupTestEnv(t)
 	mountPickupRoutes(env)
 
-	manager := env.ClientAs("equipment-manager")
+	manager := env.ClientAs("manager-equipment")
 	leader := env.ClientAs("leader-yggdrasil")
 
 	// Setup: create 3 articles
@@ -418,7 +418,7 @@ func TestPickupFlow_AccessControl(t *testing.T) {
 	mountPickupRoutes(env)
 
 	leader := env.ClientAs("leader-yggdrasil")
-	otherLeader := env.ClientAs("leader-spindlarna")
+	otherLeader := env.ClientAs("leader-flaskpost")
 	bookingID, itemIDs, _ := setupPickupEnv(t, env)
 
 	// Transition to picked_up
@@ -452,7 +452,7 @@ func TestPickupFlow_AccessControl(t *testing.T) {
 	})
 
 	t.Run("equipment manager can update pickup status", func(t *testing.T) {
-		manager := env.ClientAs("equipment-manager")
+		manager := env.ClientAs("manager-equipment")
 		b, _ := json.Marshal(map[string]any{"pickup_status": "picked_up"})
 		resp, err := manager.Put("/api/v0/bookings/"+bookingID+"/items/"+itemIDs[0]+"/pickup", bytes.NewReader(b))
 		if err != nil {

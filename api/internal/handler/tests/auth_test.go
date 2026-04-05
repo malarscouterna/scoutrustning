@@ -37,14 +37,14 @@ func TestAuth_DevPersonaOverride(t *testing.T) {
 		var claims auth.Claims
 		json.NewDecoder(resp.Body).Decode(&claims)
 
-		if claims.MemberID != "3000001" {
-			t.Errorf("expected member_id 3000001, got %s", claims.MemberID)
+		if claims.MemberID != "3000005" {
+			t.Errorf("expected member_id 3000005, got %s", claims.MemberID)
 		}
 		if claims.GroupID != "766" {
 			t.Errorf("expected group_id 766, got %s", claims.GroupID)
 		}
-		if claims.Name != "Anna Ledare" {
-			t.Errorf("expected name Anna Ledare, got %s", claims.Name)
+		if claims.Name != "Hanna Yggdrasil" {
+			t.Errorf("expected name Hanna Yggdrasil, got %s", claims.Name)
 		}
 		if !claims.HasRole("leader") {
 			t.Error("expected leader role")
@@ -99,7 +99,7 @@ func TestAuth_RoleEnforcement(t *testing.T) {
 	})
 
 	t.Run("manager can access admin endpoint", func(t *testing.T) {
-		client := env.ClientAs("equipment-manager")
+		client := env.ClientAs("manager-equipment")
 		resp, err := client.Get("/api/v0/admin-only")
 		if err != nil {
 			t.Fatal(err)

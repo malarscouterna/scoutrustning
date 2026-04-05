@@ -113,12 +113,13 @@ async function requestMut<T>(path: string, method: string, body: unknown, opts: 
 
 export function createApiClient(opts: FetchOptions = {}) {
 	return {
-		listArticles: (params?: { search?: string; category_id?: string; location_id?: string; status?: string }) => {
+		listArticles: (params?: { search?: string; category_id?: string; location_id?: string; status?: string; mine?: boolean }) => {
 			const query = new URLSearchParams();
 			if (params?.search) query.set('search', params.search);
 			if (params?.category_id) query.set('category_id', params.category_id);
 			if (params?.location_id) query.set('location_id', params.location_id);
 			if (params?.status) query.set('status', params.status);
+			if (params?.mine) query.set('mine', 'true');
 			const qs = query.toString();
 			return request<Article[]>(`/articles${qs ? '?' + qs : ''}`, opts);
 		},

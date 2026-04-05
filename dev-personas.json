@@ -1,50 +1,66 @@
 {
   "personas": {
-    "leader-yggdrasil": {
+    "manager-it": {
       "member_id": "3000001",
       "group_id": "766",
-      "name": "Anna Ledare",
-      "email": "anna@example.com",
-      "roles": ["leader"],
-      "units": ["Yggdrasil"]
+      "name": "Magnus IT-grupp",
+      "email": "magnus@example.com",
+      "roles": ["equipment_manager"],
+      "units": ["IT-gruppen"]
     },
-    "leader-spindlarna": {
+    "manager-equipment": {
       "member_id": "3000002",
       "group_id": "766",
-      "name": "Erik Ledare",
-      "email": "erik@example.com",
-      "roles": ["leader"],
-      "units": ["Spindlarna"]
-    },
-    "project-leader": {
-      "member_id": "3000003",
-      "group_id": "766",
-      "name": "Maria Projektledare",
-      "email": "maria@example.com",
-      "roles": ["project_leader"],
-      "units": ["Valborgskommittén"]
-    },
-    "equipment-manager": {
-      "member_id": "3000004",
-      "group_id": "766",
-      "name": "Karl Materialare",
-      "email": "karl@example.com",
+      "name": "Gillis Utrustning",
+      "email": "gillis@example.com",
       "roles": ["equipment_manager"],
       "units": ["Utrustningsgruppen"]
     },
-    "leader-and-manager": {
+    "project-unit-leader": {
+      "member_id": "3000003",
+      "group_id": "766",
+      "name": "Julia Valborg-Yggdrasil",
+      "email": "julia@example.com",
+      "roles": ["project_leader"],
+      "units": ["Valborgskommittén", "Yggdrasil"]
+    },
+    "project-leader": {
+      "member_id": "3000007",
+      "group_id": "766",
+      "name": "Lovisa Valborg",
+      "email": "lovisa@example.com",
+      "roles": ["project_leader"],
+      "units": ["Valborgskommittén"]
+    },
+    "leader-unit-it": {
+      "member_id": "3000004",
+      "group_id": "766",
+      "name": "Teo IT-Yggdrasil",
+      "email": "teo@example.com",
+      "roles": ["equipment_manager"],
+      "units": ["IT-gruppen", "Yggdrasil"]
+    },
+    "leader-yggdrasil": {
       "member_id": "3000005",
       "group_id": "766",
-      "name": "Sofia Dubbelroll",
-      "email": "sofia@example.com",
-      "roles": ["leader", "equipment_manager"],
-      "units": ["Yggdrasil", "IT-gruppen"]
+      "name": "Hanna Yggdrasil",
+      "email": "hanna@example.com",
+      "roles": ["leader"],
+      "units": ["Yggdrasil"]
     },
-    "other-group-leader": {
+    "leader-flaskpost": {
+      "member_id": "3000006",
+      "group_id": "766",
+      "name": "Fredrik Flaskpost",
+      "email": "fredrik@example.com",
+      "roles": ["leader"],
+      "units": ["Flaskpostorné"]
+    },
+    "other-kar-leader": {
       "member_id": "4000001",
       "group_id": "999",
-      "name": "Test Annan Kår",
-      "email": "test@other.example.com",
+      "name": "Linn Annan-Kår",
+      "email": "linn@other.example.com",
       "roles": ["leader"],
       "units": ["Avdelning 1"]
     }

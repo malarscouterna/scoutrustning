@@ -68,6 +68,26 @@ func (h *ArticleHandler) List(w http.ResponseWriter, r *http.Request) {
 		params.Search = pgtype.Text{String: v, Valid: true}
 	}
 
+	// mine=true: only articles linked to user's bookings
+	if r.URL.Query().Get("mine") == "true" {
+		var statuses []string
+		if v := r.URL.Query().Get("status"); v != "" {
+			statuses = strings.Split(v, ",")
+		}
+		articles, err := h.Q.ListArticlesByUserBookings(r.Context(), db.ListArticlesByUserBookingsParams{
+			GroupID:   claims.GroupID,
+			Statuses:  statuses,
+			UserID:    claims.MemberID,
+			UnitNames: claims.Units,
+		})
+		if err != nil {
+			WriteError(w, http.StatusInternalServerError, "failed to list articles")
+			return
+		}
+		WriteJSON(w, http.StatusOK, articles)
+		return
+	}
+
 	articles, err := h.Q.ListArticles(r.Context(), params)
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, "failed to list articles")

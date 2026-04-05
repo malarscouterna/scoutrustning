@@ -202,7 +202,8 @@ export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin
 ## Workflow instructions
 
 - **Build minimal viable first**: Get things working end-to-end before adding complexity. Don't over-scaffold or create stubs for things not yet needed.
-- **Before writing code**: Read `docs/SPEC.md` for requirements. Clarify anything ambiguous before implementing.
+- **Before writing code**: Read `docs/SPEC.md` for requirements. Clarify anything ambiguous before implementing. **Never start writing or modifying files until the user explicitly approves the plan.** Present what you intend to do, wait for a go-ahead, then implement.
+- **After implementing changes**: If any change requires a container rebuild, database reset, migration run, or other manual step to take effect, explicitly state what the user needs to do (e.g. `docker compose up --build`, `./dev-seed.sh`, restart a service). Never assume the user knows which changes require a rebuild.
 - **Multi-tenancy is non-negotiable**: Every new table gets `group_id`. Every new query filters on it. No shortcuts.
 - **Keep docs updated**: When adding or changing API endpoints, update `docs/API.md`. When making architectural decisions or discovering new conventions, update this file and `docs/SPEC.md` proactively — don't wait to be asked.
 - **Always show the commit message** for user approval before committing. Never commit without asking.

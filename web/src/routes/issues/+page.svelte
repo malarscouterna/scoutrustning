@@ -29,6 +29,7 @@
 	let filterOptions = $derived(isManager ? allFilterOptions : allFilterOptions.filter(o => !o.managerOnly));
 
 	let selectedStatuses = $state<Set<string>>(new Set(data.filter.split(',')));
+	let showMine = $state(data.mine);
 
 	const statusLabels: Record<string, string> = {
 		ok: 'OK',
@@ -94,6 +95,7 @@
 		const statuses = [...selectedStatuses].join(',');
 		const params = new URLSearchParams();
 		if (statuses) params.set('status', statuses);
+		params.set('mine', showMine ? 'true' : 'false');
 		window.location.href = `/issues${params.toString() ? '?' + params : ''}`;
 	}
 
@@ -147,6 +149,10 @@
 				</button>
 			{/each}
 		</div>
+		<label class="flex items-center gap-2 mt-2">
+			<input type="checkbox" checked={showMine} onchange={() => { showMine = !showMine; applyFilter(); }} />
+			<span class="text-xs text-neutral-600">Visa bara mina ärenden</span>
+		</label>
 	</div>
 
 	{#if articles.length === 0}

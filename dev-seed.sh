@@ -6,8 +6,8 @@
 
 set -e
 
-API="http://localhost:8080"
-HEADER="X-Dev-Role-Override: equipment-manager"
+API="${API:-http://localhost:8080}"
+HEADER="X-Dev-Role-Override: manager-it"
 CSV="${1:-docs/import-example.csv}"
 
 echo "Waiting for API..."
@@ -26,17 +26,16 @@ if [ "$HTTP_CODE" != "200" ]; then
 fi
 
 echo "Clearing existing seed data..."
-curl -sf -X POST "$API/api/v0/articles/import" \
-  -H "$HEADER" \
-  -F "file=@/dev/null" > /dev/null 2>&1 || true
-# Delete all existing articles, bookings will cascade
 docker compose exec -T db psql -U utrustning -d utrustning -c "
-  DELETE FROM article_events;
+  DELETE FROM audit_log;
+  DELETE FROM issue_reports;
   DELETE FROM booking_items;
   DELETE FROM bookings;
+  DELETE FROM package_items;
+  DELETE FROM packages;
   DELETE FROM articles;
   DELETE FROM units;
-" > /dev/null 2>&1
+" || echo "Warning: cleanup had errors, continuing..."
 echo "Cleared."
 
 echo "Importing articles from: $CSV"

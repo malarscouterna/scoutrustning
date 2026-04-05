@@ -42,7 +42,7 @@ services:
       - ./role-mapping.json:/app/role-mapping.json:ro
       - ./dev-personas.json:/app/dev-personas.json:ro
     environment:
-      ORIGIN: http://localhost:3000
+      ORIGIN: ${ORIGIN:-http://localhost:3000}
       API_URL: http://api:8080
       DEV_MODE: "true"
       AUTH_SECRET: dev-secret-change-in-production

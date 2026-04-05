@@ -22,7 +22,7 @@ func TestBookingFlow_FullLifecycle(t *testing.T) {
 		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries}).Routes())
 	})
 
-	manager := env.ClientAs("equipment-manager")
+	manager := env.ClientAs("manager-equipment")
 	leader := env.ClientAs("leader-yggdrasil")
 
 	// Setup: get location and category, create some articles
@@ -197,9 +197,9 @@ func TestBookingFlow_NoDoubleBooking(t *testing.T) {
 		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries}).Routes())
 	})
 
-	manager := env.ClientAs("equipment-manager")
+	manager := env.ClientAs("manager-equipment")
 	leaderA := env.ClientAs("leader-yggdrasil")
-	leaderB := env.ClientAs("leader-spindlarna")
+	leaderB := env.ClientAs("leader-flaskpost")
 
 	// Setup: create 2 Sibley tents
 	resp, _ := manager.Get("/api/v0/locations")
@@ -292,7 +292,7 @@ func TestBookingFlow_UpdateConfirmedBooking(t *testing.T) {
 		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries}).Routes())
 	})
 
-	manager := env.ClientAs("equipment-manager")
+	manager := env.ClientAs("manager-equipment")
 	leader := env.ClientAs("leader-yggdrasil")
 
 	// Setup: create 3 Sibley tents
@@ -419,7 +419,7 @@ func TestBookingFlow_AccessControl(t *testing.T) {
 	})
 
 	leaderYgg := env.ClientAs("leader-yggdrasil")
-	leaderOrn := env.ClientAs("leader-spindlarna")
+	leaderOrn := env.ClientAs("leader-flaskpost")
 
 	// Create a personal booking (no unit)
 	b, _ := json.Marshal(map[string]any{"start_date": "2026-08-01", "end_date": "2026-08-05"})
@@ -457,7 +457,7 @@ func TestBookingFlow_AccessControl(t *testing.T) {
 	})
 
 	t.Run("equipment manager can update any booking", func(t *testing.T) {
-		manager := env.ClientAs("equipment-manager")
+		manager := env.ClientAs("manager-equipment")
 		b, _ := json.Marshal(map[string]any{"notes": "Manager override"})
 		resp, err := manager.Put("/api/v0/bookings/"+bookingID, bytes.NewReader(b))
 		if err != nil {
@@ -510,7 +510,7 @@ func TestBookingFlow_CancelAndDeleteDraft(t *testing.T) {
 	})
 
 	t.Run("cancel confirmed booking", func(t *testing.T) {
-		manager := env.ClientAs("equipment-manager")
+		manager := env.ClientAs("manager-equipment")
 
 		// Create an article so we can submit
 		resp, _ := manager.Get("/api/v0/locations")
@@ -576,7 +576,7 @@ func TestBookingFlow_IncrementalAddNoDuplicates(t *testing.T) {
 		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries}).Routes())
 	})
 
-	manager := env.ClientAs("equipment-manager")
+	manager := env.ClientAs("manager-equipment")
 	leader := env.ClientAs("leader-yggdrasil")
 
 	// Setup: create 5 items of same type
@@ -678,7 +678,7 @@ func TestBookingFlow_LocationScopedAvailability(t *testing.T) {
 		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries}).Routes())
 	})
 
-	manager := env.ClientAs("equipment-manager")
+	manager := env.ClientAs("manager-equipment")
 	leader := env.ClientAs("leader-yggdrasil")
 
 	// Get seed location and category
@@ -795,7 +795,7 @@ func TestBookingFlow_Copy(t *testing.T) {
 		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries}).Routes())
 	})
 
-	manager := env.ClientAs("equipment-manager")
+	manager := env.ClientAs("manager-equipment")
 	leader := env.ClientAs("leader-yggdrasil")
 
 	// Setup

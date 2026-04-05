@@ -17,7 +17,7 @@ import (
 // Returns booking ID, item IDs, and article IDs.
 func setupReturnEnv(t *testing.T, env *testutil.TestEnv, articleCount, bookCount int) (bookingID string, itemIDs, articleIDs []string) {
 	t.Helper()
-	manager := env.ClientAs("equipment-manager")
+	manager := env.ClientAs("manager-equipment")
 	leader := env.ClientAs("leader-yggdrasil")
 
 	resp, _ := manager.Get("/api/v0/locations")
@@ -179,7 +179,7 @@ func TestReturnFlow_DelayedBlocksAvailability(t *testing.T) {
 	mountReturnRoutes(env)
 
 	leader := env.ClientAs("leader-yggdrasil")
-	leaderB := env.ClientAs("leader-spindlarna")
+	leaderB := env.ClientAs("leader-flaskpost")
 	bookingID, itemIDs, _ := setupReturnEnv(t, env, 2, 2)
 
 	// Return one as delayed
@@ -410,7 +410,7 @@ func TestReturnFlow_AccessControl(t *testing.T) {
 	env := testutil.SetupTestEnv(t)
 	mountReturnRoutes(env)
 
-	otherLeader := env.ClientAs("leader-spindlarna")
+	otherLeader := env.ClientAs("leader-flaskpost")
 	bookingID, itemIDs, _ := setupReturnEnv(t, env, 1, 1)
 
 	t.Run("other leader cannot return items", func(t *testing.T) {
@@ -427,7 +427,7 @@ func TestReturnFlow_AccessControl(t *testing.T) {
 	})
 
 	t.Run("equipment manager can return items", func(t *testing.T) {
-		manager := env.ClientAs("equipment-manager")
+		manager := env.ClientAs("manager-equipment")
 		b, _ := json.Marshal(map[string]any{"return_status": "returned_ok"})
 		resp, err := manager.Put("/api/v0/bookings/"+bookingID+"/items/"+itemIDs[0]+"/return", bytes.NewReader(b))
 		if err != nil {

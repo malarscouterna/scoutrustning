@@ -52,7 +52,7 @@ func TestIssueFlow_ReportAndResolve(t *testing.T) {
 	env := testutil.SetupTestEnv(t)
 	mountIssueRoutes(env)
 
-	manager := env.ClientAs("equipment-manager")
+	manager := env.ClientAs("manager-equipment")
 	leader := env.ClientAs("leader-yggdrasil")
 	articleID := createTestArticle(t, manager, "IssueTest")
 
@@ -156,7 +156,7 @@ func TestIssueFlow_AccessControl(t *testing.T) {
 	env := testutil.SetupTestEnv(t)
 	mountIssueRoutes(env)
 
-	manager := env.ClientAs("equipment-manager")
+	manager := env.ClientAs("manager-equipment")
 	leader := env.ClientAs("leader-yggdrasil")
 	articleID := createTestArticle(t, manager, "ACTest")
 

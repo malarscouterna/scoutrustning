@@ -324,6 +324,111 @@ func (q *Queries) ListArticles(ctx context.Context, arg ListArticlesParams) ([]L
 	return items, nil
 }
 
+const listArticlesByUserBookings = `-- name: ListArticlesByUserBookings :many
+SELECT a.id, a.group_id, a.commercial_name, a.common_name, a.category_id, a.location_id, a.status, a.individually_tracked, a.requires_approval, a.image_path, a.description, a.instructions, a.purchase_date, a.purchase_price, a.place, a.drying_until, a.created_at, a.updated_at,
+    l.name AS location_name,
+    c.name AS category_name
+FROM articles a
+JOIN locations l ON a.location_id = l.id
+JOIN categories c ON a.category_id = c.id
+WHERE a.group_id = $1
+    AND (COALESCE(array_length($2::text[], 1), 0) = 0 OR a.status = ANY($2))
+    AND (
+        a.id IN (
+            SELECT bi.article_id FROM booking_items bi
+            JOIN bookings b ON bi.booking_id = b.id
+            WHERE b.group_id = $1
+                AND (b.created_by = $3 OR b.used_by_unit_id = ANY(
+                    SELECT un.id FROM units un WHERE un.group_id = $1 AND un.name = ANY($4::text[])
+                ))
+        )
+        OR a.id IN (
+            SELECT ae.article_id FROM article_events ae
+            WHERE ae.group_id = $1 AND ae.actor_id = $3
+        )
+    )
+ORDER BY c.sort_order, c.name, a.commercial_name, a.common_name
+`
+
+type ListArticlesByUserBookingsParams struct {
+	GroupID   string   `json:"group_id"`
+	Statuses  []string `json:"statuses"`
+	UserID    string   `json:"user_id"`
+	UnitNames []string `json:"unit_names"`
+}
+
+type ListArticlesByUserBookingsRow struct {
+	ID                  pgtype.UUID        `json:"id"`
+	GroupID             string             `json:"group_id"`
+	CommercialName      string             `json:"commercial_name"`
+	CommonName          string             `json:"common_name"`
+	CategoryID          pgtype.UUID        `json:"category_id"`
+	LocationID          pgtype.UUID        `json:"location_id"`
+	Status              string             `json:"status"`
+	IndividuallyTracked bool               `json:"individually_tracked"`
+	RequiresApproval    bool               `json:"requires_approval"`
+	ImagePath           pgtype.Text        `json:"image_path"`
+	Description         string             `json:"description"`
+	Instructions        string             `json:"instructions"`
+	PurchaseDate        pgtype.Date        `json:"purchase_date"`
+	PurchasePrice       pgtype.Numeric     `json:"purchase_price"`
+	Place               string             `json:"place"`
+	DryingUntil         pgtype.Date        `json:"drying_until"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	LocationName        string             `json:"location_name"`
+	CategoryName        string             `json:"category_name"`
+}
+
+// Returns articles with given statuses that are linked to the user's bookings
+// (created by user or assigned to one of their units), or where the user
+// reported an issue (is an actor on an article event).
+func (q *Queries) ListArticlesByUserBookings(ctx context.Context, arg ListArticlesByUserBookingsParams) ([]ListArticlesByUserBookingsRow, error) {
+	rows, err := q.db.Query(ctx, listArticlesByUserBookings,
+		arg.GroupID,
+		arg.Statuses,
+		arg.UserID,
+		arg.UnitNames,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListArticlesByUserBookingsRow{}
+	for rows.Next() {
+		var i ListArticlesByUserBookingsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.GroupID,
+			&i.CommercialName,
+			&i.CommonName,
+			&i.CategoryID,
+			&i.LocationID,
+			&i.Status,
+			&i.IndividuallyTracked,
+			&i.RequiresApproval,
+			&i.ImagePath,
+			&i.Description,
+			&i.Instructions,
+			&i.PurchaseDate,
+			&i.PurchasePrice,
+			&i.Place,
+			&i.DryingUntil,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.LocationName,
+			&i.CategoryName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateArticle = `-- name: UpdateArticle :one
 UPDATE articles SET
     commercial_name = $1,

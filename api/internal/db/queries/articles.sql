@@ -60,6 +60,34 @@ RETURNING *;
 DELETE FROM articles
 WHERE id = @id AND group_id = @group_id;
 
+-- name: ListArticlesByUserBookings :many
+-- Returns articles with given statuses that are linked to the user's bookings
+-- (created by user or assigned to one of their units), or where the user
+-- reported an issue (is an actor on an article event).
+SELECT a.*,
+    l.name AS location_name,
+    c.name AS category_name
+FROM articles a
+JOIN locations l ON a.location_id = l.id
+JOIN categories c ON a.category_id = c.id
+WHERE a.group_id = @group_id
+    AND (COALESCE(array_length(@statuses::text[], 1), 0) = 0 OR a.status = ANY(@statuses))
+    AND (
+        a.id IN (
+            SELECT bi.article_id FROM booking_items bi
+            JOIN bookings b ON bi.booking_id = b.id
+            WHERE b.group_id = @group_id
+                AND (b.created_by = @user_id OR b.used_by_unit_id = ANY(
+                    SELECT un.id FROM units un WHERE un.group_id = @group_id AND un.name = ANY(@unit_names::text[])
+                ))
+        )
+        OR a.id IN (
+            SELECT ae.article_id FROM article_events ae
+            WHERE ae.group_id = @group_id AND ae.actor_id = @user_id
+        )
+    )
+ORDER BY c.sort_order, c.name, a.commercial_name, a.common_name;
+
 -- name: CountArticlesByLocation :many
 SELECT l.id, l.name, COUNT(a.id) AS count
 FROM locations l

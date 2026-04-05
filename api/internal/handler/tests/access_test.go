@@ -103,9 +103,9 @@ func TestAccess_UnitBookingVisibility(t *testing.T) {
 	env := testutil.SetupTestEnv(t)
 	mountAll(env)
 
-	manager := env.ClientAs("equipment-manager")
+	manager := env.ClientAs("manager-equipment")
 	leaderYgg := env.ClientAs("leader-yggdrasil")
-	leaderSpi := env.ClientAs("leader-spindlarna")
+	leaderSpi := env.ClientAs("leader-flaskpost")
 
 	// Create units
 	for _, name := range []string{"Yggdrasil", "Spindlarna"} {
@@ -193,7 +193,7 @@ func TestAccess_RoleEnforcementAllEndpoints(t *testing.T) {
 	mountAll(env)
 
 	leader := env.ClientAs("leader-yggdrasil")
-	manager := env.ClientAs("equipment-manager")
+	manager := env.ClientAs("manager-equipment")
 
 	locID, catID := seedIDs(t, manager)
 
@@ -272,7 +272,7 @@ func TestAccess_ArticleStatusRoles(t *testing.T) {
 	env := testutil.SetupTestEnv(t)
 	mountAll(env)
 
-	manager := env.ClientAs("equipment-manager")
+	manager := env.ClientAs("manager-equipment")
 	leader := env.ClientAs("leader-yggdrasil")
 
 	locID, catID := seedIDs(t, manager)
@@ -317,11 +317,11 @@ func TestMultiTenancy_GroupIsolation(t *testing.T) {
 	mountAll(env)
 
 	// Group 766 (Mälarscouterna)
-	manager766 := env.ClientAs("equipment-manager")
+	manager766 := env.ClientAs("manager-equipment")
 	leader766 := env.ClientAs("leader-yggdrasil")
 
 	// Group 999 (Testkåren)
-	leader999 := env.ClientAs("other-group-leader")
+	leader999 := env.ClientAs("other-kar-leader")
 
 	// Manager creates article in group 766
 	locID, catID := seedIDs(t, manager766)
@@ -389,9 +389,9 @@ func TestAccess_UnitMembershipOnBooking(t *testing.T) {
 	env := testutil.SetupTestEnv(t)
 	mountAll(env)
 
-	manager := env.ClientAs("equipment-manager")
+	manager := env.ClientAs("manager-equipment")
 	leaderYgg := env.ClientAs("leader-yggdrasil")
-	leaderSpi := env.ClientAs("leader-spindlarna")
+	leaderSpi := env.ClientAs("leader-flaskpost")
 	projectLeader := env.ClientAs("project-leader")
 
 	// Create units and a project
@@ -489,7 +489,7 @@ func TestAccess_PickupEventLogging(t *testing.T) {
 		})
 	})
 
-	manager := env.ClientAs("equipment-manager")
+	manager := env.ClientAs("manager-equipment")
 	leader := env.ClientAs("leader-yggdrasil")
 
 	locID, catID := seedIDs(t, manager)
@@ -536,8 +536,8 @@ func TestAccess_PickupEventLogging(t *testing.T) {
 		for _, e := range events {
 			if e["event_type"] == "picked_up" {
 				found = true
-				if e["actor_name"] != "Anna Ledare" {
-					t.Errorf("expected actor Anna Ledare, got %v", e["actor_name"])
+				if e["actor_name"] != "Hanna Yggdrasil" {
+					t.Errorf("expected actor Hanna Yggdrasil, got %v", e["actor_name"])
 				}
 			}
 		}
@@ -561,8 +561,8 @@ func TestAccess_PickupEventLogging(t *testing.T) {
 		for _, e := range events {
 			if e["event_type"] == "returned" {
 				found = true
-				if e["actor_name"] != "Anna Ledare" {
-					t.Errorf("expected actor Anna Ledare, got %v", e["actor_name"])
+				if e["actor_name"] != "Hanna Yggdrasil" {
+					t.Errorf("expected actor Hanna Yggdrasil, got %v", e["actor_name"])
 				}
 			}
 		}

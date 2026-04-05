@@ -25,7 +25,7 @@ func TestArticleCRUD(t *testing.T) {
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
 	})
 
-	manager := env.ClientAs("equipment-manager")
+	manager := env.ClientAs("manager-equipment")
 	leader := env.ClientAs("leader-yggdrasil")
 
 	// Get seed location and category IDs
@@ -136,7 +136,7 @@ func TestArticleCSVImport(t *testing.T) {
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
 	})
 
-	manager := env.ClientAs("equipment-manager")
+	manager := env.ClientAs("manager-equipment")
 
 	t.Run("import CSV creates articles and auto-creates categories", func(t *testing.T) {
 		csvPath := findCSVPath()
@@ -153,7 +153,7 @@ func TestArticleCSVImport(t *testing.T) {
 		writer.Close()
 
 		req, _ := http.NewRequest("POST", env.Server.URL+"/api/v0/articles/import", &buf)
-		req.Header.Set("X-Dev-Role-Override", "equipment-manager")
+		req.Header.Set("X-Dev-Role-Override", "manager-equipment")
 		req.Header.Set("Content-Type", writer.FormDataContentType())
 
 		resp, err := http.DefaultClient.Do(req)
