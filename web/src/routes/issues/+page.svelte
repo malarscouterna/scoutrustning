@@ -9,9 +9,15 @@
 
 	let isManager = $derived(hasRole($page.data.user, 'equipment_manager'));
 
-	let articles = $state<Article[]>(data.articles);
+	let serverArticles = $derived(data.articles);
+	let localOverrides = $state<Map<string, Partial<Article>>>(new Map());
+	let articles = $derived(
+		serverArticles.map(a => localOverrides.has(a.id) ? { ...a, ...localOverrides.get(a.id) } : a)
+	);
 	let expandedId = $state<string | null>(null);
+	const EVENT_LIMIT = 6;
 	let events = $state<ArticleEvent[]>([]);
+	let hasMoreEvents = $state(false);
 	let loadingEvents = $state(false);
 	let newStatus = $state('');
 	let comment = $state('');
@@ -28,8 +34,8 @@
 
 	let filterOptions = $derived(isManager ? allFilterOptions : allFilterOptions.filter(o => !o.managerOnly));
 
-	let selectedStatuses = $state<Set<string>>(new Set(data.filter.split(',')));
-	let showMine = $state(data.mine);
+	let selectedStatuses = $derived(new Set(data.filter.split(',')));
+	let showMine = $derived(data.mine);
 
 	const statusLabels: Record<string, string> = {
 		ok: 'OK',
@@ -82,20 +88,20 @@
 	}
 
 	function toggleStatus(value: string) {
-		if (selectedStatuses.has(value)) {
-			selectedStatuses.delete(value);
+		const next = new Set(selectedStatuses);
+		if (next.has(value)) {
+			next.delete(value);
 		} else {
-			selectedStatuses.add(value);
+			next.add(value);
 		}
-		selectedStatuses = new Set(selectedStatuses);
-		applyFilter();
+		navigate(next, showMine);
 	}
 
-	function applyFilter() {
-		const statuses = [...selectedStatuses].join(',');
+	function navigate(statuses: Set<string>, mine: boolean) {
+		const s = [...statuses].join(',');
 		const params = new URLSearchParams();
-		if (statuses) params.set('status', statuses);
-		params.set('mine', showMine ? 'true' : 'false');
+		if (s) params.set('status', s);
+		params.set('mine', mine ? 'true' : 'false');
 		window.location.href = `/issues${params.toString() ? '?' + params : ''}`;
 	}
 
@@ -107,8 +113,10 @@
 		error = '';
 		loadingEvents = true;
 		try {
-			events = await api.listArticleEvents(article.id);
-		} catch { events = []; }
+			const result = await api.listArticleEvents(article.id, EVENT_LIMIT);
+			events = result.events;
+			hasMoreEvents = result.has_more;
+		} catch { events = []; hasMoreEvents = false; }
 		loadingEvents = false;
 	}
 
@@ -119,8 +127,10 @@
 		error = '';
 		try {
 			const updated = await api.updateArticleStatus(articleId, { status: newStatus, comment: comment.trim() || undefined });
-			articles = articles.map((a) => a.id === articleId ? { ...a, status: updated.status } : a);
-			events = await api.listArticleEvents(articleId);
+			localOverrides = new Map(localOverrides).set(articleId, { status: updated.status });
+			const result = await api.listArticleEvents(articleId, EVENT_LIMIT);
+			events = result.events;
+			hasMoreEvents = result.has_more;
 			flash(`Status ändrad till ${statusLabels[newStatus] ?? newStatus}`);
 			newStatus = '';
 			comment = '';
@@ -150,7 +160,7 @@
 			{/each}
 		</div>
 		<label class="flex items-center gap-2 mt-2">
-			<input type="checkbox" checked={showMine} onchange={() => { showMine = !showMine; applyFilter(); }} />
+			<input type="checkbox" checked={showMine} onchange={() => navigate(selectedStatuses, !showMine)} />
 			<span class="text-xs text-neutral-600">Visa bara mina ärenden</span>
 		</label>
 	</div>
@@ -182,8 +192,8 @@
 							<div class="space-y-2">
 								<div class="flex items-end gap-2">
 									<div>
-										<label class="text-xs text-neutral-600 block mb-1">{isManager ? 'Ändra status' : 'Uppdatera rapport'}</label>
-										<select bind:value={newStatus} class="border rounded px-2 py-1 text-sm">
+										<span class="text-xs text-neutral-600 block mb-1">{isManager ? 'Ändra status' : 'Uppdatera rapport'}</span>
+										<select bind:value={newStatus} class="border rounded px-2 py-1 text-sm" aria-label={isManager ? 'Ändra status' : 'Uppdatera rapport'}>
 											<option value="">Välj...</option>
 											{#if isManager}
 												<option value="ok">OK (löst)</option>
@@ -226,6 +236,18 @@
 											</div>
 										{/each}
 									</div>
+									{#if hasMoreEvents}
+										<button
+											class="text-xs text-blue-600 hover:text-blue-800 mt-2 cursor-pointer"
+											onclick={async () => {
+												const result = await api.listArticleEvents(article.id);
+												events = result.events;
+												hasMoreEvents = false;
+											}}
+										>
+											Visa alla händelser
+										</button>
+									{/if}
 								{/if}
 							</div>
 						</div>

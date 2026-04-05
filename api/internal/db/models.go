@@ -64,6 +64,7 @@ type Booking struct {
 	Notes                 string             `json:"notes"`
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	PrePickupStatus       pgtype.Text        `json:"pre_pickup_status"`
 }
 
 type BookingItem struct {

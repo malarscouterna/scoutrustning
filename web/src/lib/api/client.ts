@@ -169,6 +169,11 @@ export function createApiClient(opts: FetchOptions = {}) {
 		// Article status & events
 		updateArticleStatus: (articleId: string, data: { status: string; comment?: string }) =>
 			requestMut<Article>(`/articles/${articleId}/status`, 'PUT', data, opts),
-		listArticleEvents: (articleId: string) => request<ArticleEvent[]>(`/articles/${articleId}/events`, opts),
+		listArticleEvents: (articleId: string, limit?: number) => {
+			const query = new URLSearchParams();
+			if (limit) query.set('limit', String(limit));
+			const qs = query.toString();
+			return request<{ events: ArticleEvent[]; has_more: boolean }>(`/articles/${articleId}/events${qs ? '?' + qs : ''}`, opts);
+		},
 	};
 }

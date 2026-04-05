@@ -129,8 +129,9 @@ func TestIssueFlow_ReportAndResolve(t *testing.T) {
 	t.Run("events contain full history", func(t *testing.T) {
 		resp, _ := leader.Get("/api/v0/articles/" + articleID + "/events")
 		defer resp.Body.Close()
-		var events []map[string]any
-		json.NewDecoder(resp.Body).Decode(&events)
+		var result struct{ Events []map[string]any }
+		json.NewDecoder(resp.Body).Decode(&result)
+		events := result.Events
 
 		if len(events) < 3 {
 			t.Fatalf("expected at least 3 events, got %d", len(events))
@@ -235,8 +236,9 @@ func TestIssueFlow_ReturnCreatesEvent(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer resp.Body.Close()
-		var events []map[string]any
-		json.NewDecoder(resp.Body).Decode(&events)
+		var result struct{ Events []map[string]any }
+		json.NewDecoder(resp.Body).Decode(&result)
+		events := result.Events
 
 		found := false
 		for _, e := range events {
@@ -259,6 +261,106 @@ func TestIssueFlow_ReturnCreatesEvent(t *testing.T) {
 		json.NewDecoder(resp.Body).Decode(&article)
 		if article["status"] != "reported_unusable" {
 			t.Errorf("expected reported_unusable, got %v", article["status"])
+		}
+	})
+}
+
+// TestIssueFlow_FullLifecycleHistory exercises a complete article lifecycle
+// (pickup → return with issue → manager repair → resolve) and verifies
+// the events endpoint returns the correct shape, order, and limit behavior.
+func TestIssueFlow_FullLifecycleHistory(t *testing.T) {
+	env := testutil.SetupTestEnv(t)
+	mountIssueRoutes(env)
+
+	manager := env.ClientAs("manager-equipment")
+	leader := env.ClientAs("leader-yggdrasil")
+
+	// Create article, booking, add item, submit, pickup
+	bookingID, itemIDs, articleIDs := setupReturnEnv(t, env, 1, 1)
+
+	// 1. Return with issue
+	b, _ := json.Marshal(map[string]any{"return_status": "reported_usable", "notes": "Small tear"})
+	resp, _ := leader.Put("/api/v0/bookings/"+bookingID+"/items/"+itemIDs[0]+"/return", bytes.NewReader(b))
+	resp.Body.Close()
+
+	// 2. Manager sets under_repair
+	b, _ = json.Marshal(map[string]any{"status": "under_repair", "comment": "Sent for repair"})
+	resp, _ = manager.Put("/api/v0/articles/"+articleIDs[0]+"/status", bytes.NewReader(b))
+	resp.Body.Close()
+
+	// 3. Manager resolves
+	b, _ = json.Marshal(map[string]any{"status": "ok", "comment": "Fixed"})
+	resp, _ = manager.Put("/api/v0/articles/"+articleIDs[0]+"/status", bytes.NewReader(b))
+	resp.Body.Close()
+
+	// Events should be (newest first): issue_resolved, status_change, issue_reported, picked_up
+	t.Run("full history returned without limit", func(t *testing.T) {
+		resp, _ := leader.Get("/api/v0/articles/" + articleIDs[0] + "/events")
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("expected 200, got %d: %s", resp.StatusCode, body)
+		}
+		var result struct {
+			Events  []map[string]any `json:"events"`
+			HasMore bool             `json:"has_more"`
+		}
+		json.NewDecoder(resp.Body).Decode(&result)
+
+		if len(result.Events) != 4 {
+			t.Fatalf("expected 4 events, got %d", len(result.Events))
+		}
+		if result.HasMore {
+			t.Error("expected has_more=false")
+		}
+
+		// Verify order: newest first
+		expectedTypes := []string{"issue_resolved", "status_change", "issue_reported", "picked_up"}
+		for i, expected := range expectedTypes {
+			if result.Events[i]["event_type"] != expected {
+				t.Errorf("event[%d]: expected %s, got %v", i, expected, result.Events[i]["event_type"])
+			}
+		}
+
+		// Verify actor names are present
+		for _, e := range result.Events {
+			if e["actor_name"] == nil || e["actor_name"] == "" {
+				t.Errorf("event %v missing actor_name", e["event_type"])
+			}
+		}
+	})
+
+	t.Run("limit returns subset with has_more", func(t *testing.T) {
+		resp, _ := leader.Get("/api/v0/articles/" + articleIDs[0] + "/events?limit=2")
+		defer resp.Body.Close()
+		var result struct {
+			Events  []map[string]any `json:"events"`
+			HasMore bool             `json:"has_more"`
+		}
+		json.NewDecoder(resp.Body).Decode(&result)
+
+		if len(result.Events) != 2 {
+			t.Fatalf("expected 2 events, got %d", len(result.Events))
+		}
+		if !result.HasMore {
+			t.Error("expected has_more=true when limited")
+		}
+	})
+
+	t.Run("limit equal to total returns has_more false", func(t *testing.T) {
+		resp, _ := leader.Get("/api/v0/articles/" + articleIDs[0] + "/events?limit=4")
+		defer resp.Body.Close()
+		var result struct {
+			Events  []map[string]any `json:"events"`
+			HasMore bool             `json:"has_more"`
+		}
+		json.NewDecoder(resp.Body).Decode(&result)
+
+		if len(result.Events) != 4 {
+			t.Fatalf("expected 4 events, got %d", len(result.Events))
+		}
+		if result.HasMore {
+			t.Error("expected has_more=false when limit >= total")
 		}
 	})
 }

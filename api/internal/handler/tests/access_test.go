@@ -529,8 +529,9 @@ func TestAccess_PickupEventLogging(t *testing.T) {
 	t.Run("pickup logged with actor", func(t *testing.T) {
 		resp, _ := leader.Get("/api/v0/articles/" + articleID + "/events")
 		defer resp.Body.Close()
-		var events []map[string]any
-		json.NewDecoder(resp.Body).Decode(&events)
+		var result struct{ Events []map[string]any }
+		json.NewDecoder(resp.Body).Decode(&result)
+		events := result.Events
 
 		found := false
 		for _, e := range events {
@@ -554,8 +555,9 @@ func TestAccess_PickupEventLogging(t *testing.T) {
 	t.Run("return logged with actor", func(t *testing.T) {
 		resp, _ := leader.Get("/api/v0/articles/" + articleID + "/events")
 		defer resp.Body.Close()
-		var events []map[string]any
-		json.NewDecoder(resp.Body).Decode(&events)
+		var result struct{ Events []map[string]any }
+		json.NewDecoder(resp.Body).Decode(&result)
+		events := result.Events
 
 		found := false
 		for _, e := range events {

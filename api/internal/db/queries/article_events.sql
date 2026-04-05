@@ -13,3 +13,12 @@ FROM article_events ae
 JOIN users u ON ae.actor_id = u.id
 WHERE ae.article_id = @article_id AND ae.group_id = @group_id
 ORDER BY ae.created_at DESC;
+
+-- name: ListArticleEventsLimited :many
+SELECT ae.*,
+    u.name AS actor_name
+FROM article_events ae
+JOIN users u ON ae.actor_id = u.id
+WHERE ae.article_id = @article_id AND ae.group_id = @group_id
+ORDER BY ae.created_at DESC
+LIMIT @max_results;

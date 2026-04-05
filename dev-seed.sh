@@ -7,7 +7,8 @@
 set -e
 
 API="${API:-http://localhost:8080}"
-HEADER="X-Dev-Role-Override: manager-it"
+HEADER="X-Dev-Role-Override: manager-equipment"
+LEADER="X-Dev-Role-Override: leader-yggdrasil"
 CSV="${1:-docs/import-example.csv}"
 
 echo "Waiting for API..."
@@ -27,12 +28,9 @@ fi
 
 echo "Clearing existing seed data..."
 docker compose exec -T db psql -U utrustning -d utrustning -c "
-  DELETE FROM audit_log;
-  DELETE FROM issue_reports;
+  DELETE FROM article_events;
   DELETE FROM booking_items;
   DELETE FROM bookings;
-  DELETE FROM package_items;
-  DELETE FROM packages;
   DELETE FROM articles;
   DELETE FROM units;
 " || echo "Warning: cleanup had errors, continuing..."
@@ -59,7 +57,6 @@ for PROJECT in Valborgskommittén Läger Utrustningsgruppen IT-gruppen; do
 done
 
 # Create quantity-tracked test articles (Tältlampa LED)
-# First delete the individually-tracked one from CSV import, then create 5 quantity-tracked
 echo "Creating quantity-tracked test articles..."
 LOC_ID=$(curl -s "$API/api/v0/locations" -H "$HEADER" | python3 -c "import json,sys; print([l['id'] for l in json.load(sys.stdin) if l['name']=='Hajkförrådet'][0])")
 CAT_ID=$(curl -s "$API/api/v0/categories" -H "$HEADER" | python3 -c "import json,sys; print([c['id'] for c in json.load(sys.stdin) if c['name']=='Sova'][0])")
@@ -75,15 +72,39 @@ for i in 1 2 3 4 5; do
 done
 echo "  Created: 5x Tältlampa LED (quantity-tracked)"
 
-# Create a test booking in picked_up state with items in various states
-echo "Creating test booking..."
-LEADER="X-Dev-Role-Override: leader-yggdrasil"
+# Helper: find booking item ID by article common_name
+find_item() {
+  local BOOKING=$1 NAME=$2 PERSONA=$3
+  curl -s "$API/api/v0/bookings/$BOOKING" -H "X-Dev-Role-Override: $PERSONA" | python3 -c "
+import json,sys
+d = json.load(sys.stdin)
+for i in d['items']:
+    if i['common_name'] == '$NAME':
+        print(i['id'])
+        break
+"
+}
+
+# Helper: find article ID by common_name
+find_article() {
+  local NAME=$1
+  curl -s "$API/api/v0/articles?search=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$NAME'))")" -H "$HEADER" | python3 -c "
+import json,sys
+for a in json.load(sys.stdin):
+    if a['common_name'] == '$NAME':
+        print(a['id'])
+        break
+"
+}
 
 UNIT_ID=$(curl -s "$API/api/v0/units" -H "$LEADER" | python3 -c "import json,sys; print([u['id'] for u in json.load(sys.stdin) if u['name']=='Yggdrasil'][0])")
 
+# ─── Booking 1: Active booking in picked_up state (for testing pickup/return) ───
+echo ""
+echo "Creating booking 1 (active, picked_up)..."
 BOOKING_ID=$(curl -s -X POST "$API/api/v0/bookings" \
   -H "$LEADER" -H "Content-Type: application/json" \
-  -d "{\"start_date\":\"2026-06-01\",\"end_date\":\"2026-06-05\",\"used_by_unit_id\":\"$UNIT_ID\",\"notes\":\"Testbokning\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+  -d "{\"start_date\":\"2026-06-01\",\"end_date\":\"2026-06-05\",\"used_by_unit_id\":\"$UNIT_ID\",\"notes\":\"Hajk med Yggdrasil\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
 echo "  Booking: $BOOKING_ID"
 
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING_ID/items" \
@@ -95,65 +116,99 @@ curl -sf -X POST "$API/api/v0/bookings/$BOOKING_ID/items" \
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING_ID/items" \
   -H "$LEADER" -H "Content-Type: application/json" \
   -d '{"commercial_name":"T\u00e4ltlampa LED","quantity":3}' > /dev/null
-echo "  Added items: 2x Sibley, 2x Stormkök, 3x Tältlampa LED"
+echo "  Added: 2x Sibley, 2x Stormkök, 3x Tältlampa LED"
 
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING_ID/submit" -H "$LEADER" > /dev/null
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING_ID/pickup" -H "$LEADER" > /dev/null
 echo "  Status: picked_up"
 
-# Mark some items with different pickup/return statuses
-ITEMS=$(curl -s "$API/api/v0/bookings/$BOOKING_ID" -H "$LEADER" | python3 -c "
+# Pick up everything except Stormkök (left for pickup testing)
+ITEMS_JSON=$(curl -s "$API/api/v0/bookings/$BOOKING_ID" -H "$LEADER")
+echo "$ITEMS_JSON" | python3 -c "
 import json,sys
 d = json.load(sys.stdin)
 for i in d['items']:
-    print(i['id'], i['common_name'])
-")
-echo "  Items:"
-echo "$ITEMS" | while read ID NAME; do echo "    $NAME ($ID)"; done
-
-# Pick up most items, leave some Stormkök unmarked for pickup testing
-ITEM_COUNT=0
-echo "$ITEMS" | while read ID NAME; do
-  ITEM_COUNT=$((ITEM_COUNT + 1))
-  case "$NAME" in
-    Stormk*) ;; # skip — leave for pickup testing
-    *)
-      curl -sf -X PUT "$API/api/v0/bookings/$BOOKING_ID/items/$ID/pickup" \
-        -H "$LEADER" -H "Content-Type: application/json" \
-        -d '{"pickup_status":"picked_up"}' > /dev/null
-      ;;
-  esac
+    if not i['common_name'].startswith('Stormkök'):
+        print(i['id'], i['common_name'])
+" | while read ID NAME; do
+  curl -sf -X PUT "$API/api/v0/bookings/$BOOKING_ID/items/$ID/pickup" \
+    -H "$LEADER" -H "Content-Type: application/json" \
+    -d '{"pickup_status":"picked_up"}' > /dev/null
 done
-echo "  Picked up all except Stormkök (left for pickup testing)"
+echo "  Picked up all except Stormkök"
 
-# Return first Sibley as OK, second as reported_usable
-FIRST_SIBLEY=$(echo "$ITEMS" | head -1 | cut -d' ' -f1)
-SECOND_SIBLEY=$(echo "$ITEMS" | sed -n '2p' | cut -d' ' -f1)
-curl -sf -X PUT "$API/api/v0/bookings/$BOOKING_ID/items/$FIRST_SIBLEY/return" \
+# Return Sibley 1 as OK
+SIBLEY1_ITEM=$(find_item "$BOOKING_ID" "Sibley 1" "leader-yggdrasil")
+curl -sf -X PUT "$API/api/v0/bookings/$BOOKING_ID/items/$SIBLEY1_ITEM/return" \
   -H "$LEADER" -H "Content-Type: application/json" \
   -d '{"return_status":"returned_ok"}' > /dev/null
 echo "  Sibley 1: returned OK"
 
-curl -sf -X PUT "$API/api/v0/bookings/$BOOKING_ID/items/$SECOND_SIBLEY/return" \
+# Return Sibley 2 as reported_usable (creates picked_up + issue_reported events)
+SIBLEY2_ITEM=$(find_item "$BOOKING_ID" "Sibley 2" "leader-yggdrasil")
+curl -sf -X PUT "$API/api/v0/bookings/$BOOKING_ID/items/$SIBLEY2_ITEM/return" \
   -H "$LEADER" -H "Content-Type: application/json" \
   -d '{"return_status":"reported_usable","notes":"Liten reva i duken"}' > /dev/null
-echo "  Sibley 2: reported usable (reva)"
+echo "  Sibley 2: returned with issue (reva i duken)"
 
-# Report an issue on Bryne directly (not via return)
-BRYNE_ID=$(curl -s "$API/api/v0/articles?search=Bryne" -H "$LEADER" | python3 -c "import json,sys; print(json.load(sys.stdin)[0]['id'])")
+# Manager acknowledges Sibley 2 issue → under_repair
+SIBLEY2_ART=$(find_article "Sibley 2")
+curl -sf -X PUT "$API/api/v0/articles/$SIBLEY2_ART/status" \
+  -H "$HEADER" -H "Content-Type: application/json" \
+  -d '{"status":"under_repair","comment":"Skickat till lagning"}' > /dev/null
+echo "  Sibley 2: manager set under_repair"
+
+# Manager resolves Sibley 2 → ok
+curl -sf -X PUT "$API/api/v0/articles/$SIBLEY2_ART/status" \
+  -H "$HEADER" -H "Content-Type: application/json" \
+  -d '{"status":"ok","comment":"Lagad, redo att användas igen"}' > /dev/null
+echo "  Sibley 2: manager resolved → ok"
+
+# Leader reports new issue on Sibley 2 → reported_unusable
+curl -sf -X PUT "$API/api/v0/articles/$SIBLEY2_ART/status" \
+  -H "$LEADER" -H "Content-Type: application/json" \
+  -d '{"status":"reported_unusable","comment":"Revan har öppnat sig igen, går inte att använda"}' > /dev/null
+echo "  Sibley 2: leader re-reported as unusable"
+
+# Manager sets under_repair again
+curl -sf -X PUT "$API/api/v0/articles/$SIBLEY2_ART/status" \
+  -H "$HEADER" -H "Content-Type: application/json" \
+  -d '{"status":"under_repair","comment":"Ny lagning behövs"}' > /dev/null
+echo "  Sibley 2: manager set under_repair again"
+
+# Manager resolves again
+curl -sf -X PUT "$API/api/v0/articles/$SIBLEY2_ART/status" \
+  -H "$HEADER" -H "Content-Type: application/json" \
+  -d '{"status":"ok","comment":"Dubbelsydd, borde hålla nu"}' > /dev/null
+echo "  Sibley 2: manager resolved again → ok"
+
+# Leader reports a third time
+curl -sf -X PUT "$API/api/v0/articles/$SIBLEY2_ART/status" \
+  -H "$LEADER" -H "Content-Type: application/json" \
+  -d '{"status":"reported_unusable","comment":"Sömmarna har gått upp igen, behöver bytas ut"}' > /dev/null
+echo "  Sibley 2: leader reported unusable a third time (8 events total)"
+
+# ─── Standalone issue reports (not from bookings) ───
+echo ""
+echo "Creating standalone issue reports..."
+
+# Bryne: reported usable
+BRYNE_ID=$(curl -s "$API/api/v0/articles?search=Bryne" -H "$HEADER" | python3 -c "import json,sys; print(json.load(sys.stdin)[0]['id'])")
 curl -sf -X PUT "$API/api/v0/articles/$BRYNE_ID/status" \
   -H "$LEADER" -H "Content-Type: application/json" \
-  -d '{"status":"reported_usable","comment":"Slitet och beh\u00f6ver slipas"}' > /dev/null
+  -d '{"status":"reported_usable","comment":"Slitet och behöver slipas"}' > /dev/null
 echo "  Bryne: reported usable (slitet)"
 
-# Archive Pannlampa via manager status update
+# Pannlampa: archived by manager
 PANN_ID=$(curl -s "$API/api/v0/articles?search=Pannlampa" -H "$HEADER" | python3 -c "import json,sys; print(json.load(sys.stdin)[0]['id'])")
 curl -sf -X PUT "$API/api/v0/articles/$PANN_ID/status" \
   -H "$HEADER" -H "Content-Type: application/json" \
   -d '{"status":"archived","comment":"Uttjänt, ersätts inte"}' > /dev/null
 echo "  Pannlampa: archived"
 
-# Create a second booking in confirmed state (ready for pickup testing)
+# ─── Booking 2: Confirmed, ready for pickup testing ───
+echo ""
+echo "Creating booking 2 (confirmed, for pickup testing)..."
 BOOKING2_ID=$(curl -s -X POST "$API/api/v0/bookings" \
   -H "$LEADER" -H "Content-Type: application/json" \
   -d "{\"start_date\":\"2026-07-01\",\"end_date\":\"2026-07-05\",\"used_by_unit_id\":\"$UNIT_ID\",\"notes\":\"Sommarläger\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
@@ -166,4 +221,5 @@ curl -sf -X POST "$API/api/v0/bookings/$BOOKING2_ID/items" \
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING2_ID/submit" -H "$LEADER" > /dev/null
 echo "  Booking 2 (confirmed): 2x Brandfilt, 1x Primus"
 
+echo ""
 echo "Done."

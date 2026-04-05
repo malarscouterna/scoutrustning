@@ -259,6 +259,24 @@ func (q *Queries) BookingHasApprovalRequired(ctx context.Context, arg BookingHas
 	return requires_approval, err
 }
 
+const cleanupEmptyDrafts = `-- name: CleanupEmptyDrafts :execrows
+DELETE FROM bookings
+WHERE status = 'draft'
+    AND created_at < $1
+    AND NOT EXISTS (
+        SELECT 1 FROM booking_items WHERE booking_id = bookings.id
+    )
+`
+
+// Delete draft bookings with zero items older than the given threshold (all groups).
+func (q *Queries) CleanupEmptyDrafts(ctx context.Context, olderThan pgtype.Timestamptz) (int64, error) {
+	result, err := q.db.Exec(ctx, cleanupEmptyDrafts, olderThan)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const cleanupStaleDrafts = `-- name: CleanupStaleDrafts :exec
 DELETE FROM bookings
 WHERE group_id = $1 AND status = 'draft'
@@ -284,7 +302,7 @@ INSERT INTO bookings (
     $1, $2, $3, $4,
     $5, 'draft', $6, $7, $8
 )
-RETURNING id, group_id, created_by, used_by_unit_id, used_by_external, used_by_external_contact, status, start_date, end_date, notes, created_at, updated_at
+RETURNING id, group_id, created_by, used_by_unit_id, used_by_external, used_by_external_contact, status, start_date, end_date, notes, created_at, updated_at, pre_pickup_status
 `
 
 type CreateBookingParams struct {
@@ -323,6 +341,7 @@ func (q *Queries) CreateBooking(ctx context.Context, arg CreateBookingParams) (B
 		&i.Notes,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PrePickupStatus,
 	)
 	return i, err
 }
@@ -343,7 +362,7 @@ func (q *Queries) DeleteBooking(ctx context.Context, arg DeleteBookingParams) er
 }
 
 const getBooking = `-- name: GetBooking :one
-SELECT b.id, b.group_id, b.created_by, b.used_by_unit_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.notes, b.created_at, b.updated_at, u.name AS unit_name
+SELECT b.id, b.group_id, b.created_by, b.used_by_unit_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.notes, b.created_at, b.updated_at, b.pre_pickup_status, u.name AS unit_name
 FROM bookings b
 LEFT JOIN units u ON b.used_by_unit_id = u.id
 WHERE b.id = $1 AND b.group_id = $2
@@ -367,6 +386,7 @@ type GetBookingRow struct {
 	Notes                 string             `json:"notes"`
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	PrePickupStatus       pgtype.Text        `json:"pre_pickup_status"`
 	UnitName              pgtype.Text        `json:"unit_name"`
 }
 
@@ -386,9 +406,27 @@ func (q *Queries) GetBooking(ctx context.Context, arg GetBookingParams) (GetBook
 		&i.Notes,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PrePickupStatus,
 		&i.UnitName,
 	)
 	return i, err
+}
+
+const getPrePickupStatus = `-- name: GetPrePickupStatus :one
+SELECT pre_pickup_status FROM bookings
+WHERE id = $1 AND group_id = $2
+`
+
+type GetPrePickupStatusParams struct {
+	ID      pgtype.UUID `json:"id"`
+	GroupID string      `json:"group_id"`
+}
+
+func (q *Queries) GetPrePickupStatus(ctx context.Context, arg GetPrePickupStatusParams) (pgtype.Text, error) {
+	row := q.db.QueryRow(ctx, getPrePickupStatus, arg.ID, arg.GroupID)
+	var pre_pickup_status pgtype.Text
+	err := row.Scan(&pre_pickup_status)
+	return pre_pickup_status, err
 }
 
 const getUnitByID = `-- name: GetUnitByID :one
@@ -416,7 +454,7 @@ func (q *Queries) GetUnitByID(ctx context.Context, arg GetUnitByIDParams) (Unit,
 }
 
 const listAllBookings = `-- name: ListAllBookings :many
-SELECT b.id, b.group_id, b.created_by, b.used_by_unit_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.notes, b.created_at, b.updated_at, u.name AS unit_name
+SELECT b.id, b.group_id, b.created_by, b.used_by_unit_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.notes, b.created_at, b.updated_at, b.pre_pickup_status, u.name AS unit_name
 FROM bookings b
 LEFT JOIN units u ON b.used_by_unit_id = u.id
 WHERE b.group_id = $1
@@ -436,6 +474,7 @@ type ListAllBookingsRow struct {
 	Notes                 string             `json:"notes"`
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	PrePickupStatus       pgtype.Text        `json:"pre_pickup_status"`
 	UnitName              pgtype.Text        `json:"unit_name"`
 }
 
@@ -461,6 +500,7 @@ func (q *Queries) ListAllBookings(ctx context.Context, groupID string) ([]ListAl
 			&i.Notes,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.PrePickupStatus,
 			&i.UnitName,
 		); err != nil {
 			return nil, err
@@ -548,7 +588,7 @@ func (q *Queries) ListBookingItems(ctx context.Context, arg ListBookingItemsPara
 }
 
 const listBookingsByStatus = `-- name: ListBookingsByStatus :many
-SELECT b.id, b.group_id, b.created_by, b.used_by_unit_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.notes, b.created_at, b.updated_at, u.name AS unit_name
+SELECT b.id, b.group_id, b.created_by, b.used_by_unit_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.notes, b.created_at, b.updated_at, b.pre_pickup_status, u.name AS unit_name
 FROM bookings b
 LEFT JOIN units u ON b.used_by_unit_id = u.id
 WHERE b.group_id = $1 AND b.status = $2
@@ -573,6 +613,7 @@ type ListBookingsByStatusRow struct {
 	Notes                 string             `json:"notes"`
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	PrePickupStatus       pgtype.Text        `json:"pre_pickup_status"`
 	UnitName              pgtype.Text        `json:"unit_name"`
 }
 
@@ -598,6 +639,7 @@ func (q *Queries) ListBookingsByStatus(ctx context.Context, arg ListBookingsBySt
 			&i.Notes,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.PrePickupStatus,
 			&i.UnitName,
 		); err != nil {
 			return nil, err
@@ -611,7 +653,7 @@ func (q *Queries) ListBookingsByStatus(ctx context.Context, arg ListBookingsBySt
 }
 
 const listBookingsByUser = `-- name: ListBookingsByUser :many
-SELECT b.id, b.group_id, b.created_by, b.used_by_unit_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.notes, b.created_at, b.updated_at, u.name AS unit_name
+SELECT b.id, b.group_id, b.created_by, b.used_by_unit_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.notes, b.created_at, b.updated_at, b.pre_pickup_status, u.name AS unit_name
 FROM bookings b
 LEFT JOIN units u ON b.used_by_unit_id = u.id
 WHERE b.group_id = $1
@@ -640,6 +682,7 @@ type ListBookingsByUserRow struct {
 	Notes                 string             `json:"notes"`
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	PrePickupStatus       pgtype.Text        `json:"pre_pickup_status"`
 	UnitName              pgtype.Text        `json:"unit_name"`
 }
 
@@ -665,6 +708,7 @@ func (q *Queries) ListBookingsByUser(ctx context.Context, arg ListBookingsByUser
 			&i.Notes,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.PrePickupStatus,
 			&i.UnitName,
 		); err != nil {
 			return nil, err
@@ -710,6 +754,27 @@ func (q *Queries) ListUnits(ctx context.Context, groupID string) ([]Unit, error)
 	return items, nil
 }
 
+const noItemsPickedUp = `-- name: NoItemsPickedUp :one
+SELECT NOT EXISTS (
+    SELECT 1 FROM booking_items
+    WHERE booking_id = $1 AND group_id = $2
+        AND pickup_status IS NOT NULL
+) AS none_picked_up
+`
+
+type NoItemsPickedUpParams struct {
+	BookingID pgtype.UUID `json:"booking_id"`
+	GroupID   string      `json:"group_id"`
+}
+
+// Returns true if every item in the booking has a null pickup_status.
+func (q *Queries) NoItemsPickedUp(ctx context.Context, arg NoItemsPickedUpParams) (bool, error) {
+	row := q.db.QueryRow(ctx, noItemsPickedUp, arg.BookingID, arg.GroupID)
+	var none_picked_up bool
+	err := row.Scan(&none_picked_up)
+	return none_picked_up, err
+}
+
 const removeBookingItem = `-- name: RemoveBookingItem :exec
 DELETE FROM booking_items
 WHERE id = $1 AND group_id = $2 AND booking_id = $3
@@ -723,6 +788,22 @@ type RemoveBookingItemParams struct {
 
 func (q *Queries) RemoveBookingItem(ctx context.Context, arg RemoveBookingItemParams) error {
 	_, err := q.db.Exec(ctx, removeBookingItem, arg.ID, arg.GroupID, arg.BookingID)
+	return err
+}
+
+const setPrePickupStatus = `-- name: SetPrePickupStatus :exec
+UPDATE bookings SET pre_pickup_status = $1
+WHERE id = $2 AND group_id = $3
+`
+
+type SetPrePickupStatusParams struct {
+	PrePickupStatus pgtype.Text `json:"pre_pickup_status"`
+	ID              pgtype.UUID `json:"id"`
+	GroupID         string      `json:"group_id"`
+}
+
+func (q *Queries) SetPrePickupStatus(ctx context.Context, arg SetPrePickupStatusParams) error {
+	_, err := q.db.Exec(ctx, setPrePickupStatus, arg.PrePickupStatus, arg.ID, arg.GroupID)
 	return err
 }
 
@@ -769,7 +850,7 @@ UPDATE bookings SET
     notes = $6,
     updated_at = now()
 WHERE id = $7 AND group_id = $8
-RETURNING id, group_id, created_by, used_by_unit_id, used_by_external, used_by_external_contact, status, start_date, end_date, notes, created_at, updated_at
+RETURNING id, group_id, created_by, used_by_unit_id, used_by_external, used_by_external_contact, status, start_date, end_date, notes, created_at, updated_at, pre_pickup_status
 `
 
 type UpdateBookingParams struct {
@@ -808,6 +889,7 @@ func (q *Queries) UpdateBooking(ctx context.Context, arg UpdateBookingParams) (B
 		&i.Notes,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PrePickupStatus,
 	)
 	return i, err
 }
@@ -881,7 +963,7 @@ func (q *Queries) UpdateBookingItemReturnStatus(ctx context.Context, arg UpdateB
 const updateBookingStatus = `-- name: UpdateBookingStatus :one
 UPDATE bookings SET status = $1, updated_at = now()
 WHERE id = $2 AND group_id = $3
-RETURNING id, group_id, created_by, used_by_unit_id, used_by_external, used_by_external_contact, status, start_date, end_date, notes, created_at, updated_at
+RETURNING id, group_id, created_by, used_by_unit_id, used_by_external, used_by_external_contact, status, start_date, end_date, notes, created_at, updated_at, pre_pickup_status
 `
 
 type UpdateBookingStatusParams struct {
@@ -906,6 +988,7 @@ func (q *Queries) UpdateBookingStatus(ctx context.Context, arg UpdateBookingStat
 		&i.Notes,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PrePickupStatus,
 	)
 	return i, err
 }

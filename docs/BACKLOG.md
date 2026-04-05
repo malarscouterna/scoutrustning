@@ -19,10 +19,9 @@ When editing a confirmed booking, it currently transitions to draft. There's no 
 
 ## Draft auto-cleanup
 
-Draft bookings that are abandoned should be automatically deleted after a configurable period (e.g. 24 hours). The `CleanupStaleDrafts` query exists but is not yet called from anywhere. Options:
-- Cron job / scheduled task in the Go API
-- Cleanup on startup + periodic goroutine
-- External scheduler (e.g. pg_cron)
+Draft bookings with zero items that are abandoned are automatically deleted after 48 hours. A background goroutine in the Go API runs hourly and calls `CleanupEmptyDrafts`. For drafts with items (stale but not empty), cleanup is deferred until notifications are implemented — users should be notified before their booking is deleted.
+
+**Status: partially resolved** — empty draft cleanup implemented. Stale drafts with items deferred pending notification system.
 
 ## Quantity-tracked items — manager UI
 
@@ -119,7 +118,9 @@ Future improvement: filter to only show articles the user personally reported, o
 
 ## Article event history — limit display
 
-The article event history currently shows all events. For articles with long histories, this should be limited to the most recent N events (e.g. 10) with a "Visa alla" button to expand. Requires an API change (add `limit` param to the events endpoint) and frontend truncation.
+The article event history endpoint now supports a `?limit=N` parameter. The frontend loads the 10 most recent events by default and shows a "Visa alla" button when more exist.
+
+**Status: resolved.**
 
 ## CSV import — quantity-tracked items
 
@@ -130,7 +131,9 @@ The CSV import currently creates all items as individually tracked. Need a way t
 Several improvements needed for the pickup flow:
 
 ### Undo all pickups → revert to confirmed/approved
-When all items in a picked_up booking have their pickup status cleared (undone), the booking should automatically transition back to confirmed (or approved, whichever it was before pickup). Currently it stays in picked_up with no items marked.
+When all items in a picked_up booking have their pickup status cleared (undone), the booking automatically transitions back to its pre-pickup status (confirmed or approved). The `pre_pickup_status` column on the `bookings` table stores the status before pickup.
+
+**Status: resolved.**
 
 ### Partial pickup indication
 When some but not all items are picked up, the booking should visually indicate "partial pickup" status. A "Klar med uthämtning" (done with pickup) button should let the user confirm they're finished even if not all items were picked up. Items left unmarked would be treated as not collected.

@@ -18,7 +18,7 @@
 			: data.units.filter(u => ($page.data.user?.units ?? []).includes(u.name))
 	);
 
-	const isEdit = !!data.existing;
+	let isEdit = $derived(!!data.existing);
 
 	let startDate = $state(data.existing?.booking.start_date ?? '');
 	let endDate = $state(data.existing?.booking.end_date ?? '');
@@ -30,9 +30,9 @@
 	let message = $state('');
 	let submitted = $state(false);
 	let loading = $state(false);
-	let showAvailability = $state(isEdit);
+	let showAvailability = $state(!!data.existing);
 
-	let cartEl: HTMLElement;
+	let cartEl = $state<HTMLElement | undefined>(undefined);
 
 	function showMessage(msg: string) {
 		message = msg;

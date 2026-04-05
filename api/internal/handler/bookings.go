@@ -594,6 +594,12 @@ func (h *BookingHandler) Pickup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Save current status so we can revert if all pickups are undone
+	h.Q.SetPrePickupStatus(r.Context(), db.SetPrePickupStatusParams{
+		ID: bookingID, GroupID: claims.GroupID,
+		PrePickupStatus: pgtype.Text{String: booking.Status, Valid: true},
+	})
+
 	updated, err := h.Q.UpdateBookingStatus(r.Context(), db.UpdateBookingStatusParams{
 		ID: bookingID, GroupID: claims.GroupID, Status: "picked_up",
 	})
@@ -677,6 +683,20 @@ func (h *BookingHandler) UpdateItemPickup(w http.ResponseWriter, r *http.Request
 		h.Q.UpdateArticleStatus(r.Context(), db.UpdateArticleStatusParams{
 			ID: item.ArticleID, GroupID: claims.GroupID, Status: "ok",
 		})
+		// If all pickups are now undone, revert booking to pre-pickup status
+		nonePickedUp, err := h.Q.NoItemsPickedUp(r.Context(), db.NoItemsPickedUpParams{
+			BookingID: bookingID, GroupID: claims.GroupID,
+		})
+		if err == nil && nonePickedUp {
+			preStatus, err := h.Q.GetPrePickupStatus(r.Context(), db.GetPrePickupStatusParams{
+				ID: bookingID, GroupID: claims.GroupID,
+			})
+			if err == nil && preStatus.Valid {
+				h.Q.UpdateBookingStatus(r.Context(), db.UpdateBookingStatusParams{
+					ID: bookingID, GroupID: claims.GroupID, Status: preStatus.String,
+				})
+			}
+		}
 	}
 
 	WriteJSON(w, http.StatusOK, item)

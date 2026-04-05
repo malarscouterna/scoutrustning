@@ -107,3 +107,61 @@ func (q *Queries) ListArticleEvents(ctx context.Context, arg ListArticleEventsPa
 	}
 	return items, nil
 }
+
+const listArticleEventsLimited = `-- name: ListArticleEventsLimited :many
+SELECT ae.id, ae.group_id, ae.article_id, ae.actor_id, ae.event_type, ae.description, ae.metadata, ae.created_at,
+    u.name AS actor_name
+FROM article_events ae
+JOIN users u ON ae.actor_id = u.id
+WHERE ae.article_id = $1 AND ae.group_id = $2
+ORDER BY ae.created_at DESC
+LIMIT $3
+`
+
+type ListArticleEventsLimitedParams struct {
+	ArticleID  pgtype.UUID `json:"article_id"`
+	GroupID    string      `json:"group_id"`
+	MaxResults int32       `json:"max_results"`
+}
+
+type ListArticleEventsLimitedRow struct {
+	ID          pgtype.UUID        `json:"id"`
+	GroupID     string             `json:"group_id"`
+	ArticleID   pgtype.UUID        `json:"article_id"`
+	ActorID     string             `json:"actor_id"`
+	EventType   string             `json:"event_type"`
+	Description string             `json:"description"`
+	Metadata    []byte             `json:"metadata"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	ActorName   string             `json:"actor_name"`
+}
+
+func (q *Queries) ListArticleEventsLimited(ctx context.Context, arg ListArticleEventsLimitedParams) ([]ListArticleEventsLimitedRow, error) {
+	rows, err := q.db.Query(ctx, listArticleEventsLimited, arg.ArticleID, arg.GroupID, arg.MaxResults)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListArticleEventsLimitedRow{}
+	for rows.Next() {
+		var i ListArticleEventsLimitedRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.GroupID,
+			&i.ArticleID,
+			&i.ActorID,
+			&i.EventType,
+			&i.Description,
+			&i.Metadata,
+			&i.CreatedAt,
+			&i.ActorName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

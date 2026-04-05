@@ -8,8 +8,12 @@
 	let { articleId }: Props = $props();
 	const api = createApiClient();
 
+	const DEFAULT_LIMIT = 6;
+
 	let events = $state<ArticleEvent[]>([]);
+	let hasMore = $state(false);
 	let loading = $state(true);
+	let showingAll = $state(false);
 
 	const typeLabels: Record<string, string> = {
 		issue_reported: 'Problem rapporterat',
@@ -51,8 +55,26 @@
 		return parts.join(' · ');
 	}
 
+	async function loadEvents(limit?: number) {
+		loading = true;
+		try {
+			const result = await api.listArticleEvents(articleId, limit);
+			events = result.events;
+			hasMore = result.has_more;
+			showingAll = !limit;
+		} catch {
+			// ignore
+		} finally {
+			loading = false;
+		}
+	}
+
+	async function showAll() {
+		await loadEvents();
+	}
+
 	$effect(() => {
-		api.listArticleEvents(articleId).then((e) => { events = e; loading = false; }).catch(() => { loading = false; });
+		loadEvents(DEFAULT_LIMIT);
 	});
 </script>
 
@@ -76,4 +98,12 @@
 			</div>
 		{/each}
 	</div>
+	{#if hasMore && !showingAll}
+		<button
+			class="text-xs text-blue-600 hover:text-blue-800 mt-2 cursor-pointer"
+			onclick={showAll}
+		>
+			Visa alla händelser
+		</button>
+	{/if}
 {/if}

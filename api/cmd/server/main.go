@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pressly/goose/v3"
 
@@ -92,6 +93,26 @@ func main() {
 
 	addr := getenv("ADDR", ":8080")
 	srv := &http.Server{Addr: addr, Handler: r}
+
+	// Background: clean up empty draft bookings every hour
+	go func() {
+		ticker := time.NewTicker(1 * time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				threshold := pgtype.Timestamptz{Time: time.Now().Add(-48 * time.Hour), Valid: true}
+				deleted, err := queries.CleanupEmptyDrafts(ctx, threshold)
+				if err != nil {
+					slog.Error("draft cleanup failed", "error", err)
+				} else if deleted > 0 {
+					slog.Info("cleaned up empty drafts", "deleted", deleted)
+				}
+			}
+		}
+	}()
 
 	go func() {
 		slog.Info("starting server", "addr", addr, "dev_mode", devMode)

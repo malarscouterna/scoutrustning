@@ -187,3 +187,28 @@ SELECT NOT EXISTS (
 DELETE FROM bookings
 WHERE group_id = @group_id AND status = 'draft'
     AND created_at < @older_than;
+
+-- name: CleanupEmptyDrafts :execrows
+-- Delete draft bookings with zero items older than the given threshold (all groups).
+DELETE FROM bookings
+WHERE status = 'draft'
+    AND created_at < @older_than
+    AND NOT EXISTS (
+        SELECT 1 FROM booking_items WHERE booking_id = bookings.id
+    );
+
+-- name: NoItemsPickedUp :one
+-- Returns true if every item in the booking has a null pickup_status.
+SELECT NOT EXISTS (
+    SELECT 1 FROM booking_items
+    WHERE booking_id = @booking_id AND group_id = @group_id
+        AND pickup_status IS NOT NULL
+) AS none_picked_up;
+
+-- name: SetPrePickupStatus :exec
+UPDATE bookings SET pre_pickup_status = @pre_pickup_status
+WHERE id = @id AND group_id = @group_id;
+
+-- name: GetPrePickupStatus :one
+SELECT pre_pickup_status FROM bookings
+WHERE id = @id AND group_id = @group_id;

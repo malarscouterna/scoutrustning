@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -328,12 +329,35 @@ func (h *ArticleHandler) ListEvents(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
+
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		limit, err := strconv.Atoi(limitStr)
+		if err != nil || limit < 1 {
+			WriteError(w, http.StatusBadRequest, "invalid limit")
+			return
+		}
+		// Fetch limit+1 to detect if there are more
+		events, err := h.Q.ListArticleEventsLimited(r.Context(), db.ListArticleEventsLimitedParams{
+			ArticleID: id, GroupID: claims.GroupID, MaxResults: int32(limit + 1),
+		})
+		if err != nil {
+			WriteError(w, http.StatusInternalServerError, "failed to list events")
+			return
+		}
+		hasMore := len(events) > limit
+		if hasMore {
+			events = events[:limit]
+		}
+		WriteJSON(w, http.StatusOK, map[string]any{"events": events, "has_more": hasMore})
+		return
+	}
+
 	events, err := h.Q.ListArticleEvents(r.Context(), db.ListArticleEventsParams{ArticleID: id, GroupID: claims.GroupID})
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, "failed to list events")
 		return
 	}
-	WriteJSON(w, http.StatusOK, events)
+	WriteJSON(w, http.StatusOK, map[string]any{"events": events, "has_more": false})
 }
 
 // UpdateStatus changes article status with an optional comment.

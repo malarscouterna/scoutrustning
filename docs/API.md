@@ -112,9 +112,18 @@ Required: `status`. `comment` required when reporting (reported_usable, reported
 **Response** `200` (updated article) | `400` | `403` | `404`
 
 ### `GET /api/v0/articles/{id}/events`
-Get the event history for an article. Returns all logged events (status changes, issue reports, resolutions, returns) ordered by most recent first.
+Get the event history for an article. Returns logged events (status changes, issue reports, resolutions, returns) ordered by most recent first.
 
-**Response** `200` — array of events with `id`, `event_type`, `description`, `metadata`, `actor_name`, `created_at`.
+**Query parameters** (all optional):
+- `limit` — maximum number of events to return. When set, response includes `has_more` to indicate if more events exist beyond the limit.
+
+**Response** `200`
+```json
+{
+  "events": [{"id": "uuid", "event_type": "...", "description": "...", "metadata": {}, "actor_name": "...", "created_at": "..."}],
+  "has_more": false
+}
+```
 
 Event types: `status_change`, `issue_reported`, `issue_resolved`, `booked`, `picked_up`, `returned`, `note`.
 
@@ -230,18 +239,20 @@ Create a new draft booking with the same unit, notes, and items as the source. D
 ```
 
 ### `POST /api/v0/bookings/{id}/pickup`
-Transition a confirmed or approved booking to `picked_up`. Access: creator, unit leaders, or equipment manager.
+Transition a confirmed or approved booking to `picked_up`. Saves the current status (`confirmed` or `approved`) as `pre_pickup_status` so it can be restored if all pickups are undone. Access: creator, unit leaders, or equipment manager.
 
 **Response** `200` | `400` | `403` | `404`
 
 ### `PUT /api/v0/bookings/{id}/items/{itemId}/pickup`
 Set the pickup status for a single booking item. Booking must be in `picked_up` status. Access: creator, unit/project members, or equipment manager. Logs a `picked_up` article event with the acting user.
 
+Sending an empty string clears the pickup status (undo). If all items in the booking have their pickup status cleared, the booking automatically reverts to its pre-pickup status (`confirmed` or `approved`).
+
 **Body**
 ```json
 {"pickup_status": "picked_up"}
 ```
-Valid values: `picked_up`, `lost`.
+Valid values: `picked_up`, `lost`, `""` (undo).
 
 **Response** `200` | `400` | `403` | `404`
 
