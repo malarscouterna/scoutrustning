@@ -1,3 +1,14 @@
+# --- Dev stage: hot reload with air ---
+FROM golang:1.26-alpine AS dev
+RUN go install github.com/air-verse/air@latest
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+ENV MIGRATIONS_DIR=/src/migrations
+EXPOSE 8080
+CMD ["air"]
+
+# --- Production build ---
 FROM golang:1.26-alpine AS build
 WORKDIR /src
 COPY go.mod go.sum ./

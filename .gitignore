@@ -1,11 +1,15 @@
 # Go
 api/bin/
 api/tmp/
+api/dev-personas.json
+api/role-mapping.json
 
 # Node / SvelteKit
 web/node_modules/
 web/.svelte-kit/
 web/build/
+web/dev-personas.json
+web/role-mapping.json
 
 # Environment
 .env

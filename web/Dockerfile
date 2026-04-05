@@ -1,3 +1,13 @@
+# --- Dev stage: HMR with vite dev server ---
+FROM node:24-alpine AS dev
+RUN corepack enable
+WORKDIR /app
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+EXPOSE 3000
+CMD ["pnpm", "dev", "--host", "--port", "3000"]
+
+# --- Production build ---
 FROM node:24-alpine AS build
 RUN corepack enable
 WORKDIR /app

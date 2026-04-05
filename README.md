@@ -30,12 +30,20 @@ Pre-release (`v0`). Breaking changes expected. Currently implements:
 ## Development
 
 ```bash
-# Start everything (builds and runs Go API + SvelteKit + Postgres)
-docker compose up --build
+# Start everything with hot reload (Go API + SvelteKit + Postgres)
+docker compose up
 
 # In another terminal, seed the database (import inventory + create units)
 ./dev-seed.sh
 ```
+
+Code changes auto-reload:
+- **Go API**: [air](https://github.com/air-verse/air) watches `.go` and `.sql` files, rebuilds and restarts (~1-2s)
+- **SvelteKit**: Vite dev server with HMR (near-instant)
+
+You still need `docker compose up --build` when:
+- Adding new Go or Node dependencies
+- Changing a Dockerfile
 
 The seed script imports from `docs/Utrustningsregister MS.xlsx - data.csv` by default. Pass a different path as an argument:
 ```bash

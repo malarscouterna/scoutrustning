@@ -16,29 +16,36 @@ services:
       retries: 5
 
   api:
-    build: ./api
+    build:
+      context: ./api
+      target: dev
     ports:
       - "8080:8080"
     volumes:
-      - ./dev-personas.json:/app/dev-personas.json:ro
-      - ./role-mapping.json:/app/role-mapping.json:ro
+      - ./api:/src
+      - ./dev-personas.json:/src/dev-personas.json:ro
+      - ./role-mapping.json:/src/role-mapping.json:ro
     environment:
       DATABASE_URL: postgres://utrustning:utrustning@db:5432/utrustning?sslmode=disable
       ADDR: ":8080"
       DEV_MODE: "true"
-      DEV_PERSONAS_PATH: /app/dev-personas.json
-      ROLE_MAPPING_PATH: /app/role-mapping.json
+      DEV_PERSONAS_PATH: /src/dev-personas.json
+      ROLE_MAPPING_PATH: /src/role-mapping.json
       JWKS_URL: https://dev.id.scouterna.se/realms/scoutnet/protocol/openid-connect/certs
-      MIGRATIONS_DIR: /migrations
+      MIGRATIONS_DIR: /src/migrations
     depends_on:
       db:
         condition: service_healthy
 
   web:
-    build: ./web
+    build:
+      context: ./web
+      target: dev
     ports:
       - "3000:3000"
     volumes:
+      - ./web:/app
+      - /app/node_modules
       - ./role-mapping.json:/app/role-mapping.json:ro
       - ./dev-personas.json:/app/dev-personas.json:ro
     environment:
