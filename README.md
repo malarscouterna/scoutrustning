@@ -47,10 +47,10 @@ In dev mode (`DEV_MODE=true`), use the `X-Dev-Role-Override` header to switch pe
 ### Running tests
 
 ```bash
-cd api && go test ./internal/handler/tests/ -timeout 180s
+cd api && go test ./internal/handler/tests/ -timeout 180s -count=1 2>&1
 ```
 
-Tests use testcontainers-go (requires Docker) and run against a real Postgres instance.
+Tests use testcontainers-go (requires Docker) and run against a real Postgres instance. A single shared container is reused across all tests for speed.
 
 ## Environment variables
 

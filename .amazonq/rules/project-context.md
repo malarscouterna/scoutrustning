@@ -142,6 +142,7 @@ When wiring real OIDC (Phase 3 Step 1): ✅ Done.
 - Tests are organized by flow (e.g. `TestBookingFlow`, `TestApprovalFlow`), not by handler or function.
 - Only write isolated unit tests for genuinely complex logic (availability calculation, article assignment).
 - Use a test helper that sets up a group, seeds data, and provides an HTTP client with a fake JWT for a given role.
+- **Test command**: `cd api && go test ./internal/handler/tests/ -timeout 180s -count=1 2>&1` — no `-v` flag so only failing tests produce output. All tests share a single Postgres container via `TestMain`; each test truncates and reseeds tables for isolation.
 - Frontend E2E tests use Playwright against the full stack.
 - In dev mode, a role switcher UI and `X-Dev-Role-Override` header allow testing as different personas (leader, project leader, equipment manager, different units) without re-authenticating. Personas are defined in `dev-personas.json`. Both are disabled in production.
 

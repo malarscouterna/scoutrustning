@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -27,19 +28,17 @@ import (
 	"github.com/malarscouterna/ms-utrustning/api/internal/handler"
 )
 
-type TestEnv struct {
-	Pool         *pgxpool.Pool
-	Queries      *db.Queries
-	Server       *httptest.Server
-	Router       *chi.Mux
-	personasPath string
+// shared holds the single Postgres container reused across all tests.
+var shared struct {
+	pool      *pgxpool.Pool
+	container testcontainers.Container
 }
 
-func SetupTestEnv(t *testing.T) *TestEnv {
-	t.Helper()
+// SetupShared starts a single Postgres container and runs migrations.
+// Call from TestMain before m.Run().
+func SetupShared() {
 	ctx := context.Background()
 
-	// Start Postgres container
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
 			Image:        "postgres:17-alpine",
@@ -54,53 +53,93 @@ func SetupTestEnv(t *testing.T) *TestEnv {
 		Started: true,
 	})
 	if err != nil {
-		t.Fatalf("failed to start postgres container: %v", err)
+		log.Fatalf("failed to start postgres container: %v", err)
 	}
-	t.Cleanup(func() { container.Terminate(ctx) })
+	shared.container = container
 
 	host, _ := container.Host(ctx)
 	port, _ := container.MappedPort(ctx, "5432")
 	dbURL := fmt.Sprintf("postgres://test:test@%s:%s/test?sslmode=disable", host, port.Port())
 
-	// Run migrations
 	migrationsDir := findMigrationsDir()
 	goose.SetBaseFS(os.DirFS(migrationsDir))
 	sqlDB, err := sql.Open("pgx", dbURL)
 	if err != nil {
-		t.Fatalf("failed to open db: %v", err)
+		log.Fatalf("failed to open db: %v", err)
 	}
 	if err := goose.Up(sqlDB, "."); err != nil {
-		t.Fatalf("failed to run migrations: %v", err)
+		log.Fatalf("failed to run migrations: %v", err)
 	}
 	sqlDB.Close()
 
-	// Create pgxpool
 	pool, err := pgxpool.New(ctx, dbURL)
 	if err != nil {
-		t.Fatalf("failed to create pool: %v", err)
+		log.Fatalf("failed to create pool: %v", err)
 	}
-	t.Cleanup(func() { pool.Close() })
+	shared.pool = pool
+}
 
-	queries := db.New(pool)
+// TeardownShared cleans up the shared container. Call from TestMain after m.Run().
+func TeardownShared() {
+	if shared.pool != nil {
+		shared.pool.Close()
+	}
+	if shared.container != nil {
+		shared.container.Terminate(context.Background())
+	}
+}
 
-	// Build router with dev mode auth
+type TestEnv struct {
+	Pool         *pgxpool.Pool
+	Queries      *db.Queries
+	Server       *httptest.Server
+	Router       *chi.Mux
+	personasPath string
+}
+
+// SetupTestEnv returns a TestEnv backed by the shared container.
+// It truncates all tables to give each test a clean slate.
+func SetupTestEnv(t *testing.T) *TestEnv {
+	t.Helper()
+
+	ctx := context.Background()
+	_, err := shared.pool.Exec(ctx,
+		`TRUNCATE groups, users, units, categories, locations, articles,
+		 article_events, bookings, booking_items, packages, package_items,
+		 audit_log CASCADE`)
+	if err != nil {
+		t.Fatalf("failed to truncate tables: %v", err)
+	}
+
+	// Re-insert seed data from migrations
+	_, err = shared.pool.Exec(ctx, `
+		INSERT INTO groups (id, name) VALUES ('766', 'Mälarscouterna'), ('999', 'Testkåren');
+		INSERT INTO locations (group_id, name, sort_order) VALUES
+			('766', 'Kammaren', 1), ('766', 'Östergården', 2), ('766', 'Ladan', 3),
+			('766', 'Kallförrådet', 4), ('766', 'Hajkförrådet', 5), ('766', 'Magasinet', 6),
+			('766', 'Verkstan', 7), ('999', 'Förrådet', 1);
+		INSERT INTO categories (group_id, name, sort_order) VALUES
+			('766', 'Övrigt', 1), ('999', 'Övrigt', 1);
+	`)
+	if err != nil {
+		t.Fatalf("failed to re-seed tables: %v", err)
+	}
+
+	queries := db.New(shared.pool)
 	personasPath := findPersonasPath()
+
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
-
 	r.Get("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"status":"ok"}`))
 	})
 
-	// Tests mount their own routes on the returned router.
-	// The V1 method provides a subrouter with auth + upsert middleware.
-
 	srv := httptest.NewServer(r)
 	t.Cleanup(func() { srv.Close() })
 
 	return &TestEnv{
-		Pool:         pool,
+		Pool:         shared.pool,
 		Queries:      queries,
 		Server:       srv,
 		Router:       r,
@@ -109,7 +148,6 @@ func SetupTestEnv(t *testing.T) *TestEnv {
 }
 
 // MountV1 mounts an authenticated subrouter at /api/v0 with auth + user upsert middleware.
-// The provided fn receives the subrouter to register routes on.
 func (e *TestEnv) MountV1(fn func(r chi.Router)) {
 	e.Router.Route("/api/v0", func(r chi.Router) {
 		r.Use(auth.Middleware(auth.MiddlewareConfig{
@@ -121,7 +159,7 @@ func (e *TestEnv) MountV1(fn func(r chi.Router)) {
 	})
 }
 
-// V1 is a convenience that mounts the standard handlers (articles, locations, categories).
+// V1 is a convenience alias for MountV1.
 func (e *TestEnv) V1(fn func(r chi.Router)) {
 	e.MountV1(fn)
 }
