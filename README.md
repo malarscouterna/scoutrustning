@@ -88,7 +88,7 @@ Flags:
 | `AUTH_SECRET` | static | generated | generated |
 | `POSTGRES_PASSWORD` | static | generated | generated |
 
-- **Dev**: hot reload, persona switcher, no OIDC required, Postgres exposed via `docker-compose.override.yml`
+- **Dev**: hot reload, persona switcher, auto-fallback to default persona (no login required), Postgres exposed
 - **Demo**: production builds, OIDC login required (ScoutID), persona switcher available after login, demo banner shown
 - **Production**: production builds, OIDC login required, no persona switcher, no demo banner
 
@@ -129,22 +129,9 @@ ms-utrustning/
 ├── dev-personas.json       # Persona definitions (needed for demo mode)
 ├── role-mapping.json       # Scoutnet role → app role mapping
 └── docs/
-    └── import-example.csv  # Or your real inventory CSV
+    ├── import-example.csv  # Or your real inventory CSV
+    └── guide.md            # User guide (shown in the UI)
 ```
-
-Download everything at once from the latest release:
-
-```bash
-mkdir -p ms-utrustning/docs && cd ms-utrustning
-BASE="https://raw.githubusercontent.com/malarscouterna/ms-utrustning/main"
-for f in docker-compose.yml gen-env.sh dev-seed.sh dev-personas.json role-mapping.json; do
-  curl -fsSL "$BASE/$f" -o "$f"
-done
-curl -fsSL "$BASE/docs/import-example.csv" -o docs/import-example.csv
-chmod +x gen-env.sh dev-seed.sh
-```
-
-No source code, no Dockerfiles, no `node_modules`. The compose file pulls pre-built images from GitHub Packages.
 
 Do **not** copy `docker-compose.override.yml` — that file enables dev-only features (local builds, source mounts, exposed Postgres port).
 
@@ -158,11 +145,14 @@ Do **not** copy `docker-compose.override.yml` — that file enables dev-only fea
 #    ORIGIN=https://your-demo-domain.example.com
 #    AUTH_KEYCLOAK_SECRET=<your keycloak client secret>
 
-# 3. Pull images and start
+# 3. Authenticate with GitHub Container Registry (one-time)
+echo "YOUR_GITHUB_PAT" | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
+
+# 4. Pull images and start
 docker compose pull
 docker compose up -d
 
-# 4. Seed the database with inventory and sample bookings
+# 5. Seed the database with inventory and sample bookings
 ./dev-seed.sh
 ```
 
@@ -181,6 +171,31 @@ docker compose up -d
 # 4. Import your inventory
 ./dev-seed.sh path/to/your-inventory.csv
 ```
+
+### Reverse proxy setup
+
+The reverse proxy forwards traffic to the SvelteKit container (port 3000). If your reverse proxy runs in Docker (e.g. Caddy), the `web` service needs to be on the same Docker network. Create a `docker-compose.caddy.yml` alongside the main compose file:
+
+```yaml
+services:
+  web:
+    networks:
+      - default
+      - caddy
+
+networks:
+  caddy:
+    external: true
+    name: your-caddy-network-name
+```
+
+Then add it to `COMPOSE_FILE` in `.env`:
+
+```
+COMPOSE_FILE=docker-compose.yml:docker-compose.caddy.yml
+```
+
+If your reverse proxy runs directly on the host (not in Docker), no extra network config is needed — it connects to `localhost:3000` (or whatever `WEB_PORT` is set to).
 
 ### Updating
 

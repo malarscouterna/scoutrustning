@@ -176,7 +176,6 @@ All differences between dev, demo, and production are controlled via `.env`. One
 | `DEV_MODE` | `true` | `true` | `false` |
 | `DEMO_MODE` | `false` | `true` | `false` |
 | `BUILD_TARGET` | `dev` | `production` | `production` |
-| `POSTGRES_PORT` | `5432` | _(empty)_ | _(empty)_ |
 
 - **Dev**: hot reload, persona switcher, auto-fallback to default persona (no login required), Postgres exposed
 - **Demo**: production builds, OIDC login required (ScoutID), persona switcher available after login, demo banner shown, Postgres not exposed
