@@ -12,7 +12,8 @@
     "@auth/sveltekit": "^1.11.1",
     "@scouterna/design-tokens": "^0.0.5",
     "@scouterna/tailwind-theme": "^0.0.4",
-    "@scouterna/ui-webc": "^3.2.0"
+    "@scouterna/ui-webc": "^3.2.0",
+    "marked": "^17.0.6"
   },
   "devDependencies": {
     "@sveltejs/adapter-node": "^5.5.4",

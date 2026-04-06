@@ -10,6 +10,7 @@ web/.svelte-kit/
 web/build/
 web/dev-personas.json
 web/role-mapping.json
+web/guide.md
 
 # Environment
 .env

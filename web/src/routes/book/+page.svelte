@@ -23,7 +23,19 @@
 	let startDate = $state(data.existing?.booking.start_date ?? '');
 	let endDate = $state(data.existing?.booking.end_date ?? '');
 	let notes = $state(data.existing?.booking.notes ?? '');
+	let defaultUnit = $derived.by(() => {
+		const myUnitNames = new Set($page.data.user?.units ?? []);
+		const match = data.units.find(u => myUnitNames.has(u.name));
+		return match?.id ?? '';
+	});
 	let selectedUnit = $state(data.existing?.booking.used_by_unit_id ?? '');
+	let unitInitialized = $state(!!data.existing);
+	$effect(() => {
+		if (!unitInitialized && defaultUnit) {
+			selectedUnit = defaultUnit;
+			unitInitialized = true;
+		}
+	});
 	let bookingId = $state<string | null>(data.existing?.booking.id ?? null);
 	let cartItems = $state<BookingItem[]>(data.existing?.items ?? []);
 	let error = $state('');

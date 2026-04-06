@@ -2,13 +2,17 @@ titelgrupp,title,count,description,location,plats,rum,lage,tags,requires_approva
 Sibley,Sibley 1,,,Hajkförrådet,,,,Sova,low
 Sibley,Sibley 2,,,Hajkförrådet,,,,Sova,low
 Sibley,Sibley 3,,,Hajkförrådet,,,,Sova,low
-Primus,Primus 1,,,Hajkförrådet,,,,Mat,
+Primus,Primus 1,,,Hajkförrådet,,,,Sova,
+Primus,Primus 2,,,Hajkförrådet,,,,Sova,
+Primus,Primus 3,,,Hajkförrådet,,,,Sova,
 Stormkök,Stormkök 1,,,Hajkförrådet,,,,Mat,
 Stormkök,Stormkök 2,,,Hajkförrådet,,,,Mat,
 Stormkök,Stormkök 3,,,Hajkförrådet,,,,Mat,
 Stormkök,Stormkök 4,,,Hajkförrådet,,,,Mat,
 Stormkök,Stormkök 5,,,Hajkförrådet,,,,Mat,
 Stormkök,Stormkök 6,,,Hajkförrådet,,,,Mat,
+Stormkök,Stormkök 7,,,Karsvik,Ostergarden,,,Mat,low
+Stormkök,Stormkök 8,,,Karsvik,Ostergarden,,,Mat,low
 Brandfilt,Brandfilt,6,,Hajkförrådet,,,,Säkerhet,
 Yxa,Yxa Stor,,,Hajkförrådet,,,,Verktyg,
 Yxa,Yxa Liten,,,Hajkförrådet,,,,Verktyg,

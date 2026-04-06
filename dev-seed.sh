@@ -129,6 +129,19 @@ curl -sf -X PUT "$API/api/v0/articles/$STORM5/status" \
   -d '{"status":"reported_unusable","comment":"Läcker bränsle, farligt"}' > /dev/null
 echo "  Stormkök 5: reported unusable (läcker)"
 
+# Stormkök 7 (Östergården): incoming with expected date
+STORM_OG_IDS=$(curl -s "$API/api/v0/articles?search=Stormk%C3%B6k" -H "$HEADER" | python3 -c "
+import json,sys
+for a in json.load(sys.stdin):
+    if a['common_name'] == 'Stormkök 7': print(a['id']); break
+")
+if [ -n "$STORM_OG_IDS" ]; then
+  curl -sf -X PUT "$API/api/v0/articles/$STORM_OG_IDS/status" \
+    -H "$HEADER" -H "Content-Type: application/json" \
+    -d '{"status":"incoming","comment":"Beställd, leverans väntas","expected_available_date":"2026-08-01"}' > /dev/null
+  echo "  Stormkök 7 (Östergården): incoming (beräknas 1 aug)"
+fi
+
 # Helper: find booking item ID by article common_name
 find_item() {
   local BOOKING=$1 NAME=$2 PERSONA=$3

@@ -12,9 +12,9 @@
 </script>
 
 {#if data.demo}
-	<div class="bg-adventurerorange-100 border-b border-adventurerorange-300 text-adventurerorange-900 text-center text-sm py-2 px-4 font-medium">
+	<a href="/guide" class="block bg-adventurerorange-100 border-b border-adventurerorange-300 text-adventurerorange-900 text-center text-sm py-2 px-4 font-medium hover:bg-adventurerorange-200">
 		🏕️ Demo — detta är en testmiljö. Bokningar och data kan återställas när som helst.
-	</div>
+	</a>
 {/if}
 
 {#if data.user}
@@ -25,6 +25,7 @@
 			<a href="/book" class="text-sm hover:underline" class:font-medium={$page.url.pathname.startsWith('/book')}>Boka</a>
 			<a href="/bookings" class="text-sm hover:underline" class:font-medium={$page.url.pathname.startsWith('/bookings')}>Bokningar</a>
 			<a href="/issues" class="text-sm hover:underline" class:font-medium={$page.url.pathname.startsWith('/issues')}>Ärenden</a>
+			<a href="/guide" class="text-sm hover:underline" class:font-medium={$page.url.pathname.startsWith('/guide')}>Guide</a>
 			<a href="/profile" class="ml-auto text-sm font-medium hover:underline">{data.user.name}</a>
 		</div>
 	</nav>
