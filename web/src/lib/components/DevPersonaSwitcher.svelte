@@ -37,7 +37,7 @@
 	);
 </script>
 
-<div class="fixed bottom-4 right-4 z-50">
+<div class="fixed bottom-18 sm:bottom-4 right-4 z-50">
 	{#if open}
 		<div class="bg-white border border-neutral-300 rounded-lg shadow-lg w-72 mb-2">
 			<div class="px-3 py-2 border-b bg-neutral-50 rounded-t-lg flex items-center justify-between">
