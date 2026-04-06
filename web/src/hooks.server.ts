@@ -5,6 +5,7 @@ import { authHandle } from './auth';
 
 const API_URL = process.env.API_URL || 'http://localhost:8080';
 const DEV_MODE = process.env.DEV_MODE === 'true';
+const DEMO_MODE = process.env.DEMO_MODE === 'true';
 const PERSONA_COOKIE = 'dev-persona';
 const DEFAULT_PERSONA = 'leader-yggdrasil';
 
@@ -67,6 +68,10 @@ const appHandle: Handle = async ({ event, resolve }) => {
 			accessToken = await getAccessToken(event);
 			if (accessToken) {
 				authMode = 'oidc';
+			} else if (DEMO_MODE) {
+				// Demo: require OIDC login, no auto-persona fallback
+				const callbackUrl = event.url.pathname + event.url.search;
+				throw redirect(302, `/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
 			} else {
 				// Dev fallback: set default persona
 				event.cookies.set(PERSONA_COOKIE, DEFAULT_PERSONA, { path: '/', maxAge: 60 * 60 * 24 * 30 });
@@ -93,6 +98,10 @@ const appHandle: Handle = async ({ event, resolve }) => {
 	if (event.url.pathname.startsWith('/api/')) {
 		const target = `${API_URL}${event.url.pathname}${event.url.search}`;
 		const headers = new Headers(event.request.headers);
+
+		// Strip auth headers from client — only the server decides identity
+		headers.delete('Authorization');
+		headers.delete('X-Dev-Role-Override');
 
 		if (authMode === 'persona') {
 			headers.set('X-Dev-Role-Override', personaKey!);

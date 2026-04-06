@@ -167,6 +167,23 @@ When wiring real OIDC (Phase 3 Step 1): ✅ Done.
 - `expected_available_date` (nullable) is used with `incoming` and `under_repair` statuses. Articles with these statuses become bookable for date ranges starting on or after this date.
 - Availability is always computed at query time from article condition + booking overlaps — never stored as a column.
 
+## Environment modes
+
+All differences between dev, demo, and production are controlled via `.env`. One `docker-compose.yml` for all modes.
+
+| Variable | Dev | Demo | Production |
+|---|---|---|---|
+| `DEV_MODE` | `true` | `true` | `false` |
+| `DEMO_MODE` | `false` | `true` | `false` |
+| `BUILD_TARGET` | `dev` | `production` | `production` |
+| `POSTGRES_PORT` | `5432` | _(empty)_ | _(empty)_ |
+
+- **Dev**: hot reload, persona switcher, auto-fallback to default persona (no login required), Postgres exposed
+- **Demo**: production builds, OIDC login required (ScoutID), persona switcher available after login, demo banner shown, Postgres not exposed
+- **Production**: production builds, OIDC login required, no persona switcher, no demo banner
+
+Demo mode requires `DEV_MODE=true` (for persona switcher) but gates access behind OIDC — no auto-persona fallback without logging in first.
+
 ## Security practices
 
 - All API endpoints require a valid JWT except health checks.
@@ -174,6 +191,10 @@ When wiring real OIDC (Phase 3 Step 1): ✅ Done.
 - `group_id` is derived from the JWT, never from request parameters.
 - File uploads (images) are validated for type and size, stored outside the web root.
 - SQL injection is prevented by sqlc's parameterized queries.
+- In demo/production: `POSTGRES_PORT` is not exposed (no `docker-compose.override.yml`). Password is randomly generated.
+- `AUTH_SECRET` and `POSTGRES_PASSWORD` are randomly generated in demo/production.
+- The SvelteKit proxy **strips** `X-Dev-Role-Override` and `Authorization` headers from incoming browser requests before forwarding to the Go API. Identity is injected server-side only — users cannot forge auth headers through the proxy.
+- The Go API port (8080) is bound to `127.0.0.1` — only reachable from the host machine for admin scripts (seed, health checks). Never reachable from the network. Only the SvelteKit port (3000) should be exposed via the reverse proxy.
 
 ## Documentation
 

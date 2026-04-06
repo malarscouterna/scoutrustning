@@ -4,6 +4,7 @@ import type { LayoutServerLoad } from './$types';
 import type { User } from '$lib/user';
 
 const DEV_MODE = process.env.DEV_MODE === 'true';
+const DEMO_MODE = process.env.DEMO_MODE === 'true';
 const PERSONA_COOKIE = 'dev-persona';
 const DEFAULT_PERSONA = 'leader-yggdrasil';
 
@@ -127,7 +128,8 @@ export const load: LayoutServerLoad = async ({ cookies, locals }) => {
 		if (personaCookie && personas[personaCookie]) {
 			return {
 				user: personas[personaCookie],
-				dev: { personas, currentPersona: personaCookie }
+				dev: { personas, currentPersona: personaCookie },
+				demo: DEMO_MODE
 			};
 		}
 
@@ -135,18 +137,24 @@ export const load: LayoutServerLoad = async ({ cookies, locals }) => {
 		const session = await locals.auth?.();
 		const user = parseUserFromSession(session);
 		if (user) {
-			return { user, dev: { personas, currentPersona: null } };
+			return { user, dev: { personas, currentPersona: null }, demo: DEMO_MODE };
 		}
 
-		// Fallback to default persona in dev
+		if (DEMO_MODE) {
+			// Demo: no fallback, hooks will redirect to login
+			return { user: null, dev: { personas, currentPersona: null }, demo: true };
+		}
+
+		// Dev fallback to default persona
 		return {
 			user: personas[DEFAULT_PERSONA] ?? null,
-			dev: { personas, currentPersona: DEFAULT_PERSONA }
+			dev: { personas, currentPersona: DEFAULT_PERSONA },
+			demo: false
 		};
 	}
 
 	// Production: user from OIDC session (hooks.server.ts handles redirect if no session)
 	const session = await locals.auth?.();
 	const user = parseUserFromSession(session);
-	return { user, dev: null };
+	return { user, dev: null, demo: false };
 };

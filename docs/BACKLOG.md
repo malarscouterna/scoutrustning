@@ -174,6 +174,17 @@ Article events created by the seed script all have `created_at = now()`, making 
 
 No API changes needed — this is purely a seed script improvement for dev/demo purposes.
 
+## User instructions / help page
+
+Add a user-facing instruction page ("Så här fungerar det" / "Hjälp") accessible from the UI navigation. Content lives in a markdown file (`docs/user-guide.md`) but renders nicely in the web app. Should cover:
+- How to browse and book equipment
+- The approval flow (when is approval needed, what happens after submit)
+- Pickup and return checklists
+- How to report issues
+- Role differences (what leaders vs equipment managers see)
+
+For demo mode, this doubles as the demo walkthrough — explaining what to try and how the persona switcher works.
+
 ## Booking flow — date change with items in cart
 
 When a booking already has items in the cart and the user changes the dates, the existing items are not re-validated against the new date range. This can lead to double-bookings or items that aren't actually available for the new dates. Currently the dates are editable after items are added, which breaks the flow.

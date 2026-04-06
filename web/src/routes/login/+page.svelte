@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 
+	let { data } = $props();
 	const callbackUrl = $derived($page.url.searchParams.get('callbackUrl') || '/');
 </script>
 
@@ -8,6 +9,13 @@
 	<img src="/PNG Utrustningsgruppen - Logotyp.png" alt="Utrustningsgruppen" class="w-48 mb-6" />
 	<h1 class="text-xl font-bold mb-1">ms-utrustning</h1>
 	<p class="text-sm text-neutral-500 mb-8">Utrustningsbokning för Mälarscouterna</p>
+
+	{#if data.demo}
+		<div class="bg-adventurerorange-50 border border-adventurerorange-200 rounded-lg px-4 py-3 mb-6 max-w-sm text-sm text-adventurerorange-900">
+			<p class="font-medium mb-1">Demo</p>
+			<p>Logga in med ditt ScoutID för att testa. Du kan byta roll med persona-väljaren efter inloggning.</p>
+		</div>
+	{/if}
 
 	<form method="POST" action="/auth/signin/keycloak">
 		<input type="hidden" name="callbackUrl" value={callbackUrl} />

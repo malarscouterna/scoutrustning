@@ -13,8 +13,6 @@ web/role-mapping.json
 
 # Environment
 .env
-.env.*
-!.env.example
 
 # Docker
 docker-compose.override.yml

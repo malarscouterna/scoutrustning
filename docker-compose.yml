@@ -2,61 +2,58 @@ services:
   db:
     image: postgres:17.9-alpine
     environment:
-      POSTGRES_USER: utrustning
-      POSTGRES_PASSWORD: utrustning
-      POSTGRES_DB: utrustning
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U utrustning"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 2s
       timeout: 5s
       retries: 5
 
   api:
+    image: ${API_IMAGE:-ms-utrustning-api}
     build:
       context: ./api
-      target: dev
+      target: ${BUILD_TARGET:-production}
     ports:
-      - "8080:8080"
-    volumes:
-      - ./api:/src
-      - ./dev-personas.json:/src/dev-personas.json:ro
-      - ./role-mapping.json:/src/role-mapping.json:ro
+      - "127.0.0.1:${API_PORT:-8080}:8080"
     environment:
-      DATABASE_URL: postgres://utrustning:utrustning@db:5432/utrustning?sslmode=disable
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
       ADDR: ":8080"
-      DEV_MODE: "true"
-      DEV_PERSONAS_PATH: /src/dev-personas.json
-      ROLE_MAPPING_PATH: /src/role-mapping.json
-      JWKS_URL: https://dev.id.scouterna.se/realms/scoutnet/protocol/openid-connect/certs
-      MIGRATIONS_DIR: /src/migrations
+      DEV_MODE: ${DEV_MODE}
+      JWKS_URL: ${JWKS_URL}
+      ROLE_MAPPING_PATH: /config/role-mapping.json
+      DEV_PERSONAS_PATH: /config/dev-personas.json
+    volumes:
+      - ./role-mapping.json:/config/role-mapping.json:ro
+      - ./dev-personas.json:/config/dev-personas.json:ro
     depends_on:
       db:
         condition: service_healthy
 
   web:
+    image: ${WEB_IMAGE:-ms-utrustning-web}
     build:
       context: ./web
-      target: dev
+      target: ${BUILD_TARGET:-production}
     ports:
-      - "3000:3000"
+      - "${WEB_PORT:-3000}:3000"
+    environment:
+      ORIGIN: ${ORIGIN}
+      API_URL: http://api:8080
+      DEV_MODE: ${DEV_MODE}
+      DEMO_MODE: ${DEMO_MODE:-false}
+      AUTH_SECRET: ${AUTH_SECRET}
+      AUTH_KEYCLOAK_ID: ${AUTH_KEYCLOAK_ID}
+      AUTH_KEYCLOAK_SECRET: ${AUTH_KEYCLOAK_SECRET}
+      AUTH_KEYCLOAK_ISSUER: ${AUTH_KEYCLOAK_ISSUER}
+      AUTH_TRUST_HOST: "true"
     volumes:
-      - ./web:/app
-      - /app/node_modules
       - ./role-mapping.json:/app/role-mapping.json:ro
       - ./dev-personas.json:/app/dev-personas.json:ro
-    environment:
-      ORIGIN: ${ORIGIN:-http://localhost:3000}
-      API_URL: http://api:8080
-      DEV_MODE: "true"
-      AUTH_SECRET: dev-secret-change-in-production
-      AUTH_KEYCLOAK_ID: ms-utrustning
-      AUTH_KEYCLOAK_SECRET: ${AUTH_KEYCLOAK_SECRET:-}
-      AUTH_KEYCLOAK_ISSUER: https://dev.id.scouterna.se/realms/scoutnet
-      AUTH_TRUST_HOST: "true"
     depends_on:
       - api
 

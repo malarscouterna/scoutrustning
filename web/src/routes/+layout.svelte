@@ -11,6 +11,12 @@
 	let { children, data } = $props();
 </script>
 
+{#if data.demo}
+	<div class="bg-adventurerorange-100 border-b border-adventurerorange-300 text-adventurerorange-900 text-center text-sm py-2 px-4 font-medium">
+		🏕️ Demo — detta är en testmiljö. Bokningar och data kan återställas när som helst.
+	</div>
+{/if}
+
 {#if data.user}
 	<nav class="border-b bg-white sticky top-0 z-10">
 		<div class="max-w-4xl mx-auto px-4 py-2 flex items-center gap-4">

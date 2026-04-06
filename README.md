@@ -33,6 +33,9 @@ Pre-release (`v0`). Breaking changes expected. Currently implements:
 ## Development
 
 ```bash
+# Generate .env for local development
+./gen-env.sh dev
+
 # Start everything with hot reload (Go API + SvelteKit + Postgres)
 docker compose up
 
@@ -63,6 +66,137 @@ cd api && go test ./internal/handler/tests/ -timeout 180s -count=1 2>&1
 
 Tests use testcontainers-go (requires Docker) and run against a real Postgres instance. A single shared container is reused across all tests for speed.
 
-## Environment variables
+## Environment modes
 
-See [.env.example](.env.example).
+All differences between dev, demo, and production are controlled via `.env`. Generate it with:
+
+```bash
+./gen-env.sh dev    # Local development
+./gen-env.sh demo   # Demo deployment
+./gen-env.sh prod   # Production
+```
+
+Flags:
+- `--force` — overwrite existing `.env` (preserves user-edited values like `ORIGIN` and `AUTH_KEYCLOAK_SECRET`)
+- `--local` — use local image names, localhost origin, and static Postgres password (for testing demo/prod modes on a dev machine). No effect on `dev` mode which is already local.
+
+| | Dev | Demo | Production |
+|---|---|---|---|
+| `DEV_MODE` | `true` | `true` | `false` |
+| `DEMO_MODE` | `false` | `true` | `false` |
+| `BUILD_TARGET` | `dev` | `production` | `production` |
+| `AUTH_SECRET` | static | generated | generated |
+| `POSTGRES_PASSWORD` | static | generated | generated |
+
+- **Dev**: hot reload, persona switcher, no OIDC required, Postgres exposed via `docker-compose.override.yml`
+- **Demo**: production builds, OIDC login required (ScoutID), persona switcher available after login, demo banner shown
+- **Production**: production builds, OIDC login required, no persona switcher, no demo banner
+
+The generated `.env` includes a `COMPOSE_FILE` variable that controls which compose files are loaded. Dev includes `docker-compose.override.yml` (local builds, source mounts, Postgres port). Demo and prod use only `docker-compose.yml` (pre-built images, no source needed). Switch modes on the same machine with:
+
+```bash
+./gen-env.sh demo --force
+docker compose up -d --build
+```
+
+The `--build` is needed when switching modes to rebuild images with the correct Dockerfile target. After the first build, `docker compose up -d` is enough for restarts.
+
+### Security model
+
+- The Go API port (8080) is bound to `127.0.0.1` — only reachable from the host machine, not from the network. The SvelteKit app proxies `/api/*` requests internally via the Docker network.
+- The proxy **strips** `X-Dev-Role-Override` and `Authorization` headers from incoming browser requests before forwarding. Identity is injected server-side from the OIDC session or persona cookie — users cannot forge it.
+- `DEV_MODE=true` in demo is safe because the persona override header only reaches the Go API through the SvelteKit proxy, which controls it. Direct access to the API container is blocked from the network.
+- Postgres is not exposed to the host in demo/prod (no `docker-compose.override.yml`). Password is randomly generated.
+- Your reverse proxy should only forward traffic to the SvelteKit port (3000). Never expose the API port (8080) directly.
+
+## Deployment
+
+### Prerequisites
+
+- A VPS with Docker and Docker Compose installed
+- A reverse proxy (nginx, Caddy, Traefik) handling TLS and forwarding to port 3000
+- A Keycloak client configured for the app (client ID: `ms-utrustning`, redirect URI: `https://your-domain/auth/callback/keycloak`)
+
+### Files needed on the server
+
+You don't need the full repo. Copy these files to your deployment directory:
+
+```
+ms-utrustning/
+├── docker-compose.yml
+├── gen-env.sh
+├── dev-seed.sh
+├── dev-personas.json       # Persona definitions (needed for demo mode)
+├── role-mapping.json       # Scoutnet role → app role mapping
+└── docs/
+    └── import-example.csv  # Or your real inventory CSV
+```
+
+Download everything at once from the latest release:
+
+```bash
+mkdir -p ms-utrustning/docs && cd ms-utrustning
+BASE="https://raw.githubusercontent.com/malarscouterna/ms-utrustning/main"
+for f in docker-compose.yml gen-env.sh dev-seed.sh dev-personas.json role-mapping.json; do
+  curl -fsSL "$BASE/$f" -o "$f"
+done
+curl -fsSL "$BASE/docs/import-example.csv" -o docs/import-example.csv
+chmod +x gen-env.sh dev-seed.sh
+```
+
+No source code, no Dockerfiles, no `node_modules`. The compose file pulls pre-built images from GitHub Packages.
+
+Do **not** copy `docker-compose.override.yml` — that file enables dev-only features (local builds, source mounts, exposed Postgres port).
+
+### Demo deployment
+
+```bash
+# 1. Generate environment
+./gen-env.sh demo
+
+# 2. Fill in the CHANGEME values in .env:
+#    ORIGIN=https://your-demo-domain.example.com
+#    AUTH_KEYCLOAK_SECRET=<your keycloak client secret>
+
+# 3. Pull images and start
+docker compose pull
+docker compose up -d
+
+# 4. Seed the database with inventory and sample bookings
+./dev-seed.sh
+```
+
+### Production deployment
+
+```bash
+# 1. Generate environment
+./gen-env.sh prod
+
+# 2. Fill in the CHANGEME values in .env
+
+# 3. Pull images and start
+docker compose pull
+docker compose up -d
+
+# 4. Import your inventory
+./dev-seed.sh path/to/your-inventory.csv
+```
+
+### Updating
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+The API runs database migrations automatically on startup. No manual migration step needed.
+
+### Re-seeding
+
+To reset the demo data (or re-seed after a schema change):
+
+```bash
+./dev-seed.sh
+```
+
+The seed script clears existing data before importing. It requires `DEV_MODE=true` on the API (dev and demo modes). In production (`DEV_MODE=false`), the seed script will refuse to run.
