@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.2.0](https://github.com/malarscouterna/ms-utrustning/compare/v0.1.0...v0.2.0) (2026-04-06)
+
+
+### Features
+
+* add Swedish usage guide at /guide ([b424fab](https://github.com/malarscouterna/ms-utrustning/commit/b424fabd53501d5b674e716ab1a52df540f2fb53))
+* browse page availability display and booking flow improvements ([61d3552](https://github.com/malarscouterna/ms-utrustning/commit/61d3552823a1d5937b8736526b0c42e14d5c8aa4))
+* CSV import count column, browse page tracking mode differentiation ([bd10177](https://github.com/malarscouterna/ms-utrustning/commit/bd10177a3ef89b297d1d707f5f8b5b230d88150d))
+* demo mode, env generator, and deployment hardening ([69fd31d](https://github.com/malarscouterna/ms-utrustning/commit/69fd31d4161774ed254d34b3b031e37a8f8ba183))
+* **dev:** add hot reload for Go API and SvelteKit in Docker ([91d9d55](https://github.com/malarscouterna/ms-utrustning/commit/91d9d55b0fed74169d33ac0248e527f4eea9bd62))
+* event history limit, draft cleanup, pickup revert ([2ad7853](https://github.com/malarscouterna/ms-utrustning/commit/2ad7853d90984e6f11426537177b384ae74662ad))
+* refactor article status to separate condition from booking state ([fc4943b](https://github.com/malarscouterna/ms-utrustning/commit/fc4943b8504c8e465637a5118443f1aa3b7d0ee1))
+* three-level approval flow with booking event history ([e1badaa](https://github.com/malarscouterna/ms-utrustning/commit/e1badaa808c43d497e72ecb797042622716da3eb))
+
+
+### Bug Fixes
+
+* dev persona cleanup, issues page scoping, seed script ([5d01202](https://github.com/malarscouterna/ms-utrustning/commit/5d01202d5965b8e62a9e5a3f2622903dc26df4ed))
+
+
+### Performance Improvements
+
+* **api:** share single Postgres container across all integration tests ([9d95d2d](https://github.com/malarscouterna/ms-utrustning/commit/9d95d2d31f230dba8c2882c1b57282676eea4801))
+
 ## 0.1.0 (2026-04-04)
 
 
