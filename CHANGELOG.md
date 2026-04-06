@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/malarscouterna/ms-utrustning/compare/v0.2.0...v0.2.1) (2026-04-06)
+
+
+### Bug Fixes
+
+* improve mobile layout with bottom navigation bar ([29d9baa](https://github.com/malarscouterna/ms-utrustning/commit/29d9baa2e9b65a704efe694cba2ebe533f4c75fa))
+
 ## [0.2.0](https://github.com/malarscouterna/ms-utrustning/compare/v0.1.0...v0.2.0) (2026-04-06)
 
 
