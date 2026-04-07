@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.2](https://github.com/malarscouterna/ms-utrustning/compare/v0.2.1...v0.2.2) (2026-04-07)
+
+
+### Bug Fixes
+
+* return 403 instead of 500 for users from unconfigured groups ([adea258](https://github.com/malarscouterna/ms-utrustning/commit/adea258da55c0517d769895a3d71534608d85bea))
+* **web:** mobile responsiveness overhaul ([d47a236](https://github.com/malarscouterna/ms-utrustning/commit/d47a23615b2ec17f28d208dbc9d4cda875bf28f9))
+
 ## [0.2.1](https://github.com/malarscouterna/ms-utrustning/compare/v0.2.0...v0.2.1) (2026-04-06)
 
 
