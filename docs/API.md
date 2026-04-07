@@ -464,7 +464,10 @@ All errors return:
 {"error": "error_key"}
 ```
 
-Error keys are short English strings (e.g. `"invalid id"`, `"article not found"`, `"forbidden"`). The frontend maps these to translated user-facing messages.
+Error keys are short English strings (e.g. `"invalid id"`, `"article not found"`, `"forbidden"`, `"group_not_found"`). The frontend maps these to translated user-facing messages.
+
+Notable error keys:
+- `group_not_found` (403) — the user's group (from JWT claims) doesn't exist in the database. Returned by the user upsert middleware when the group_id FK constraint fails.
 
 ---
 
@@ -479,3 +482,5 @@ In dev mode (`DEV_MODE=true`): `X-Dev-Role-Override: <persona>` header. Availabl
 - `equipment-manager` — full admin
 - `leader-and-manager` — combined roles, unit Yggdrasil
 - `other-group-leader` — leader in group 999 (Testkåren), for multi-tenancy testing
+
+Also in dev mode: `X-Dev-Claims: <json>` header with a JSON-encoded claims object for testing arbitrary claim combinations (used by integration tests).

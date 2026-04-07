@@ -49,6 +49,7 @@ High — follow these unless they conflict with an explicit user instruction.
 - Tests are organized by flow (e.g. `TestBookingFlow`, `TestApprovalFlow`), not by handler or function.
 - Only write isolated unit tests for genuinely complex logic (availability calculation, article assignment).
 - Use the test helper that sets up a group, seeds data, and provides an HTTP client with a fake JWT for a given role.
+- For edge cases that don't warrant a permanent persona (unknown group, no roles, malformed claims), use `env.ClientWithClaims(auth.Claims{...})` which sends a JSON-encoded `X-Dev-Claims` header. The auth middleware parses this in dev mode and injects the claims directly.
 - Test command: `cd api && go test ./internal/handler/tests/ -timeout 180s -count=1 2>&1` — no `-v` flag so only failing tests produce output. All tests share a single Postgres container via `TestMain`; each test truncates and reseeds tables for isolation.
 
 ### General

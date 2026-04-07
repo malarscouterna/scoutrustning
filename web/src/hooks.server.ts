@@ -119,6 +119,8 @@ const appHandle: Handle = async ({ event, resolve }) => {
 			duplex: 'half'
 		});
 
+		// If the API says the group doesn't exist, the 403 response passes through.
+		// The layout redirects unmapped users to / so page load functions won't hit this.
 		return new Response(res.body, {
 			status: res.status,
 			statusText: res.statusText,

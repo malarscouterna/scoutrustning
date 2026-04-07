@@ -89,6 +89,41 @@ func TestAuth_DevPersonaOverride(t *testing.T) {
 	})
 }
 
+func TestAuth_UnknownGroupReturns403(t *testing.T) {
+	env := testutil.SetupTestEnv(t)
+
+	env.V1(func(r chi.Router) {
+		r.Get("/articles", func(w http.ResponseWriter, r *http.Request) {
+			handler.WriteJSON(w, http.StatusOK, []string{})
+		})
+	})
+
+	client := env.ClientWithClaims(auth.Claims{
+		MemberID: "9999999",
+		GroupID:  "unknown_group",
+		Name:     "Unknown User",
+		Email:    "unknown@example.com",
+		Roles:    []string{"leader"},
+		Units:    []string{"Some Unit"},
+	})
+
+	resp, err := client.Get("/api/v0/articles")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", resp.StatusCode)
+	}
+
+	var body map[string]string
+	json.NewDecoder(resp.Body).Decode(&body)
+	if body["error"] != "group_not_found" {
+		t.Errorf("expected error key 'group_not_found', got %q", body["error"])
+	}
+}
+
 func TestAuth_RoleEnforcement(t *testing.T) {
 	env := testutil.SetupTestEnv(t)
 

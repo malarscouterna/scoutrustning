@@ -3,6 +3,9 @@ package handler
 import (
 	"log/slog"
 	"net/http"
+	"strings"
+
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/malarscouterna/ms-utrustning/api/internal/auth"
 	"github.com/malarscouterna/ms-utrustning/api/internal/db"
@@ -24,6 +27,10 @@ func UpsertUserMiddleware(queries *db.Queries) func(http.Handler) http.Handler {
 				Email:   claims.Email,
 			})
 			if err != nil {
+				if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23503" && strings.Contains(pgErr.ConstraintName, "group_id") {
+					WriteError(w, http.StatusForbidden, "group_not_found")
+					return
+				}
 				slog.Error("failed to upsert user", "error", err, "member_id", claims.MemberID)
 				WriteError(w, http.StatusInternalServerError, "internal error")
 				return

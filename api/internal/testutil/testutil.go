@@ -3,6 +3,7 @@ package testutil
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -173,10 +174,23 @@ func (e *TestEnv) ClientAs(persona string) *TestClient {
 	}
 }
 
+// ClientWithClaims returns an HTTP client that injects arbitrary claims via
+// a JSON-encoded X-Dev-Claims header. Use this for edge cases that don't
+// warrant a permanent persona (e.g. unknown group, no roles, malformed claims).
+func (e *TestEnv) ClientWithClaims(claims auth.Claims) *TestClient {
+	data, _ := json.Marshal(claims)
+	return &TestClient{
+		baseURL:   e.Server.URL,
+		rawClaims: string(data),
+		client:    &http.Client{Timeout: 10 * time.Second},
+	}
+}
+
 type TestClient struct {
-	baseURL string
-	persona string
-	client  *http.Client
+	baseURL   string
+	persona   string
+	rawClaims string
+	client    *http.Client
 }
 
 func (c *TestClient) Do(method, path string, body io.Reader) (*http.Response, error) {
@@ -184,7 +198,11 @@ func (c *TestClient) Do(method, path string, body io.Reader) (*http.Response, er
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("X-Dev-Role-Override", c.persona)
+	if c.rawClaims != "" {
+		req.Header.Set("X-Dev-Claims", c.rawClaims)
+	} else {
+		req.Header.Set("X-Dev-Role-Override", c.persona)
+	}
 	req.Header.Set("Content-Type", "application/json")
 	return c.client.Do(req)
 }

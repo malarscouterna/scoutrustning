@@ -8,6 +8,20 @@ Newest first.
 
 ---
 
+## 2026-04-07
+
+### Friendly error for unconfigured groups
+
+Users logging in via ScoutID from a group not in `role-mapping.json` previously got a 500 error (FK violation in UpsertUserMiddleware). Fixed:
+- Go API: `UpsertUserMiddleware` detects the group_id FK violation and returns 403 with `"group_not_found"` error key
+- Frontend: `parseUserFromSession` now returns `oidcName` when the user is authenticated but their group isn't mapped
+- Layout shows a friendly Swedish message: "Din scoutkår är inte konfigurerad" with different text for demo (points to persona switcher) vs production (contact equipment manager)
+- Unmapped users are redirected to `/` to prevent page load functions from crashing
+- Added `X-Dev-Claims` header support in auth middleware for testing arbitrary claims
+- Integration test: `TestAuth_UnknownGroupReturns403`
+
+---
+
 ## 2026-04-06
 
 ### Demo mode, env generator, and deployment hardening

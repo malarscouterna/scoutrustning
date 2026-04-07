@@ -31,7 +31,17 @@
 	</a>
 {/if}
 
-{#if data.user}
+{#if !data.user && data.oidcName}
+	<div class="flex flex-col items-center justify-center min-h-screen px-4 bg-white text-neutral-900">
+		<img src="/PNG Utrustningsgruppen - Logotyp.png" alt="Utrustningsgruppen" class="w-48 mb-6" />
+		<h1 class="text-xl font-bold mb-2">Hej {data.oidcName}!</h1>
+		{#if data.demo}
+			<p class="text-sm text-neutral-600 mb-4 max-w-sm text-center">Din scoutkår är inte konfigurerad i den här demomiljön. Använd persona-väljaren nedan för att testa systemet.</p>
+		{:else}
+			<p class="text-sm text-neutral-600 mb-4 max-w-sm text-center">Din scoutkår är inte konfigurerad för det här systemet. Kontakta din utrustningsansvarige om du tror att det är fel.</p>
+		{/if}
+	</div>
+{:else if data.user}
 	<!-- Desktop nav -->
 	<nav class="hidden sm:block border-b bg-white sticky top-0 z-10">
 		<div class="max-w-4xl mx-auto px-4 py-2 flex items-center gap-4">
@@ -49,7 +59,9 @@
 {/if}
 
 <div class="{data.user ? 'pb-16 sm:pb-0' : ''}">
-	{@render children()}
+	{#if !data.oidcName || data.user}
+		{@render children()}
+	{/if}
 </div>
 
 {#if data.user}

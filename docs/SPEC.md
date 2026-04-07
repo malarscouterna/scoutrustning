@@ -211,7 +211,7 @@ The reverse proxy only forwards to the SvelteKit container (port 3000). SvelteKi
 4. SvelteKit exchanges code for tokens, stores in httpOnly cookie
 5. On API calls, SvelteKit passes the access token to Go API
 6. Go API validates JWT using Keycloak's JWKS endpoint, extracts claims (member_id, name, email, roles, units, projects, group_id)
-7. Go API upserts user record (member_id + cached profile) and scopes all queries to the user's group
+7. Go API upserts user record (member_id + cached profile) and scopes all queries to the user's group. If the group doesn't exist in the database, returns 403 with `group_not_found` — the frontend shows a friendly message instead of crashing.
 
 ## User Flows
 
@@ -707,4 +707,4 @@ Swedish (`sv`) is the only UI language. English (`en`) is planned as a second la
 - Overdue reminder schedule (daily? configurable?)
 - Whether booking date granularity needs to go below day level in the future
 - Token refresh — currently the access token from initial login is used until expiry, then the user is redirected to re-authenticate. Auth.js token rotation could be added to refresh tokens silently.
-- Per-organisation role mapping — currently hardcoded in `role-mapping.json`, eventually needs to be configurable per group
+- Per-organisation role mapping — currently hardcoded in `role-mapping.json`, eventually needs a dynamic admin UI for group/role management (see backlog: "Admin UI for group/role management")

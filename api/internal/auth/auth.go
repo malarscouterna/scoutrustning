@@ -95,16 +95,28 @@ func Middleware(cfg MiddlewareConfig) func(http.Handler) http.Handler {
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Dev mode: check for persona override header
-			if cfg.DevMode && personas != nil {
-				if override := r.Header.Get("X-Dev-Role-Override"); override != "" {
-					if p, ok := personas[override]; ok {
-						r = r.WithContext(withClaims(r.Context(), p))
-						next.ServeHTTP(w, r)
+			// Dev mode: check for persona override or raw claims header
+			if cfg.DevMode {
+				if raw := r.Header.Get("X-Dev-Claims"); raw != "" {
+					var c Claims
+					if err := json.Unmarshal([]byte(raw), &c); err != nil {
+						http.Error(w, `{"error":"invalid dev claims"}`, http.StatusBadRequest)
 						return
 					}
-					http.Error(w, `{"error":"unknown dev persona"}`, http.StatusBadRequest)
+					r = r.WithContext(withClaims(r.Context(), c))
+					next.ServeHTTP(w, r)
 					return
+				}
+				if personas != nil {
+					if override := r.Header.Get("X-Dev-Role-Override"); override != "" {
+						if p, ok := personas[override]; ok {
+							r = r.WithContext(withClaims(r.Context(), p))
+							next.ServeHTTP(w, r)
+							return
+						}
+						http.Error(w, `{"error":"unknown dev persona"}`, http.StatusBadRequest)
+						return
+					}
 				}
 			}
 

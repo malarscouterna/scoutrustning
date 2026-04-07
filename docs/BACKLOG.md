@@ -2,6 +2,21 @@
 
 Deferred work items — things to grab when there's time, smaller tasks set aside during major work. When an item is completed, move it to [accomplished.md](accomplished.md).
 
+## Admin UI for group/role management
+
+Currently, group access is controlled by a static `role-mapping.json` file. Users from groups not in this file see a "group not configured" message. Future plan:
+
+- Auto-register groups/troops/roles when users attempt to log in (store what was seen in the token)
+- Admin interface where managers can:
+  - See all groups that have attempted login
+  - Grant groups access to the system
+  - Add groups by Scoutnet role or group ID
+  - Assign access levels per unit/role: none, normal (booking access), low (project leader level), manager
+- Replace "project" concept with "funktionärsroll" (functional role) — a role should be given none, normal, low, or manager level access
+- A unit should be given normal access to the booking system by default
+
+This replaces the current static role-mapping approach and enables self-service onboarding for new scout groups.
+
 ## Date change conflict UX
 
 When changing dates on a booking, the API validates that all existing items are available for the new range and returns 409 with the conflicting article name. Currently the UI just shows a red error. Better UX: highlight which items conflict and let the user remove them before retrying the date change.

@@ -1,5 +1,6 @@
 import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
+import { redirect } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
 import type { User } from '$lib/user';
 
@@ -48,15 +49,21 @@ function loadRoleMapping(): any {
 	return null;
 }
 
-function parseUserFromSession(session: any): User | null {
+interface SessionParseResult {
+	user: User | null;
+	oidcName: string | null;
+}
+
+function parseUserFromSession(session: any): SessionParseResult {
 	const accessToken = session?.accessToken;
-	if (!accessToken) return null;
+	if (!accessToken) return { user: null, oidcName: null };
 
 	// Decode JWT payload (no verification — the Go API does that)
 	try {
 		const payload = JSON.parse(atob(accessToken.split('.')[1]));
+		const name = payload.name || '';
 		const rm = loadRoleMapping();
-		if (!rm) return null;
+		if (!rm) return { user: null, oidcName: name };
 
 		// Extract member ID from preferred_username ("scoutnet|3169207" → "3169207")
 		let memberID = payload.preferred_username || '';
@@ -101,25 +108,31 @@ function parseUserFromSession(session: any): User | null {
 			}
 		}
 
-		if (!groupID) return null;
+		if (!groupID) return { user: null, oidcName: name };
+
+		// Group found in token but not configured in role mapping
+		if (!rm.groups?.[groupID]) return { user: null, oidcName: name };
 
 		return {
-			member_id: memberID,
-			group_id: groupID,
-			name: payload.name || '',
-			email: payload.email || '',
-			roles: [...appRoles],
-			units: [...units],
-			role_units: Object.fromEntries(
-				Object.entries(roleUnits).map(([k, v]) => [k, [...v]])
-			),
+			user: {
+				member_id: memberID,
+				group_id: groupID,
+				name,
+				email: payload.email || '',
+				roles: [...appRoles],
+				units: [...units],
+				role_units: Object.fromEntries(
+					Object.entries(roleUnits).map(([k, v]) => [k, [...v]])
+				),
+			},
+			oidcName: null,
 		};
 	} catch {
-		return null;
+		return { user: null, oidcName: null };
 	}
 }
 
-export const load: LayoutServerLoad = async ({ cookies, locals }) => {
+export const load: LayoutServerLoad = async ({ cookies, locals, url }) => {
 	// Dev mode with persona cookie: use persona
 	if (DEV_MODE) {
 		const personaCookie = cookies.get(PERSONA_COOKIE);
@@ -129,32 +142,43 @@ export const load: LayoutServerLoad = async ({ cookies, locals }) => {
 			return {
 				user: personas[personaCookie],
 				dev: { personas, currentPersona: personaCookie },
-				demo: DEMO_MODE
+				demo: DEMO_MODE,
+				oidcName: null
 			};
 		}
 
 		// No persona cookie — try OIDC session
 		const session = await locals.auth?.();
-		const user = parseUserFromSession(session);
+		const { user, oidcName } = parseUserFromSession(session);
 		if (user) {
-			return { user, dev: { personas, currentPersona: null }, demo: DEMO_MODE };
+			return { user, dev: { personas, currentPersona: null }, demo: DEMO_MODE, oidcName: null };
+		}
+
+		// Logged in via OIDC but group not mapped — show friendly message
+		if (oidcName) {
+			if (url.pathname !== '/') throw redirect(302, '/');
+			return { user: null, dev: { personas, currentPersona: null }, demo: DEMO_MODE, oidcName };
 		}
 
 		if (DEMO_MODE) {
-			// Demo: no fallback, hooks will redirect to login
-			return { user: null, dev: { personas, currentPersona: null }, demo: true };
+			// Demo without OIDC session: hooks will redirect to login
+			return { user: null, dev: { personas, currentPersona: null }, demo: true, oidcName: null };
 		}
 
 		// Dev fallback to default persona
 		return {
 			user: personas[DEFAULT_PERSONA] ?? null,
 			dev: { personas, currentPersona: DEFAULT_PERSONA },
-			demo: false
+			demo: false,
+			oidcName: null
 		};
 	}
 
 	// Production: user from OIDC session (hooks.server.ts handles redirect if no session)
 	const session = await locals.auth?.();
-	const user = parseUserFromSession(session);
-	return { user, dev: null, demo: false };
+	const { user, oidcName } = parseUserFromSession(session);
+	if (!user && oidcName && url.pathname !== '/') {
+		throw redirect(302, '/');
+	}
+	return { user, dev: null, demo: false, oidcName };
 };
