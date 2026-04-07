@@ -371,15 +371,15 @@
 									{@const representativeId = row.articleIds[0]}
 									<div class="flex items-start gap-2">
 										{#if row.status !== 'ok'}
-											<button onclick={() => toggleIssueHistory(representativeId)} class="inline-block px-2 py-0.5 rounded text-xs shrink-0 cursor-pointer {statusBadgeClass(row.status)}">
+											<button onclick={() => toggleIssueHistory(representativeId)} class="inline-block px-2 py-0.5 rounded text-xs cursor-pointer {statusBadgeClass(row.status)}">
 												×{row.count} {statusLabels[row.status] ?? row.status}
 											</button>
 										{:else}
-											<span class="inline-block px-2 py-0.5 rounded text-xs shrink-0 {statusBadgeClass(row.status)}">
+											<span class="inline-block px-2 py-0.5 rounded text-xs {statusBadgeClass(row.status)}">
 												×{row.count} {statusLabels[row.status] ?? row.status}
 											</span>
 										{/if}
-										<div>
+										<div class="min-w-0">
 											{#if row.bookingInfo}
 												<span class="text-xs text-purple-700">{row.bookingInfo}</span>
 											{/if}

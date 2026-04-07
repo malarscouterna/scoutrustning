@@ -106,7 +106,7 @@
 								<span class="text-xs text-neutral-400">Personlig</span>
 							{/if}
 						</div>
-						<span class="text-xs px-2 py-0.5 rounded shrink-0 {statusColors[booking.status] ?? 'bg-neutral-100'}">
+						<span class="text-xs px-2 py-0.5 rounded {statusColors[booking.status] ?? 'bg-neutral-100'}">
 							{statusLabels[booking.status] ?? booking.status}
 						</span>
 					</div>

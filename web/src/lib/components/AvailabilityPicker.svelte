@@ -207,8 +207,8 @@
 						<p class="text-xs text-neutral-400">Inga detaljer</p>
 					{:else}
 						{#each detail.articles as article}
-							<div class="flex items-start gap-2 text-xs">
-								<span class="px-1.5 py-0.5 rounded shrink-0
+							<div class="flex flex-wrap items-start gap-2 text-xs">
+								<span class="px-1.5 py-0.5 rounded
 									{article.status === 'reported_usable' ? 'bg-orange-100 text-orange-700' : article.status === 'incoming' ? 'bg-blue-50 text-blue-700' : article.status === 'under_repair' ? 'bg-neutral-100 text-neutral-700' : 'bg-neutral-100'}">
 									{article.status === 'reported_usable' ? 'Felrapporterad' : article.status === 'incoming' ? 'Inkommande' : article.status === 'under_repair' ? 'Under reparation' : article.status}
 								</span>
