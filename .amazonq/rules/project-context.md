@@ -1,4 +1,8 @@
-# ms-utrustning — AI Context
+# ms-utrustning — Project Context
+
+## Purpose
+
+Reference material for AI assistance. Describes what the project is, how it's built, and key design decisions. For coding rules see `coding-conventions.md`, for interaction expectations see `workflow.md`.
 
 ## What this project is
 
@@ -15,21 +19,13 @@ The full specification is in `docs/SPEC.md` — read it before making architectu
 
 Auth: SvelteKit handles OIDC login with ScoutID (Keycloak) via Auth.js (`@auth/sveltekit`). Go API validates JWTs and extracts claims. No user registration — users are upserted from token claims on login.
 
-### Key identity decisions
-
-- `groups.id` is `text`, using the Keycloak org ID directly (e.g. `"766"` for Mälarscouterna)
-- `users.id` is `text`, using the Keycloak member ID directly (e.g. `"3000924"`)
-- All other tables use `uuid` primary keys
-- Units are a managed table (`units`), not free text — populated from OIDC claims or created by admins. The `units` table has a `type` column (`unit` or `project`) to distinguish scout units from temporary projects.
-- Booking approval is per-article (`articles.approval_level`). Three levels: `none` (freely bookable), `low` (project leaders auto-approve, regular leaders need manager approval), `high` (always needs manager approval, except managers themselves). If any item in a booking requires approval for the current user, the whole booking waits.
-
 ## Project structure
 
 ```
 ms-utrustning/
 ├── api/                    # Go API
 │   ├── cmd/server/         # main.go entrypoint
-│   ├── internal/           # (created as needed)
+│   ├── internal/
 │   │   ├── auth/           # JWT validation middleware + OIDC claim parsing
 │   │   ├── handler/        # HTTP handlers per resource
 │   │   ├── db/             # sqlc generated code + queries
@@ -43,129 +39,70 @@ ms-utrustning/
 │   │   ├── lib/
 │   │   │   ├── api/client.ts       # Typed API client
 │   │   │   ├── components/         # Shared Svelte components
-│   │   │   └── user.ts             # User type + role helpers (shared interface for auth)
+│   │   │   └── user.ts             # User type + role helpers
 │   │   ├── routes/
-│   │   │   ├── +layout.server.ts   # Provides `user` + dev persona data to all pages
+│   │   │   ├── +layout.server.ts   # Provides user + dev persona data
 │   │   │   └── +layout.svelte      # Nav, role-based UI, dev persona switcher
-│   │   ├── hooks.server.ts         # API proxy (injects auth header), dev persona cookie
+│   │   ├── hooks.server.ts         # API proxy, auth header injection
 │   │   └── app.html
 │   ├── static/
 │   ├── package.json
 │   ├── svelte.config.js
 │   └── Dockerfile
 ├── docs/
-│   ├── SPEC.md             # Full specification
+│   ├── SPEC.md             # Full specification (living document)
 │   ├── API.md              # API reference (keep updated)
-│   └── import-example.csv  # Example CSV for article import
-├── role-mapping.json       # Scoutnet role → app role mapping (per group)
-├── dev-personas.json       # Shared dev personas for role switching
+│   ├── BACKLOG.md          # Open work items
+│   ├── accomplished.md     # Completed work log
+│   ├── issues-and-events.md
+│   ├── article-status-refactor.md
+│   └── guide.md            # User-facing guide (shown in UI)
+├── .amazonq/rules/
+│   ├── project-context.md  # This file — reference
+│   ├── coding-conventions.md # How to write code
+│   └── workflow.md         # How to interact with the user
+├── role-mapping.json       # Scoutnet role → app role mapping
+├── dev-personas.json       # Dev personas for role switching
 ├── docker-compose.yml
-├── .env.example
 └── README.md
 ```
 
-## Version pinning
+## Key identity decisions
 
-| Component | Version |
-|---|---|
-| Go | 1.26 |
-| Chi | v5.2.5 |
-| pgx | v5.9.1 |
-| golang-jwt | v5.3.1 |
-| keyfunc | v3.8.0 |
-| goose | v3.27.0 |
-| Node | 24 LTS |
-| Svelte | 5.55+ |
-| SvelteKit | 2.55+ |
-| @auth/sveltekit | 1.11+ |
-| Tailwind CSS | 4.2+ (via @tailwindcss/vite plugin) |
-| TypeScript | 5.9+ (SvelteKit requires ^5.3.3, not 6.x) |
-| Vite | 8.0+ |
-| @scouterna/ui-webc | 3.2+ |
-| @scouterna/tailwind-theme | 0.0.4+ |
-| PostgreSQL | 17.9 |
+- `groups.id` is `text`, using the Keycloak org ID directly (e.g. `"766"` for Mälarscouterna)
+- `users.id` is `text`, using the Keycloak member ID directly (e.g. `"3000924"`)
+- All other tables use `uuid` primary keys
+- Units are a managed table (`units`), not free text — populated from OIDC claims or created by admins. The `units` table has a `type` column (`unit` or `project`) to distinguish scout units from temporary projects.
+- Booking approval is per-article (`articles.approval_level`). Three levels: `none` (freely bookable), `low` (project leaders auto-approve, regular leaders need manager approval), `high` (always needs manager approval, except managers themselves). If any item in a booking requires approval for the current user, the whole booking waits.
 
-## Code conventions
-
-### Go (api/)
-
-- Use stdlib `net/http` types in handlers. Chi for routing only.
-- All SQL in `api/internal/db/queries/*.sql`, generated by sqlc. Never write raw SQL in Go code.
-- Every query must filter on `group_id`. No exceptions.
-- Handlers receive the authenticated user context (member_id, roles, group_id) from middleware — never parse tokens in handlers.
-- Use `slog` for structured logging.
-- Error responses are JSON: `{"error": "message"}` with appropriate HTTP status.
-- No global state. Dependencies injected via handler structs.
-- Migrations use goose with `-- +goose Up` / `-- +goose Down` markers in single SQL files.
-
-### SvelteKit (web/)
-
-- Use `@scouterna/ui-webc` components wherever a matching component exists (scout-button, scout-card, scout-input, scout-app-bar, scout-bottom-bar, scout-tabs, scout-list-view, etc.). Only build custom components when no web component fits.
-- Use `@scouterna/tailwind-theme` for styling. Tailwind CSS v4 via `@tailwindcss/vite` plugin.
-- API calls go through a typed client in `src/lib/api/`.
-- Server-side load functions fetch data; forms use SvelteKit form actions or fetch to the Go API.
-- Mobile-first responsive design. Test layouts at 375px width.
-- Extract shared UI patterns into reusable components in `src/lib/components/` to reduce duplication. If the same UI appears in two or more pages, extract it.
-
-#### Identity & auth architecture
-
-The frontend has a clean separation between "who is the user" and "where does that info come from":
-
-- `$lib/user.ts` defines the `User` type and helpers like `hasRole()`. This is the stable interface all pages and components consume.
-- `+layout.server.ts` provides `data.user` (the current user) to all pages. Today this comes from the dev persona cookie; in production it will come from the OIDC session. Pages never care about the source.
-- `hooks.server.ts` proxies all `/api/*` requests to the Go API and injects the auth header. In dev mode: reads the `dev-persona` cookie and sets `X-Dev-Role-Override`. In production: will forward the real Bearer token.
-- `data.dev` (from layout) contains dev-only persona data. It's `null` in production. The `DevPersonaSwitcher` component only renders when `data.dev` is present.
-- **No page or component should ever reference personas, cookies, or auth headers directly.** They consume `data.user` from the layout and call `createApiClient()` without auth options — the hooks layer handles identity injection.
-
-When wiring real OIDC (Phase 3 Step 1): ✅ Done.
-1. `@auth/sveltekit` handles OIDC login with Keycloak provider (`src/auth.ts`)
-2. `hooks.server.ts` gates all non-public routes — redirects to `/login` if no valid session
-3. `+layout.server.ts` parses the access token using `role-mapping.json` to build the `User` object
-4. The proxy forwards the real JWT to the Go API, which validates it via JWKS
-5. Dev mode keeps working alongside — persona cookie overrides the session when present
-6. `role-mapping.json` maps Scoutnet token roles (`group:766:it_manager`, `troop:17443:vice_leader`) to app roles and unit names
-
-### Database
-
-- `groups` and `users` have `text` primary keys (Keycloak org ID and member ID respectively).
-- All other tables use `uuid` primary keys (`gen_random_uuid()`).
-- All tables have `group_id text NOT NULL REFERENCES groups(id)`.
-- Units are a managed table with FK from bookings, not free text. The `units` table stores both units (`type = 'unit'`) and projects (`type = 'project'`).
-- Timestamps are `timestamptz`, always UTC.
-- Migrations are sequential goose SQL files, never destructive in production.
-- **Never create a new database table without explicit user approval.** Propose the table and get confirmation first.
-
-### Testing
-
-- **API tests are integration tests**, not unit tests. Each test exercises a full user flow via HTTP against a real Postgres (testcontainers-go). No mocking the database.
-- **Every new API endpoint must have integration tests** covering the happy path, error cases, and access control before committing.
-- Tests are organized by flow (e.g. `TestBookingFlow`, `TestApprovalFlow`), not by handler or function.
-- Only write isolated unit tests for genuinely complex logic (availability calculation, article assignment).
-- Use a test helper that sets up a group, seeds data, and provides an HTTP client with a fake JWT for a given role.
-- **Test command**: `cd api && go test ./internal/handler/tests/ -timeout 180s -count=1 2>&1` — no `-v` flag so only failing tests produce output. All tests share a single Postgres container via `TestMain`; each test truncates and reseeds tables for isolation.
-- Frontend E2E tests use Playwright against the full stack.
-- In dev mode, a role switcher UI and `X-Dev-Role-Override` header allow testing as different personas (leader, project leader, equipment manager, different units) without re-authenticating. Personas are defined in `dev-personas.json`. Both are disabled in production.
-
-### General
-
-- Commits follow [Conventional Commits](https://www.conventionalcommits.org/). This drives Release Please for automated versioning and changelogs.
-- API is versioned as `v0` (pre-release). Breaking changes don't require version bumps. Move to `v1` when ready for production.
-- UI is internationalized from the start. Swedish (`sv`) is the default locale, English (`en`) planned as second. All user-facing strings should go through an i18n system — no hardcoded Swedish in components. (i18n system not yet set up; current UI has hardcoded Swedish as a known debt.)
-- The Go API is language-agnostic: returns data as stored, uses error keys (not human-readable messages) so the frontend can translate them.
-- Code, comments, API field names, and documentation are always in English.
-- Never hardcode credentials or secrets. Use environment variables.
-- Never log tokens, passwords, or PII beyond what's needed for debugging.
-
-### Article model
+## Article model
 
 - `commercial_name` is the product type (e.g. "Sibley", "Stormkök") — what users browse and book by.
 - `common_name` is the individual item identifier (e.g. "Sibley 1") — for physical identification at pickup.
 - Availability is grouped by `commercial_name + location`. Same product in different locations shows as separate groups.
-- `approval_level` is set per article (`none`, `low`, `high`). During CSV import, read from the `requires_approval` column; defaults to `none` if absent. Managers can change per-article or in bulk.
+- `approval_level` is set per article (`none`, `low`, `high`). During CSV import, read from the `requires_approval` column; defaults to `none` if absent.
 - Quantity-tracked items: each physical unit is a separate row with `individually_tracked = false`. Manager sets count via UI after import.
 - Article `status` represents **condition** (ok, reported_usable, incoming, reported_unusable, under_repair, lost, archived) — orthogonal to booking state (reserved, loaned out), which is computed from booking data.
 - `expected_available_date` (nullable) is used with `incoming` and `under_repair` statuses. Articles with these statuses become bookable for date ranges starting on or after this date.
 - Availability is always computed at query time from article condition + booking overlaps — never stored as a column.
+
+## Identity & auth architecture
+
+The frontend has a clean separation between "who is the user" and "where does that info come from":
+
+- `$lib/user.ts` defines the `User` type and helpers like `hasRole()`. This is the stable interface all pages and components consume.
+- `+layout.server.ts` provides `data.user` (the current user) to all pages. In production this comes from the OIDC session; in dev mode from the persona cookie. Pages never care about the source.
+- `hooks.server.ts` proxies all `/api/*` requests to the Go API and injects the auth header. In dev mode: reads the `dev-persona` cookie and sets `X-Dev-Role-Override`. In production: forwards the real Bearer token.
+- **No page or component should ever reference personas, cookies, or auth headers directly.** They consume `data.user` from the layout and call `createApiClient()` without auth options — the hooks layer handles identity injection.
+- `role-mapping.json` maps Scoutnet token roles (`group:766:it_manager`, `troop:17443:vice_leader`) to app roles and unit names.
+
+## Scalability
+
+Expected upper bounds per group: ~5,000 articles, ~20 concurrent overlapping bookings. The current single-Postgres + Go API architecture requires no changes for this domain.
+
+Availability queries (`AvailableArticles`, `AvailableArticlesExcludingBooking`, `ListArticlesWithAvailability`) only scan bookings that overlap the requested date range (`b.start_date <= @end_date AND b.end_date >= @start_date`). Historical bookings (returned, cancelled, or outside the window) are excluded via `idx_bookings_dates`. At 20 concurrent bookings the `NOT IN` subquery touches ~200–400 booking_item rows — trivial for Postgres. Total booking history does not affect query cost.
+
+If pagination is ever needed on article lists, that's a query-level change, not architectural.
 
 ## Environment modes
 
@@ -190,57 +127,30 @@ Demo mode requires `DEV_MODE=true` (for persona switcher) but gates access behin
 - `group_id` is derived from the JWT, never from request parameters.
 - File uploads (images) are validated for type and size, stored outside the web root.
 - SQL injection is prevented by sqlc's parameterized queries.
-- In demo/production: `POSTGRES_PORT` is not exposed (no `docker-compose.override.yml`). Password is randomly generated.
+- In demo/production: `POSTGRES_PORT` is not exposed. Password is randomly generated.
 - `AUTH_SECRET` and `POSTGRES_PASSWORD` are randomly generated in demo/production.
-- The SvelteKit proxy **strips** `X-Dev-Role-Override` and `Authorization` headers from incoming browser requests before forwarding to the Go API. Identity is injected server-side only — users cannot forge auth headers through the proxy.
-- The Go API port (8080) is bound to `127.0.0.1` — only reachable from the host machine for admin scripts (seed, health checks). Never reachable from the network. Only the SvelteKit port (3000) should be exposed via the reverse proxy.
+- The SvelteKit proxy **strips** `X-Dev-Role-Override` and `Authorization` headers from incoming browser requests before forwarding to the Go API. Identity is injected server-side only.
+- The Go API port (8080) is bound to `127.0.0.1` — only reachable from the host machine. Only the SvelteKit port (3000) should be exposed via the reverse proxy.
 
-## Documentation
+## Version pinning
 
-This rules file is **living documentation** — update it whenever decisions are made, conventions change, or new patterns emerge. Don't wait to be asked.
-
-- `docs/SPEC.md` — full specification, implementation plan, data model
-- `docs/API.md` — API reference for all endpoints (keep updated when adding/changing endpoints)
-- `docs/BACKLOG.md` — deferred work items, things identified as needed but withheld for now
-- `docs/issues-and-events.md` — issue reporting & article events design decisions and future plans
-- `.amazonq/rules/project-context.md` — this file, AI context and project rules
-- Feature-specific READMEs — when building complex features, add a `README.md` in `docs/` (e.g. `docs/bookings.md`, `docs/availability.md`) documenting the design decisions, trade-offs, and non-obvious choices made along the way
+Check `api/go.mod` for Go dependency versions and `web/package.json` for frontend dependency versions. Notable constraints:
+- TypeScript must be ^5.x (not 6.x) — SvelteKit requires ^5.3.3
+- PostgreSQL 17.x
 
 ## Development environment
 
 Tool paths (may not be on default PATH):
 
-| Tool | Path | Install |
-|---|---|---|
-| Go | `/usr/local/go/bin/go` | Pre-installed |
-| Node | `/usr/local/bin/node` | Pre-installed |
-| pnpm | On PATH via snap or `corepack enable` | Pre-installed |
-| sqlc | `$HOME/go/bin/sqlc` | `go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest` |
-| Docker | `/usr/bin/docker` | Pre-installed |
+| Tool | Path |
+|---|---|
+| Go | `/usr/local/go/bin/go` |
+| Node | `/usr/local/bin/node` |
+| pnpm | On PATH via snap or `corepack enable` |
+| sqlc | `$HOME/go/bin/sqlc` (`go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest`) |
+| Docker | `/usr/bin/docker` |
 
 When running Go commands, ensure PATH includes Go:
 ```bash
 export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin
 ```
-
-## Workflow instructions
-
-- **Build minimal viable first**: Get things working end-to-end before adding complexity. Don't over-scaffold or create stubs for things not yet needed.
-- **Before writing code**: Read `docs/SPEC.md` for requirements. Clarify anything ambiguous before implementing. **Never start writing or modifying files until the user explicitly approves the plan.** Present what you intend to do, wait for a go-ahead, then implement.
-- **After implementing changes**: If any change requires a container rebuild, database reset, migration run, or other manual step to take effect, explicitly state what the user needs to do (e.g. `docker compose up --build`, `./dev-seed.sh`, restart a service). Never assume the user knows which changes require a rebuild.
-- **Multi-tenancy is non-negotiable**: Every new table gets `group_id`. Every new query filters on it. No shortcuts.
-- **Keep docs updated**: When adding or changing API endpoints, update `docs/API.md`. When making architectural decisions or discovering new conventions, update this file and `docs/SPEC.md` proactively — don't wait to be asked.
-- **Always show the commit message** for user approval before committing. Never commit without asking.
-- **Only the user decides when we're done.** Never assume a task is finished or offer a commit message unless the user explicitly says so.
-- **When the user says we're done or finished**: Review all changes. Verify:
-  1. No TODO comments, placeholder logic, or incomplete implementations left behind
-  2. No security issues (missing auth checks, unscoped queries, credential leaks)
-  3. `group_id` filtering on all new queries
-  4. Code matches existing style and conventions
-  5. New functionality has integration tests covering the happy path
-  6. `docs/API.md` reflects any new or changed endpoints
-  7. `docs/SPEC.md` and this file are still accurate — update if needed
-  Then suggest a commit message following Conventional Commits. The commit type drives semantic versioning via Release Please:
-  - `feat:` → minor version bump
-  - `fix:` → patch version bump
-  - `feat!:` or `BREAKING CHANGE:` → major version bump
