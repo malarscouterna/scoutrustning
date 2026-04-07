@@ -192,7 +192,7 @@
 						<input type="number" min="1" max={unhandled.length} value={quantityInputs[`${g.key}_form`] ?? 1} oninput={(e) => quantityInputs[`${g.key}_form`] = parseInt(e.currentTarget.value) || 1} class="w-16 text-center border rounded px-2 py-1" />
 						<span class="text-neutral-500">av {unhandled.length} kvar</span>
 					</div>
-					<div class="flex gap-2">
+					<div class="flex flex-wrap gap-2">
 						{#each ['returned_ok', 'delayed', 'reported_usable', 'reported_unusable', 'lost'] as s}
 							<button onclick={() => form.status = s} class="text-xs px-3 py-1 rounded border" class:bg-blue-700={form.status === s} class:text-white={form.status === s}>{labels[s]}</button>
 						{/each}
@@ -235,7 +235,7 @@
 		</div>
 		{#if activeItemId === item.id}
 			<div class="border rounded p-3 bg-neutral-50 text-sm space-y-2">
-				<div class="flex gap-2">
+				<div class="flex flex-wrap gap-2">
 					{#each ['returned_ok', 'delayed', 'reported_usable', 'reported_unusable', 'lost'] as s}
 						<button onclick={() => form.status = s} class="text-xs px-3 py-1 rounded border" class:bg-blue-700={form.status === s} class:text-white={form.status === s}>{labels[s]}</button>
 					{/each}

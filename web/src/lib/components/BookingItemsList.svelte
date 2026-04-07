@@ -72,44 +72,36 @@
 						<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded ml-1">Kräver särskilt godkännande</span>
 					{/if}
 				</div>
-				<table class="w-full text-sm">
-					<tbody>
-						{#each group.items as item}
-							<tr class="border-t first:border-t-0">
-								<td class="px-4 py-2">
-									{item.common_name}
-									{#if item.article_status === 'reported_usable'}
-										<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded ml-1">Felrapporterad</span>
-									{:else if item.article_status === 'incoming'}
-										<span class="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded ml-1">Inkommande{#if item.article_expected_available_date} — {new Date(item.article_expected_available_date).toLocaleDateString('sv', { day: 'numeric', month: 'short' })}{/if}</span>
-									{:else if item.article_status === 'under_repair'}
-										<span class="text-xs bg-neutral-100 text-neutral-700 px-1.5 py-0.5 rounded ml-1">Under reparation{#if item.article_expected_available_date} — klar {new Date(item.article_expected_available_date).toLocaleDateString('sv', { day: 'numeric', month: 'short' })}{/if}</span>
-									{/if}
-									{#if latestComments.has(item.article_id)}
-										<p class="text-xs text-neutral-500 italic mt-0.5">“{latestComments.get(item.article_id)}”</p>
-									{/if}
-								</td>
-								<td class="px-4 py-2 text-neutral-600">{item.location_name}</td>
-								<td class="px-4 py-2 text-neutral-600">{item.place || ''}</td>
+				<div class="divide-y">
+					{#each group.items as item}
+						<div class="px-4 py-2">
+							<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+								<span class="text-sm">{item.common_name}</span>
+								<span class="text-sm text-neutral-600">{item.location_name}</span>
+								{#if item.place}<span class="text-sm text-neutral-600">{item.place}</span>{/if}
+								{#if item.article_status === 'reported_usable'}
+									<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">Felrapporterad</span>
+								{:else if item.article_status === 'incoming'}
+									<span class="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded">Inkommande{#if item.article_expected_available_date} — {new Date(item.article_expected_available_date).toLocaleDateString('sv', { day: 'numeric', month: 'short' })}{/if}</span>
+								{:else if item.article_status === 'under_repair'}
+									<span class="text-xs bg-neutral-100 text-neutral-700 px-1.5 py-0.5 rounded">Under reparation{#if item.article_expected_available_date} — klar {new Date(item.article_expected_available_date).toLocaleDateString('sv', { day: 'numeric', month: 'short' })}{/if}</span>
+								{/if}
 								{#if item.return_status && item.return_status !== 'returned_ok' && item.return_status !== 'pending'}
-									<td class="px-4 py-2">
-										<span class="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700"
-										>{{returned_ok: 'OK', delayed: 'Försenad', reported_usable: 'Problem — användbar', reported_unusable: 'Problem — ej användbar', lost: 'Saknas'}[item.return_status] ?? item.return_status}</span>
-									</td>
+									<span class="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700"
+									>{{returned_ok: 'OK', delayed: 'Försenad', reported_usable: 'Problem — användbar', reported_unusable: 'Problem — ej användbar', lost: 'Saknas'}[item.return_status] ?? item.return_status}</span>
 								{:else if !item.pickup_status || item.pickup_status === 'lost'}
-									<td class="px-4 py-2"><span class="text-xs text-neutral-400">Ej hämtad</span></td>
-								{:else}
-									<td></td>
+									<span class="text-xs text-neutral-400">Ej hämtad</span>
 								{/if}
 								{#if editable && onRemove}
-									<td class="px-4 py-2 text-right">
-										<button onclick={() => onRemove(item.id)} class="text-red-600 text-xs hover:underline">Ta bort</button>
-									</td>
+									<button onclick={() => onRemove(item.id)} class="text-red-600 text-xs hover:underline ml-auto">Ta bort</button>
 								{/if}
-							</tr>
-						{/each}
-					</tbody>
-				</table>
+							</div>
+							{#if latestComments.has(item.article_id)}
+								<p class="text-xs text-neutral-500 italic mt-0.5">“{latestComments.get(item.article_id)}”</p>
+							{/if}
+						</div>
+					{/each}
+				</div>
 			</div>
 		{/each}
 	</div>

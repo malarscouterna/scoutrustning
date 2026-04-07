@@ -289,13 +289,13 @@
 			<div class="border rounded">
 				<button
 					onclick={() => toggleGroup(group.key)}
-					class="w-full flex items-center justify-between px-4 py-3 hover:bg-neutral-50 text-left"
+					class="w-full flex flex-wrap items-center justify-between gap-1 px-4 py-3 hover:bg-neutral-50 text-left"
 				>
-					<div>
+					<div class="min-w-0">
 						<span class="font-medium">{group.commercialName}</span>
 						<span class="text-sm text-neutral-500 ml-2">{group.categoryName}</span>
 					</div>
-					<div class="flex items-center gap-3 text-sm text-neutral-600">
+					<div class="flex items-center gap-2 text-sm text-neutral-600">
 						<span>{group.locationName}</span>
 						{#if group.individuallyTracked}
 							<span class="bg-blue-600 text-white px-2 py-0.5 rounded">{availableCount}/{group.count} st</span>
@@ -308,74 +308,61 @@
 				{#if expanded}
 					<div class="border-t px-4 py-2 bg-neutral-50">
 						{#if group.individuallyTracked}
-							<table class="w-full text-sm">
-								<thead>
-									<tr class="text-left text-neutral-500">
-										<th class="py-1">Namn</th>
-										<th class="py-1">Plats</th>
-										<th class="py-1">Status</th>
-										<th class="py-1"></th>
-									</tr>
-								</thead>
-								<tbody>
-									{#each sortArticles(group.articles) as article}
-										<tr class="border-t border-neutral-200">
-											<td class="py-1">{article.common_name}</td>
-											<td class="py-1 text-neutral-600">{article.place || '—'}</td>
-											<td class="py-1">
-												{#if article.status !== 'ok' || article.current_booking_id}
-													<button onclick={() => toggleIssueHistory(article.id)} class="inline-block px-2 py-0.5 rounded text-xs cursor-pointer {statusBadgeClass(article.status)}">
-														{statusLabels[article.status] ?? article.status}
-													</button>
-												{:else}
-													<span class="inline-block px-2 py-0.5 rounded text-xs {statusBadgeClass(article.status)}">
-														{statusLabels[article.status] ?? article.status}
-													</span>
-												{/if}
-												{#if bookingLabel(article)}
-													<span class="text-xs text-purple-700 ml-1">{bookingLabel(article)}</span>
-												{/if}
-												{#if expectedDateLabel(article)}
-													<span class="text-xs text-blue-600 ml-1">({expectedDateLabel(article)})</span>
-												{/if}
-												{#if latestComments.has(article.id) && showIssueHistoryFor !== article.id}
-													<p class="text-xs text-neutral-500 mt-0.5 italic">“{latestComments.get(article.id)}”</p>
-												{/if}
-												{#if showIssueHistoryFor === article.id}
-													{@const ih = issueHistory.get(article.id)}
-													{#if ih?.loading}
-														<p class="text-xs text-neutral-400 mt-1">Laddar...</p>
-													{:else if ih && ih.events.length > 0}
-														<div class="mt-1 space-y-0.5">
-															{#each ih.events as event}
-																<div class="text-xs text-neutral-600">
-																	<span class="text-neutral-400">{new Date(event.created_at).toLocaleDateString('sv')}</span>
-																	{#if event.description}<span class="italic">“{event.description}”</span>{/if}
-																	<span class="text-neutral-400">— {event.actor_name}</span>
-																</div>
-															{/each}
-														</div>
-													{/if}
-												{/if}
-											</td>
-											<td class="py-1 text-right">
+							<div class="divide-y divide-neutral-200 text-sm">
+								{#each sortArticles(group.articles) as article}
+									<div class="py-2">
+										<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+											<span class="font-medium">{article.common_name}</span>
+											<span class="text-xs text-neutral-500">{article.place || '—'}</span>
+											{#if article.status !== 'ok' || article.current_booking_id}
+												<button onclick={() => toggleIssueHistory(article.id)} class="inline-block px-2 py-0.5 rounded text-xs cursor-pointer {statusBadgeClass(article.status)}">
+													{statusLabels[article.status] ?? article.status}
+												</button>
+											{:else}
+												<span class="inline-block px-2 py-0.5 rounded text-xs {statusBadgeClass(article.status)}">
+													{statusLabels[article.status] ?? article.status}
+												</span>
+											{/if}
+											<span class="ml-auto flex gap-2 shrink-0">
 												<button onclick={() => reportingArticleId = reportingArticleId === article.id ? null : article.id} class="text-xs text-blue-700 underline">Rapportera</button>
-												<button onclick={() => showHistoryFor = showHistoryFor === article.id ? null : article.id} class="text-xs text-neutral-500 underline ml-2">Historik</button>
-											</td>
-										</tr>
-										{#if reportingArticleId === article.id}
-											<tr><td colspan="4">
-												<ReportIssueForm articleId={article.id} articleName={article.common_name} onReported={handleIssueReported} onCancel={() => reportingArticleId = null} />
-											</td></tr>
+												<button onclick={() => showHistoryFor = showHistoryFor === article.id ? null : article.id} class="text-xs text-neutral-500 underline">Historik</button>
+											</span>
+										</div>
+										{#if bookingLabel(article)}
+											<p class="text-xs text-purple-700 mt-0.5">{bookingLabel(article)}</p>
 										{/if}
-										{#if showHistoryFor === article.id}
-											<tr><td colspan="4" class="py-2">
-												<ArticleEventHistory articleId={article.id} />
-											</td></tr>
+										{#if expectedDateLabel(article)}
+											<p class="text-xs text-blue-600 mt-0.5">({expectedDateLabel(article)})</p>
 										{/if}
-									{/each}
-								</tbody>
-							</table>
+										{#if latestComments.has(article.id) && showIssueHistoryFor !== article.id}
+											<p class="text-xs text-neutral-500 mt-0.5 italic">“{latestComments.get(article.id)}”</p>
+										{/if}
+										{#if showIssueHistoryFor === article.id}
+											{@const ih = issueHistory.get(article.id)}
+											{#if ih?.loading}
+												<p class="text-xs text-neutral-400 mt-1">Laddar...</p>
+											{:else if ih && ih.events.length > 0}
+												<div class="mt-1 space-y-1">
+													{#each ih.events as event}
+														<div class="text-xs text-neutral-600">
+															<span class="text-neutral-400">{new Date(event.created_at).toLocaleDateString('sv')} — {event.actor_name}</span>
+															{#if event.description}<p class="italic mt-0.5">“{event.description}”</p>{/if}
+														</div>
+													{/each}
+												</div>
+											{/if}
+										{/if}
+									</div>
+									{#if reportingArticleId === article.id}
+										<ReportIssueForm articleId={article.id} articleName={article.common_name} onReported={handleIssueReported} onCancel={() => reportingArticleId = null} />
+									{/if}
+									{#if showHistoryFor === article.id}
+										<div class="py-2">
+											<ArticleEventHistory articleId={article.id} />
+										</div>
+									{/if}
+								{/each}
+							</div>
 						{:else}
 							{@const rows = groupByState(group.articles)}
 							<div class="space-y-1 py-1 text-sm">
@@ -407,12 +394,11 @@
 												{#if ih?.loading}
 													<p class="text-xs text-neutral-400">Laddar...</p>
 												{:else if ih && ih.events.length > 0}
-													<div class="space-y-0.5">
+													<div class="space-y-1">
 														{#each ih.events as event}
 															<div class="text-xs text-neutral-600">
-																<span class="text-neutral-400">{new Date(event.created_at).toLocaleDateString('sv')}</span>
-																{#if event.description}<span class="italic">“{event.description}”</span>{/if}
-																<span class="text-neutral-400">— {event.actor_name}</span>
+																<span class="text-neutral-400">{new Date(event.created_at).toLocaleDateString('sv')} — {event.actor_name}</span>
+																{#if event.description}<p class="italic mt-0.5">“{event.description}”</p>{/if}
 															</div>
 														{/each}
 													</div>

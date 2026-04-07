@@ -137,7 +137,7 @@
 	}
 </script>
 
-<div class="max-w-4xl mx-auto p-4 pb-20">
+<div class="max-w-4xl mx-auto p-4 pb-36 sm:pb-20">
 	<h1 class="text-heading-sm font-bold mb-4">
 		{isEdit ? 'Redigera bokning' : 'Boka utrustning'}
 	</h1>
@@ -157,7 +157,7 @@
 		{/if}
 
 		<!-- 1. Booking details -->
-		<div class="flex flex-wrap gap-3 mb-4">
+		<div class="grid grid-cols-2 sm:flex sm:flex-wrap gap-3 mb-4">
 			<label class="flex flex-col gap-1">
 				<span class="text-sm">Startdatum</span>
 				<input type="date" bind:value={startDate} disabled={cartItems.length > 0} class="border rounded px-3 py-2 disabled:opacity-50" />
@@ -166,11 +166,11 @@
 				<span class="text-sm">Slutdatum</span>
 				<input type="date" bind:value={endDate} disabled={cartItems.length > 0} class="border rounded px-3 py-2 disabled:opacity-50" />
 			</label>
-			<label class="flex flex-col gap-1">
+			<label class="flex flex-col gap-1 col-span-2">
 				<span class="text-sm">Anteckningar</span>
 				<input type="text" bind:value={notes} placeholder="T.ex. Hajk med Yggdrasil" class="border rounded px-3 py-2" />
 			</label>
-			<label class="flex flex-col gap-1">
+			<label class="flex flex-col gap-1 col-span-2">
 				<span class="text-sm">Bokas för</span>
 				<select bind:value={selectedUnit} class="border rounded px-3 py-2">
 					<option value="">Personlig bokning</option>
@@ -227,8 +227,8 @@
 
 		<!-- 4. Sticky bottom bar -->
 		{#if bookingId}
-			<div class="fixed bottom-0 left-0 right-0 bg-white border-t px-4 py-3 z-10">
-				<div class="max-w-4xl mx-auto flex items-center gap-3">
+			<div class="fixed bottom-16 sm:bottom-0 left-0 right-0 bg-white border-t px-4 py-3 z-10">
+				<div class="max-w-4xl mx-auto flex flex-wrap items-center gap-3">
 					<button
 						onclick={submitBooking}
 						disabled={cartItems.length === 0}

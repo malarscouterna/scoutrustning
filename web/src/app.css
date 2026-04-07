@@ -1,2 +1,6 @@
 @import 'tailwindcss';
 @import '@scouterna/tailwind-theme';
+
+html, body {
+	overflow-x: hidden;
+}

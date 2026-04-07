@@ -54,6 +54,7 @@ services:
     volumes:
       - ./role-mapping.json:/app/role-mapping.json:ro
       - ./dev-personas.json:/app/dev-personas.json:ro
+      - ./docs/guide.md:/app/guide.md:ro
     depends_on:
       - api
 

@@ -256,7 +256,7 @@
 			<div class="border rounded mb-3 divide-y">
 				{#each bookingEvents as event}
 					<div class="px-4 py-2 text-sm {event.event_type === 'rejected' ? 'bg-red-50' : event.event_type === 'approved' ? 'bg-green-50' : 'bg-neutral-50'}">
-						<div class="flex items-center gap-2 text-xs text-neutral-500 mb-0.5">
+						<div class="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-neutral-500 mb-0.5">
 							<span class="font-medium text-neutral-700">{event.actor_name}</span>
 							<span>
 								{{
@@ -304,7 +304,7 @@
 			</div>
 		{/if}
 
-		<div class="flex items-center gap-2">
+		<div class="flex flex-wrap items-center gap-2">
 			{#if editable}
 				<a href="/book?id={booking.id}" class="bg-blue-700 text-white px-4 py-2 rounded text-sm">Redigera</a>
 			{/if}

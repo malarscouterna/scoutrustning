@@ -174,7 +174,7 @@
 			{#each articles as article}
 				<div class="border rounded">
 					<button onclick={() => toggle(article)} class="w-full text-left px-4 py-3 hover:bg-neutral-50">
-						<div class="flex items-center justify-between gap-3">
+						<div class="flex flex-wrap items-center justify-between gap-2">
 							<div>
 								<span class="font-medium text-sm">{article.common_name}</span>
 								<span class="text-xs text-neutral-500 ml-1">({article.commercial_name})</span>
@@ -225,14 +225,14 @@
 									<div class="space-y-1">
 										{#each events as event}
 											<div class="text-xs">
-												<div class="flex items-start gap-2">
+												<div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
 													<span class="text-neutral-400 shrink-0">{new Date(event.created_at).toLocaleDateString('sv')}</span>
 													<span class="font-medium">{eventLabels[event.event_type] ?? event.event_type}</span>
 													{#if formatEventMeta(event)}<span class="text-neutral-500">{formatEventMeta(event)}</span>{/if}
-													<span class="text-neutral-400 ml-auto shrink-0">{event.actor_name}</span>
+													<span class="text-neutral-400 shrink-0">{event.actor_name}</span>
 												</div>
 												{#if event.description}
-													<p class="text-neutral-600 ml-[4.5rem] mt-0.5">{event.description}</p>
+													<p class="text-neutral-600 mt-0.5 pl-0.5">{event.description}</p>
 												{/if}
 											</div>
 										{/each}

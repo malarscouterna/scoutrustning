@@ -10,6 +10,10 @@ Newest first.
 
 ## 2026-04-07
 
+### Mobile responsiveness overhaul
+
+Fixed horizontal overflow and layout issues across all pages on phone-sized screens. Replaced tables with flex-wrap layouts, made rows and buttons wrap properly, fixed book page sticky bar hidden behind mobile nav. Moved persona switcher to top-right on mobile with scroll support. Removed redundant `manager-it` persona. Fixed user guide not loading by mounting `docs/guide.md` into web container.
+
 ### Friendly error for unconfigured groups
 
 Users logging in via ScoutID from a group not in `role-mapping.json` previously got a 500 error (FK violation in UpsertUserMiddleware). Fixed:

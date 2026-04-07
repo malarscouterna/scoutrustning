@@ -10,7 +10,7 @@
 		<div class="bg-adventurerorange-50 border border-adventurerorange-200 rounded-lg p-4 mb-6">
 			<h2 class="font-bold text-adventurerorange-900 mb-2">Demo-läge</h2>
 			<p class="text-sm text-adventurerorange-800 mb-3">
-				Detta är en demomiljö. Använd personaväljaren (nedre högra hörnet) för att byta mellan olika roller och se systemet från olika perspektiv. Data kan återställas när som helst.
+				Detta är en demomiljö. Använd personaväljaren (övre högra hörnet på mobil, nedre högra på dator) för att byta mellan olika roller och se systemet från olika perspektiv. Data kan återställas när som helst.
 			</p>
 			<details class="text-sm">
 				<summary class="cursor-pointer font-medium text-adventurerorange-800 mb-2">Tillgängliga personas</summary>

@@ -1,13 +1,5 @@
 {
   "personas": {
-    "manager-it": {
-      "member_id": "3000001",
-      "group_id": "766",
-      "name": "Magnus IT-grupp",
-      "email": "magnus@example.com",
-      "roles": ["equipment_manager"],
-      "units": ["IT-gruppen"]
-    },
     "manager-equipment": {
       "member_id": "3000002",
       "group_id": "766",

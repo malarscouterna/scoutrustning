@@ -158,8 +158,8 @@
 		{@const hasFlags = group.reported_usable_count > 0 || group.incoming_count > 0 || group.under_repair_count > 0}
 		{@const booked = bookedCounts.get(key) ?? 0}
 		<div class="border rounded">
-			<div class="flex items-center justify-between px-4 py-2">
-				<div>
+			<div class="flex flex-wrap items-center justify-between gap-2 px-4 py-2">
+				<div class="min-w-0">
 					<span class="font-medium">{group.commercial_name}</span>
 					<span class="text-xs text-neutral-500 ml-2">{group.category_name} · {group.location_name}</span>
 					{#if group.approval_level === 'low'}

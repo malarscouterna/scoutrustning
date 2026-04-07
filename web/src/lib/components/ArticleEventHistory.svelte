@@ -84,14 +84,14 @@
 	<div class="space-y-1.5 mt-1">
 		{#each events as event}
 			<div class="text-xs">
-				<div class="flex items-start gap-2">
+				<div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
 					<span class="text-neutral-400 shrink-0">{new Date(event.created_at).toLocaleDateString('sv')}</span>
 					<span class="font-medium {typeColors[event.event_type] ?? 'text-neutral-700'}">{typeLabels[event.event_type] ?? event.event_type}</span>
 					{#if formatMeta(event)}<span class="text-neutral-500">{formatMeta(event)}</span>{/if}
-					<span class="text-neutral-400 ml-auto shrink-0">{event.actor_name}</span>
+					<span class="text-neutral-400 shrink-0">{event.actor_name}</span>
 				</div>
 				{#if event.description}
-					<p class="text-neutral-600 ml-[4.5rem] mt-0.5">{event.description}</p>
+					<p class="text-neutral-600 mt-0.5 pl-0.5">{event.description}</p>
 				{/if}
 			</div>
 		{/each}

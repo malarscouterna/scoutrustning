@@ -37,9 +37,9 @@
 	);
 </script>
 
-<div class="fixed bottom-18 sm:bottom-4 right-4 z-50">
+<div class="fixed top-2 right-4 sm:bottom-4 sm:top-auto z-50 flex flex-col sm:flex-col-reverse sm:items-end">
 	{#if open}
-		<div class="bg-white border border-neutral-300 rounded-lg shadow-lg w-72 mb-2">
+		<div class="bg-white border border-neutral-300 rounded-lg shadow-lg w-72 mt-2 sm:mt-0 sm:mb-2 max-h-[70vh] overflow-y-auto">
 			<div class="px-3 py-2 border-b bg-neutral-50 rounded-t-lg flex items-center justify-between">
 				<span class="text-xs font-medium text-neutral-600">Dev persona</span>
 				<button onclick={() => (open = false)} class="text-neutral-400 hover:text-neutral-600 text-sm">✕</button>
