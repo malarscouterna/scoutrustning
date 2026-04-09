@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { createApiClient, type ArticleEvent } from '$lib/api/client';
+	import { statusLabels, eventTypeLabels, eventTypeColors } from '$lib/labels';
 
 	interface Props {
 		articleId: string;
@@ -14,32 +15,6 @@
 	let hasMore = $state(false);
 	let loading = $state(true);
 	let showingAll = $state(false);
-
-	const typeLabels: Record<string, string> = {
-		issue_reported: 'Problem rapporterat',
-		issue_resolved: 'Problem löst',
-		status_change: 'Statusändring',
-		returned: 'Återlämnad',
-		booked: 'Bokad',
-		picked_up: 'Uthämtad',
-		note: 'Anteckning'
-	};
-
-	const typeColors: Record<string, string> = {
-		issue_reported: 'text-orange-700',
-		issue_resolved: 'text-green-700',
-		status_change: 'text-blue-700',
-		returned: 'text-green-700',
-	};
-
-	const statusLabels: Record<string, string> = {
-		ok: 'OK',
-		reported_usable: 'Felrapporterad — användbar',
-		reported_unusable: 'Felrapporterad — ej användbar',
-		under_repair: 'Under reparation',
-		lost: 'Saknas',
-		archived: 'Arkiverad',
-	};
 
 	function formatMeta(event: ArticleEvent): string {
 		const m = event.metadata ?? {};
@@ -86,7 +61,7 @@
 			<div class="text-xs">
 				<div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
 					<span class="text-neutral-400 shrink-0">{new Date(event.created_at).toLocaleDateString('sv')}</span>
-					<span class="font-medium {typeColors[event.event_type] ?? 'text-neutral-700'}">{typeLabels[event.event_type] ?? event.event_type}</span>
+					<span class="font-medium {eventTypeColors[event.event_type] ?? 'text-neutral-700'}">{eventTypeLabels[event.event_type] ?? event.event_type}</span>
 					{#if formatMeta(event)}<span class="text-neutral-500">{formatMeta(event)}</span>{/if}
 					<span class="text-neutral-400 shrink-0">{event.actor_name}</span>
 				</div>

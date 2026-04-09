@@ -11,6 +11,44 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const bulkUpdateArticleLocation = `-- name: BulkUpdateArticleLocation :execrows
+UPDATE articles SET location_id = $1, updated_at = now()
+WHERE id = ANY($2::uuid[]) AND group_id = $3
+`
+
+type BulkUpdateArticleLocationParams struct {
+	LocationID pgtype.UUID   `json:"location_id"`
+	Ids        []pgtype.UUID `json:"ids"`
+	GroupID    string        `json:"group_id"`
+}
+
+func (q *Queries) BulkUpdateArticleLocation(ctx context.Context, arg BulkUpdateArticleLocationParams) (int64, error) {
+	result, err := q.db.Exec(ctx, bulkUpdateArticleLocation, arg.LocationID, arg.Ids, arg.GroupID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const bulkUpdateArticleStatus = `-- name: BulkUpdateArticleStatus :execrows
+UPDATE articles SET status = $1, updated_at = now()
+WHERE id = ANY($2::uuid[]) AND group_id = $3
+`
+
+type BulkUpdateArticleStatusParams struct {
+	Status  string        `json:"status"`
+	Ids     []pgtype.UUID `json:"ids"`
+	GroupID string        `json:"group_id"`
+}
+
+func (q *Queries) BulkUpdateArticleStatus(ctx context.Context, arg BulkUpdateArticleStatusParams) (int64, error) {
+	result, err := q.db.Exec(ctx, bulkUpdateArticleStatus, arg.Status, arg.Ids, arg.GroupID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const countArticlesByCategory = `-- name: CountArticlesByCategory :many
 SELECT c.id, c.name, COUNT(a.id) AS count
 FROM categories c
@@ -79,6 +117,29 @@ func (q *Queries) CountArticlesByLocation(ctx context.Context, groupID string) (
 		return nil, err
 	}
 	return items, nil
+}
+
+const countArticlesInGroup = `-- name: CountArticlesInGroup :one
+SELECT COUNT(*) AS count
+FROM articles a
+WHERE a.group_id = $1
+    AND a.commercial_name = $2
+    AND a.location_id = $3
+    AND a.status != 'archived'
+`
+
+type CountArticlesInGroupParams struct {
+	GroupID        string      `json:"group_id"`
+	CommercialName string      `json:"commercial_name"`
+	LocationID     pgtype.UUID `json:"location_id"`
+}
+
+// Counts non-archived articles in a quantity tracked group.
+func (q *Queries) CountArticlesInGroup(ctx context.Context, arg CountArticlesInGroupParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countArticlesInGroup, arg.GroupID, arg.CommercialName, arg.LocationID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const createArticle = `-- name: CreateArticle :one
@@ -169,6 +230,52 @@ func (q *Queries) DeleteArticle(ctx context.Context, arg DeleteArticleParams) er
 	return err
 }
 
+const findReplacementArticle = `-- name: FindReplacementArticle :one
+SELECT a.id
+FROM articles a
+WHERE a.group_id = $1
+    AND a.commercial_name = $2
+    AND a.location_id = $3
+    AND a.status IN ('ok', 'reported_usable')
+    AND a.id != ALL($4::uuid[])
+    AND a.id NOT IN (
+        SELECT bi.article_id FROM booking_items bi
+        JOIN bookings b ON bi.booking_id = b.id
+        WHERE b.group_id = $1
+            AND b.status IN ('confirmed', 'approved', 'picked_up', 'submitted', 'draft')
+            AND b.start_date <= $5
+            AND b.end_date >= $6
+            AND (bi.return_status IS NULL OR bi.return_status IN ('pending', 'delayed'))
+    )
+ORDER BY a.created_at
+LIMIT 1
+`
+
+type FindReplacementArticleParams struct {
+	GroupID        string        `json:"group_id"`
+	CommercialName string        `json:"commercial_name"`
+	LocationID     pgtype.UUID   `json:"location_id"`
+	ExcludeIds     []pgtype.UUID `json:"exclude_ids"`
+	EndDate        pgtype.Date   `json:"end_date"`
+	StartDate      pgtype.Date   `json:"start_date"`
+}
+
+// Finds a replacement article with the same commercial_name + location, bookable status,
+// not in the given exclude list, and not in any overlapping active booking.
+func (q *Queries) FindReplacementArticle(ctx context.Context, arg FindReplacementArticleParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, findReplacementArticle,
+		arg.GroupID,
+		arg.CommercialName,
+		arg.LocationID,
+		arg.ExcludeIds,
+		arg.EndDate,
+		arg.StartDate,
+	)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const getArticle = `-- name: GetArticle :one
 SELECT a.id, a.group_id, a.commercial_name, a.common_name, a.category_id, a.location_id, a.status, a.individually_tracked, a.image_path, a.description, a.instructions, a.purchase_date, a.purchase_price, a.place, a.created_at, a.updated_at, a.expected_available_date, a.approval_level, a.import_batch_id, a.manager_notes,
     l.name AS location_name,
@@ -237,6 +344,139 @@ func (q *Queries) GetArticle(ctx context.Context, arg GetArticleParams) (GetArti
 		&i.CategoryName,
 	)
 	return i, err
+}
+
+const getArticleGroupInfo = `-- name: GetArticleGroupInfo :one
+SELECT a.id, a.group_id, a.commercial_name, a.common_name, a.category_id, a.location_id, a.status, a.individually_tracked, a.image_path, a.description, a.instructions, a.purchase_date, a.purchase_price, a.place, a.created_at, a.updated_at, a.expected_available_date, a.approval_level, a.import_batch_id, a.manager_notes,
+    l.name AS location_name,
+    c.name AS category_name
+FROM articles a
+JOIN locations l ON a.location_id = l.id
+JOIN categories c ON a.category_id = c.id
+WHERE a.group_id = $1
+    AND a.commercial_name = $2
+    AND a.location_id = $3
+ORDER BY a.created_at
+LIMIT 1
+`
+
+type GetArticleGroupInfoParams struct {
+	GroupID        string      `json:"group_id"`
+	CommercialName string      `json:"commercial_name"`
+	LocationID     pgtype.UUID `json:"location_id"`
+}
+
+type GetArticleGroupInfoRow struct {
+	ID                    pgtype.UUID        `json:"id"`
+	GroupID               string             `json:"group_id"`
+	CommercialName        string             `json:"commercial_name"`
+	CommonName            string             `json:"common_name"`
+	CategoryID            pgtype.UUID        `json:"category_id"`
+	LocationID            pgtype.UUID        `json:"location_id"`
+	Status                string             `json:"status"`
+	IndividuallyTracked   bool               `json:"individually_tracked"`
+	ImagePath             pgtype.Text        `json:"image_path"`
+	Description           string             `json:"description"`
+	Instructions          string             `json:"instructions"`
+	PurchaseDate          pgtype.Date        `json:"purchase_date"`
+	PurchasePrice         pgtype.Numeric     `json:"purchase_price"`
+	Place                 string             `json:"place"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	ExpectedAvailableDate pgtype.Date        `json:"expected_available_date"`
+	ApprovalLevel         string             `json:"approval_level"`
+	ImportBatchID         pgtype.UUID        `json:"import_batch_id"`
+	ManagerNotes          string             `json:"manager_notes"`
+	LocationName          string             `json:"location_name"`
+	CategoryName          string             `json:"category_name"`
+}
+
+// Returns shared fields from the representative (oldest) article in a group.
+func (q *Queries) GetArticleGroupInfo(ctx context.Context, arg GetArticleGroupInfoParams) (GetArticleGroupInfoRow, error) {
+	row := q.db.QueryRow(ctx, getArticleGroupInfo, arg.GroupID, arg.CommercialName, arg.LocationID)
+	var i GetArticleGroupInfoRow
+	err := row.Scan(
+		&i.ID,
+		&i.GroupID,
+		&i.CommercialName,
+		&i.CommonName,
+		&i.CategoryID,
+		&i.LocationID,
+		&i.Status,
+		&i.IndividuallyTracked,
+		&i.ImagePath,
+		&i.Description,
+		&i.Instructions,
+		&i.PurchaseDate,
+		&i.PurchasePrice,
+		&i.Place,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ExpectedAvailableDate,
+		&i.ApprovalLevel,
+		&i.ImportBatchID,
+		&i.ManagerNotes,
+		&i.LocationName,
+		&i.CategoryName,
+	)
+	return i, err
+}
+
+const listActiveBookingConflicts = `-- name: ListActiveBookingConflicts :many
+SELECT DISTINCT a.id AS article_id, a.common_name AS article_name,
+    b.id AS booking_id,
+    b.start_date AS booking_start_date, b.end_date AS booking_end_date,
+    COALESCE(u.name, b.used_by_external, '') AS booking_unit
+FROM articles a
+JOIN booking_items bi ON bi.article_id = a.id
+JOIN bookings b ON bi.booking_id = b.id
+LEFT JOIN units u ON b.used_by_unit_id = u.id
+WHERE a.id = ANY($1::uuid[]) AND a.group_id = $2
+    AND b.status IN ('confirmed', 'approved', 'picked_up')
+    AND (bi.return_status IS NULL OR bi.return_status IN ('pending', 'delayed'))
+`
+
+type ListActiveBookingConflictsParams struct {
+	Ids     []pgtype.UUID `json:"ids"`
+	GroupID string        `json:"group_id"`
+}
+
+type ListActiveBookingConflictsRow struct {
+	ArticleID        pgtype.UUID `json:"article_id"`
+	ArticleName      string      `json:"article_name"`
+	BookingID        pgtype.UUID `json:"booking_id"`
+	BookingStartDate pgtype.Date `json:"booking_start_date"`
+	BookingEndDate   pgtype.Date `json:"booking_end_date"`
+	BookingUnit      string      `json:"booking_unit"`
+}
+
+// Returns articles from the given list that are in active bookings (confirmed/approved/picked_up)
+// with booking details for conflict resolution.
+func (q *Queries) ListActiveBookingConflicts(ctx context.Context, arg ListActiveBookingConflictsParams) ([]ListActiveBookingConflictsRow, error) {
+	rows, err := q.db.Query(ctx, listActiveBookingConflicts, arg.Ids, arg.GroupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListActiveBookingConflictsRow{}
+	for rows.Next() {
+		var i ListActiveBookingConflictsRow
+		if err := rows.Scan(
+			&i.ArticleID,
+			&i.ArticleName,
+			&i.BookingID,
+			&i.BookingStartDate,
+			&i.BookingEndDate,
+			&i.BookingUnit,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listArticles = `-- name: ListArticles :many
@@ -571,6 +811,116 @@ func (q *Queries) ListArticlesWithAvailability(ctx context.Context, arg ListArti
 	return items, nil
 }
 
+const listNewestInGroup = `-- name: ListNewestInGroup :many
+SELECT a.id
+FROM articles a
+WHERE a.group_id = $1
+    AND a.commercial_name = $2
+    AND a.location_id = $3
+    AND a.status != 'archived'
+    AND a.id NOT IN (
+        SELECT bi.article_id FROM booking_items bi
+        JOIN bookings b ON bi.booking_id = b.id
+        WHERE b.group_id = $1
+            AND b.status IN ('confirmed', 'approved', 'picked_up', 'submitted', 'draft')
+            AND (bi.return_status IS NULL OR bi.return_status IN ('pending', 'delayed'))
+    )
+ORDER BY a.created_at DESC
+`
+
+type ListNewestInGroupParams struct {
+	GroupID        string      `json:"group_id"`
+	CommercialName string      `json:"commercial_name"`
+	LocationID     pgtype.UUID `json:"location_id"`
+}
+
+// Returns articles in a group ordered newest first, for archiving excess.
+// Excludes articles in active bookings.
+func (q *Queries) ListNewestInGroup(ctx context.Context, arg ListNewestInGroupParams) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, listNewestInGroup, arg.GroupID, arg.CommercialName, arg.LocationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []pgtype.UUID{}
+	for rows.Next() {
+		var id pgtype.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const propagateSharedFields = `-- name: PropagateSharedFields :execrows
+UPDATE articles SET
+    description = $1,
+    instructions = $2,
+    manager_notes = $3,
+    category_id = $4,
+    updated_at = now()
+WHERE group_id = $5
+    AND commercial_name = $6
+    AND id != $7
+`
+
+type PropagateSharedFieldsParams struct {
+	Description    string      `json:"description"`
+	Instructions   string      `json:"instructions"`
+	ManagerNotes   string      `json:"manager_notes"`
+	CategoryID     pgtype.UUID `json:"category_id"`
+	GroupID        string      `json:"group_id"`
+	CommercialName string      `json:"commercial_name"`
+	ExcludeID      pgtype.UUID `json:"exclude_id"`
+}
+
+// After editing an individually tracked article, sync shared fields to siblings.
+func (q *Queries) PropagateSharedFields(ctx context.Context, arg PropagateSharedFieldsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, propagateSharedFields,
+		arg.Description,
+		arg.Instructions,
+		arg.ManagerNotes,
+		arg.CategoryID,
+		arg.GroupID,
+		arg.CommercialName,
+		arg.ExcludeID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const swapBookingItemArticleByArticle = `-- name: SwapBookingItemArticleByArticle :execrows
+UPDATE booking_items SET article_id = $1
+WHERE article_id = $2 AND booking_id = $3 AND group_id = $4
+`
+
+type SwapBookingItemArticleByArticleParams struct {
+	NewArticleID pgtype.UUID `json:"new_article_id"`
+	OldArticleID pgtype.UUID `json:"old_article_id"`
+	BookingID    pgtype.UUID `json:"booking_id"`
+	GroupID      string      `json:"group_id"`
+}
+
+// Swap all booking_items referencing old_article_id in a specific booking to new_article_id.
+func (q *Queries) SwapBookingItemArticleByArticle(ctx context.Context, arg SwapBookingItemArticleByArticleParams) (int64, error) {
+	result, err := q.db.Exec(ctx, swapBookingItemArticleByArticle,
+		arg.NewArticleID,
+		arg.OldArticleID,
+		arg.BookingID,
+		arg.GroupID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const updateArticle = `-- name: UpdateArticle :one
 UPDATE articles SET
     commercial_name = $1,
@@ -651,6 +1001,63 @@ func (q *Queries) UpdateArticle(ctx context.Context, arg UpdateArticleParams) (A
 		&i.ManagerNotes,
 	)
 	return i, err
+}
+
+const updateArticleGroupFields = `-- name: UpdateArticleGroupFields :execrows
+UPDATE articles SET
+    commercial_name = $1,
+    common_name = $2,
+    category_id = $3,
+    location_id = $4,
+    approval_level = $5,
+    description = $6,
+    instructions = $7,
+    place = $8,
+    manager_notes = $9,
+    individually_tracked = $10,
+    updated_at = now()
+WHERE group_id = $11
+    AND commercial_name = $12
+    AND location_id = $13
+`
+
+type UpdateArticleGroupFieldsParams struct {
+	NewCommercialName   string      `json:"new_commercial_name"`
+	NewCommonName       string      `json:"new_common_name"`
+	CategoryID          pgtype.UUID `json:"category_id"`
+	NewLocationID       pgtype.UUID `json:"new_location_id"`
+	ApprovalLevel       string      `json:"approval_level"`
+	Description         string      `json:"description"`
+	Instructions        string      `json:"instructions"`
+	Place               string      `json:"place"`
+	ManagerNotes        string      `json:"manager_notes"`
+	IndividuallyTracked bool        `json:"individually_tracked"`
+	GroupID             string      `json:"group_id"`
+	OldCommercialName   string      `json:"old_commercial_name"`
+	OldLocationID       pgtype.UUID `json:"old_location_id"`
+}
+
+// Updates shared fields for all articles in a quantity tracked group.
+func (q *Queries) UpdateArticleGroupFields(ctx context.Context, arg UpdateArticleGroupFieldsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateArticleGroupFields,
+		arg.NewCommercialName,
+		arg.NewCommonName,
+		arg.CategoryID,
+		arg.NewLocationID,
+		arg.ApprovalLevel,
+		arg.Description,
+		arg.Instructions,
+		arg.Place,
+		arg.ManagerNotes,
+		arg.IndividuallyTracked,
+		arg.GroupID,
+		arg.OldCommercialName,
+		arg.OldLocationID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const updateArticleStatus = `-- name: UpdateArticleStatus :one

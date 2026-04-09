@@ -42,7 +42,8 @@ Only the user decides when work is finished. Never assume a task is complete or 
 When the user says done or finished, perform this checklist:
 
 1. **Code quality**: No TODO comments, placeholder logic, or incomplete implementations left behind.
-2. **Security**: No missing auth checks, unscoped queries, or credential leaks.
+2. **Duplication**: No duplicated constants, labels, or utility functions across files. Shared code extracted to `$lib/` modules. No unused SQL queries, API endpoints, or dead code.
+3. **Security**: No missing auth checks, unscoped queries, or credential leaks.
 3. **Multi-tenancy**: `group_id` filtering on all new queries.
 4. **Style**: Code matches existing conventions (see `coding-conventions.md`).
 5. **Tests**: New functionality has integration tests covering the happy path. Run the test suite: `cd api && go test ./internal/handler/tests/ -timeout 180s -count=1 2>&1`

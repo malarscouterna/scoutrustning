@@ -1,10 +1,99 @@
 <script lang="ts">
 	import type { PageData } from './$types';
 	import { createApiClient, type Article } from '$lib/api/client';
+	import { statusLabels } from '$lib/labels';
+	import { hasRole } from '$lib/user';
+	import { page } from '$app/stores';
 	import ReportIssueForm from '$lib/components/ReportIssueForm.svelte';
 	import ArticleEventHistory from '$lib/components/ArticleEventHistory.svelte';
 
 	let { data }: { data: PageData } = $props();
+
+	let isManager = $derived(hasRole($page.data.user, 'equipment_manager'));
+	let managerMode = $state(false);
+	let selectedArticles = $state<Set<string>>(new Set());
+	let bulkStatus = $state('');
+	let bulkLocationId = $state('');
+	let bulkLoading = $state(false);
+	let bulkMessage = $state('');
+	let bulkConflicts = $state<Array<{ article_id: string; article_name: string; booking_id: string; booking_dates: string; booking_unit: string }>>([]);
+	let countEditing = $state<Map<string, number>>(new Map());
+	let countLoading = $state<Set<string>>(new Set());
+
+	let selectedCount = $derived(selectedArticles.size);
+
+	function toggleSelectArticle(id: string) {
+		const next = new Set(selectedArticles);
+		if (next.has(id)) next.delete(id); else next.add(id);
+		selectedArticles = next;
+	}
+
+	function toggleSelectGroup(group: ArticleGroup) {
+		const ids = group.articles.map(a => a.id);
+		const allSelected = ids.every(id => selectedArticles.has(id));
+		const next = new Set(selectedArticles);
+		for (const id of ids) {
+			if (allSelected) next.delete(id); else next.add(id);
+		}
+		selectedArticles = next;
+	}
+
+	function isGroupSelected(group: ArticleGroup): boolean {
+		return group.articles.length > 0 && group.articles.every(a => selectedArticles.has(a.id));
+	}
+
+	async function executeBulkAction() {
+		if (selectedCount === 0) return;
+		bulkLoading = true;
+		bulkMessage = '';
+		bulkConflicts = [];
+		try {
+			const payload: { article_ids: string[]; status?: string; location_id?: string } = {
+				article_ids: [...selectedArticles]
+			};
+			if (bulkStatus) payload.status = bulkStatus;
+			if (bulkLocationId) payload.location_id = bulkLocationId;
+			const result = await api.bulkUpdateArticles(payload);
+			if (result.conflicts.length > 0) {
+				bulkConflicts = result.conflicts;
+				bulkMessage = `${result.conflicts.length} artiklar kunde inte arkiveras — aktiva bokningar.`;
+			} else {
+				bulkMessage = `${result.updated} artiklar uppdaterade.`;
+				selectedArticles = new Set();
+				bulkStatus = '';
+				bulkLocationId = '';
+				window.location.reload();
+			}
+		} catch (e: any) {
+			bulkMessage = e.message ?? 'Något gick fel.';
+		} finally {
+			bulkLoading = false;
+		}
+	}
+
+	async function updateCount(group: ArticleGroup, newCount: number) {
+		if (newCount < 0) return;
+		const key = group.key;
+		const loading = new Set(countLoading);
+		loading.add(key);
+		countLoading = loading;
+		try {
+			await api.updateGroupCount({
+				commercial_name: group.commercialName,
+				location_id: group.articles[0].location_id,
+				new_count: newCount
+			});
+			window.location.reload();
+		} catch (e: any) {
+			bulkMessage = e.message === 'cannot_reduce_count'
+				? 'Kan inte minska antal — artiklar i aktiva bokningar.'
+				: (e.message ?? 'Något gick fel.');
+		} finally {
+			const done = new Set(countLoading);
+			done.delete(key);
+			countLoading = done;
+		}
+	}
 
 	let search = $state('');
 	let selectedCategory = $state('');
@@ -28,16 +117,6 @@
 	const api = createApiClient();
 
 	const statusOrder = ['ok', 'reported_usable', 'incoming', 'reported_unusable', 'under_repair', 'lost', 'archived'] as const;
-
-	const statusLabels: Record<string, string> = {
-		ok: 'OK',
-		reported_usable: 'Felrapporterad — användbar',
-		incoming: 'Inkommande',
-		reported_unusable: 'Felrapporterad — ej användbar',
-		under_repair: 'Under reparation',
-		lost: 'Saknas',
-		archived: 'Arkiverad',
-	};
 
 	const bookableStatuses = new Set(['ok', 'reported_usable']);
 
@@ -91,6 +170,7 @@
 		count: number;
 		articles: Article[];
 		individuallyTracked: boolean;
+		representativeId: string;
 	}
 
 	let groups = $derived.by(() => {
@@ -109,7 +189,8 @@
 					locationName: a.location_name,
 					count: 1,
 					articles: [a],
-					individuallyTracked: a.individually_tracked
+					individuallyTracked: a.individually_tracked,
+					representativeId: a.id
 				});
 			}
 		}
@@ -289,6 +370,31 @@
 		{articles.length} artiklar i {groups.length} grupper
 	</p>
 
+	{#if isManager}
+		<div class="flex flex-wrap items-center gap-3 mb-4">
+			<label class="flex items-center gap-2 text-sm">
+				<input type="checkbox" bind:checked={managerMode} />
+				Hanteringsläge
+			</label>
+			{#if managerMode}
+				<a href="/articles/new" class="text-sm bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700">+ Skapa artikel</a>
+			{/if}
+		</div>
+	{/if}
+
+	{#if bulkMessage}
+		<div class="bg-amber-50 border border-amber-200 rounded p-3 mb-4 text-amber-800 text-sm">
+			{bulkMessage}
+			{#if bulkConflicts.length > 0}
+				<ul class="mt-1 list-disc list-inside">
+					{#each bulkConflicts as c}
+						<li>{c.article_name} — bokad av {c.booking_unit} ({c.booking_dates})</li>
+					{/each}
+				</ul>
+			{/if}
+		</div>
+	{/if}
+
 	{#if reportedMessage}
 		<div class="bg-green-50 border border-green-200 rounded p-3 mb-4 text-green-800 text-sm">{reportedMessage}</div>
 	{/if}
@@ -302,7 +408,10 @@
 					onclick={() => toggleGroup(group.key)}
 					class="w-full flex flex-wrap items-center justify-between gap-1 px-4 py-3 hover:bg-neutral-50 text-left"
 				>
-					<div class="min-w-0">
+					<div class="flex items-center gap-2 min-w-0">
+						{#if managerMode}
+							<input type="checkbox" checked={isGroupSelected(group)} onclick={(e) => { e.stopPropagation(); toggleSelectGroup(group); }} class="shrink-0" />
+						{/if}
 						<span class="font-medium">{group.commercialName}</span>
 						<span class="text-sm text-neutral-500 ml-2">{group.categoryName}</span>
 					</div>
@@ -323,7 +432,7 @@
 								{#each sortArticles(group.articles) as article}
 									<div class="py-2">
 										<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-											<span class="font-medium">{article.common_name}</span>
+											<a href="/articles/{article.id}" class="inline-flex items-center gap-1 text-xs font-medium text-blue-700 border border-blue-200 bg-blue-50 rounded px-2 py-0.5 hover:bg-blue-100">{article.common_name} ›</a>
 											<span class="text-xs text-neutral-500">{article.place || '—'}</span>
 											{#if article.status !== 'ok' || article.current_booking_id}
 												<button onclick={() => toggleIssueHistory(article.id)} class="inline-block px-2 py-0.5 rounded text-xs cursor-pointer {statusBadgeClass(article.status)}">
@@ -335,6 +444,9 @@
 												</span>
 											{/if}
 											<span class="ml-auto flex gap-2 shrink-0">
+												{#if isManager}
+													<a href="/articles/{article.id}/edit" class="inline-flex items-center gap-1 text-xs text-neutral-600 border border-neutral-200 bg-neutral-50 rounded px-2 py-0.5 hover:bg-neutral-100">Redigera ›</a>
+												{/if}
 												<button onclick={() => reportingArticleId = reportingArticleId === article.id ? null : article.id} class="text-xs text-blue-700 underline">Rapportera</button>
 												<button onclick={() => showHistoryFor = showHistoryFor === article.id ? null : article.id} class="text-xs text-neutral-500 underline">Historik</button>
 											</span>
@@ -377,6 +489,12 @@
 						{:else}
 							{@const rows = groupByState(group.articles)}
 							<div class="space-y-1 py-1 text-sm">
+								<div class="flex gap-2">
+									<a href="/articles/{group.representativeId}" class="inline-flex items-center gap-1 text-xs text-blue-700 border border-blue-200 bg-blue-50 rounded px-2 py-1 hover:bg-blue-100">Visa artikelsida ›</a>
+									{#if isManager}
+										<a href="/articles/{group.representativeId}/edit?group=true" class="inline-flex items-center gap-1 text-xs text-neutral-600 border border-neutral-200 bg-neutral-50 rounded px-2 py-1 hover:bg-neutral-100">Redigera ›</a>
+									{/if}
+								</div>
 								{#each rows as row}
 									{@const comment = row.articleIds.map(id => latestComments.get(id)).find(c => c)}
 									{@const representativeId = row.articleIds[0]}

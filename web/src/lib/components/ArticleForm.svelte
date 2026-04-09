@@ -6,6 +6,10 @@
 		categories: Category[];
 		mode: 'create' | 'edit';
 		isManager?: boolean;
+		individuallyTrackedEdit?: boolean;
+		quantityTrackedEdit?: boolean;
+		groupCount?: number | null;
+		onCountChange?: (newCount: number) => Promise<void>;
 		initial?: {
 			commercial_name?: string;
 			common_name?: string;
@@ -28,7 +32,14 @@
 		saving?: boolean;
 	}
 
-	let { locations, categories, mode, isManager = false, initial, submitLabel = 'Spara', onSubmit, onCancel, error = '', saving = false }: Props = $props();
+	let { locations, categories, mode, isManager = false, individuallyTrackedEdit = false, quantityTrackedEdit = false, groupCount = null, onCountChange, initial, submitLabel = 'Spara', onSubmit, onCancel, error = '', saving = false }: Props = $props();
+
+	let countValue = $state(0);
+	let countSaving = $state(false);
+
+	$effect(() => {
+		if (groupCount !== null) countValue = groupCount;
+	});
 
 	let form = $state({
 		commercial_name: '',
@@ -116,6 +127,9 @@
 			const data = buildBase();
 			data.common_name = form.common_name;
 			await onSubmit([data]);
+			if (quantityTrackedEdit && groupCount !== null && countValue !== groupCount && onCountChange) {
+				await onCountChange(countValue);
+			}
 			return;
 		}
 
@@ -155,6 +169,11 @@
 		form.category_id && form.location_id &&
 		(mode === 'edit' ? !!form.common_name : (form.individually_tracked ? names.every(n => n.trim()) : count > 0))
 	);
+
+	let nameWarning = $derived(
+		mode === 'edit' && form.commercial_name && form.common_name
+		&& !form.common_name.startsWith(form.commercial_name)
+	);
 </script>
 
 <form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }} class="space-y-4">
@@ -162,121 +181,286 @@
 		<div class="bg-red-50 border border-red-200 rounded p-2 text-red-800 text-sm">{error}</div>
 	{/if}
 
-	<label class="block">
-		<span class="text-sm text-neutral-600 block mb-1">Produktnamn</span>
-		<input type="text" bind:value={form.commercial_name} placeholder="t.ex. Sibley" class="border rounded px-2 py-1.5 text-sm w-full" />
-	</label>
+	{#if individuallyTrackedEdit}
+		<div class="border border-blue-200 bg-blue-50/30 rounded p-4 space-y-4">
+			<p class="text-xs text-blue-600">Gemensamt — uppdateras för alla artiklar i gruppen</p>
 
-	{#if mode === 'edit'}
-		<label class="block">
-			<span class="text-sm text-neutral-600 block mb-1">Artikelnamn *</span>
-			<input type="text" bind:value={form.common_name} required placeholder="t.ex. Sibley 1" class="border rounded px-2 py-1.5 text-sm w-full" />
-		</label>
-	{/if}
+			<label class="block">
+				<span class="text-sm text-neutral-600 block mb-1">Produktnamn</span>
+				<input type="text" bind:value={form.commercial_name} placeholder="t.ex. Sibley" class="border rounded px-2 py-1.5 text-sm w-full" />
+			</label>
 
-	<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-		<label class="block">
-			<span class="text-sm text-neutral-600 block mb-1">Kategori *</span>
-			<select bind:value={form.category_id} required class="border rounded px-2 py-1.5 text-sm w-full">
-				<option value="">Välj...</option>
-				{#each categories as cat}
-					<option value={cat.id}>{cat.name}</option>
-				{/each}
-			</select>
-		</label>
-		<label class="block">
-			<span class="text-sm text-neutral-600 block mb-1">Plats *</span>
-			<select bind:value={form.location_id} required class="border rounded px-2 py-1.5 text-sm w-full">
-				<option value="">Välj...</option>
-				{#each locations as loc}
-					<option value={loc.id}>{loc.name}</option>
-				{/each}
-			</select>
-		</label>
-	</div>
+			<label class="block">
+				<span class="text-sm text-neutral-600 block mb-1">Kategori *</span>
+				<select bind:value={form.category_id} required class="border rounded px-2 py-1.5 text-sm w-full">
+					<option value="">Välj...</option>
+					{#each categories as cat}
+						<option value={cat.id}>{cat.name}</option>
+					{/each}
+				</select>
+			</label>
 
-	<div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-		<label class="block">
-			<span class="text-sm text-neutral-600 block mb-1">Status</span>
-			<select bind:value={form.status} class="border rounded px-2 py-1.5 text-sm w-full">
-				{#each statusOptions as opt}
-					<option value={opt.value}>{opt.label}</option>
-				{/each}
-			</select>
-		</label>
-		<label class="block">
-			<span class="text-sm text-neutral-600 block mb-1">Godkännandenivå</span>
-			<select bind:value={form.approval_level} class="border rounded px-2 py-1.5 text-sm w-full">
-				{#each approvalOptions as opt}
-					<option value={opt.value}>{opt.label}</option>
-				{/each}
-			</select>
-		</label>
-		{#if mode === 'create'}
-			<div class="flex items-end pb-1">
-				<label class="flex items-center gap-2 text-sm">
-					<input type="checkbox" bind:checked={form.individually_tracked} />
-					Individuellt spårad
+			<label class="block">
+				<span class="text-sm text-neutral-600 block mb-1">Beskrivning</span>
+				<textarea bind:value={form.description} rows="2" class="border rounded px-2 py-1.5 text-sm w-full"></textarea>
+			</label>
+
+			<label class="block">
+				<span class="text-sm text-neutral-600 block mb-1">Instruktioner</span>
+				<textarea bind:value={form.instructions} rows="2" class="border rounded px-2 py-1.5 text-sm w-full"></textarea>
+			</label>
+
+			{#if isManager}
+				<label class="block">
+					<span class="text-sm text-neutral-600 block mb-1">Interna anteckningar (bara synligt för utrustningsansvariga)</span>
+					<textarea bind:value={form.manager_notes} rows="2" placeholder="Interna noteringar..." class="border rounded px-2 py-1.5 text-sm w-full bg-amber-50"></textarea>
+				</label>
+			{/if}
+		</div>
+
+		<div class="border border-neutral-200 rounded p-4 space-y-4">
+			<p class="text-xs text-neutral-500">Enskild artikel — gäller bara denna</p>
+
+			<label class="block">
+				<span class="text-sm text-neutral-600 block mb-1">Artikelnamn *</span>
+				<input type="text" bind:value={form.common_name} required placeholder="t.ex. Sibley 1" class="border rounded px-2 py-1.5 text-sm w-full" />
+				{#if nameWarning}
+					<p class="text-xs text-amber-600 mt-1">Artikelnamnet börjar inte med produktnamnet ({form.commercial_name})</p>
+				{/if}
+			</label>
+
+			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+				<label class="block">
+					<span class="text-sm text-neutral-600 block mb-1">Status</span>
+					<select bind:value={form.status} class="border rounded px-2 py-1.5 text-sm w-full">
+						{#each statusOptions as opt}
+							<option value={opt.value}>{opt.label}</option>
+						{/each}
+					</select>
+				</label>
+				<label class="block">
+					<span class="text-sm text-neutral-600 block mb-1">Godkännandenivå</span>
+					<select bind:value={form.approval_level} class="border rounded px-2 py-1.5 text-sm w-full">
+						{#each approvalOptions as opt}
+							<option value={opt.value}>{opt.label}</option>
+						{/each}
+					</select>
 				</label>
 			</div>
-		{/if}
-	</div>
 
-	{#if mode === 'create'}
-		<label class="block">
-			<span class="text-sm text-neutral-600 block mb-1">Antal</span>
-			<input type="number" bind:value={count} min="1" max="200" class="border rounded px-2 py-1.5 text-sm w-24" />
-		</label>
-
-		{#if form.individually_tracked && count > 0}
-			<div>
-				<span class="text-sm text-neutral-600 block mb-1">Artikelnamn ({count} st)</span>
-				<div class="space-y-1">
-					{#each names as name, i}
-						<input
-							type="text"
-							value={name}
-							oninput={(e) => updateName(i, (e.target as HTMLInputElement).value)}
-							placeholder="Artikelnamn {i + 1}"
-							class="border rounded px-2 py-1.5 text-sm w-full"
-						/>
+			<label class="block">
+				<span class="text-sm text-neutral-600 block mb-1">Plats *</span>
+				<select bind:value={form.location_id} required class="border rounded px-2 py-1.5 text-sm w-full">
+					<option value="">Välj...</option>
+					{#each locations as loc}
+						<option value={loc.id}>{loc.name}</option>
 					{/each}
-				</div>
+				</select>
+			</label>
+
+			<label class="block">
+				<span class="text-sm text-neutral-600 block mb-1">Förvaringsplats</span>
+				<input type="text" bind:value={form.place} placeholder="t.ex. Hylla 3" class="border rounded px-2 py-1.5 text-sm w-full" />
+			</label>
+
+			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+				<label class="block">
+					<span class="text-sm text-neutral-600 block mb-1">Inköpsdatum</span>
+					<input type="date" bind:value={form.purchase_date} class="border rounded px-2 py-1.5 text-sm w-full" />
+				</label>
+				<label class="block">
+					<span class="text-sm text-neutral-600 block mb-1">Inköpspris (kr)</span>
+					<input type="number" bind:value={form.purchase_price} step="0.01" min="0" class="border rounded px-2 py-1.5 text-sm w-full" />
+				</label>
 			</div>
+		</div>
+	{:else if quantityTrackedEdit}
+		<div class="border border-blue-200 bg-blue-50/30 rounded p-4 space-y-4">
+
+			<label class="block">
+				<span class="text-sm text-neutral-600 block mb-1">Produktnamn</span>
+				<input type="text" bind:value={form.commercial_name} placeholder="t.ex. Sibley" class="border rounded px-2 py-1.5 text-sm w-full" />
+			</label>
+
+			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+				<label class="block">
+					<span class="text-sm text-neutral-600 block mb-1">Kategori *</span>
+					<select bind:value={form.category_id} required class="border rounded px-2 py-1.5 text-sm w-full">
+						<option value="">Välj...</option>
+						{#each categories as cat}
+							<option value={cat.id}>{cat.name}</option>
+						{/each}
+					</select>
+				</label>
+				<label class="block">
+					<span class="text-sm text-neutral-600 block mb-1">Godkännandenivå</span>
+					<select bind:value={form.approval_level} class="border rounded px-2 py-1.5 text-sm w-full">
+						{#each approvalOptions as opt}
+							<option value={opt.value}>{opt.label}</option>
+						{/each}
+					</select>
+				</label>
+			</div>
+
+			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+				<label class="block">
+					<span class="text-sm text-neutral-600 block mb-1">Plats *</span>
+					<select bind:value={form.location_id} required class="border rounded px-2 py-1.5 text-sm w-full">
+						<option value="">Välj...</option>
+						{#each locations as loc}
+							<option value={loc.id}>{loc.name}</option>
+						{/each}
+					</select>
+				</label>
+				{#if groupCount !== null}
+					<label class="block">
+						<span class="text-sm text-neutral-600 block mb-1">Antal</span>
+						<input type="number" bind:value={countValue} min="0" max="999" class="border rounded px-2 py-1.5 text-sm w-full" />
+					</label>
+				{/if}
+			</div>
+
+			<label class="block">
+				<span class="text-sm text-neutral-600 block mb-1">Förvaringsplats</span>
+				<input type="text" bind:value={form.place} placeholder="t.ex. Hylla 3" class="border rounded px-2 py-1.5 text-sm w-full" />
+			</label>
+
+			<label class="block">
+				<span class="text-sm text-neutral-600 block mb-1">Beskrivning</span>
+				<textarea bind:value={form.description} rows="2" class="border rounded px-2 py-1.5 text-sm w-full"></textarea>
+			</label>
+
+			<label class="block">
+				<span class="text-sm text-neutral-600 block mb-1">Instruktioner</span>
+				<textarea bind:value={form.instructions} rows="2" class="border rounded px-2 py-1.5 text-sm w-full"></textarea>
+			</label>
+
+			{#if isManager}
+				<label class="block">
+					<span class="text-sm text-neutral-600 block mb-1">Interna anteckningar (bara synligt för utrustningsansvariga)</span>
+					<textarea bind:value={form.manager_notes} rows="2" placeholder="Interna noteringar..." class="border rounded px-2 py-1.5 text-sm w-full bg-amber-50"></textarea>
+				</label>
+			{/if}
+		</div>
+	{:else}
+		<label class="block">
+			<span class="text-sm text-neutral-600 block mb-1">Produktnamn</span>
+			<input type="text" bind:value={form.commercial_name} placeholder="t.ex. Sibley" class="border rounded px-2 py-1.5 text-sm w-full" />
+		</label>
+
+		{#if mode === 'edit'}
+			<label class="block">
+				<span class="text-sm text-neutral-600 block mb-1">Artikelnamn *</span>
+				<input type="text" bind:value={form.common_name} required placeholder="t.ex. Sibley 1" class="border rounded px-2 py-1.5 text-sm w-full" />
+				{#if nameWarning}
+					<p class="text-xs text-amber-600 mt-1">Artikelnamnet börjar inte med produktnamnet ({form.commercial_name})</p>
+				{/if}
+			</label>
 		{/if}
-	{/if}
 
-	<label class="block">
-		<span class="text-sm text-neutral-600 block mb-1">Förvaringsplats</span>
-		<input type="text" bind:value={form.place} placeholder="t.ex. Hylla 3" class="border rounded px-2 py-1.5 text-sm w-full" />
-	</label>
+		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+			<label class="block">
+				<span class="text-sm text-neutral-600 block mb-1">Kategori *</span>
+				<select bind:value={form.category_id} required class="border rounded px-2 py-1.5 text-sm w-full">
+					<option value="">Välj...</option>
+					{#each categories as cat}
+						<option value={cat.id}>{cat.name}</option>
+					{/each}
+				</select>
+			</label>
+			<label class="block">
+				<span class="text-sm text-neutral-600 block mb-1">Godkännandenivå</span>
+				<select bind:value={form.approval_level} class="border rounded px-2 py-1.5 text-sm w-full">
+					{#each approvalOptions as opt}
+						<option value={opt.value}>{opt.label}</option>
+					{/each}
+				</select>
+			</label>
+		</div>
 
-	<label class="block">
-		<span class="text-sm text-neutral-600 block mb-1">Beskrivning</span>
-		<textarea bind:value={form.description} rows="2" class="border rounded px-2 py-1.5 text-sm w-full"></textarea>
-	</label>
+		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+			<label class="block">
+				<span class="text-sm text-neutral-600 block mb-1">Plats *</span>
+				<select bind:value={form.location_id} required class="border rounded px-2 py-1.5 text-sm w-full">
+					<option value="">Välj...</option>
+					{#each locations as loc}
+						<option value={loc.id}>{loc.name}</option>
+					{/each}
+				</select>
+			</label>
+			<label class="block">
+				<span class="text-sm text-neutral-600 block mb-1">Status</span>
+				<select bind:value={form.status} class="border rounded px-2 py-1.5 text-sm w-full">
+					{#each statusOptions as opt}
+						<option value={opt.value}>{opt.label}</option>
+					{/each}
+				</select>
+			</label>
+		</div>
 
-	<label class="block">
-		<span class="text-sm text-neutral-600 block mb-1">Instruktioner</span>
-		<textarea bind:value={form.instructions} rows="2" class="border rounded px-2 py-1.5 text-sm w-full"></textarea>
-	</label>
+		{#if mode === 'create'}
+			<label class="flex items-center gap-2 text-sm">
+				<input type="checkbox" bind:checked={form.individually_tracked} />
+				Individuellt spårad
+			</label>
+		{/if}
 
-	<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+		{#if mode === 'create'}
+			<label class="block">
+				<span class="text-sm text-neutral-600 block mb-1">Antal</span>
+				<input type="number" bind:value={count} min="1" max="200" class="border rounded px-2 py-1.5 text-sm w-24" />
+			</label>
+
+			{#if form.individually_tracked && count > 0}
+				<div>
+					<span class="text-sm text-neutral-600 block mb-1">Artikelnamn ({count} st)</span>
+					<div class="space-y-1">
+						{#each names as name, i}
+							<input
+								type="text"
+								value={name}
+								oninput={(e) => updateName(i, (e.target as HTMLInputElement).value)}
+								placeholder="Artikelnamn {i + 1}"
+								class="border rounded px-2 py-1.5 text-sm w-full"
+							/>
+						{/each}
+					</div>
+				</div>
+			{/if}
+		{/if}
+
 		<label class="block">
-			<span class="text-sm text-neutral-600 block mb-1">Inköpsdatum</span>
-			<input type="date" bind:value={form.purchase_date} class="border rounded px-2 py-1.5 text-sm w-full" />
+			<span class="text-sm text-neutral-600 block mb-1">Förvaringsplats</span>
+			<input type="text" bind:value={form.place} placeholder="t.ex. Hylla 3" class="border rounded px-2 py-1.5 text-sm w-full" />
 		</label>
-		<label class="block">
-			<span class="text-sm text-neutral-600 block mb-1">Inköpspris (kr)</span>
-			<input type="number" bind:value={form.purchase_price} step="0.01" min="0" class="border rounded px-2 py-1.5 text-sm w-full" />
-		</label>
-	</div>
 
-	{#if isManager}
 		<label class="block">
-			<span class="text-sm text-neutral-600 block mb-1">Interna anteckningar (bara synligt för materialare)</span>
-			<textarea bind:value={form.manager_notes} rows="2" placeholder="Interna noteringar..." class="border rounded px-2 py-1.5 text-sm w-full bg-amber-50"></textarea>
+			<span class="text-sm text-neutral-600 block mb-1">Beskrivning</span>
+			<textarea bind:value={form.description} rows="2" class="border rounded px-2 py-1.5 text-sm w-full"></textarea>
 		</label>
+
+		<label class="block">
+			<span class="text-sm text-neutral-600 block mb-1">Instruktioner</span>
+			<textarea bind:value={form.instructions} rows="2" class="border rounded px-2 py-1.5 text-sm w-full"></textarea>
+		</label>
+
+		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+			<label class="block">
+				<span class="text-sm text-neutral-600 block mb-1">Inköpsdatum</span>
+				<input type="date" bind:value={form.purchase_date} class="border rounded px-2 py-1.5 text-sm w-full" />
+			</label>
+			<label class="block">
+				<span class="text-sm text-neutral-600 block mb-1">Inköpspris (kr)</span>
+				<input type="number" bind:value={form.purchase_price} step="0.01" min="0" class="border rounded px-2 py-1.5 text-sm w-full" />
+			</label>
+		</div>
+
+		{#if isManager}
+			<label class="block">
+				<span class="text-sm text-neutral-600 block mb-1">Interna anteckningar (bara synligt för utrustningsansvariga)</span>
+				<textarea bind:value={form.manager_notes} rows="2" placeholder="Interna noteringar..." class="border rounded px-2 py-1.5 text-sm w-full bg-amber-50"></textarea>
+			</label>
+		{/if}
 	{/if}
 
 	<div class="flex gap-2 pt-2">

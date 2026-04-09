@@ -11,7 +11,7 @@
 	const roleConfig: Record<string, { label: string; description: string }> = {
 		leader: { label: 'Ledare', description: 'Kan boka utrustning för sina avdelningar' },
 		project_leader: { label: 'Projektledare', description: 'Kan boka utrustning utan godkännande' },
-		equipment_manager: { label: 'Materialare', description: 'Full tillgång till inventarie, ärenden och godkännanden' }
+		equipment_manager: { label: 'Utrustningsansvarig', description: 'Full tillgång till inventarie, ärenden och godkännanden' }
 	};
 
 	let accessGroups = $derived(user.roles.map(role => ({

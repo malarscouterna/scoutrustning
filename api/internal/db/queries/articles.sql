@@ -137,3 +137,125 @@ LEFT JOIN articles a ON a.category_id = c.id AND a.group_id = c.group_id
 WHERE c.group_id = @group_id
 GROUP BY c.id, c.name
 ORDER BY c.sort_order;
+
+-- name: BulkUpdateArticleStatus :execrows
+UPDATE articles SET status = @status, updated_at = now()
+WHERE id = ANY(@ids::uuid[]) AND group_id = @group_id;
+
+-- name: BulkUpdateArticleLocation :execrows
+UPDATE articles SET location_id = @location_id, updated_at = now()
+WHERE id = ANY(@ids::uuid[]) AND group_id = @group_id;
+
+-- name: ListActiveBookingConflicts :many
+-- Returns articles from the given list that are in active bookings (confirmed/approved/picked_up)
+-- with booking details for conflict resolution.
+SELECT DISTINCT a.id AS article_id, a.common_name AS article_name,
+    b.id AS booking_id,
+    b.start_date AS booking_start_date, b.end_date AS booking_end_date,
+    COALESCE(u.name, b.used_by_external, '') AS booking_unit
+FROM articles a
+JOIN booking_items bi ON bi.article_id = a.id
+JOIN bookings b ON bi.booking_id = b.id
+LEFT JOIN units u ON b.used_by_unit_id = u.id
+WHERE a.id = ANY(@ids::uuid[]) AND a.group_id = @group_id
+    AND b.status IN ('confirmed', 'approved', 'picked_up')
+    AND (bi.return_status IS NULL OR bi.return_status IN ('pending', 'delayed'));
+
+-- name: FindReplacementArticle :one
+-- Finds a replacement article with the same commercial_name + location, bookable status,
+-- not in the given exclude list, and not in any overlapping active booking.
+SELECT a.id
+FROM articles a
+WHERE a.group_id = @group_id
+    AND a.commercial_name = @commercial_name
+    AND a.location_id = @location_id
+    AND a.status IN ('ok', 'reported_usable')
+    AND a.id != ALL(@exclude_ids::uuid[])
+    AND a.id NOT IN (
+        SELECT bi.article_id FROM booking_items bi
+        JOIN bookings b ON bi.booking_id = b.id
+        WHERE b.group_id = @group_id
+            AND b.status IN ('confirmed', 'approved', 'picked_up', 'submitted', 'draft')
+            AND b.start_date <= @end_date
+            AND b.end_date >= @start_date
+            AND (bi.return_status IS NULL OR bi.return_status IN ('pending', 'delayed'))
+    )
+ORDER BY a.created_at
+LIMIT 1;
+
+-- name: SwapBookingItemArticleByArticle :execrows
+-- Swap all booking_items referencing old_article_id in a specific booking to new_article_id.
+UPDATE booking_items SET article_id = @new_article_id
+WHERE article_id = @old_article_id AND booking_id = @booking_id AND group_id = @group_id;
+
+
+-- name: GetArticleGroupInfo :one
+-- Returns shared fields from the representative (oldest) article in a group.
+SELECT a.*,
+    l.name AS location_name,
+    c.name AS category_name
+FROM articles a
+JOIN locations l ON a.location_id = l.id
+JOIN categories c ON a.category_id = c.id
+WHERE a.group_id = @group_id
+    AND a.commercial_name = @commercial_name
+    AND a.location_id = @location_id
+ORDER BY a.created_at
+LIMIT 1;
+
+-- name: CountArticlesInGroup :one
+-- Counts non-archived articles in a quantity tracked group.
+SELECT COUNT(*) AS count
+FROM articles a
+WHERE a.group_id = @group_id
+    AND a.commercial_name = @commercial_name
+    AND a.location_id = @location_id
+    AND a.status != 'archived';
+
+-- name: ListNewestInGroup :many
+-- Returns articles in a group ordered newest first, for archiving excess.
+-- Excludes articles in active bookings.
+SELECT a.id
+FROM articles a
+WHERE a.group_id = @group_id
+    AND a.commercial_name = @commercial_name
+    AND a.location_id = @location_id
+    AND a.status != 'archived'
+    AND a.id NOT IN (
+        SELECT bi.article_id FROM booking_items bi
+        JOIN bookings b ON bi.booking_id = b.id
+        WHERE b.group_id = @group_id
+            AND b.status IN ('confirmed', 'approved', 'picked_up', 'submitted', 'draft')
+            AND (bi.return_status IS NULL OR bi.return_status IN ('pending', 'delayed'))
+    )
+ORDER BY a.created_at DESC;
+
+-- name: UpdateArticleGroupFields :execrows
+-- Updates shared fields for all articles in a quantity tracked group.
+UPDATE articles SET
+    commercial_name = @new_commercial_name,
+    common_name = @new_common_name,
+    category_id = @category_id,
+    location_id = @new_location_id,
+    approval_level = @approval_level,
+    description = @description,
+    instructions = @instructions,
+    place = @place,
+    manager_notes = @manager_notes,
+    individually_tracked = @individually_tracked,
+    updated_at = now()
+WHERE group_id = @group_id
+    AND commercial_name = @old_commercial_name
+    AND location_id = @old_location_id;
+
+-- name: PropagateSharedFields :execrows
+-- After editing an individually tracked article, sync shared fields to siblings.
+UPDATE articles SET
+    description = @description,
+    instructions = @instructions,
+    manager_notes = @manager_notes,
+    category_id = @category_id,
+    updated_at = now()
+WHERE group_id = @group_id
+    AND commercial_name = @commercial_name
+    AND id != @exclude_id;

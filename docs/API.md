@@ -147,7 +147,66 @@ Get the event history for an article. Returns logged events (status changes, iss
 }
 ```
 
-Event types: `status_change`, `issue_reported`, `issue_resolved`, `booked`, `picked_up`, `returned`, `note`.
+Event types: `status_change`, `issue_reported`, `issue_resolved`, `count_changed`, `booked`, `picked_up`, `returned`, `note`.
+
+### `GET /api/v0/articles/{id}/group-events`
+Get the aggregated event history for all articles in a quantity tracked group (matched by commercial_name + location). Returns events from all articles in the group, ordered by most recent first.
+
+**Query parameters** (all optional):
+- `limit` — maximum number of events to return. When set, response includes `has_more`.
+
+**Response** `200` — same format as `/articles/{id}/events`, with additional `article_name` field per event.
+
+---
+
+### 🔒 `PUT /api/v0/articles/bulk`
+Bulk update articles. Supports status change, location move, and archive with conflict detection.
+
+For archive: checks active booking conflicts, auto-swaps where a replacement is available, returns unresolved conflicts.
+
+**Body**
+```json
+{
+  "article_ids": ["uuid1", "uuid2"],
+  "status": "archived",
+  "location_id": "uuid"
+}
+```
+At least one of `status` or `location_id` required.
+
+**Response** `200`
+```json
+{
+  "updated": 5,
+  "conflicts": [
+    {
+      "article_id": "uuid",
+      "article_name": "Sibley 3",
+      "booking_id": "uuid",
+      "booking_dates": "2026-06-05 — 2026-06-08",
+      "booking_unit": "Yggdrasil"
+    }
+  ]
+}
+```
+
+### 🔒 `POST /api/v0/articles/group-count`
+Adjust the count of a quantity tracked article group. Creates or archives article records to match the new count. Logs a single `count_changed` event on the representative (oldest) article. Never archives the representative.
+
+**Body**
+```json
+{
+  "commercial_name": "Liggunderlag",
+  "location_id": "uuid",
+  "new_count": 12
+}
+```
+
+**Response** `200`
+```json
+{"count": 12}
+```
+`409` with `cannot_reduce_count` if too many articles are in active bookings to reduce to the requested count.
 
 ---
 

@@ -12,7 +12,7 @@
 	const roleLabels: Record<string, string> = {
 		leader: 'Ledare',
 		project_leader: 'Projektledare',
-		equipment_manager: 'Materialare'
+		equipment_manager: 'Utrustningsansvarig'
 	};
 
 	async function switchPersona(key: string | null) {

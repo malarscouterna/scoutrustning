@@ -318,16 +318,29 @@ DROP TABLE IF EXISTS group_settings;
 
 **UPDATE**: Routes use `/articles/*` instead of `/admin/articles/*` — no separate admin namespace. Article detail page added as a natural read-only view for all users, complementing (not replacing) the browse page expand.
 
-### Step 2c: Browse page manager mode
+### Step 2c: Browse page manager mode ✅ (partial)
 
-1. Add "Hanteringsläge" toggle (session state, manager only)
-2. Add checkboxes (per group and per article) when toggle is on
-3. Add bulk actions toolbar: status change, location move, archive
-4. Add count field for quantity tracked groups in expanded view
-5. Add edit links per article/group
-6. Add "Skapa artikel" button
-7. Add `PUT /articles/bulk` endpoint with archive conflict detection + auto-replacement
-8. Log single `count_changed` article event per count adjustment
+1. ✅ Article detail links: individually tracked articles get pill-button links on common_name in expanded view, quantity tracked groups get "Visa artikelsida ›" link
+2. ✅ Edit links per article/group: "Redigera ›" pill-button links (manager only) — individually tracked → `/articles/{id}/edit`, quantity tracked → `/articles/{id}/edit?group=true`
+3. ✅ "Skapa artikel" button (manager mode)
+4. ✅ `PUT /articles/bulk` endpoint with archive conflict detection + auto-replacement
+5. ✅ `POST /articles/group-count` endpoint — atomic count adjustment, logs single `count_changed` event, protects representative (oldest)
+6. ✅ `PUT /articles/{id}?group=true` — applies shared fields to all articles in quantity tracked group
+7. ✅ Auto-propagation of shared fields on individually tracked article save (description, instructions, manager_notes, category_id)
+8. ✅ Article detail page: quantity tracked shows status summary, aggregated purchase info, collapsed group events
+9. ✅ `GET /articles/{id}/group-events` — aggregated event history across all articles in a group
+10. ✅ Edit form: three layouts — individually tracked (shared/per-item sections), quantity tracked (single blue box with count), create (flat)
+11. ✅ Shared fields: description, instructions, manager_notes, category_id. Per-item: common_name, status, approval_level, location_id, place, purchase_date, purchase_price
+12. ✅ Name validation warning when common_name doesn't start with commercial_name
+13. ✅ CSV import reads `instructions` and `manager_notes` columns
+14. ✅ Example CSV enriched with descriptions, instructions, manager_notes, rum/lage
+15. ✅ Consistent link styling: pill-button with › for navigation, underline for in-page actions
+16. ✅ "Materialare" → "Utrustningsansvarig" terminology
+17. ✅ "Hanteringsläge" toggle (session state, manager only) — partially wired
+18. ✅ Checkboxes (per group and per article) — state management done, UI partially wired
+19. Remaining: bulk actions toolbar UI (status change, location move, archive dropdowns), count field in browse expanded view, article note input on detail page (add `note` events to article history)
+
+**UPDATE**: Step 2c scope expanded significantly from original plan. Article detail page gained quantity tracked group support (status summary, aggregated purchase info, collapsed group events). Edit form split into three layouts with shared/per-item field distinction. Shared field propagation added for individually tracked articles. Approval level moved from shared to per-item (different locations may need different approval rules). Location is per-item (same product type can exist in multiple locations).
 
 ### Step 2d: CSV export + booking export + print fetch list
 

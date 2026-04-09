@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { createApiClient, type Article, type ArticleEvent } from '$lib/api/client';
+	import { statusLabels, statusColors, eventTypeLabels } from '$lib/labels';
 	import { hasRole } from '$lib/user';
 	import { page } from '$app/stores';
 	import type { PageData } from './$types';
@@ -37,43 +38,6 @@
 	let selectedStatuses = $derived(new Set(data.filter.split(',')));
 	let showMine = $derived(data.mine);
 
-	const statusLabels: Record<string, string> = {
-		ok: 'OK',
-		reported_usable: 'Felrapporterad — användbar',
-		incoming: 'Inkommande',
-		reported_unusable: 'Felrapporterad — ej användbar',
-		under_repair: 'Under reparation',
-		lost: 'Saknas',
-		archived: 'Arkiverad',
-	};
-
-	const statusColors: Record<string, string> = {
-		reported_usable: 'bg-orange-100 text-orange-800',
-		reported_unusable: 'bg-red-100 text-red-800',
-		under_repair: 'bg-blue-100 text-blue-800',
-		lost: 'bg-challengerpink-100 text-challengerpink-800',
-		archived: 'bg-neutral-100 text-neutral-500',
-	};
-
-	const eventLabels: Record<string, string> = {
-		issue_reported: 'Problem rapporterat',
-		issue_resolved: 'Problem löst',
-		status_change: 'Statusändring',
-		returned: 'Återlämnad',
-		booked: 'Bokad',
-		picked_up: 'Uthämtad',
-		note: 'Anteckning'
-	};
-
-	const metaStatusLabels: Record<string, string> = {
-		ok: 'OK',
-		reported_usable: 'Felrapporterad — användbar',
-		reported_unusable: 'Felrapporterad — ej användbar',
-		under_repair: 'Under reparation',
-		lost: 'Saknas',
-		archived: 'Arkiverad',
-	};
-
 	function formatEventMeta(event: ArticleEvent): string {
 		const m = event.metadata ?? {};
 		const parts: string[] = [];
@@ -81,9 +45,9 @@
 		if (m.severity === 'unusable') parts.push('ej användbar');
 		if (m.reason === 'lost' || m.reason === 'missing_at_pickup') parts.push('saknas');
 		if (m.new_status && m.old_status) {
-			parts.push(`${metaStatusLabels[m.old_status] ?? m.old_status} → ${metaStatusLabels[m.new_status] ?? m.new_status}`);
+			parts.push(`${statusLabels[m.old_status] ?? m.old_status} → ${statusLabels[m.new_status] ?? m.new_status}`);
 		} else if (m.new_status) {
-			parts.push(`→ ${metaStatusLabels[m.new_status] ?? m.new_status}`);
+			parts.push(`→ ${statusLabels[m.new_status] ?? m.new_status}`);
 		}
 		return parts.join(' · ');
 	}
@@ -227,7 +191,7 @@
 											<div class="text-xs">
 												<div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
 													<span class="text-neutral-400 shrink-0">{new Date(event.created_at).toLocaleDateString('sv')}</span>
-													<span class="font-medium">{eventLabels[event.event_type] ?? event.event_type}</span>
+													<span class="font-medium">{eventTypeLabels[event.event_type] ?? event.event_type}</span>
 													{#if formatEventMeta(event)}<span class="text-neutral-500">{formatEventMeta(event)}</span>{/if}
 													<span class="text-neutral-400 shrink-0">{event.actor_name}</span>
 												</div>

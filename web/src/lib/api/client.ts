@@ -239,6 +239,12 @@ export function createApiClient(opts: FetchOptions = {}) {
 			const qs = query.toString();
 			return request<{ events: ArticleEvent[]; has_more: boolean }>(`/articles/${articleId}/events${qs ? '?' + qs : ''}`, opts);
 		},
+		listArticleGroupEvents: (articleId: string, limit?: number) => {
+			const query = new URLSearchParams();
+			if (limit) query.set('limit', String(limit));
+			const qs = query.toString();
+			return request<{ events: ArticleEvent[]; has_more: boolean }>(`/articles/${articleId}/group-events${qs ? '?' + qs : ''}`, opts);
+		},
 
 		// Group settings
 		getGroupSettings: () => request<GroupSettings>('/group-settings', opts),
@@ -249,10 +255,16 @@ export function createApiClient(opts: FetchOptions = {}) {
 		getArticle: (id: string) => request<Article>(`/articles/${id}`, opts),
 		createArticle: (data: Record<string, unknown>) =>
 			requestMut<Article>('/articles', 'POST', data, opts),
-		updateArticle: (id: string, data: Record<string, unknown>) =>
-			requestMut<Article>(`/articles/${id}`, 'PUT', data, opts),
+		updateArticle: (id: string, data: Record<string, unknown>, group?: boolean) =>
+			requestMut<Article>(`/articles/${id}${group ? '?group=true' : ''}`, 'PUT', data, opts),
 		deleteArticle: (id: string) =>
 			requestMut<void>(`/articles/${id}`, 'DELETE', undefined, opts),
+
+		// Bulk operations
+		bulkUpdateArticles: (data: { article_ids: string[]; status?: string; location_id?: string }) =>
+			requestMut<{ updated: number; conflicts: Array<{ article_id: string; article_name: string; booking_id: string; booking_dates: string; booking_unit: string }> }>('/articles/bulk', 'PUT', data, opts),
+		updateGroupCount: (data: { commercial_name: string; location_id: string; new_count: number }) =>
+			requestMut<{ count: number }>('/articles/group-count', 'POST', data, opts),
 
 		// CSV import
 		importArticles: async (file: File, mode: 'preview' | 'confirmed' = 'preview', duplicateAction?: string) => {

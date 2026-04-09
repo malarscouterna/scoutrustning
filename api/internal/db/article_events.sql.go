@@ -108,6 +108,148 @@ func (q *Queries) ListArticleEvents(ctx context.Context, arg ListArticleEventsPa
 	return items, nil
 }
 
+const listArticleEventsByGroup = `-- name: ListArticleEventsByGroup :many
+SELECT ae.id, ae.group_id, ae.article_id, ae.actor_id, ae.event_type, ae.description, ae.metadata, ae.created_at,
+    u.name AS actor_name,
+    a.common_name AS article_name
+FROM article_events ae
+JOIN users u ON ae.actor_id = u.id
+JOIN articles a ON ae.article_id = a.id
+WHERE ae.group_id = $1
+    AND ae.article_id IN (
+        SELECT a2.id FROM articles a2
+        WHERE a2.group_id = $1
+            AND a2.commercial_name = $2
+            AND a2.location_id = $3
+    )
+ORDER BY ae.created_at DESC
+`
+
+type ListArticleEventsByGroupParams struct {
+	GroupID        string      `json:"group_id"`
+	CommercialName string      `json:"commercial_name"`
+	LocationID     pgtype.UUID `json:"location_id"`
+}
+
+type ListArticleEventsByGroupRow struct {
+	ID          pgtype.UUID        `json:"id"`
+	GroupID     string             `json:"group_id"`
+	ArticleID   pgtype.UUID        `json:"article_id"`
+	ActorID     string             `json:"actor_id"`
+	EventType   string             `json:"event_type"`
+	Description string             `json:"description"`
+	Metadata    []byte             `json:"metadata"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	ActorName   string             `json:"actor_name"`
+	ArticleName string             `json:"article_name"`
+}
+
+// Returns events for all articles matching a commercial_name + location, newest first.
+func (q *Queries) ListArticleEventsByGroup(ctx context.Context, arg ListArticleEventsByGroupParams) ([]ListArticleEventsByGroupRow, error) {
+	rows, err := q.db.Query(ctx, listArticleEventsByGroup, arg.GroupID, arg.CommercialName, arg.LocationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListArticleEventsByGroupRow{}
+	for rows.Next() {
+		var i ListArticleEventsByGroupRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.GroupID,
+			&i.ArticleID,
+			&i.ActorID,
+			&i.EventType,
+			&i.Description,
+			&i.Metadata,
+			&i.CreatedAt,
+			&i.ActorName,
+			&i.ArticleName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listArticleEventsByGroupLimited = `-- name: ListArticleEventsByGroupLimited :many
+SELECT ae.id, ae.group_id, ae.article_id, ae.actor_id, ae.event_type, ae.description, ae.metadata, ae.created_at,
+    u.name AS actor_name,
+    a.common_name AS article_name
+FROM article_events ae
+JOIN users u ON ae.actor_id = u.id
+JOIN articles a ON ae.article_id = a.id
+WHERE ae.group_id = $1
+    AND ae.article_id IN (
+        SELECT a2.id FROM articles a2
+        WHERE a2.group_id = $1
+            AND a2.commercial_name = $2
+            AND a2.location_id = $3
+    )
+ORDER BY ae.created_at DESC
+LIMIT $4
+`
+
+type ListArticleEventsByGroupLimitedParams struct {
+	GroupID        string      `json:"group_id"`
+	CommercialName string      `json:"commercial_name"`
+	LocationID     pgtype.UUID `json:"location_id"`
+	MaxResults     int32       `json:"max_results"`
+}
+
+type ListArticleEventsByGroupLimitedRow struct {
+	ID          pgtype.UUID        `json:"id"`
+	GroupID     string             `json:"group_id"`
+	ArticleID   pgtype.UUID        `json:"article_id"`
+	ActorID     string             `json:"actor_id"`
+	EventType   string             `json:"event_type"`
+	Description string             `json:"description"`
+	Metadata    []byte             `json:"metadata"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	ActorName   string             `json:"actor_name"`
+	ArticleName string             `json:"article_name"`
+}
+
+func (q *Queries) ListArticleEventsByGroupLimited(ctx context.Context, arg ListArticleEventsByGroupLimitedParams) ([]ListArticleEventsByGroupLimitedRow, error) {
+	rows, err := q.db.Query(ctx, listArticleEventsByGroupLimited,
+		arg.GroupID,
+		arg.CommercialName,
+		arg.LocationID,
+		arg.MaxResults,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListArticleEventsByGroupLimitedRow{}
+	for rows.Next() {
+		var i ListArticleEventsByGroupLimitedRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.GroupID,
+			&i.ArticleID,
+			&i.ActorID,
+			&i.EventType,
+			&i.Description,
+			&i.Metadata,
+			&i.CreatedAt,
+			&i.ActorName,
+			&i.ArticleName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listArticleEventsLimited = `-- name: ListArticleEventsLimited :many
 SELECT ae.id, ae.group_id, ae.article_id, ae.actor_id, ae.event_type, ae.description, ae.metadata, ae.created_at,
     u.name AS actor_name

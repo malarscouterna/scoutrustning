@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { createApiClient, type ArticleEvent } from '$lib/api/client';
+	import { statusLabels, statusColors, approvalLabels, eventTypeLabels, eventTypeColors } from '$lib/labels';
 	import { hasRole } from '$lib/user';
 	import { page } from '$app/stores';
 	import ReportIssueForm from '$lib/components/ReportIssueForm.svelte';
@@ -10,42 +11,100 @@
 	const api = createApiClient();
 
 	let isManager = $derived(hasRole($page.data.user, 'equipment_manager'));
-	let article = $state<typeof data.article>(undefined!);
-
-	$effect(() => {
-		article = data.article;
-	});
+	let article = $derived(data.article);
+	let groupArticles = $derived(data.groupArticles);
+	let isQuantityTracked = $derived(!article.individually_tracked && groupArticles !== null);
+	let statusOverride = $state<string | null>(null);
+	let effectiveStatus = $derived(statusOverride ?? article.status);
 	let reporting = $state(false);
 	let message = $state('');
 
-	const statusLabels: Record<string, string> = {
-		ok: 'OK',
-		reported_usable: 'Felrapporterad — användbar',
-		incoming: 'Inkommande',
-		reported_unusable: 'Felrapporterad — ej användbar',
-		under_repair: 'Under reparation',
-		lost: 'Saknas',
-		archived: 'Arkiverad'
-	};
+	// Group status summary for quantity tracked
+	let statusSummary = $derived.by(() => {
+		if (!groupArticles) return [];
+		const counts = new Map<string, number>();
+		for (const a of groupArticles) {
+			counts.set(a.status, (counts.get(a.status) ?? 0) + 1);
+		}
+		const order = ['ok', 'reported_usable', 'incoming', 'reported_unusable', 'under_repair', 'lost', 'archived'];
+		return order
+			.filter(s => counts.has(s))
+			.map(s => ({ status: s, count: counts.get(s)! }));
+	});
 
-	const statusColors: Record<string, string> = {
-		ok: 'bg-green-100 text-green-800',
-		reported_usable: 'bg-orange-100 text-orange-800',
-		incoming: 'bg-blue-50 text-blue-700',
-		reported_unusable: 'bg-red-100 text-red-800',
-		under_repair: 'bg-neutral-100 text-neutral-700',
-		lost: 'bg-challengerpink-100 text-challengerpink-800',
-		archived: 'bg-neutral-100 text-neutral-500'
-	};
+	// Aggregated purchase info for quantity tracked
+	let purchaseOverview = $derived.by(() => {
+		if (!groupArticles) return null;
+		const dates = groupArticles.filter(a => a.purchase_date).map(a => a.purchase_date!);
+		const prices = groupArticles.filter(a => a.purchase_price).map(a => a.purchase_price!);
+		if (dates.length === 0 && prices.length === 0) return null;
+		const uniqueDates = [...new Set(dates)].sort();
+		const uniquePrices = [...new Set(prices)].sort();
+		return { dates: uniqueDates, prices: uniquePrices };
+	});
 
-	const approvalLabels: Record<string, string> = {
-		none: 'Ingen',
-		low: 'Låg',
-		high: 'Hög'
-	};
+	// Group events: loading state
+	let groupEvents = $state<ArticleEvent[]>([]);
+	let groupEventsHasMore = $state(false);
+	let groupEventsLoading = $state(true);
+	let groupEventsShowAll = $state(false);
+
+	async function loadGroupEvents(limit?: number) {
+		groupEventsLoading = true;
+		try {
+			const result = await api.listArticleGroupEvents(article.id, limit);
+			groupEvents = result.events;
+			groupEventsHasMore = result.has_more;
+			groupEventsShowAll = !limit;
+		} catch {
+			// ignore
+		} finally {
+			groupEventsLoading = false;
+		}
+	}
+
+	$effect(() => {
+		if (isQuantityTracked) {
+			loadGroupEvents(6);
+		}
+	});
+
+	function formatEventMeta(event: ArticleEvent): string {
+		const m = event.metadata ?? {};
+		if (m.old_count && m.new_count) return `${m.old_count} → ${m.new_count}`;
+		if (m.new_status && m.old_status) {
+			return `${statusLabels[m.old_status] ?? m.old_status} → ${statusLabels[m.new_status] ?? m.new_status}`;
+		}
+		return '';
+	}
+
+	interface CollapsedEvent {
+		event: ArticleEvent;
+		count: number;
+	}
+
+	function collapseEvents(events: ArticleEvent[]): CollapsedEvent[] {
+		const result: CollapsedEvent[] = [];
+		for (const e of events) {
+			const prev = result[result.length - 1];
+			if (prev
+				&& prev.event.event_type === e.event_type
+				&& prev.event.actor_name === e.actor_name
+				&& formatEventMeta(prev.event) === formatEventMeta(e)
+				&& Math.abs(new Date(prev.event.created_at).getTime() - new Date(e.created_at).getTime()) < 60_000
+			) {
+				prev.count++;
+			} else {
+				result.push({ event: e, count: 1 });
+			}
+		}
+		return result;
+	}
+
+	let collapsedGroupEvents = $derived(collapseEvents(groupEvents));
 
 	function handleIssueReported(newStatus: string) {
-		article = { ...article, status: newStatus };
+		statusOverride = newStatus;
 		reporting = false;
 		message = 'Problem rapporterat!';
 		setTimeout(() => message = '', 4000);
@@ -61,13 +120,17 @@
 
 	<div class="mt-4 mb-6">
 		<div class="flex flex-wrap items-center gap-3 mb-2">
-			<h1 class="text-heading-sm font-bold">{article.common_name}</h1>
-			<span class="text-sm px-2 py-0.5 rounded {statusColors[article.status] ?? 'bg-neutral-100'}">
-				{statusLabels[article.status] ?? article.status}
-			</span>
+			{#if isQuantityTracked}
+				<h1 class="text-heading-sm font-bold">{article.commercial_name || article.common_name}</h1>
+			{:else}
+				<h1 class="text-heading-sm font-bold">{article.common_name}</h1>
+				<span class="text-sm px-2 py-0.5 rounded {statusColors[effectiveStatus] ?? 'bg-neutral-100'}">
+					{statusLabels[effectiveStatus] ?? effectiveStatus}
+				</span>
+			{/if}
 		</div>
 
-		{#if article.commercial_name}
+		{#if !isQuantityTracked && article.commercial_name}
 			<p class="text-neutral-600 mb-1">{article.commercial_name}</p>
 		{/if}
 
@@ -78,6 +141,19 @@
 				<span>{article.place}</span>
 			{/if}
 		</div>
+
+		{#if isQuantityTracked && groupArticles}
+			<div class="mb-4">
+				<h2 class="text-sm font-medium text-neutral-600 mb-1">Status ({groupArticles.length} st)</h2>
+				<div class="flex flex-wrap gap-2">
+					{#each statusSummary as { status, count }}
+						<span class="text-xs px-2 py-0.5 rounded {statusColors[status] ?? 'bg-neutral-100'}">
+							{count} {statusLabels[status] ?? status}
+						</span>
+					{/each}
+				</div>
+			</div>
+		{/if}
 
 		{#if article.description}
 			<div class="mb-4">
@@ -96,11 +172,20 @@
 		<div class="flex flex-wrap gap-x-6 gap-y-2 text-sm text-neutral-500 mb-4">
 			<span>Spårning: {article.individually_tracked ? 'Individuell' : 'Antal'}</span>
 			<span>Godkännande: {approvalLabels[article.approval_level] ?? article.approval_level}</span>
-			{#if article.purchase_date}
-				<span>Inköpt: {article.purchase_date}</span>
-			{/if}
-			{#if article.purchase_price}
-				<span>{article.purchase_price} kr</span>
+			{#if isQuantityTracked && purchaseOverview}
+				{#if purchaseOverview.dates.length > 0}
+					<span>Inköpt: {purchaseOverview.dates.join(', ')}</span>
+				{/if}
+				{#if purchaseOverview.prices.length > 0}
+					<span>{purchaseOverview.prices.join(', ')} kr</span>
+				{/if}
+			{:else}
+				{#if article.purchase_date}
+					<span>Inköpt: {article.purchase_date}</span>
+				{/if}
+				{#if article.purchase_price}
+					<span>{article.purchase_price} kr</span>
+				{/if}
 			{/if}
 		</div>
 
@@ -116,7 +201,7 @@
 				{reporting ? 'Avbryt' : 'Rapportera problem'}
 			</button>
 			{#if isManager}
-				<a href="/articles/{article.id}/edit" class="text-sm text-blue-700 underline">Redigera</a>
+				<a href="/articles/{article.id}/edit{isQuantityTracked ? '?group=true' : ''}" class="inline-flex items-center gap-1 text-xs text-neutral-600 border border-neutral-200 bg-neutral-50 rounded px-2 py-1 hover:bg-neutral-100">Redigera ›</a>
 			{/if}
 		</div>
 
@@ -133,5 +218,37 @@
 	</div>
 
 	<h2 class="font-medium mb-2">Historik</h2>
-	<ArticleEventHistory articleId={article.id} />
+	{#if isQuantityTracked}
+		{#if groupEventsLoading}
+			<p class="text-xs text-neutral-400 py-1">Laddar historik...</p>
+		{:else if groupEvents.length === 0}
+			<p class="text-xs text-neutral-400 py-1">Ingen historik</p>
+		{:else}
+			<div class="space-y-1.5 mt-1">
+				{#each collapsedGroupEvents as { event, count }}
+					<div class="text-xs">
+						<div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+							<span class="text-neutral-400 shrink-0">{new Date(event.created_at).toLocaleDateString('sv')}</span>
+							<span class="font-medium {eventTypeColors[event.event_type] ?? 'text-neutral-700'}">{eventTypeLabels[event.event_type] ?? event.event_type}{#if count > 1} ×{count}{/if}</span>
+							{#if formatEventMeta(event)}<span class="text-neutral-500">{formatEventMeta(event)}</span>{/if}
+							<span class="text-neutral-400 shrink-0">{event.actor_name}</span>
+						</div>
+						{#if event.description}
+							<p class="text-neutral-600 mt-0.5 pl-0.5">{event.description}</p>
+						{/if}
+					</div>
+				{/each}
+			</div>
+			{#if groupEventsHasMore && !groupEventsShowAll}
+				<button
+					class="text-xs text-blue-600 hover:text-blue-800 mt-2 cursor-pointer"
+					onclick={() => loadGroupEvents()}
+				>
+					Visa alla händelser
+				</button>
+			{/if}
+		{/if}
+	{:else}
+		<ArticleEventHistory articleId={article.id} />
+	{/if}
 </div>

@@ -142,3 +142,36 @@ Built the entire Phase 1 in one session:
 - Booking flow: create draft, add items with availability checking, submit, cancel, copy
 - Location-scoped availability with double-booking prevention
 - Booking UI with cart, date picker, booking list, booking detail
+
+## 2026-04-10
+
+### Browse page manager mode + article detail enhancements (Phase 2 Step 2c, partial)
+
+See [inventory-management.md](inventory-management.md) for the full design doc.
+
+**Browse page links and edit buttons**: All users see article links in expanded view — individually tracked articles get pill-button links on common_name, quantity tracked groups get "Visa artikelsida ›" link. Managers see "Redigera ›" buttons alongside. Consistent link styling: pill-button with › chevron for navigation, underline text for in-page actions (Rapportera, Historik).
+
+**Manager mode toggle**: "Hanteringsläge" checkbox (session state, manager only) with "Skapa artikel" button. Checkboxes per group and per article for bulk selection (state management done, toolbar UI remaining).
+
+**API — bulk operations**:
+- `PUT /articles/bulk` — bulk status change, location move, archive with conflict detection + auto-replacement in active bookings
+- `POST /articles/group-count` — atomic count adjustment for quantity tracked groups, logs single `count_changed` event, protects representative (oldest article never archived)
+- `PUT /articles/{id}?group=true` — applies shared fields to all articles in a quantity tracked group
+- `GET /articles/{id}/group-events` — aggregated event history across all articles in a group
+
+**Article detail page — quantity tracked support**: Detects quantity tracked groups and shows status summary (e.g. "42 OK, 3 under reparation"), aggregated purchase info (unique dates/prices across group), and collapsed group events (consecutive same-type events within 60s shown as "Bokad ×3"). Report issue available for all article types.
+
+**Edit form — three layouts**:
+- Individually tracked: blue "Gemensamt" section (shared fields) + neutral "Enskild artikel" section (per-item fields)
+- Quantity tracked (`?group=true`): single blue box with all fields + count
+- Create: flat layout (unchanged)
+
+**Shared field propagation**: Saving an individually tracked article auto-propagates description, instructions, manager_notes, and category_id to all siblings with the same commercial_name. Approval level and location are per-item (different locations may need different approval rules).
+
+**Name validation**: Warning when common_name doesn't start with commercial_name.
+
+**CSV import**: Now reads `instructions` and `manager_notes` columns. Example CSV enriched with realistic descriptions, instructions, manager notes, and rum/lage data.
+
+**Terminology**: "Materialare" → "Utrustningsansvarig" across all UI.
+
+**Cleanup**: Extracted shared `$lib/labels.ts` module — `statusLabels`, `statusColors`, `approvalLabels`, `eventTypeLabels`, `eventTypeColors` — replacing duplicated constants across browse, article detail, issues, and ArticleEventHistory. Removed unused SQL queries (`GetOldestArticleInGroup`, `ListArticlesByGroup`).

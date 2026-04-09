@@ -45,13 +45,14 @@ Empty draft cleanup is implemented (48h). Stale drafts *with* items need notific
 
 ## Quantity-tracked items — manager UI
 
-**Being built in Phase 2 Step 2** (see [inventory-management.md](inventory-management.md)).
+**Partially built in Phase 2 Step 2c** (see [inventory-management.md](inventory-management.md)).
 
-Equipment manager gets:
-- Count field (number input) in browse page manager mode for quantity tracked groups
-- Typing a new count creates/archives article records to match
-- Single `count_changed` article event per adjustment for inventory history
-- Group edit page for shared properties (category, location, approval level, etc.)
+Done: count field on group edit page, group-count API endpoint, group events, article detail page with status summary.
+
+Remaining:
+- Count field inline on browse page expanded view (manager mode)
+- Bulk actions toolbar UI on browse page (status change, location move, archive dropdowns)
+- Per-physical-article list/edit UI for quantity tracked groups (edit individual purchase dates, prices)
 
 ## Subcategories
 
@@ -131,3 +132,19 @@ Backdate article events in the seed script for realistic history spread. No API 
 ## Booking flow — date change with items in cart
 
 When dates change on a booking with items, re-validate all items against the new range. Currently the API returns 409 for conflicts but the UI doesn't handle it gracefully. Temporary fix: disable date editing after items are added.
+
+## Quantity-tracked items — batch issue reporting
+
+On the article detail page for quantity tracked groups, allow reporting issues for multiple items at once (e.g. "3 LED lamps broken"). Currently reports go to the representative article only. Needs a count input on the report form that creates events on N articles in the group. Similar UX to the return flow's per-item status.
+
+## Shared visual identity for interactive elements
+
+Audit and standardize the visual language for interactive elements across the app:
+- **Navigation links** (opens a new page): pill-button with › chevron. Blue for primary (article name, "Visa artikelsida"), neutral for secondary ("Redigera"). Currently used on browse and article detail pages — verify consistency everywhere.
+- **In-page actions** (toggles something on the current page): underline text. Blue for primary ("Rapportera"), neutral for secondary ("Historik", "Avbryt").
+- **Manager-only elements**: how to visually distinguish manager controls from user controls? Currently relies on conditional rendering only — no visual indicator that something is a manager feature.
+- **Bulk vs individual actions**: bulk toolbar vs per-item links. Need clear visual distinction when manager mode is fully wired.
+- **Destructive actions**: red underline text ("Ta bort artikel permanent"). Consistent?
+- **Primary action buttons**: filled blue ("Spara", "Skapa artikel"). Consistent sizing and placement?
+
+Extract shared button/link component or at least document the pattern in coding-conventions.md.

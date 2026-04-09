@@ -30,11 +30,14 @@ func (h *ArticleHandler) Routes() chi.Router {
 	r.Get("/availability/articles", h.AvailableArticlesList)
 	r.Get("/{id}", h.Get)
 	r.Get("/{id}/events", h.ListEvents)
+	r.Get("/{id}/group-events", h.ListGroupEvents)
 	r.Put("/{id}/status", h.UpdateStatus)
 	r.With(auth.RequireRole("equipment_manager")).Post("/", h.Create)
 	r.With(auth.RequireRole("equipment_manager")).Put("/{id}", h.Update)
 	r.With(auth.RequireRole("equipment_manager")).Delete("/{id}", h.Delete)
 	r.With(auth.RequireRole("equipment_manager")).Post("/import", h.Import)
+	r.With(auth.RequireRole("equipment_manager")).Put("/bulk", h.BulkUpdate)
+	r.With(auth.RequireRole("equipment_manager")).Post("/group-count", h.GroupCount)
 	return r
 }
 
@@ -271,6 +274,43 @@ func (h *ArticleHandler) Update(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+
+	// group=true: apply shared fields to all articles in the quantity tracked group
+	if r.URL.Query().Get("group") == "true" {
+		existing, err := h.Q.GetArticle(r.Context(), db.GetArticleParams{ID: id, GroupID: claims.GroupID})
+		if err != nil {
+			WriteError(w, http.StatusNotFound, "article not found")
+			return
+		}
+		_, err = h.Q.UpdateArticleGroupFields(r.Context(), db.UpdateArticleGroupFieldsParams{
+			GroupID:            claims.GroupID,
+			OldCommercialName:  existing.CommercialName,
+			OldLocationID:      existing.LocationID,
+			NewCommercialName:  req.CommercialName,
+			NewCommonName:      req.CommonName,
+			CategoryID:         catID,
+			NewLocationID:      locID,
+			ApprovalLevel:      req.ApprovalLevel,
+			Description:        req.Description,
+			Instructions:       req.Instructions,
+			Place:              req.Place,
+			ManagerNotes:       req.ManagerNotes,
+			IndividuallyTracked: req.IndividuallyTracked,
+		})
+		if err != nil {
+			slog.Error("failed to update article group", "error", err)
+			WriteError(w, http.StatusInternalServerError, "failed to update group")
+			return
+		}
+		updated, err := h.Q.GetArticle(r.Context(), db.GetArticleParams{ID: id, GroupID: claims.GroupID})
+		if err != nil {
+			WriteError(w, http.StatusInternalServerError, "failed to read updated article")
+			return
+		}
+		WriteJSON(w, http.StatusOK, updated)
+		return
+	}
+
 	article, err := h.Q.UpdateArticle(r.Context(), db.UpdateArticleParams{
 		ID: id, GroupID: claims.GroupID,
 		CommercialName:      req.CommercialName,
@@ -291,6 +331,20 @@ func (h *ArticleHandler) Update(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusNotFound, "article not found")
 		return
 	}
+
+	// Auto-propagate shared fields to siblings (same commercial_name across all locations)
+	if article.IndividuallyTracked && article.CommercialName != "" {
+		h.Q.PropagateSharedFields(r.Context(), db.PropagateSharedFieldsParams{
+			GroupID:        claims.GroupID,
+			CommercialName: article.CommercialName,
+			ExcludeID:      article.ID,
+			Description:    article.Description,
+			Instructions:   article.Instructions,
+			ManagerNotes:   article.ManagerNotes,
+			CategoryID:     article.CategoryID,
+		})
+	}
+
 	WriteJSON(w, http.StatusOK, article)
 }
 
@@ -445,6 +499,55 @@ func (h *ArticleHandler) ListEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	events, err := h.Q.ListArticleEvents(r.Context(), db.ListArticleEventsParams{ArticleID: id, GroupID: claims.GroupID})
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to list events")
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"events": events, "has_more": false})
+}
+
+// ListGroupEvents returns events for all articles in a quantity tracked group.
+func (h *ArticleHandler) ListGroupEvents(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	// Look up the article to get commercial_name + location_id
+	article, err := h.Q.GetArticle(r.Context(), db.GetArticleParams{ID: id, GroupID: claims.GroupID})
+	if err != nil {
+		WriteError(w, http.StatusNotFound, "article not found")
+		return
+	}
+
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		limit, err := strconv.Atoi(limitStr)
+		if err != nil || limit < 1 {
+			WriteError(w, http.StatusBadRequest, "invalid limit")
+			return
+		}
+		events, err := h.Q.ListArticleEventsByGroupLimited(r.Context(), db.ListArticleEventsByGroupLimitedParams{
+			GroupID: claims.GroupID, CommercialName: article.CommercialName,
+			LocationID: article.LocationID, MaxResults: int32(limit + 1),
+		})
+		if err != nil {
+			WriteError(w, http.StatusInternalServerError, "failed to list events")
+			return
+		}
+		hasMore := len(events) > limit
+		if hasMore {
+			events = events[:limit]
+		}
+		WriteJSON(w, http.StatusOK, map[string]any{"events": events, "has_more": hasMore})
+		return
+	}
+
+	events, err := h.Q.ListArticleEventsByGroup(r.Context(), db.ListArticleEventsByGroupParams{
+		GroupID: claims.GroupID, CommercialName: article.CommercialName,
+		LocationID: article.LocationID,
+	})
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, "failed to list events")
 		return
@@ -721,6 +824,8 @@ func (h *ArticleHandler) Import(w http.ResponseWriter, r *http.Request) {
 		}
 
 		description := col(record, "description")
+		instructions := col(record, "instructions")
+		managerNotes := col(record, "manager_notes")
 		rawLocation := col(record, "location")
 		plats := col(record, "plats")
 		rum := col(record, "rum")
@@ -799,7 +904,9 @@ func (h *ArticleHandler) Import(w http.ResponseWriter, r *http.Request) {
 				IndividuallyTracked: individuallyTracked,
 				ApprovalLevel:       approvalLevel,
 				Description:         description,
+				Instructions:        instructions,
 				Place:               place,
+				ManagerNotes:        managerNotes,
 			})
 			if err != nil {
 				errors = append(errors, fmt.Sprintf("row %d: %v", imported+skipped+2, err))
@@ -819,6 +926,284 @@ func (h *ArticleHandler) Import(w http.ResponseWriter, r *http.Request) {
 		"skipped":  skipped,
 		"errors":   errors,
 	})
+}
+
+// BulkUpdate handles bulk status change, location move, and archive with conflict detection.
+func (h *ArticleHandler) BulkUpdate(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	ctx := r.Context()
+
+	var req struct {
+		ArticleIDs []string `json:"article_ids"`
+		Status     string   `json:"status"`
+		LocationID string   `json:"location_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if len(req.ArticleIDs) == 0 {
+		WriteError(w, http.StatusBadRequest, "article_ids required")
+		return
+	}
+	if req.Status == "" && req.LocationID == "" {
+		WriteError(w, http.StatusBadRequest, "status or location_id required")
+		return
+	}
+
+	ids := make([]pgtype.UUID, len(req.ArticleIDs))
+	for i, s := range req.ArticleIDs {
+		id, err := parseUUID(s)
+		if err != nil {
+			WriteError(w, http.StatusBadRequest, "invalid article_id")
+			return
+		}
+		ids[i] = id
+	}
+
+	type conflict struct {
+		ArticleID    string `json:"article_id"`
+		ArticleName  string `json:"article_name"`
+		BookingID    string `json:"booking_id"`
+		BookingDates string `json:"booking_dates"`
+		BookingUnit  string `json:"booking_unit"`
+	}
+
+	// For archive: check active booking conflicts and attempt auto-replacement
+	if req.Status == "archived" {
+		conflicts, err := h.Q.ListActiveBookingConflicts(ctx, db.ListActiveBookingConflictsParams{
+			Ids: ids, GroupID: claims.GroupID,
+		})
+		if err != nil {
+			slog.Error("failed to check booking conflicts", "error", err)
+			WriteError(w, http.StatusInternalServerError, "failed to check conflicts")
+			return
+		}
+
+		var unresolvedConflicts []conflict
+		replacedArticles := map[string]bool{} // article IDs that were auto-replaced
+
+		for _, c := range conflicts {
+			artIDStr := formatUUID(c.ArticleID)
+			if replacedArticles[artIDStr] {
+				continue
+			}
+
+			// Get article info for replacement search
+			article, err := h.Q.GetArticle(ctx, db.GetArticleParams{ID: c.ArticleID, GroupID: claims.GroupID})
+			if err != nil {
+				continue
+			}
+
+			replacement, err := h.Q.FindReplacementArticle(ctx, db.FindReplacementArticleParams{
+				GroupID:        claims.GroupID,
+				CommercialName: article.CommercialName,
+				LocationID:     article.LocationID,
+				ExcludeIds:     ids,
+				StartDate:      c.BookingStartDate,
+				EndDate:        c.BookingEndDate,
+			})
+			if err != nil {
+				// No replacement found
+				startStr := c.BookingStartDate.Time.Format("2006-01-02")
+				endStr := c.BookingEndDate.Time.Format("2006-01-02")
+				unresolvedConflicts = append(unresolvedConflicts, conflict{
+					ArticleID:    artIDStr,
+					ArticleName:  c.ArticleName,
+					BookingID:    formatUUID(c.BookingID),
+					BookingDates: startStr + " — " + endStr,
+					BookingUnit:  c.BookingUnit,
+				})
+				continue
+			}
+
+			// Auto-swap in the booking
+			_, err = h.Q.SwapBookingItemArticleByArticle(ctx, db.SwapBookingItemArticleByArticleParams{
+				NewArticleID: replacement,
+				OldArticleID: c.ArticleID,
+				BookingID:    c.BookingID,
+				GroupID:      claims.GroupID,
+			})
+			if err != nil {
+				slog.Error("failed to swap article in booking", "error", err)
+				continue
+			}
+			replacedArticles[artIDStr] = true
+		}
+
+		if len(unresolvedConflicts) > 0 {
+			WriteJSON(w, http.StatusOK, map[string]any{
+				"updated":   0,
+				"conflicts": unresolvedConflicts,
+			})
+			return
+		}
+	}
+
+	var updated int64
+	if req.Status != "" {
+		n, err := h.Q.BulkUpdateArticleStatus(ctx, db.BulkUpdateArticleStatusParams{
+			Status: req.Status, Ids: ids, GroupID: claims.GroupID,
+		})
+		if err != nil {
+			slog.Error("failed to bulk update status", "error", err)
+			WriteError(w, http.StatusInternalServerError, "failed to update")
+			return
+		}
+		updated = n
+
+		for _, id := range ids {
+			LogArticleEvent(ctx, h.Q, claims, id, "status_change", "", map[string]string{
+				"new_status": req.Status,
+				"bulk":       "true",
+			})
+		}
+	}
+
+	if req.LocationID != "" {
+		locID, err := parseUUID(req.LocationID)
+		if err != nil {
+			WriteError(w, http.StatusBadRequest, "invalid location_id")
+			return
+		}
+		n, err := h.Q.BulkUpdateArticleLocation(ctx, db.BulkUpdateArticleLocationParams{
+			LocationID: locID, Ids: ids, GroupID: claims.GroupID,
+		})
+		if err != nil {
+			slog.Error("failed to bulk update location", "error", err)
+			WriteError(w, http.StatusInternalServerError, "failed to update")
+			return
+		}
+		if updated == 0 {
+			updated = n
+		}
+	}
+
+	WriteJSON(w, http.StatusOK, map[string]any{
+		"updated":   updated,
+		"conflicts": []any{},
+	})
+}
+
+// GroupCount adjusts the count of a quantity tracked article group.
+func (h *ArticleHandler) GroupCount(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	ctx := r.Context()
+
+	var req struct {
+		CommercialName string `json:"commercial_name"`
+		LocationID     string `json:"location_id"`
+		NewCount       int    `json:"new_count"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.CommercialName == "" || req.LocationID == "" {
+		WriteError(w, http.StatusBadRequest, "commercial_name and location_id required")
+		return
+	}
+	if req.NewCount < 0 {
+		WriteError(w, http.StatusBadRequest, "new_count must be >= 0")
+		return
+	}
+
+	locID, err := parseUUID(req.LocationID)
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid location_id")
+		return
+	}
+
+	currentCount, err := h.Q.CountArticlesInGroup(ctx, db.CountArticlesInGroupParams{
+		GroupID: claims.GroupID, CommercialName: req.CommercialName, LocationID: locID,
+	})
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to count articles")
+		return
+	}
+
+	diff := int(req.NewCount) - int(currentCount)
+	if diff == 0 {
+		WriteJSON(w, http.StatusOK, map[string]any{"count": currentCount})
+		return
+	}
+
+	// Get representative article for event logging and as template for new articles
+	representative, err := h.Q.GetArticleGroupInfo(ctx, db.GetArticleGroupInfoParams{
+		GroupID: claims.GroupID, CommercialName: req.CommercialName, LocationID: locID,
+	})
+	if err != nil {
+		WriteError(w, http.StatusNotFound, "article group not found")
+		return
+	}
+
+	if diff > 0 {
+		// Create new articles using representative as template
+		for range diff {
+			_, err := h.Q.CreateArticle(ctx, db.CreateArticleParams{
+				GroupID:             claims.GroupID,
+				CommercialName:      representative.CommercialName,
+				CommonName:          representative.CommonName,
+				CategoryID:          representative.CategoryID,
+				LocationID:          representative.LocationID,
+				Status:              "ok",
+				IndividuallyTracked: false,
+				ApprovalLevel:       representative.ApprovalLevel,
+				Description:         representative.Description,
+				Instructions:        representative.Instructions,
+				Place:               representative.Place,
+				ManagerNotes:        representative.ManagerNotes,
+			})
+			if err != nil {
+				slog.Error("failed to create article for count increase", "error", err)
+				WriteError(w, http.StatusInternalServerError, "failed to create articles")
+				return
+			}
+		}
+	} else {
+		// Archive newest articles not in active bookings
+		toArchive := -diff
+		candidates, err := h.Q.ListNewestInGroup(ctx, db.ListNewestInGroupParams{
+			GroupID: claims.GroupID, CommercialName: req.CommercialName, LocationID: locID,
+		})
+		if err != nil {
+			WriteError(w, http.StatusInternalServerError, "failed to list articles")
+			return
+		}
+
+		// Never archive the representative (oldest)
+		var archiveIDs []pgtype.UUID
+		for _, cid := range candidates {
+			if formatUUID(cid) == formatUUID(representative.ID) {
+				continue
+			}
+			archiveIDs = append(archiveIDs, cid)
+			if len(archiveIDs) >= toArchive {
+				break
+			}
+		}
+
+		if len(archiveIDs) < toArchive {
+			WriteError(w, http.StatusConflict, "cannot_reduce_count")
+			return
+		}
+
+		_, err = h.Q.BulkUpdateArticleStatus(ctx, db.BulkUpdateArticleStatusParams{
+			Status: "archived", Ids: archiveIDs, GroupID: claims.GroupID,
+		})
+		if err != nil {
+			WriteError(w, http.StatusInternalServerError, "failed to archive articles")
+			return
+		}
+	}
+
+	// Log single count_changed event on the representative
+	LogArticleEvent(ctx, h.Q, claims, representative.ID, "count_changed", "", map[string]string{
+		"old_count": strconv.FormatInt(currentCount, 10),
+		"new_count": strconv.Itoa(req.NewCount),
+	})
+
+	WriteJSON(w, http.StatusOK, map[string]any{"count": req.NewCount})
 }
 
 func normalizeKarsvikPlats(plats string) string {
