@@ -31,6 +31,9 @@ High — follow these unless they conflict with an explicit user instruction.
 - Mobile-first responsive design. Test layouts at 375px width.
 - Extract shared UI patterns into reusable components in `src/lib/components/`. If the same UI appears in two or more pages, extract it.
 - No page or component should ever reference personas, cookies, or auth headers directly. Consume `data.user` from the layout and call `createApiClient()` without auth options.
+- Follow Svelte 5 reactivity rules: use `$derived` for values derived from props/data, `$effect` to sync `$state` from reactive sources. Never capture `data.*` or other reactive values in `const` or `$state()` initializers — this triggers `state_referenced_locally` warnings.
+- All `<label>` elements must wrap their `<input>` or use explicit `for`/`id` attributes for accessibility compliance.
+- Before committing, verify no new Svelte warnings are introduced by running `npx svelte-check` and checking for warnings in files you modified.
 
 ### Database
 

@@ -159,6 +159,9 @@ type articleRequest struct {
 	Description         string  `json:"description"`
 	Instructions        string  `json:"instructions"`
 	Place               string  `json:"place"`
+	PurchaseDate        *string `json:"purchase_date"`
+	PurchasePrice       *string `json:"purchase_price"`
+	ManagerNotes        string  `json:"manager_notes"`
 }
 
 func (h *ArticleHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -190,6 +193,22 @@ func (h *ArticleHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if approvalLevel == "" {
 		approvalLevel = "none"
 	}
+	var purchaseDate pgtype.Date
+	if req.PurchaseDate != nil && *req.PurchaseDate != "" {
+		t, err := time.Parse("2006-01-02", *req.PurchaseDate)
+		if err != nil {
+			WriteError(w, http.StatusBadRequest, "invalid purchase_date")
+			return
+		}
+		purchaseDate = pgtype.Date{Time: t, Valid: true}
+	}
+	var purchasePrice pgtype.Numeric
+	if req.PurchasePrice != nil && *req.PurchasePrice != "" {
+		if err := purchasePrice.Scan(*req.PurchasePrice); err != nil {
+			WriteError(w, http.StatusBadRequest, "invalid purchase_price")
+			return
+		}
+	}
 	article, err := h.Q.CreateArticle(r.Context(), db.CreateArticleParams{
 		GroupID:             claims.GroupID,
 		CommercialName:      req.CommercialName,
@@ -202,6 +221,9 @@ func (h *ArticleHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Description:         req.Description,
 		Instructions:        req.Instructions,
 		Place:               req.Place,
+		PurchaseDate:        purchaseDate,
+		PurchasePrice:       purchasePrice,
+		ManagerNotes:        req.ManagerNotes,
 	})
 	if err != nil {
 		slog.Error("failed to create article", "error", err)
@@ -233,6 +255,22 @@ func (h *ArticleHandler) Update(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusBadRequest, "invalid location_id")
 		return
 	}
+	var purchaseDate pgtype.Date
+	if req.PurchaseDate != nil && *req.PurchaseDate != "" {
+		t, err := time.Parse("2006-01-02", *req.PurchaseDate)
+		if err != nil {
+			WriteError(w, http.StatusBadRequest, "invalid purchase_date")
+			return
+		}
+		purchaseDate = pgtype.Date{Time: t, Valid: true}
+	}
+	var purchasePrice pgtype.Numeric
+	if req.PurchasePrice != nil && *req.PurchasePrice != "" {
+		if err := purchasePrice.Scan(*req.PurchasePrice); err != nil {
+			WriteError(w, http.StatusBadRequest, "invalid purchase_price")
+			return
+		}
+	}
 	article, err := h.Q.UpdateArticle(r.Context(), db.UpdateArticleParams{
 		ID: id, GroupID: claims.GroupID,
 		CommercialName:      req.CommercialName,
@@ -245,6 +283,9 @@ func (h *ArticleHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Description:         req.Description,
 		Instructions:        req.Instructions,
 		Place:               req.Place,
+		PurchaseDate:        purchaseDate,
+		PurchasePrice:       purchasePrice,
+		ManagerNotes:        req.ManagerNotes,
 	})
 	if err != nil {
 		WriteError(w, http.StatusNotFound, "article not found")

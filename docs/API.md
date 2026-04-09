@@ -67,10 +67,13 @@ Create an article.
   "approval_level": "none",
   "description": "",
   "instructions": "",
-  "place": "Shelf 3"
+  "place": "Shelf 3",
+  "purchase_date": "2024-03-15",
+  "purchase_price": "1299.50",
+  "manager_notes": "Internal note"
 }
 ```
-Required: `common_name`, `category_id`, `location_id`. Status defaults to `ok`. `approval_level` defaults to `none`.
+Required: `common_name`, `category_id`, `location_id`. Status defaults to `ok`. `approval_level` defaults to `none`. `purchase_date`, `purchase_price`, `manager_notes` are optional.
 
 **Response** `201` | `400` | `403`
 
@@ -432,11 +435,7 @@ List all locations for the group, ordered by sort_order.
 **Response** `200` | `400` | `403` | `404`
 
 ### 🔒 `DELETE /api/v0/locations/{id}`
-**Response** `204` | `403` | `404`
-
----
-
-## Categories
+**Response** `204` | `403` | `404` | `409` (`has_articles` with `count`)
 
 ### `GET /api/v0/categories`
 List all categories for the group, ordered by sort_order.
@@ -453,7 +452,40 @@ List all categories for the group, ordered by sort_order.
 **Response** `200` | `400` | `403` | `404`
 
 ### 🔒 `DELETE /api/v0/categories/{id}`
-**Response** `204` | `403` | `404`
+**Response** `204` | `403` | `404` | `409` (`has_articles` with `count`)
+
+---
+
+## Group Settings
+
+All endpoints require `equipment_manager` role.
+
+### 🔒 `GET /api/v0/group-settings`
+Returns group settings. SMTP key is returned masked.
+
+**Response** `200`
+```json
+{
+  "notification_email_from": "utrustning@example.com",
+  "smtp_key_set": true,
+  "smtp_key_masked": "sk-...7f2a",
+  "gchat_webhook_url": "https://chat.googleapis.com/...",
+  "default_approval_level": "none"
+}
+```
+
+### 🔒 `PUT /api/v0/group-settings`
+```json
+{
+  "notification_email_from": "utrustning@example.com",
+  "smtp_key": "sk-new-key",
+  "gchat_webhook_url": "https://chat.googleapis.com/...",
+  "default_approval_level": "none"
+}
+```
+`smtp_key`: `null` = keep existing, `""` = clear, non-empty = encrypt and store.
+
+**Response** `200` | `400` | `403`
 
 ---
 
@@ -468,6 +500,7 @@ Error keys are short English strings (e.g. `"invalid id"`, `"article not found"`
 
 Notable error keys:
 - `group_not_found` (403) — the user's group (from JWT claims) doesn't exist in the database. Returned by the user upsert middleware when the group_id FK constraint fails.
+- `has_articles` (409) — returned by `DELETE /locations/{id}` and `DELETE /categories/{id}` when articles reference the entity. Response includes `"count": N`.
 
 ---
 
@@ -476,11 +509,12 @@ Notable error keys:
 In production: `Authorization: Bearer <jwt>` header with a valid Keycloak token.
 
 In dev mode (`DEV_MODE=true`): `X-Dev-Role-Override: <persona>` header. Available personas:
+- `manager-equipment` — equipment_manager, unit Utrustningsgruppen
+- `project-unit-leader` — project_leader, units Valborgskömmittén + Yggdrasil
+- `project-leader` — project_leader, unit Valborgskömmittén
+- `leader-unit-it` — equipment_manager, units IT-gruppen + Yggdrasil
 - `leader-yggdrasil` — leader, unit Yggdrasil
-- `leader-orneerna` — leader, unit Ornéerna
-- `project-leader` — project leader, project Valborg 2026 (books without approval)
-- `equipment-manager` — full admin
-- `leader-and-manager` — combined roles, unit Yggdrasil
-- `other-group-leader` — leader in group 999 (Testkåren), for multi-tenancy testing
+- `leader-flaskpost` — leader, unit Flaskpostorné
+- `other-kar-leader` — leader in group 999 (Testkåren), unit Avdelning 1, for multi-tenancy testing
 
 Also in dev mode: `X-Dev-Claims: <json>` header with a JSON-encoded claims object for testing arbitrary claim combinations (used by integration tests).

@@ -12,8 +12,13 @@ export interface Article {
 	individually_tracked: boolean;
 	approval_level: string;
 	description: string;
+	instructions: string;
 	place: string;
+	purchase_date: string | null;
+	purchase_price: string | null;
 	expected_available_date: string | null;
+	import_batch_id: string | null;
+	manager_notes: string;
 	current_booking_id: string | null;
 	current_booking_status: string | null;
 	current_booking_end_date: string | null;
@@ -103,8 +108,26 @@ export interface AvailabilityGroup {
 	location_name: string;
 }
 
+export interface GroupSettings {
+	notification_email_from: string;
+	smtp_key_set: boolean;
+	smtp_key_masked: string;
+	gchat_webhook_url: string;
+	default_approval_level: string;
+}
+
 interface FetchOptions {
 	fetch?: typeof globalThis.fetch;
+}
+
+export class ApiError extends Error {
+	statusCode: number;
+	body: Record<string, any>;
+	constructor(message: string, statusCode: number, body: Record<string, any>) {
+		super(message);
+		this.statusCode = statusCode;
+		this.body = body;
+	}
 }
 
 async function request<T>(path: string, opts: FetchOptions = {}): Promise<T> {
@@ -112,7 +135,7 @@ async function request<T>(path: string, opts: FetchOptions = {}): Promise<T> {
 	const res = await f(`${API_BASE}${path}`, { headers: { 'Content-Type': 'application/json' } });
 	if (!res.ok) {
 		const body = await res.json().catch(() => ({}));
-		throw new Error(body.error || res.statusText);
+		throw new ApiError(body.error || res.statusText, res.status, body);
 	}
 	return res.json();
 }
@@ -126,7 +149,7 @@ async function requestMut<T>(path: string, method: string, body: unknown, opts: 
 	});
 	if (!res.ok) {
 		const b = await res.json().catch(() => ({}));
-		throw new Error(b.error || res.statusText);
+		throw new ApiError(b.error || res.statusText, res.status, b);
 	}
 	if (res.status === 204) return undefined as T;
 	return res.json();
@@ -216,5 +239,52 @@ export function createApiClient(opts: FetchOptions = {}) {
 			const qs = query.toString();
 			return request<{ events: ArticleEvent[]; has_more: boolean }>(`/articles/${articleId}/events${qs ? '?' + qs : ''}`, opts);
 		},
+
+		// Group settings
+		getGroupSettings: () => request<GroupSettings>('/group-settings', opts),
+		updateGroupSettings: (data: { notification_email_from?: string; smtp_key?: string | null; gchat_webhook_url?: string; default_approval_level?: string }) =>
+			requestMut<GroupSettings>('/group-settings', 'PUT', data, opts),
+
+		// Article CRUD
+		getArticle: (id: string) => request<Article>(`/articles/${id}`, opts),
+		createArticle: (data: Record<string, unknown>) =>
+			requestMut<Article>('/articles', 'POST', data, opts),
+		updateArticle: (id: string, data: Record<string, unknown>) =>
+			requestMut<Article>(`/articles/${id}`, 'PUT', data, opts),
+		deleteArticle: (id: string) =>
+			requestMut<void>(`/articles/${id}`, 'DELETE', undefined, opts),
+
+		// CSV import
+		importArticles: async (file: File, mode: 'preview' | 'confirmed' = 'preview', duplicateAction?: string) => {
+			const f = opts.fetch ?? globalThis.fetch;
+			const formData = new FormData();
+			formData.append('file', file);
+			if (duplicateAction) formData.append('duplicate_action', duplicateAction);
+			const res = await f(`${API_BASE}/articles/import?mode=${mode}`, {
+				method: 'POST',
+				body: formData
+			});
+			if (!res.ok) {
+				const b = await res.json().catch(() => ({}));
+				throw new Error(b.error || res.statusText);
+			}
+			return res.json();
+		},
+
+		// Location CRUD
+		createLocation: (data: { name: string; sort_order?: number }) =>
+			requestMut<Location>('/locations', 'POST', data, opts),
+		updateLocation: (id: string, data: { name: string; sort_order?: number }) =>
+			requestMut<Location>(`/locations/${id}`, 'PUT', data, opts),
+		deleteLocation: (id: string) =>
+			requestMut<void>(`/locations/${id}`, 'DELETE', undefined, opts),
+
+		// Category CRUD
+		createCategory: (data: { name: string; sort_order?: number }) =>
+			requestMut<Category>('/categories', 'POST', data, opts),
+		updateCategory: (id: string, data: { name: string; sort_order?: number }) =>
+			requestMut<Category>(`/categories/${id}`, 'PUT', data, opts),
+		deleteCategory: (id: string) =>
+			requestMut<void>(`/categories/${id}`, 'DELETE', undefined, opts),
 	};
 }

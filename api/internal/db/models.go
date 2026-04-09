@@ -27,6 +27,8 @@ type Article struct {
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 	ExpectedAvailableDate pgtype.Date        `json:"expected_available_date"`
 	ApprovalLevel         string             `json:"approval_level"`
+	ImportBatchID         pgtype.UUID        `json:"import_batch_id"`
+	ManagerNotes          string             `json:"manager_notes"`
 }
 
 type ArticleEvent struct {
@@ -101,6 +103,16 @@ type Group struct {
 	ID        string             `json:"id"`
 	Name      string             `json:"name"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+type GroupSetting struct {
+	GroupID               string             `json:"group_id"`
+	NotificationEmailFrom string             `json:"notification_email_from"`
+	SmtpKeyEncrypted      []byte             `json:"smtp_key_encrypted"`
+	GchatWebhookUrl       string             `json:"gchat_webhook_url"`
+	DefaultApprovalLevel  string             `json:"default_approval_level"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Location struct {

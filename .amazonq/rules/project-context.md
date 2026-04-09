@@ -27,6 +27,7 @@ ms-utrustning/
 │   ├── cmd/server/         # main.go entrypoint
 │   ├── internal/
 │   │   ├── auth/           # JWT validation middleware + OIDC claim parsing
+│   │   ├── crypto/         # AES-256-GCM encryption for sensitive settings
 │   │   ├── handler/        # HTTP handlers per resource
 │   │   ├── db/             # sqlc generated code + queries
 │   │   └── notify/         # Email + Google Chat notifications

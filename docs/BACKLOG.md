@@ -4,8 +4,14 @@ Deferred work items — things to grab when there's time, smaller tasks set asid
 
 ## Admin UI for group/role management
 
-Currently, group access is controlled by a static `role-mapping.json` file. Users from groups not in this file see a "group not configured" message. Future plan:
+Currently, group access is controlled by a static `role-mapping.json` file. Users from groups not in this file see a "group not configured" message.
 
+**Decided approach** (see [inventory-management.md](inventory-management.md)):
+- System-level admin (adding/removing groups) stays text-based — no UI, CLI/SQL only. `role-mapping.json` remains the bootstrap mechanism.
+- Per-group settings (notification routing, SMTP key, default approval level) are stored in `group_settings` table, editable by equipment managers via `/settings` page. **Being built in Phase 2 Step 2.**
+- Per-group role mapping UI (which Scoutnet roles map to which app roles) is deferred until onboarding a second group. The `role-mapping.json` serves as bootstrap/override — system admin sets the first manager, then that manager takes over in the UI.
+
+Future plan:
 - Auto-register groups/troops/roles when users attempt to log in (store what was seen in the token)
 - Admin interface where managers can:
   - See all groups that have attempted login
@@ -14,8 +20,6 @@ Currently, group access is controlled by a static `role-mapping.json` file. User
   - Assign access levels per unit/role: none, normal (booking access), low (project leader level), manager
 - Replace "project" concept with "funktionärsroll" (functional role) — a role should be given none, normal, low, or manager level access
 - A unit should be given normal access to the booking system by default
-
-This replaces the current static role-mapping approach and enables self-service onboarding for new scout groups.
 
 ## Date change conflict UX
 
@@ -41,10 +45,13 @@ Empty draft cleanup is implemented (48h). Stale drafts *with* items need notific
 
 ## Quantity-tracked items — manager UI
 
-Equipment manager needs UI to:
-- Toggle article groups between individually tracked and quantity tracked
-- Adjust count for quantity-tracked items
-- View and edit tracking mode per article group
+**Being built in Phase 2 Step 2** (see [inventory-management.md](inventory-management.md)).
+
+Equipment manager gets:
+- Count field (number input) in browse page manager mode for quantity tracked groups
+- Typing a new count creates/archives article records to match
+- Single `count_changed` article event per adjustment for inventory history
+- Group edit page for shared properties (category, location, approval level, etc.)
 
 ## Subcategories
 

@@ -25,11 +25,11 @@ WHERE a.id = @id AND a.group_id = @group_id;
 INSERT INTO articles (
     group_id, commercial_name, common_name, category_id, location_id,
     status, individually_tracked, approval_level,
-    description, instructions, purchase_date, purchase_price, place
+    description, instructions, purchase_date, purchase_price, place, manager_notes
 ) VALUES (
     @group_id, @commercial_name, @common_name, @category_id, @location_id,
     @status, @individually_tracked, @approval_level,
-    @description, @instructions, @purchase_date, @purchase_price, @place
+    @description, @instructions, @purchase_date, @purchase_price, @place, @manager_notes
 )
 RETURNING *;
 
@@ -47,6 +47,7 @@ UPDATE articles SET
     purchase_date = @purchase_date,
     purchase_price = @purchase_price,
     place = @place,
+    manager_notes = @manager_notes,
     updated_at = now()
 WHERE id = @id AND group_id = @group_id
 RETURNING *;

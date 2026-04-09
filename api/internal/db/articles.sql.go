@@ -85,13 +85,13 @@ const createArticle = `-- name: CreateArticle :one
 INSERT INTO articles (
     group_id, commercial_name, common_name, category_id, location_id,
     status, individually_tracked, approval_level,
-    description, instructions, purchase_date, purchase_price, place
+    description, instructions, purchase_date, purchase_price, place, manager_notes
 ) VALUES (
     $1, $2, $3, $4, $5,
     $6, $7, $8,
-    $9, $10, $11, $12, $13
+    $9, $10, $11, $12, $13, $14
 )
-RETURNING id, group_id, commercial_name, common_name, category_id, location_id, status, individually_tracked, image_path, description, instructions, purchase_date, purchase_price, place, created_at, updated_at, expected_available_date, approval_level
+RETURNING id, group_id, commercial_name, common_name, category_id, location_id, status, individually_tracked, image_path, description, instructions, purchase_date, purchase_price, place, created_at, updated_at, expected_available_date, approval_level, import_batch_id, manager_notes
 `
 
 type CreateArticleParams struct {
@@ -108,6 +108,7 @@ type CreateArticleParams struct {
 	PurchaseDate        pgtype.Date    `json:"purchase_date"`
 	PurchasePrice       pgtype.Numeric `json:"purchase_price"`
 	Place               string         `json:"place"`
+	ManagerNotes        string         `json:"manager_notes"`
 }
 
 func (q *Queries) CreateArticle(ctx context.Context, arg CreateArticleParams) (Article, error) {
@@ -125,6 +126,7 @@ func (q *Queries) CreateArticle(ctx context.Context, arg CreateArticleParams) (A
 		arg.PurchaseDate,
 		arg.PurchasePrice,
 		arg.Place,
+		arg.ManagerNotes,
 	)
 	var i Article
 	err := row.Scan(
@@ -146,6 +148,8 @@ func (q *Queries) CreateArticle(ctx context.Context, arg CreateArticleParams) (A
 		&i.UpdatedAt,
 		&i.ExpectedAvailableDate,
 		&i.ApprovalLevel,
+		&i.ImportBatchID,
+		&i.ManagerNotes,
 	)
 	return i, err
 }
@@ -166,7 +170,7 @@ func (q *Queries) DeleteArticle(ctx context.Context, arg DeleteArticleParams) er
 }
 
 const getArticle = `-- name: GetArticle :one
-SELECT a.id, a.group_id, a.commercial_name, a.common_name, a.category_id, a.location_id, a.status, a.individually_tracked, a.image_path, a.description, a.instructions, a.purchase_date, a.purchase_price, a.place, a.created_at, a.updated_at, a.expected_available_date, a.approval_level,
+SELECT a.id, a.group_id, a.commercial_name, a.common_name, a.category_id, a.location_id, a.status, a.individually_tracked, a.image_path, a.description, a.instructions, a.purchase_date, a.purchase_price, a.place, a.created_at, a.updated_at, a.expected_available_date, a.approval_level, a.import_batch_id, a.manager_notes,
     l.name AS location_name,
     c.name AS category_name
 FROM articles a
@@ -199,6 +203,8 @@ type GetArticleRow struct {
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 	ExpectedAvailableDate pgtype.Date        `json:"expected_available_date"`
 	ApprovalLevel         string             `json:"approval_level"`
+	ImportBatchID         pgtype.UUID        `json:"import_batch_id"`
+	ManagerNotes          string             `json:"manager_notes"`
 	LocationName          string             `json:"location_name"`
 	CategoryName          string             `json:"category_name"`
 }
@@ -225,6 +231,8 @@ func (q *Queries) GetArticle(ctx context.Context, arg GetArticleParams) (GetArti
 		&i.UpdatedAt,
 		&i.ExpectedAvailableDate,
 		&i.ApprovalLevel,
+		&i.ImportBatchID,
+		&i.ManagerNotes,
 		&i.LocationName,
 		&i.CategoryName,
 	)
@@ -232,7 +240,7 @@ func (q *Queries) GetArticle(ctx context.Context, arg GetArticleParams) (GetArti
 }
 
 const listArticles = `-- name: ListArticles :many
-SELECT a.id, a.group_id, a.commercial_name, a.common_name, a.category_id, a.location_id, a.status, a.individually_tracked, a.image_path, a.description, a.instructions, a.purchase_date, a.purchase_price, a.place, a.created_at, a.updated_at, a.expected_available_date, a.approval_level,
+SELECT a.id, a.group_id, a.commercial_name, a.common_name, a.category_id, a.location_id, a.status, a.individually_tracked, a.image_path, a.description, a.instructions, a.purchase_date, a.purchase_price, a.place, a.created_at, a.updated_at, a.expected_available_date, a.approval_level, a.import_batch_id, a.manager_notes,
     l.name AS location_name,
     c.name AS category_name
 FROM articles a
@@ -273,6 +281,8 @@ type ListArticlesRow struct {
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 	ExpectedAvailableDate pgtype.Date        `json:"expected_available_date"`
 	ApprovalLevel         string             `json:"approval_level"`
+	ImportBatchID         pgtype.UUID        `json:"import_batch_id"`
+	ManagerNotes          string             `json:"manager_notes"`
 	LocationName          string             `json:"location_name"`
 	CategoryName          string             `json:"category_name"`
 }
@@ -311,6 +321,8 @@ func (q *Queries) ListArticles(ctx context.Context, arg ListArticlesParams) ([]L
 			&i.UpdatedAt,
 			&i.ExpectedAvailableDate,
 			&i.ApprovalLevel,
+			&i.ImportBatchID,
+			&i.ManagerNotes,
 			&i.LocationName,
 			&i.CategoryName,
 		); err != nil {
@@ -325,7 +337,7 @@ func (q *Queries) ListArticles(ctx context.Context, arg ListArticlesParams) ([]L
 }
 
 const listArticlesByUserBookings = `-- name: ListArticlesByUserBookings :many
-SELECT a.id, a.group_id, a.commercial_name, a.common_name, a.category_id, a.location_id, a.status, a.individually_tracked, a.image_path, a.description, a.instructions, a.purchase_date, a.purchase_price, a.place, a.created_at, a.updated_at, a.expected_available_date, a.approval_level,
+SELECT a.id, a.group_id, a.commercial_name, a.common_name, a.category_id, a.location_id, a.status, a.individually_tracked, a.image_path, a.description, a.instructions, a.purchase_date, a.purchase_price, a.place, a.created_at, a.updated_at, a.expected_available_date, a.approval_level, a.import_batch_id, a.manager_notes,
     l.name AS location_name,
     c.name AS category_name
 FROM articles a
@@ -376,6 +388,8 @@ type ListArticlesByUserBookingsRow struct {
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 	ExpectedAvailableDate pgtype.Date        `json:"expected_available_date"`
 	ApprovalLevel         string             `json:"approval_level"`
+	ImportBatchID         pgtype.UUID        `json:"import_batch_id"`
+	ManagerNotes          string             `json:"manager_notes"`
 	LocationName          string             `json:"location_name"`
 	CategoryName          string             `json:"category_name"`
 }
@@ -416,6 +430,8 @@ func (q *Queries) ListArticlesByUserBookings(ctx context.Context, arg ListArticl
 			&i.UpdatedAt,
 			&i.ExpectedAvailableDate,
 			&i.ApprovalLevel,
+			&i.ImportBatchID,
+			&i.ManagerNotes,
 			&i.LocationName,
 			&i.CategoryName,
 		); err != nil {
@@ -430,7 +446,7 @@ func (q *Queries) ListArticlesByUserBookings(ctx context.Context, arg ListArticl
 }
 
 const listArticlesWithAvailability = `-- name: ListArticlesWithAvailability :many
-SELECT a.id, a.group_id, a.commercial_name, a.common_name, a.category_id, a.location_id, a.status, a.individually_tracked, a.image_path, a.description, a.instructions, a.purchase_date, a.purchase_price, a.place, a.created_at, a.updated_at, a.expected_available_date, a.approval_level,
+SELECT a.id, a.group_id, a.commercial_name, a.common_name, a.category_id, a.location_id, a.status, a.individually_tracked, a.image_path, a.description, a.instructions, a.purchase_date, a.purchase_price, a.place, a.created_at, a.updated_at, a.expected_available_date, a.approval_level, a.import_batch_id, a.manager_notes,
     l.name AS location_name,
     c.name AS category_name,
     cur_booking.id AS current_booking_id,
@@ -490,6 +506,8 @@ type ListArticlesWithAvailabilityRow struct {
 	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
 	ExpectedAvailableDate  pgtype.Date        `json:"expected_available_date"`
 	ApprovalLevel          string             `json:"approval_level"`
+	ImportBatchID          pgtype.UUID        `json:"import_batch_id"`
+	ManagerNotes           string             `json:"manager_notes"`
 	LocationName           string             `json:"location_name"`
 	CategoryName           string             `json:"category_name"`
 	CurrentBookingID       pgtype.UUID        `json:"current_booking_id"`
@@ -534,6 +552,8 @@ func (q *Queries) ListArticlesWithAvailability(ctx context.Context, arg ListArti
 			&i.UpdatedAt,
 			&i.ExpectedAvailableDate,
 			&i.ApprovalLevel,
+			&i.ImportBatchID,
+			&i.ManagerNotes,
 			&i.LocationName,
 			&i.CategoryName,
 			&i.CurrentBookingID,
@@ -565,9 +585,10 @@ UPDATE articles SET
     purchase_date = $10,
     purchase_price = $11,
     place = $12,
+    manager_notes = $13,
     updated_at = now()
-WHERE id = $13 AND group_id = $14
-RETURNING id, group_id, commercial_name, common_name, category_id, location_id, status, individually_tracked, image_path, description, instructions, purchase_date, purchase_price, place, created_at, updated_at, expected_available_date, approval_level
+WHERE id = $14 AND group_id = $15
+RETURNING id, group_id, commercial_name, common_name, category_id, location_id, status, individually_tracked, image_path, description, instructions, purchase_date, purchase_price, place, created_at, updated_at, expected_available_date, approval_level, import_batch_id, manager_notes
 `
 
 type UpdateArticleParams struct {
@@ -583,6 +604,7 @@ type UpdateArticleParams struct {
 	PurchaseDate        pgtype.Date    `json:"purchase_date"`
 	PurchasePrice       pgtype.Numeric `json:"purchase_price"`
 	Place               string         `json:"place"`
+	ManagerNotes        string         `json:"manager_notes"`
 	ID                  pgtype.UUID    `json:"id"`
 	GroupID             string         `json:"group_id"`
 }
@@ -601,6 +623,7 @@ func (q *Queries) UpdateArticle(ctx context.Context, arg UpdateArticleParams) (A
 		arg.PurchaseDate,
 		arg.PurchasePrice,
 		arg.Place,
+		arg.ManagerNotes,
 		arg.ID,
 		arg.GroupID,
 	)
@@ -624,6 +647,8 @@ func (q *Queries) UpdateArticle(ctx context.Context, arg UpdateArticleParams) (A
 		&i.UpdatedAt,
 		&i.ExpectedAvailableDate,
 		&i.ApprovalLevel,
+		&i.ImportBatchID,
+		&i.ManagerNotes,
 	)
 	return i, err
 }
@@ -631,7 +656,7 @@ func (q *Queries) UpdateArticle(ctx context.Context, arg UpdateArticleParams) (A
 const updateArticleStatus = `-- name: UpdateArticleStatus :one
 UPDATE articles SET status = $1, expected_available_date = $2, updated_at = now()
 WHERE id = $3 AND group_id = $4
-RETURNING id, group_id, commercial_name, common_name, category_id, location_id, status, individually_tracked, image_path, description, instructions, purchase_date, purchase_price, place, created_at, updated_at, expected_available_date, approval_level
+RETURNING id, group_id, commercial_name, common_name, category_id, location_id, status, individually_tracked, image_path, description, instructions, purchase_date, purchase_price, place, created_at, updated_at, expected_available_date, approval_level, import_batch_id, manager_notes
 `
 
 type UpdateArticleStatusParams struct {
@@ -668,6 +693,8 @@ func (q *Queries) UpdateArticleStatus(ctx context.Context, arg UpdateArticleStat
 		&i.UpdatedAt,
 		&i.ExpectedAvailableDate,
 		&i.ApprovalLevel,
+		&i.ImportBatchID,
+		&i.ManagerNotes,
 	)
 	return i, err
 }

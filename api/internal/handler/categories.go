@@ -111,6 +111,11 @@ func (h *CategoryHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
+	count, err := h.Q.CountArticlesForCategory(r.Context(), db.CountArticlesForCategoryParams{GroupID: claims.GroupID, CategoryID: id})
+	if err == nil && count > 0 {
+		WriteJSON(w, http.StatusConflict, map[string]any{"error": "has_articles", "count": count})
+		return
+	}
 	if err := h.Q.DeleteCategory(r.Context(), db.DeleteCategoryParams{ID: id, GroupID: claims.GroupID}); err != nil {
 		WriteError(w, http.StatusNotFound, "category not found")
 		return

@@ -43,6 +43,7 @@ Article fields:
 - Usage instructions
 - Purchase date and price
 - Place (free text — where within the location, e.g. "shelf 3")
+- Manager notes (private, only visible to equipment managers)
 - Whether it's individually tracked or quantity-tracked
 - Approval level (none/low/high) — controls whether booking requires manager approval
 
@@ -322,6 +323,7 @@ All tables have `group_id` (text, FK → groups). Omitted below for brevity.
 | purchase_date | date | Nullable |
 | purchase_price | numeric | Nullable |
 | place | text | Free text, where within location |
+| manager_notes | text | Private notes, only visible to equipment managers |
 | expected_available_date | date | Nullable, for incoming/under_repair — when the article is expected to be usable |
 | created_at / updated_at | timestamptz | |
 
@@ -399,6 +401,16 @@ All tables have `group_id` (text, FK → groups). Omitted below for brevity.
 | message | text | Human-readable message (approval comment, leader explanation, etc.) |
 | metadata | jsonb | Structured data (items added/removed, old/new dates, etc.) |
 | created_at | timestamptz | |
+
+### group_settings
+| Column | Type | Notes |
+|---|---|---|
+| group_id | text | PK, FK → groups |
+| notification_email_from | text | Email from-address for this group |
+| smtp_key_encrypted | bytea | Nullable, AES-256-GCM encrypted SMTP API key |
+| gchat_webhook_url | text | Google Chat webhook URL |
+| default_approval_level | text | Default for new articles: none/low/high |
+| created_at / updated_at | timestamptz | |
 
 ### audit_log
 | Column | Type | Notes |
@@ -642,12 +654,20 @@ CSV column mapping:
 - **UPDATE**: Originally planned as simple boolean `requires_approval`. Evolved to three-level model with booking events for conversation history. See [article-status-refactor.md](docs/article-status-refactor.md) for the status changes that accompanied this.
 
 #### Step 2: Equipment manager — inventory management
-- Article create/edit form (all fields)
-- Article list with bulk actions (status change, location move)
-- CSV import UI with progress/error feedback, duplicate handling
-- CSV export on browse page, booking export on bookings page
-- Print-friendly fetch list on booking detail
-- Admin settings page: location and category CRUD
+See [inventory-management.md](docs/inventory-management.md) for full design doc.
+- Browse page gains "Hanteringsläge" toggle (session state) for inline manager controls: bulk actions, edit links, count field for quantity tracked items
+- Article create/edit forms at `/articles/*` (manager-guarded), article detail page at `/articles/[id]` (all users)
+- `manager_notes` field on articles — private notes only visible to equipment managers, amber-highlighted in UI
+- Quantity tracked group edit: count field (number input), changes create/archive records, single `count_changed` article event per adjustment
+- Settings page at `/settings`: user prefs (placeholder) + manager-only group settings (locations, categories, CSV import, notification routing)
+- **UPDATE**: Settings moved to a "Gruppinställningar" tab on the profile page (`/profile`) instead of a separate route. "Mina inställningar" section on the Profil tab as placeholder for future personal settings.
+- `group_settings` table with explicit columns: notification_email_from, smtp_key_encrypted (AES-256-GCM, key in `.env`), gchat_webhook_url, default_approval_level
+- CSV import with two-phase flow: preview (dry run with per-row duplicate detection) → confirm. Revertable via import batch tracking. Duplicate matching on `common_name + group_id`
+- CSV export on browse page (client-side, import-compatible columns), booking export on booking detail
+- Print-friendly fetch list on booking detail (`@media print`, grouped by location)
+- `PUT /articles/bulk` for bulk status change, location move, archive (with auto-replacement in active bookings)
+- Archive-before-delete workflow: archiving checks for active bookings, auto-swaps where possible, flags conflicts for manager
+- Location/category deletion blocked if articles reference them (409 with count)
 
 #### Step 3: Issue report images (deferred)
 
@@ -708,3 +728,4 @@ Swedish (`sv`) is the only UI language. English (`en`) is planned as a second la
 - Whether booking date granularity needs to go below day level in the future
 - Token refresh — currently the access token from initial login is used until expiry, then the user is redirected to re-authenticate. Auth.js token rotation could be added to refresh tokens silently.
 - Per-organisation role mapping — currently hardcoded in `role-mapping.json`, eventually needs a dynamic admin UI for group/role management (see backlog: "Admin UI for group/role management")
+- `SETTINGS_ENCRYPTION_KEY` in `.env` for encrypting per-group SMTP keys — migrate to Docker secret in Phase 3
