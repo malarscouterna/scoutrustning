@@ -34,6 +34,7 @@ High — follow these unless they conflict with an explicit user instruction.
 - Follow Svelte 5 reactivity rules: use `$derived` for values derived from props/data, `$effect` to sync `$state` from reactive sources. Never capture `data.*` or other reactive values in `const` or `$state()` initializers — this triggers `state_referenced_locally` warnings.
 - All `<label>` elements must wrap their `<input>` or use explicit `for`/`id` attributes for accessibility compliance.
 - Before committing, verify no new Svelte warnings are introduced by running `npx svelte-check` and checking for warnings in files you modified.
+- Target: zero warnings from `npx svelte-check` on Svelte files. All existing warnings have been resolved — do not introduce new ones.
 
 ### Database
 

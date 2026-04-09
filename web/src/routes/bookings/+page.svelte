@@ -6,11 +6,13 @@
 	let isManager = $derived(data.user?.roles.includes('equipment_manager') ?? false);
 	let userUnits = $derived(data.user?.units ?? []);
 
-	const initialFilter: 'mine' | 'all' | 'pending' =
-		data.user?.roles.includes('equipment_manager')
+	let filter = $state<'mine' | 'all' | 'pending'>('mine');
+
+	$effect(() => {
+		filter = data.user?.roles.includes('equipment_manager')
 			? (data.pendingCount > 0 ? 'pending' : 'all')
 			: 'mine';
-	let filter = $state<'mine' | 'all' | 'pending'>(initialFilter);
+	});
 
 	const statusLabels: Record<string, string> = {
 		draft: 'Utkast',

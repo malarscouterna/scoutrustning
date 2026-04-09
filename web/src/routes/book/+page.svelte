@@ -20,29 +20,43 @@
 
 	let isEdit = $derived(!!data.existing);
 
-	let startDate = $state(data.existing?.booking.start_date ?? '');
-	let endDate = $state(data.existing?.booking.end_date ?? '');
-	let notes = $state(data.existing?.booking.notes ?? '');
+	let startDate = $state('');
+	let endDate = $state('');
+	let notes = $state('');
 	let defaultUnit = $derived.by(() => {
 		const myUnitNames = new Set($page.data.user?.units ?? []);
 		const match = data.units.find(u => myUnitNames.has(u.name));
 		return match?.id ?? '';
 	});
-	let selectedUnit = $state(data.existing?.booking.used_by_unit_id ?? '');
-	let unitInitialized = $state(!!data.existing);
+	let selectedUnit = $state('');
+	let unitInitialized = $state(false);
+	let bookingId = $state<string | null>(null);
+	let cartItems = $state<BookingItem[]>([]);
+	let error = $state('');
+	let message = $state('');
+	let submitted = $state(false);
+	let loading = $state(false);
+	let showAvailability = $state(false);
+
+	$effect(() => {
+		if (data.existing) {
+			startDate = data.existing.booking.start_date;
+			endDate = data.existing.booking.end_date;
+			notes = data.existing.booking.notes;
+			selectedUnit = data.existing.booking.used_by_unit_id ?? '';
+			unitInitialized = true;
+			bookingId = data.existing.booking.id;
+			cartItems = data.existing.items;
+			showAvailability = true;
+		}
+	});
+
 	$effect(() => {
 		if (!unitInitialized && defaultUnit) {
 			selectedUnit = defaultUnit;
 			unitInitialized = true;
 		}
 	});
-	let bookingId = $state<string | null>(data.existing?.booking.id ?? null);
-	let cartItems = $state<BookingItem[]>(data.existing?.items ?? []);
-	let error = $state('');
-	let message = $state('');
-	let submitted = $state(false);
-	let loading = $state(false);
-	let showAvailability = $state(!!data.existing);
 
 	let cartEl = $state<HTMLElement | undefined>(undefined);
 
@@ -92,7 +106,7 @@
 		}
 	}
 
-	let prevCartCount = $state(cartItems.length);
+	let prevCartCount = $state(0);
 
 	async function refreshCart() {
 		if (!bookingId) return;

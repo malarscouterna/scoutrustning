@@ -223,7 +223,7 @@
 			{#if notPicked}
 				<span class="text-xs text-neutral-400">Ej hämtad</span>
 			{:else if hasReturn}
-				<span class="text-xs px-2 py-0.5 rounded {colors[item.return_status] ?? ''}">{labels[item.return_status] ?? item.return_status}</span>
+				<span class="text-xs px-2 py-0.5 rounded {colors[item.return_status ?? ''] ?? ''}">{labels[item.return_status ?? ''] ?? item.return_status}</span>
 				{#if savedKey === item.id}<span class="text-xs text-green-600">Sparad</span>{/if}
 				<button onclick={() => setReturn(item.id, '')} class="text-xs text-neutral-400 hover:text-neutral-600">Ångra</button>
 			{:else if activeItemId !== item.id}

@@ -8,6 +8,32 @@ Newest first.
 
 ---
 
+## 2026-04-09
+
+### Inventory management foundation (Phase 2 Step 2a+2b)
+
+Built the foundation for equipment manager inventory management. See [inventory-management.md](inventory-management.md) for the full design doc.
+
+**Group settings**: `group_settings` table with per-group notification config (email from-address, encrypted SMTP key via AES-256-GCM, Google Chat webhook URL). GET/PUT endpoints, manager-only. Settings UI as "Gruppinställningar" tab on the profile page.
+
+**Location/category CRUD UI**: Reusable `CrudList.svelte` component. Deletion blocked when articles reference the entity (409 with count).
+
+**Article create/edit forms**: Shared `ArticleForm.svelte` with create and edit modes. Create mode supports multi-article creation (count field + editable name list for individually tracked, count-only for quantity tracked). Pre-fill from existing article group via `?from=` query param. New `manager_notes` field (private, amber-highlighted, manager-only). Added `purchase_date` and `purchase_price` to API handlers.
+
+**Article detail page**: `/articles/[id]` read-only view for all users — description, instructions, status, report issue, event history. Manager notes visible only to managers. Edit link for managers.
+
+**CSV import**: Basic import UI on profile page settings tab (uses existing API endpoint).
+
+**API client**: `ApiError` class preserving full response body for richer error messages (e.g. article count on 409).
+
+**Svelte 5 cleanup**: Resolved all pre-existing `state_referenced_locally` warnings and a11y label issues across browse, book, bookings, and return checklist pages. Zero svelte-check warnings. Added rules to prevent regressions.
+
+### Integration tests for inventory management
+
+`TestInventoryManagement` with 6 subtests: group settings CRUD, leader access denied, location/category delete blocked by articles, empty location deletable, article with manager_notes and purchase fields.
+
+---
+
 ## 2026-04-07
 
 ### Mobile responsiveness overhaul

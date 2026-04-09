@@ -6,10 +6,17 @@
 
 	let { data }: { data: PageData } = $props();
 
-	let search = $state(data.filters.search ?? '');
-	let selectedCategory = $state(data.filters.category_id ?? '');
-	let selectedLocation = $state(data.filters.location_id ?? '');
-	let showArchived = $state(data.filters.status?.includes('archived') ?? false);
+	let search = $state('');
+	let selectedCategory = $state('');
+	let selectedLocation = $state('');
+	let showArchived = $state(false);
+
+	$effect(() => {
+		search = data.filters.search ?? '';
+		selectedCategory = data.filters.category_id ?? '';
+		selectedLocation = data.filters.location_id ?? '';
+		showArchived = data.filters.status?.includes('archived') ?? false;
+	});
 	let expandedGroups = $state<Set<string>>(new Set());
 	let reportingArticleId = $state<string | null>(null);
 	let showHistoryFor = $state<string | null>(null);
@@ -70,7 +77,11 @@
 		});
 	}
 
-	let articles: Article[] = $state(data.articles);
+	let articles: Article[] = $state([]);
+
+	$effect(() => {
+		articles = data.articles;
+	});
 
 	interface ArticleGroup {
 		key: string;

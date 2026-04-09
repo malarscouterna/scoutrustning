@@ -11,15 +11,21 @@
 
 	const api = createApiClient();
 
-	let booking = $state<Booking>(data.booking);
-	let items = $state<BookingItem[]>(data.items);
+	let booking = $state<Booking>(undefined!);
+	let items = $state<BookingItem[]>([]);
 	let error = $state('');
-	let message = $state($page.url.searchParams.get('msg') ?? '');
+	let message = $state('');
 
-	if (message) {
-		history.replaceState({}, '', $page.url.pathname);
-		setTimeout(() => message = '', 4000);
-	}
+	$effect(() => {
+		booking = data.booking;
+		items = data.items;
+		const msg = $page.url.searchParams.get('msg');
+		if (msg) {
+			message = msg;
+			history.replaceState({}, '', $page.url.pathname);
+			setTimeout(() => message = '', 4000);
+		}
+	});
 
 	// Poll for updates during active pickup/return
 	let pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -51,11 +57,6 @@
 	});
 
 	onDestroy(stopPolling);
-
-	if (message) {
-		history.replaceState({}, '', $page.url.pathname);
-		setTimeout(() => message = '', 4000);
-	}
 
 	const statusLabels: Record<string, string> = {
 		draft: 'Utkast',

@@ -46,7 +46,8 @@ When the user says done or finished, perform this checklist:
 3. **Multi-tenancy**: `group_id` filtering on all new queries.
 4. **Style**: Code matches existing conventions (see `coding-conventions.md`).
 5. **Tests**: New functionality has integration tests covering the happy path. Run the test suite: `cd api && go test ./internal/handler/tests/ -timeout 180s -count=1 2>&1`
-6. **Documentation** — verify each of these is still accurate and update if needed:
+6. **Svelte warnings**: Run `cd web && npx svelte-check` and verify zero warnings on Svelte files. Do not introduce new warnings.
+7. **Documentation** — verify each of these is still accurate and update if needed:
    - `docs/API.md` — reflects any new or changed endpoints
    - `docs/SPEC.md` — reflects current architecture and decisions
    - `docs/BACKLOG.md` — any resolved items removed
@@ -55,7 +56,7 @@ When the user says done or finished, perform this checklist:
    - `.amazonq/rules/coding-conventions.md` — any new patterns captured
    - `README.md` — reflects current status and setup instructions
    - `docs/guide.md` — user-facing guide reflects current UI and features
-7. **Commit message**: Suggest a message following [Conventional Commits](https://www.conventionalcommits.org/). Explain the version impact (`feat:` → minor bump, `fix:` → patch bump, `feat!:` → major bump).
+8. **Commit message**: Suggest a message following [Conventional Commits](https://www.conventionalcommits.org/). Explain the version impact (`feat:` → minor bump, `fix:` → patch bump, `feat!:` → major bump).
 
 ### Commits
 
