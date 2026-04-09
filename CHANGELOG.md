@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.0](https://github.com/malarscouterna/ms-utrustning/compare/v0.2.2...v0.3.0) (2026-04-09)
+
+
+### Features
+
+* inventory management foundation — settings, article forms, detail page ([794d252](https://github.com/malarscouterna/ms-utrustning/commit/794d25211cf23e975d44710d83a140bc51b94a4f))
+* **web,api:** browse page article links, edit forms with shared/per-item fields, bulk API ([f16783c](https://github.com/malarscouterna/ms-utrustning/commit/f16783cd6e0f4852bb7ae12f1bc3cb647074af25))
+
+
+### Bug Fixes
+
+* **web:** resolve pre-existing Svelte 5 reactivity warnings and type errors ([cd1401b](https://github.com/malarscouterna/ms-utrustning/commit/cd1401bdebe035a89761d36b24656599174541f3))
+
 ## [0.2.2](https://github.com/malarscouterna/ms-utrustning/compare/v0.2.1...v0.2.2) (2026-04-07)
 
 
