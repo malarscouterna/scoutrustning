@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/malarscouterna/ms-utrustning/compare/v0.3.0...v0.3.1) (2026-04-09)
+
+
+### Bug Fixes
+
+* add missing files from prior commit ([bd019a9](https://github.com/malarscouterna/ms-utrustning/commit/bd019a99336f599ba46fc908e2ccae01fcafe88c))
+
 ## [0.3.0](https://github.com/malarscouterna/ms-utrustning/compare/v0.2.2...v0.3.0) (2026-04-09)
 
 
