@@ -5,6 +5,8 @@
 package db
 
 import (
+	"encoding/json"
+
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -17,7 +19,6 @@ type Article struct {
 	LocationID            pgtype.UUID        `json:"location_id"`
 	Status                string             `json:"status"`
 	IndividuallyTracked   bool               `json:"individually_tracked"`
-	ImagePath             pgtype.Text        `json:"image_path"`
 	Description           string             `json:"description"`
 	Instructions          string             `json:"instructions"`
 	PurchaseDate          pgtype.Date        `json:"purchase_date"`
@@ -29,6 +30,7 @@ type Article struct {
 	ApprovalLevel         string             `json:"approval_level"`
 	ImportBatchID         pgtype.UUID        `json:"import_batch_id"`
 	ManagerNotes          string             `json:"manager_notes"`
+	ImageIds              json.RawMessage    `json:"image_ids"`
 }
 
 type ArticleEvent struct {
@@ -38,7 +40,7 @@ type ArticleEvent struct {
 	ActorID     string             `json:"actor_id"`
 	EventType   string             `json:"event_type"`
 	Description string             `json:"description"`
-	Metadata    []byte             `json:"metadata"`
+	Metadata    json.RawMessage    `json:"metadata"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
@@ -49,7 +51,7 @@ type AuditLog struct {
 	Action     string             `json:"action"`
 	EntityType string             `json:"entity_type"`
 	EntityID   pgtype.UUID        `json:"entity_id"`
-	Details    []byte             `json:"details"`
+	Details    json.RawMessage    `json:"details"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
 
@@ -76,7 +78,7 @@ type BookingEvent struct {
 	ActorID   string             `json:"actor_id"`
 	EventType string             `json:"event_type"`
 	Message   string             `json:"message"`
-	Metadata  []byte             `json:"metadata"`
+	Metadata  json.RawMessage    `json:"metadata"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 

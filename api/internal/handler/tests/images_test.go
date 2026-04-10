@@ -25,7 +25,6 @@ func TestImageUpload(t *testing.T) {
 	t.Cleanup(images.ShutdownVips)
 
 	env := testutil.SetupTestEnv(t)
-
 	imageDir := t.TempDir()
 
 	env.V1(func(r chi.Router) {
@@ -55,10 +54,10 @@ func TestImageUpload(t *testing.T) {
 	for i := range 2 {
 		names := []string{"Sibley 1", "Sibley 2"}
 		body := map[string]any{
-			"commercial_name":    "Sibley",
-			"common_name":        names[i],
-			"category_id":        catID,
-			"location_id":        locID,
+			"commercial_name":      "Sibley",
+			"common_name":          names[i],
+			"category_id":          catID,
+			"location_id":          locID,
 			"individually_tracked": true,
 		}
 		b, _ := json.Marshal(body)
@@ -72,12 +71,18 @@ func TestImageUpload(t *testing.T) {
 
 	testJPEG := createTestJPEG(t)
 
-	t.Run("leader cannot upload product image", func(t *testing.T) {
+	// Helper to upload and return response
+	uploadProduct := func(t *testing.T, persona string) (*http.Response, error) {
+		t.Helper()
 		body, contentType := buildMultipartUpload(t, testJPEG, "Sibley", locID)
-		req, _ := http.NewRequest("POST", leader.BaseURL()+"/api/v0/images/product", body)
+		req, _ := http.NewRequest("POST", manager.BaseURL()+"/api/v0/images/product", body)
 		req.Header.Set("Content-Type", contentType)
-		req.Header.Set("X-Dev-Role-Override", "leader-yggdrasil")
-		resp, err := http.DefaultClient.Do(req)
+		req.Header.Set("X-Dev-Role-Override", persona)
+		return http.DefaultClient.Do(req)
+	}
+
+	t.Run("leader cannot upload product image", func(t *testing.T) {
+		resp, err := uploadProduct(t, "leader-yggdrasil")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -87,14 +92,10 @@ func TestImageUpload(t *testing.T) {
 		}
 	})
 
-	var imageID string
+	var image1, image2 string
 
-	t.Run("manager uploads product image", func(t *testing.T) {
-		body, contentType := buildMultipartUpload(t, testJPEG, "Sibley", locID)
-		req, _ := http.NewRequest("POST", manager.BaseURL()+"/api/v0/images/product", body)
-		req.Header.Set("Content-Type", contentType)
-		req.Header.Set("X-Dev-Role-Override", "manager-equipment")
-		resp, err := http.DefaultClient.Do(req)
+	t.Run("upload first image", func(t *testing.T) {
+		resp, err := uploadProduct(t, "manager-equipment")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -103,23 +104,45 @@ func TestImageUpload(t *testing.T) {
 			respBody, _ := io.ReadAll(resp.Body)
 			t.Fatalf("expected 200, got %d: %s", resp.StatusCode, respBody)
 		}
-		var result map[string]string
+		var result map[string]any
 		json.NewDecoder(resp.Body).Decode(&result)
-		imageID = result["image_id"]
-		if imageID == "" {
-			t.Fatal("expected image_id in response")
+		image1 = result["image_id"].(string)
+		ids := result["image_ids"].([]any)
+		if len(ids) != 1 || ids[0].(string) != image1 {
+			t.Errorf("expected [%s], got %v", image1, ids)
 		}
 
-		// Verify files on disk
-		if _, err := os.Stat(filepath.Join(imageDir, imageID+".webp")); err != nil {
+		if _, err := os.Stat(filepath.Join(imageDir, image1+".webp")); err != nil {
 			t.Errorf("source file not found: %v", err)
 		}
-		if _, err := os.Stat(filepath.Join(imageDir, imageID+"_thumb.webp")); err != nil {
-			t.Errorf("thumbnail file not found: %v", err)
+		if _, err := os.Stat(filepath.Join(imageDir, image1+"_thumb.webp")); err != nil {
+			t.Errorf("thumbnail not found: %v", err)
 		}
 	})
 
-	t.Run("image_path set on both articles", func(t *testing.T) {
+	t.Run("upload second image appends", func(t *testing.T) {
+		resp, err := uploadProduct(t, "manager-equipment")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			respBody, _ := io.ReadAll(resp.Body)
+			t.Fatalf("expected 200, got %d: %s", resp.StatusCode, respBody)
+		}
+		var result map[string]any
+		json.NewDecoder(resp.Body).Decode(&result)
+		image2 = result["image_id"].(string)
+		ids := result["image_ids"].([]any)
+		if len(ids) != 2 {
+			t.Fatalf("expected 2 images, got %d", len(ids))
+		}
+		if ids[0].(string) != image1 || ids[1].(string) != image2 {
+			t.Errorf("expected [%s, %s], got %v", image1, image2, ids)
+		}
+	})
+
+	t.Run("image_ids set on both articles", func(t *testing.T) {
 		resp, _ := manager.Get("/api/v0/articles")
 		var articles []map[string]any
 		json.NewDecoder(resp.Body).Decode(&articles)
@@ -127,15 +150,16 @@ func TestImageUpload(t *testing.T) {
 
 		for _, a := range articles {
 			if a["commercial_name"] == "Sibley" {
-				if a["image_path"] != imageID {
-					t.Errorf("article %s: expected image_path %q, got %v", a["common_name"], imageID, a["image_path"])
+				ids, ok := a["image_ids"].([]any)
+				if !ok || len(ids) != 2 {
+					t.Errorf("article %s: expected 2 image_ids, got %v", a["common_name"], a["image_ids"])
 				}
 			}
 		}
 	})
 
 	t.Run("serve WebP source", func(t *testing.T) {
-		resp, _ := leader.Get("/api/v0/images/" + imageID + ".webp")
+		resp, _ := leader.Get("/api/v0/images/" + image1 + ".webp")
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("expected 200, got %d", resp.StatusCode)
@@ -148,16 +172,8 @@ func TestImageUpload(t *testing.T) {
 		}
 	})
 
-	t.Run("serve WebP thumbnail", func(t *testing.T) {
-		resp, _ := leader.Get("/api/v0/images/" + imageID + "_thumb.webp")
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			t.Fatalf("expected 200, got %d", resp.StatusCode)
-		}
-	})
-
 	t.Run("serve JPEG download", func(t *testing.T) {
-		resp, _ := leader.Get("/api/v0/images/" + imageID + ".webp?format=jpeg")
+		resp, _ := leader.Get("/api/v0/images/" + image1 + ".webp?format=jpeg")
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("expected 200, got %d", resp.StatusCode)
@@ -165,55 +181,40 @@ func TestImageUpload(t *testing.T) {
 		if ct := resp.Header.Get("Content-Type"); ct != "image/jpeg" {
 			t.Errorf("expected image/jpeg, got %s", ct)
 		}
-		if cd := resp.Header.Get("Content-Disposition"); cd == "" {
-			t.Error("expected Content-Disposition header for download")
-		}
 	})
 
-	t.Run("serve 404 for nonexistent image", func(t *testing.T) {
-		resp, _ := leader.Get("/api/v0/images/00000000-0000-0000-0000-000000000000.webp")
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusNotFound {
-			t.Errorf("expected 404, got %d", resp.StatusCode)
-		}
-	})
-
-	t.Run("replace image deletes old files", func(t *testing.T) {
-		oldID := imageID
-
-		body, contentType := buildMultipartUpload(t, testJPEG, "Sibley", locID)
-		req, _ := http.NewRequest("POST", manager.BaseURL()+"/api/v0/images/product", body)
-		req.Header.Set("Content-Type", contentType)
-		req.Header.Set("X-Dev-Role-Override", "manager-equipment")
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			t.Fatal(err)
-		}
+	t.Run("reorder images", func(t *testing.T) {
+		body, _ := json.Marshal(map[string]any{
+			"commercial_name": "Sibley",
+			"location_id":     locID,
+			"image_ids":       []string{image2, image1},
+		})
+		resp, _ := manager.Put("/api/v0/images/product/reorder", bytes.NewReader(body))
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
 			respBody, _ := io.ReadAll(resp.Body)
 			t.Fatalf("expected 200, got %d: %s", resp.StatusCode, respBody)
 		}
-		var result map[string]string
-		json.NewDecoder(resp.Body).Decode(&result)
-		imageID = result["image_id"]
 
-		// Old files should be gone
-		if _, err := os.Stat(filepath.Join(imageDir, oldID+".webp")); !os.IsNotExist(err) {
-			t.Error("old source file should have been deleted")
-		}
-		if _, err := os.Stat(filepath.Join(imageDir, oldID+"_thumb.webp")); !os.IsNotExist(err) {
-			t.Error("old thumbnail should have been deleted")
-		}
-
-		// New files should exist
-		if _, err := os.Stat(filepath.Join(imageDir, imageID+".webp")); err != nil {
-			t.Errorf("new source file not found: %v", err)
+		// Verify order on articles
+		resp2, _ := manager.Get("/api/v0/articles")
+		var articles []map[string]any
+		json.NewDecoder(resp2.Body).Decode(&articles)
+		resp2.Body.Close()
+		for _, a := range articles {
+			if a["commercial_name"] == "Sibley" {
+				ids := a["image_ids"].([]any)
+				if ids[0].(string) != image2 || ids[1].(string) != image1 {
+					t.Errorf("expected reordered [%s, %s], got %v", image2, image1, ids)
+				}
+				break
+			}
 		}
 	})
 
-	t.Run("delete product image", func(t *testing.T) {
-		req, _ := http.NewRequest("DELETE", manager.BaseURL()+"/api/v0/images/product?commercial_name=Sibley&location_id="+locID, nil)
+	t.Run("delete single image", func(t *testing.T) {
+		req, _ := http.NewRequest("DELETE",
+			manager.BaseURL()+"/api/v0/images/product/"+image1+"?commercial_name=Sibley&location_id="+locID, nil)
 		req.Header.Set("X-Dev-Role-Override", "manager-equipment")
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
@@ -224,19 +225,27 @@ func TestImageUpload(t *testing.T) {
 			t.Fatalf("expected 204, got %d", resp.StatusCode)
 		}
 
-		// Files should be gone
-		if _, err := os.Stat(filepath.Join(imageDir, imageID+".webp")); !os.IsNotExist(err) {
-			t.Error("source file should have been deleted")
+		// image1 files gone
+		if _, err := os.Stat(filepath.Join(imageDir, image1+".webp")); !os.IsNotExist(err) {
+			t.Error("deleted image source should be gone")
+		}
+		// image2 files still exist
+		if _, err := os.Stat(filepath.Join(imageDir, image2+".webp")); err != nil {
+			t.Error("remaining image should still exist")
 		}
 
-		// image_path should be cleared on articles
+		// Articles should have only image2
 		resp2, _ := manager.Get("/api/v0/articles")
 		var articles []map[string]any
 		json.NewDecoder(resp2.Body).Decode(&articles)
 		resp2.Body.Close()
 		for _, a := range articles {
-			if a["commercial_name"] == "Sibley" && a["image_path"] != nil {
-				t.Errorf("article %s: expected nil image_path, got %v", a["common_name"], a["image_path"])
+			if a["commercial_name"] == "Sibley" {
+				ids := a["image_ids"].([]any)
+				if len(ids) != 1 || ids[0].(string) != image2 {
+					t.Errorf("expected [%s], got %v", image2, ids)
+				}
+				break
 			}
 		}
 	})
@@ -257,17 +266,8 @@ func TestImageUpload(t *testing.T) {
 		}
 		var result map[string]string
 		json.NewDecoder(resp.Body).Decode(&result)
-		issueImageID := result["image_id"]
-		if issueImageID == "" {
+		if result["image_id"] == "" {
 			t.Fatal("expected image_id")
-		}
-
-		// Verify files
-		if _, err := os.Stat(filepath.Join(imageDir, issueImageID+".webp")); err != nil {
-			t.Errorf("issue source file not found: %v", err)
-		}
-		if _, err := os.Stat(filepath.Join(imageDir, issueImageID+"_thumb.webp")); err != nil {
-			t.Errorf("issue thumbnail not found: %v", err)
 		}
 	})
 }

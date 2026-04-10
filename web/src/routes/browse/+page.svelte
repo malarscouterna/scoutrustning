@@ -486,7 +486,7 @@
 				</button>
 				{#if expanded}
 					{@const rep = group.articles[0]}
-					{@const hasImage = !!rep.image_path}
+					{@const hasImage = rep.image_ids?.length > 0}
 					{@const hasInfo = !!(rep.description || rep.instructions || (isManager && rep.manager_notes) || hasImage)}
 					<div class="border-t px-4 py-2 bg-neutral-50">
 						{#if group.individuallyTracked}
@@ -630,14 +630,8 @@
 
 {#snippet infoBlock(a: Article)}
 	<div class="mb-2 space-y-2 text-xs text-neutral-600">
-		{#if a.image_path}
-			<ImageViewer
-				src="/api/v0/images/{a.image_path}.webp"
-				thumbSrc="/api/v0/images/{a.image_path}_thumb.webp"
-				alt={a.commercial_name || a.common_name}
-				downloadId={a.image_path}
-				class="block w-3/4"
-			/>
+		{#if a.image_ids?.length > 0}
+			<ImageViewer imageIds={a.image_ids} alt={a.commercial_name || a.common_name} />
 		{/if}
 		{#if a.description}
 			<div>

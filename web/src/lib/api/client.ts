@@ -20,6 +20,7 @@ export interface Article {
 	import_batch_id: string | null;
 	manager_notes: string;
 	image_path: string | null;
+	image_ids: string[];
 	current_booking_id: string | null;
 	current_booking_status: string | null;
 	current_booking_end_date: string | null;
@@ -285,6 +286,33 @@ export function createApiClient(opts: FetchOptions = {}) {
 			}
 			return res.json();
 		},
+
+		uploadProductImage: async (file: File, commercialName: string, locationId: string) => {
+			const f = opts.fetch ?? globalThis.fetch;
+			const formData = new FormData();
+			formData.append('file', file);
+			formData.append('commercial_name', commercialName);
+			formData.append('location_id', locationId);
+			const res = await f(`${API_BASE}/images/product`, {
+				method: 'POST',
+				body: formData
+			});
+			if (!res.ok) {
+				const b = await res.json().catch(() => ({}));
+				throw new ApiError(b.error || res.statusText, res.status, b);
+			}
+			return res.json() as Promise<{ image_id: string; image_ids: string[] }>;
+		},
+		deleteProductImage: async (imageId: string, commercialName: string, locationId: string) => {
+			const query = new URLSearchParams({ commercial_name: commercialName, location_id: locationId });
+			return requestMut<void>(`/images/product/${imageId}?${query}`, 'DELETE', undefined, opts);
+		},
+		reorderProductImages: (commercialName: string, locationId: string, imageIds: string[]) =>
+			requestMut<{ image_ids: string[] }>('/images/product/reorder', 'PUT', {
+				commercial_name: commercialName,
+				location_id: locationId,
+				image_ids: imageIds
+			}, opts),
 
 		// Location CRUD
 		createLocation: (data: { name: string; sort_order?: number }) =>
