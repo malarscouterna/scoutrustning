@@ -114,6 +114,14 @@
 	let reportedMessage = $state('');
 	let latestComments = $state<Map<string, string>>(new Map());
 
+	let showDescriptionFor = $state<Set<string>>(new Set());
+
+	function toggleDescription(key: string) {
+		const next = new Set(showDescriptionFor);
+		if (next.has(key)) next.delete(key); else next.add(key);
+		showDescriptionFor = next;
+	}
+
 	const api = createApiClient();
 
 	const statusOrder = ['ok', 'reported_usable', 'incoming', 'reported_unusable', 'under_repair', 'lost', 'archived'] as const;
@@ -426,8 +434,20 @@
 					</div>
 				</button>
 				{#if expanded}
+					{@const rep = group.articles[0]}
+					{@const hasInfo = !!(rep.description || rep.instructions || (isManager && rep.manager_notes))}
 					<div class="border-t px-4 py-2 bg-neutral-50">
 						{#if group.individuallyTracked}
+							{#if hasInfo}
+								<div class="mb-2">
+									<button onclick={() => toggleDescription(group.key)} class="text-xs text-neutral-500 hover:text-neutral-700">
+										{showDescriptionFor.has(group.key) ? 'Dölj info ▲' : 'Visa info ▼'}
+									</button>
+								</div>
+							{/if}
+							{#if showDescriptionFor.has(group.key)}
+								{@render infoBlock(rep)}
+							{/if}
 							<div class="divide-y divide-neutral-200 text-sm">
 								{#each sortArticles(group.articles) as article}
 									<div class="py-2">
@@ -489,12 +509,35 @@
 						{:else}
 							{@const rows = groupByState(group.articles)}
 							<div class="space-y-1 py-1 text-sm">
-								<div class="flex gap-2">
+								<div class="flex flex-wrap items-center gap-2">
 									<a href="/articles/{group.representativeId}" class="inline-flex items-center gap-1 text-xs text-blue-700 border border-blue-200 bg-blue-50 rounded px-2 py-1 hover:bg-blue-100">Visa artikelsida ›</a>
 									{#if isManager}
 										<a href="/articles/{group.representativeId}/edit?group=true" class="inline-flex items-center gap-1 text-xs text-neutral-600 border border-neutral-200 bg-neutral-50 rounded px-2 py-1 hover:bg-neutral-100">Redigera ›</a>
+										<label class="inline-flex items-center gap-1 text-xs text-neutral-600 ml-auto">
+											Antal:
+											<input
+												type="number"
+												value={group.count}
+												min="0"
+												max="999"
+												disabled={countLoading.has(group.key)}
+												onchange={(e) => {
+													const v = parseInt((e.target as HTMLInputElement).value);
+													if (!isNaN(v) && v !== group.count) updateCount(group, v);
+												}}
+												class="border rounded px-1.5 py-0.5 w-16 text-xs"
+											/>
+										</label>
+									{/if}
+									{#if hasInfo}
+										<button onclick={() => toggleDescription(group.key)} class="text-xs text-neutral-500 hover:text-neutral-700">
+											{showDescriptionFor.has(group.key) ? 'Dölj info ▲' : 'Visa info ▼'}
+										</button>
 									{/if}
 								</div>
+								{#if showDescriptionFor.has(group.key)}
+									{@render infoBlock(rep)}
+								{/if}
 								{#each rows as row}
 									{@const comment = row.articleIds.map(id => latestComments.get(id)).find(c => c)}
 									{@const representativeId = row.articleIds[0]}
@@ -544,3 +587,26 @@
 		{/each}
 	</div>
 </div>
+
+{#snippet infoBlock(a: Article)}
+	<div class="mb-2 space-y-2 text-xs text-neutral-600">
+		{#if a.description}
+			<div>
+				<span class="font-medium text-neutral-500">Beskrivning:</span>
+				<p class="mt-0.5">{a.description}</p>
+			</div>
+		{/if}
+		{#if a.instructions}
+			<div>
+				<span class="font-medium text-neutral-500">Instruktioner:</span>
+				<p class="mt-0.5">{a.instructions}</p>
+			</div>
+		{/if}
+		{#if isManager && a.manager_notes}
+			<div class="bg-amber-50 border border-amber-200 rounded p-2">
+				<span class="font-medium text-amber-700">Intern anteckning:</span>
+				<p class="mt-0.5 text-amber-900">{a.manager_notes}</p>
+			</div>
+		{/if}
+	</div>
+{/snippet}

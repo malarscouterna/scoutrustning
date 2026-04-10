@@ -245,6 +245,8 @@ export function createApiClient(opts: FetchOptions = {}) {
 			const qs = query.toString();
 			return request<{ events: ArticleEvent[]; has_more: boolean }>(`/articles/${articleId}/group-events${qs ? '?' + qs : ''}`, opts);
 		},
+		addArticleNote: (articleId: string, message: string) =>
+			requestMut<void>(`/articles/${articleId}/events`, 'POST', { message }, opts),
 
 		// Group settings
 		getGroupSettings: () => request<GroupSettings>('/group-settings', opts),

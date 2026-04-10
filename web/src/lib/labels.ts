@@ -32,7 +32,7 @@ export const eventTypeLabels: Record<string, string> = {
 	returned: 'Återlämnad',
 	booked: 'Bokad',
 	picked_up: 'Uthämtad',
-	note: 'Anteckning'
+	note: 'Kommentar'
 };
 
 export const eventTypeColors: Record<string, string> = {

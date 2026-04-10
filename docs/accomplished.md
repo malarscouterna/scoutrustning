@@ -181,3 +181,13 @@ See [inventory-management.md](inventory-management.md) for the full design doc.
 **Migration**: `00012_count_changed_event.sql` — adds `count_changed` to the `article_events` event_type check constraint.
 
 **Integration tests**: `TestBrowseManagerMode` with 9 subtests: bulk status change, bulk location move, leader access denied, group count increase (with event verification), group count decrease, group update applies to all, shared field propagation (including approval_level NOT propagating), group events aggregation, count change via edit page flow, leader access denied on group-count.
+
+**Browse page — expandable info**: "Visa info ▼" toggle in expanded view shows description, instructions, and manager notes (amber box, manager only). Shared across both individually and quantity tracked groups via Svelte 5 render snippet.
+
+**Browse page — inline count field**: Quantity tracked groups show an "Antal" number input in the expanded view (manager only). Submits on change via the group-count API.
+
+**Article detail — comment input**: Text input + "Spara" button above the history section. Calls `POST /articles/{id}/events` (new endpoint, returns 204). History refreshes immediately after adding (key-based re-render for individually tracked, explicit reload for quantity tracked). Notes excluded from event collapsing — comments always show individually.
+
+**Group edit — per-physical-item list**: Expandable "Visa enskilda artiklar (N st)" section below the form showing each physical item with status badge, purchase date, and purchase price.
+
+**Fixes**: Report issue form wraps on narrow screens. "Anteckning" → "Kommentar" in event type labels and input placeholder.

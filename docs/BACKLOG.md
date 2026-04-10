@@ -148,3 +148,11 @@ Audit and standardize the visual language for interactive elements across the ap
 - **Primary action buttons**: filled blue ("Spara", "Skapa artikel"). Consistent sizing and placement?
 
 Extract shared button/link component or at least document the pattern in coding-conventions.md.
+
+## Article comments — delete own recent comments
+
+After adding a comment on the article detail page, the user should be able to delete it (at least for a short time, e.g. within 5 minutes or until someone else adds an event). Needs a `DELETE /articles/{id}/events/{event_id}` endpoint with ownership + time check.
+
+## Article history management for managers
+
+On the article edit page, managers should be able to manage the article's event history: edit descriptions, delete erroneous events, add backdated notes. This is an admin tool for correcting mistakes, not a user-facing feature.

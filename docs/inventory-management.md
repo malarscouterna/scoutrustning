@@ -338,7 +338,14 @@ DROP TABLE IF EXISTS group_settings;
 16. ✅ "Materialare" → "Utrustningsansvarig" terminology
 17. ✅ "Hanteringsläge" toggle (session state, manager only) — partially wired
 18. ✅ Checkboxes (per group and per article) — state management done, UI partially wired
-19. Remaining: bulk actions toolbar UI (status change, location move, archive dropdowns), count field in browse expanded view, article note input on detail page (add `note` events to article history)
+19. ✅ Expandable description/instructions/manager notes on browse page ("Visa info" toggle)
+20. ✅ Count field for quantity tracked groups in browse expanded view (manager only)
+21. ✅ Article note input on detail page (`POST /articles/{id}/events` with `note` type)
+22. ✅ Per-physical-item list on group edit page (expandable, shows status/purchase per item)
+23. ✅ Event collapsing excludes notes (comments always show individually)
+24. ✅ Report issue form responsive fix (wraps on narrow screens)
+25. ✅ "Anteckning" → "Kommentar" terminology
+26. Remaining: bulk actions toolbar UI (status change, location move, archive dropdowns)
 
 **UPDATE**: Step 2c scope expanded significantly from original plan. Article detail page gained quantity tracked group support (status summary, aggregated purchase info, collapsed group events). Edit form split into three layouts with shared/per-item field distinction. Shared field propagation added for individually tracked articles. Approval level moved from shared to per-item (different locations may need different approval rules). Location is per-item (same product type can exist in multiple locations).
 

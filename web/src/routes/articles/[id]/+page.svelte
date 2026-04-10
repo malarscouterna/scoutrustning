@@ -88,6 +88,7 @@
 		for (const e of events) {
 			const prev = result[result.length - 1];
 			if (prev
+				&& e.event_type !== 'note'
 				&& prev.event.event_type === e.event_type
 				&& prev.event.actor_name === e.actor_name
 				&& formatEventMeta(prev.event) === formatEventMeta(e)
@@ -102,6 +103,28 @@
 	}
 
 	let collapsedGroupEvents = $derived(collapseEvents(groupEvents));
+
+	let noteText = $state('');
+	let noteSaving = $state(false);
+	let historyKey = $state(0);
+
+	async function addNote() {
+		if (!noteText.trim()) return;
+		noteSaving = true;
+		try {
+			await api.addArticleNote(article.id, noteText.trim());
+			noteText = '';
+			if (isQuantityTracked) {
+				await loadGroupEvents(groupEventsShowAll ? undefined : 6);
+			} else {
+				historyKey++;
+			}
+		} catch {
+			// ignore
+		} finally {
+			noteSaving = false;
+		}
+	}
 
 	function handleIssueReported(newStatus: string) {
 		statusOverride = newStatus;
@@ -217,6 +240,19 @@
 		{/if}
 	</div>
 
+	<div class="flex gap-2 mb-4">
+		<input
+			type="text"
+			bind:value={noteText}
+			placeholder="Lägg till kommentar..."
+			onkeydown={(e) => e.key === 'Enter' && addNote()}
+			class="border rounded px-2 py-1.5 text-sm flex-1"
+		/>
+		<button onclick={addNote} disabled={noteSaving || !noteText.trim()} class="text-sm bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 disabled:opacity-50">
+			{noteSaving ? '...' : 'Spara'}
+		</button>
+	</div>
+
 	<h2 class="font-medium mb-2">Historik</h2>
 	{#if isQuantityTracked}
 		{#if groupEventsLoading}
@@ -249,6 +285,8 @@
 			{/if}
 		{/if}
 	{:else}
-		<ArticleEventHistory articleId={article.id} />
+		{#key historyKey}
+			<ArticleEventHistory articleId={article.id} />
+		{/key}
 	{/if}
 </div>

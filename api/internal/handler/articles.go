@@ -31,6 +31,7 @@ func (h *ArticleHandler) Routes() chi.Router {
 	r.Get("/{id}", h.Get)
 	r.Get("/{id}/events", h.ListEvents)
 	r.Get("/{id}/group-events", h.ListGroupEvents)
+	r.Post("/{id}/events", h.AddNote)
 	r.Put("/{id}/status", h.UpdateStatus)
 	r.With(auth.RequireRole("equipment_manager")).Post("/", h.Create)
 	r.With(auth.RequireRole("equipment_manager")).Put("/{id}", h.Update)
@@ -553,6 +554,30 @@ func (h *ArticleHandler) ListGroupEvents(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	WriteJSON(w, http.StatusOK, map[string]any{"events": events, "has_more": false})
+}
+
+// AddNote adds a note event to an article's history.
+func (h *ArticleHandler) AddNote(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	var req struct {
+		Message string `json:"message"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Message == "" {
+		WriteError(w, http.StatusBadRequest, "message required")
+		return
+	}
+	// Verify article exists in group
+	if _, err := h.Q.GetArticle(r.Context(), db.GetArticleParams{ID: id, GroupID: claims.GroupID}); err != nil {
+		WriteError(w, http.StatusNotFound, "article not found")
+		return
+	}
+	LogArticleEvent(r.Context(), h.Q, claims, id, "note", req.Message, nil)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // UpdateStatus changes article status with an optional comment.

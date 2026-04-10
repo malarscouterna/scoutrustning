@@ -1,4 +1,4 @@
-import { createApiClient } from '$lib/api/client';
+import { createApiClient, type Article } from '$lib/api/client';
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 
@@ -13,18 +13,20 @@ export const load: PageServerLoad = async ({ fetch, parent, params, url }) => {
 		api.listCategories()
 	]);
 
-	// For group edit: count non-archived siblings
 	let groupCount: number | null = null;
+	let groupItems: Article[] | null = null;
 	if (url.searchParams.get('group') === 'true') {
 		const all = await api.listArticles({
 			search: article.commercial_name,
 			location_id: article.location_id,
 			status: 'ok,reported_usable,incoming,reported_unusable,under_repair,lost'
 		});
-		groupCount = all.filter(
+		const siblings = all.filter(
 			a => a.commercial_name === article.commercial_name && a.location_id === article.location_id
-		).length;
+		);
+		groupCount = siblings.length;
+		groupItems = siblings;
 	}
 
-	return { article, locations, categories, groupCount };
+	return { article, locations, categories, groupCount, groupItems };
 };
