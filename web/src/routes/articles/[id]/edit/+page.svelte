@@ -16,12 +16,25 @@
 		saving = true;
 		error = '';
 		try {
-			await api.updateArticle(data.article.id, articles[0], isGroupEdit);
+			const articleData = { ...articles[0] };
+			const newCount = articleData._newCount as number | undefined;
+			delete articleData._newCount;
+
+			await api.updateArticle(data.article.id, articleData, isGroupEdit);
+
+			if (newCount !== undefined) {
+				await api.updateGroupCount({
+					commercial_name: data.article.commercial_name,
+					location_id: data.article.location_id,
+					new_count: newCount
+				});
+			}
+
 			goto('/browse');
 		} catch (e: any) {
 			error = e.message;
+			saving = false;
 		}
-		saving = false;
 	}
 
 	async function handleDelete() {
@@ -32,13 +45,6 @@
 		} catch (e: any) {
 			error = e.message;
 		}
-	}
-	async function handleCountChange(newCount: number) {
-		await api.updateGroupCount({
-			commercial_name: data.article.commercial_name,
-			location_id: data.article.location_id,
-			new_count: newCount
-		});
 	}
 </script>
 
@@ -57,7 +63,6 @@
 		individuallyTrackedEdit={data.article.individually_tracked && !isGroupEdit}
 		quantityTrackedEdit={isGroupEdit}
 		groupCount={data.groupCount}
-		onCountChange={handleCountChange}
 		submitLabel="Spara"
 		onSubmit={handleSubmit}
 		onCancel={() => goto('/browse')}

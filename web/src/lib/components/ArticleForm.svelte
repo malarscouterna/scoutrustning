@@ -9,7 +9,6 @@
 		individuallyTrackedEdit?: boolean;
 		quantityTrackedEdit?: boolean;
 		groupCount?: number | null;
-		onCountChange?: (newCount: number) => Promise<void>;
 		initial?: {
 			commercial_name?: string;
 			common_name?: string;
@@ -32,7 +31,7 @@
 		saving?: boolean;
 	}
 
-	let { locations, categories, mode, isManager = false, individuallyTrackedEdit = false, quantityTrackedEdit = false, groupCount = null, onCountChange, initial, submitLabel = 'Spara', onSubmit, onCancel, error = '', saving = false }: Props = $props();
+	let { locations, categories, mode, isManager = false, individuallyTrackedEdit = false, quantityTrackedEdit = false, groupCount = null, initial, submitLabel = 'Spara', onSubmit, onCancel, error = '', saving = false }: Props = $props();
 
 	let countValue = $state(0);
 	let countSaving = $state(false);
@@ -126,10 +125,10 @@
 		if (mode === 'edit') {
 			const data = buildBase();
 			data.common_name = form.common_name;
-			await onSubmit([data]);
-			if (quantityTrackedEdit && groupCount !== null && countValue !== groupCount && onCountChange) {
-				await onCountChange(countValue);
+			if (quantityTrackedEdit && groupCount !== null && countValue !== groupCount) {
+				data._newCount = countValue;
 			}
+			await onSubmit([data]);
 			return;
 		}
 

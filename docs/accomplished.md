@@ -174,4 +174,10 @@ See [inventory-management.md](inventory-management.md) for the full design doc.
 
 **Terminology**: "Materialare" → "Utrustningsansvarig" across all UI.
 
-**Cleanup**: Extracted shared `$lib/labels.ts` module — `statusLabels`, `statusColors`, `approvalLabels`, `eventTypeLabels`, `eventTypeColors` — replacing duplicated constants across browse, article detail, issues, and ArticleEventHistory. Removed unused SQL queries (`GetOldestArticleInGroup`, `ListArticlesByGroup`).
+**Cleanup**: Extracted shared `$lib/labels.ts` module — `statusLabels`, `statusColors`, `approvalLabels`, `eventTypeLabels`, `eventTypeColors` — replacing duplicated constants across browse, article detail, issues, and ArticleEventHistory. Removed unused SQL queries (`GetOldestArticleInGroup`, `ListArticlesByGroup`). Removed unused `onCountChange` prop.
+
+**Bug fix**: Quantity tracked count change from edit page wasn't working — `goto('/browse')` in `onSubmit` aborted the async chain before `onCountChange` ran. Fixed by consolidating the full save sequence (update article + count change + navigate) in the edit page's `handleSubmit`.
+
+**Migration**: `00012_count_changed_event.sql` — adds `count_changed` to the `article_events` event_type check constraint.
+
+**Integration tests**: `TestBrowseManagerMode` with 9 subtests: bulk status change, bulk location move, leader access denied, group count increase (with event verification), group count decrease, group update applies to all, shared field propagation (including approval_level NOT propagating), group events aggregation, count change via edit page flow, leader access denied on group-count.

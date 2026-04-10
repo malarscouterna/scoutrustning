@@ -345,6 +345,70 @@ func TestBrowseManagerMode(t *testing.T) {
 		}
 	})
 
+	t.Run("group count change via edit page", func(t *testing.T) {
+		// Simulate the edit page flow: save group fields + change count
+		id1 := createArticle("EditCount", "EditCountTest", false)
+		id2 := createArticle("EditCount", "EditCountTest", false)
+		defer manager.Delete("/api/v0/articles/" + id1)
+		defer manager.Delete("/api/v0/articles/" + id2)
+
+		// Step 1: Update group fields via ?group=true
+		body := map[string]any{
+			"commercial_name":      "EditCountTest",
+			"common_name":          "EditCount",
+			"category_id":          catID,
+			"location_id":          locID,
+			"description":          "Updated via edit page",
+			"instructions":         "",
+			"approval_level":       "none",
+			"manager_notes":        "",
+			"individually_tracked": false,
+			"status":               "ok",
+			"place":                "",
+		}
+		b, _ := json.Marshal(body)
+		resp, _ := manager.Put("/api/v0/articles/"+id1+"?group=true", bytes.NewReader(b))
+		if resp.StatusCode != http.StatusOK {
+			respBody, _ := io.ReadAll(resp.Body)
+			t.Fatalf("group update: expected 200, got %d: %s", resp.StatusCode, respBody)
+		}
+		resp.Body.Close()
+
+		// Step 2: Change count from 2 to 4 (what the edit page does after saving fields)
+		countBody := map[string]any{
+			"commercial_name": "EditCountTest",
+			"location_id":     locID,
+			"new_count":       4,
+		}
+		b, _ = json.Marshal(countBody)
+		resp, _ = manager.Post("/api/v0/articles/group-count", bytes.NewReader(b))
+		if resp.StatusCode != http.StatusOK {
+			respBody, _ := io.ReadAll(resp.Body)
+			t.Fatalf("group-count: expected 200, got %d: %s", resp.StatusCode, respBody)
+		}
+		var result map[string]any
+		json.NewDecoder(resp.Body).Decode(&result)
+		resp.Body.Close()
+		if int(result["count"].(float64)) != 4 {
+			t.Errorf("expected count 4, got %v", result["count"])
+		}
+
+		// Verify: list articles and count matching ones
+		resp, _ = manager.Get("/api/v0/articles?search=EditCountTest&status=ok,reported_usable,incoming,reported_unusable,under_repair,lost")
+		var articles []map[string]any
+		json.NewDecoder(resp.Body).Decode(&articles)
+		resp.Body.Close()
+		matching := 0
+		for _, a := range articles {
+			if a["commercial_name"] == "EditCountTest" && a["location_id"] == locID {
+				matching++
+			}
+		}
+		if matching != 4 {
+			t.Errorf("expected 4 articles after count change, got %d", matching)
+		}
+	})
+
 	t.Run("leader cannot use group-count", func(t *testing.T) {
 		body := map[string]any{
 			"commercial_name": "X",
