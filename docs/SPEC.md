@@ -38,7 +38,7 @@ Article fields:
 - Category / subcategory (broad grouping for filtering, e.g. Sova, Mat, Säkerhet, Verktyg)
 - Location (where it physically is)
 - Status (determines availability)
-- Image (stored locally)
+- Image (per product type, see Image Handling below)
 - Description
 - Usage instructions
 - Purchase date and price
@@ -214,6 +214,28 @@ The reverse proxy only forwards to the SvelteKit container (port 3000). SvelteKi
 6. Go API validates JWT using Keycloak's JWKS endpoint, extracts claims (member_id, name, email, roles, units, projects, group_id)
 7. Go API upserts user record (member_id + cached profile) and scopes all queries to the user's group. If the group doesn't exist in the database, returns 403 with `group_not_found` — the frontend shows a friendly message instead of crashing.
 
+### Image Handling
+
+Product images are stored per product type per location (`commercial_name + location_id`). All physical articles of the same type at the same location share one image. Equipment managers upload images.
+
+Issue report images are separate — attached to article events, documenting specific damage. Any user can upload these when reporting an issue.
+
+**Upload and conversion:**
+- Accept JPEG, PNG, HEIC up to 25MB raw
+- Convert server-side to WebP using libvips (handles all input formats, EXIF rotation, metadata stripping)
+- Strip all EXIF data (privacy: GPS, device info). No EXIF fields are preserved — the DB already captures who uploaded, when, and in what context
+- Two variants per image:
+  - Source: 1920px longest edge, WebP quality 80 (~0.5–1MB) — for detail views
+  - Thumbnail: 400×300px, WebP quality 70 (~10–30KB) — for cards and lists
+- Stored on disk as `{uuid}.webp` / `{uuid}_thumb.webp` in a Docker volume
+- Referenced by UUID in the database
+
+**Product images** enforce a 4:3 landscape crop via a client-side crop UI (e.g. cropperjs) before upload. This ensures consistent card/list layouts.
+
+**Issue report images** have no crop requirement — users upload as-is, server converts and resizes.
+
+**Storage estimate:** At 5,000 articles per group × 100 groups, product images are shared per type so actual count is much lower. ~500GB worst case, realistically far less.
+
 ## User Flows
 
 ### Leader: Book equipment
@@ -317,7 +339,7 @@ All tables have `group_id` (text, FK → groups). Omitted below for brevity.
 | status | text | Condition enum: ok, reported_usable, incoming, reported_unusable, under_repair, lost, archived |
 | individually_tracked | boolean | |
 | approval_level | text | none, low, high — controls booking approval flow |
-| image_path | text | Nullable |
+| image_path | text | Nullable, per commercial_name + location_id (shared by all articles of that type at that location) |
 | description | text | |
 | instructions | text | |
 | purchase_date | date | Nullable |
@@ -653,23 +675,34 @@ CSV column mapping:
 - Integration tests: 9 subtests covering all approval level × role combinations
 - **UPDATE**: Originally planned as simple boolean `requires_approval`. Evolved to three-level model with booking events for conversation history. See [article-status-refactor.md](docs/article-status-refactor.md) for the status changes that accompanied this.
 
-#### Step 2: Equipment manager — inventory management
+#### Step 2: Equipment manager — inventory management (in progress)
 See [inventory-management.md](docs/inventory-management.md) for full design doc.
-- Browse page gains "Hanteringsläge" toggle (session state) for inline manager controls: bulk actions, edit links, count field for quantity tracked items
+- Browse page "Hanteringsläge" toggle (session state) for inline manager controls: bulk actions, edit links, checkboxes per group/article
+- Bulk actions toolbar: status change, location move, archive with conflict detection + auto-replacement in active bookings, comment input for events
 - Article create/edit forms at `/articles/*` (manager-guarded), article detail page at `/articles/[id]` (all users)
 - `manager_notes` field on articles — private notes only visible to equipment managers, amber-highlighted in UI
-- Quantity tracked group edit: count field (number input), changes create/archive records, single `count_changed` article event per adjustment
-- Settings page at `/settings`: user prefs (placeholder) + manager-only group settings (locations, categories, CSV import, notification routing)
-- **UPDATE**: Settings moved to a "Gruppinställningar" tab on the profile page (`/profile`) instead of a separate route. "Mina inställningar" section on the Profil tab as placeholder for future personal settings.
+- Quantity tracked group edit: count field, create/archive records, single `count_changed` article event, per-physical-item list with status/purchase info
+- Shared field propagation: saving an individually tracked article propagates description, instructions, manager_notes, category_id to siblings (approval_level and location are per-item)
+- Article detail page: quantity tracked status summary, aggregated purchase info, collapsed group events, comment input
+- Settings as "Gruppinställningar" tab on profile page (`/profile`): locations, categories, CSV import, group settings
 - `group_settings` table with explicit columns: notification_email_from, smtp_key_encrypted (AES-256-GCM, key in `.env`), gchat_webhook_url, default_approval_level
-- CSV import with two-phase flow: preview (dry run with per-row duplicate detection) → confirm. Revertable via import batch tracking. Duplicate matching on `common_name + group_id`
+- Location/category deletion blocked if articles reference them (409 with count)
+- CSV import reads `instructions` and `manager_notes` columns
+- Shared `$lib/labels.ts` module replacing duplicated constants across pages
+- Integration tests: inventory management (6 subtests), browse manager mode (9 subtests)
+
+Remaining:
+- CSV import two-phase flow: preview (dry run with per-row duplicate detection) → confirm. Revertable via import batch tracking. Duplicate matching on `common_name + group_id`
 - CSV export on browse page (client-side, import-compatible columns), booking export on booking detail
 - Print-friendly fetch list on booking detail (`@media print`, grouped by location)
-- `PUT /articles/bulk` for bulk status change, location move, archive (with auto-replacement in active bookings)
-- Archive-before-delete workflow: archiving checks for active bookings, auto-swaps where possible, flags conflicts for manager
-- Location/category deletion blocked if articles reference them (409 with count)
 
-#### Step 3: Issue report images (deferred)
+#### Step 3: Image upload
+- Product images: per product type + location, 4:3 crop enforced client-side (cropperjs), equipment managers upload
+- Issue report images: attached to article events, no crop requirement, any user uploads when reporting
+- Server-side conversion to WebP via libvips (JPEG/PNG/HEIC input, up to 25MB raw)
+- Two variants: source (1920px/q80) + thumbnail (400×300/q70)
+- Strip all EXIF, apply rotation before processing
+- Stored as `{uuid}.webp` / `{uuid}_thumb.webp` on Docker volume
 
 ### Phase 3 — Production auth + notifications
 
@@ -709,9 +742,38 @@ Connect real OIDC, add notifications, and make the system usable by actual users
 
 ### Phase 5 — Reporting + scale
 - Loan history reporting (per article, per person, per location)
-- Article image management improvements
 - Group onboarding (second scout group)
 - Multi-tenancy hardening
+
+### Phase 6 — External API
+Read-only API for external consumers (other scout websites, apps, digital signage). Separate from the internal `/api/v0/*` which is session-authenticated and proxied through SvelteKit.
+
+- Authentication via API key per group, issued by equipment managers in settings, stored hashed, scoped to one group
+- Served under `/api/public/v1/*` (separate version track from internal API)
+- Endpoints: article list/detail, product images/thumbnails, booking statuses, issue list
+- Read-only — no write operations
+- Rate limited per key
+- Cache-friendly responses (ETags, Cache-Control)
+
+### Phase 6 — External API
+
+A read-only public API for external consumers (other scout websites, apps, digital signage, etc.). Separate from the internal `/api/v0/*` which is session-authenticated and proxied through SvelteKit.
+
+**Authentication**: API key per group, issued by equipment managers via the settings page. Keys are stored hashed in the database. Requests authenticate via `Authorization: Bearer <key>` header. Each key is scoped to a single group — no cross-group access.
+
+**Endpoints** (read-only):
+- Article list with category/location/search filters
+- Article detail (description, instructions, status, images)
+- Product images and thumbnails (served directly or via signed URLs)
+- Booking statuses (current bookings per article — reserved/loaned/available)
+- Issue list (open issues, article condition)
+
+**Design considerations**:
+- Served under `/api/public/v1/*` (separate version track from internal API)
+- Rate limited per key
+- No write operations — external systems read inventory state, they don't modify it
+- Group-scoped like everything else — the API key determines which group's data is returned
+- Cache-friendly responses (ETags, reasonable Cache-Control headers) since inventory changes infrequently
 
 ## Internationalization (i18n)
 
@@ -721,6 +783,14 @@ Swedish (`sv`) is the only UI language. English (`en`) is planned as a second la
 - The Go API is language-agnostic: returns data as stored, uses error keys (not human-readable messages) so the frontend can translate them when i18n is added.
 - User-generated content (article names, category names, descriptions) is stored as-is — not translated.
 - Code, comments, API field names, and documentation are always in English.
+
+## Analytics
+
+Usage analytics are handled by a separate, decoupled service — not part of ms-utrustning itself. The plan is to run a self-hosted analytics tool (e.g. Umami or Plausible CE) as its own Docker Compose stack with its own database, shared across multiple sites (ms-utrustning + other web properties like the Joomla-based main website).
+
+Integration with ms-utrustning is minimal: a `<script>` tag in `web/src/app.html` pointing to the analytics instance. Custom events (e.g. "booking created", "pickup completed") can be added in SvelteKit code. If the analytics service is down, nothing breaks — the tracking script fails silently.
+
+This is not part of the ms-utrustning deployment or release cycle.
 
 ## Open / TBD
 
