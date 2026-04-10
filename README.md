@@ -22,7 +22,7 @@ Pre-release (`v0`). Breaking changes expected. Currently implements:
 
 ## Stack
 
-- **API**: Go 1.26 (Chi v5, pgx v5, sqlc) — `/api/v0/*`
+- **API**: Go 1.26 (Chi v5, pgx v5, sqlc, govips) — `/api/v0/*`
 - **Frontend**: SvelteKit 2 + Svelte 5 + @scouterna/ui-webc 3
 - **Styling**: Tailwind CSS 4 + @scouterna/tailwind-theme
 - **Database**: PostgreSQL 17

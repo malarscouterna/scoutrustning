@@ -12,7 +12,7 @@ The full specification is in `docs/SPEC.md` — read it before making architectu
 
 ## Architecture
 
-- **Go API** (Chi v5 + pgx v5 + sqlc) — JSON REST API at `/api/v0/*` (pre-release, breaking changes allowed without version bump)
+- **Go API** (Chi v5 + pgx v5 + sqlc + govips) — JSON REST API at `/api/v0/*` (pre-release, breaking changes allowed without version bump)
 - **SvelteKit 2 frontend** — Svelte 5, responsive web app, mobile-first for leaders, uses `@scouterna/ui-webc` web components and `@scouterna/tailwind-theme`
 - **PostgreSQL 17** — single database, all tables scoped by `group_id` for multi-tenancy
 - **Docker Compose** — Go API + SvelteKit + Postgres, behind a reverse proxy

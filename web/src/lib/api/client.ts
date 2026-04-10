@@ -19,6 +19,7 @@ export interface Article {
 	expected_available_date: string | null;
 	import_batch_id: string | null;
 	manager_notes: string;
+	image_path: string | null;
 	current_booking_id: string | null;
 	current_booking_status: string | null;
 	current_booking_end_date: string | null;

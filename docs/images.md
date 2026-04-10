@@ -265,11 +265,27 @@ Enforce 4:3 aspect ratio via interactive crop UI before upload.
 
 Deliverable: consistent 4:3 product images via interactive crop.
 
-### Step 6: Image in booking views
+### Step 6: Multiple images per product
 
-Show product thumbnails in booking-related pages.
+Support multiple images per product type + location. First image is the "primary" shown in lists.
 
-- [ ] Booking detail: show thumbnail next to each item in the checklist
+- [ ] Migration: new `product_images` table (`id uuid PK, group_id, commercial_name, location_id, image_id text, sort_order int, created_at`). Migrate existing `image_path` data into this table, then drop `image_path` column from articles.
+- [ ] Update upload endpoint to append (not replace) — returns the new image entry with sort_order
+- [ ] Add reorder endpoint: `PUT /api/v0/images/product/reorder` (array of image IDs in order)
+- [ ] Add delete single image endpoint: `DELETE /api/v0/images/product/{image_id}`
+- [ ] Update article queries to join first image (sort_order = 0) for list views
+- [ ] Article detail + browse expanded: horizontal scrollable strip (`overflow-x: auto` + `scroll-snap-type: x mandatory`), images fill available width, natural swipe on phone
+- [ ] Fullscreen gallery: responsive layout — phone: vertical scroll showing full-width images one below another (swipe up/down), desktop: grid (2–3 columns). Pinch-to-zoom on each image, download button per image. Upgrade ImageViewer to use PhotoSwipe or similar.
+- [ ] Upload UI: drag-to-reorder, delete individual images
+- [ ] Integration tests
+
+Deliverable: managers can upload multiple photos per product, users see a gallery.
+
+### Step 7: Image in booking views
+
+Show product images in booking-related pages. Tapping an item expands to show image and description.
+
+- [ ] Booking detail: expandable items — tap to show thumbnail + description
 - [ ] Pickup checklist: thumbnail helps identify the right item
 - [ ] Availability/booking page: thumbnail in the product list
 - [ ] Book page: thumbnail in cart items
