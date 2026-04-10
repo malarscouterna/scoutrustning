@@ -709,13 +709,24 @@ Remaining:
 - CSV export on browse page (client-side, import-compatible columns), booking export on booking detail
 - Print-friendly fetch list on booking detail (`@media print`, grouped by location)
 
-#### Step 3: Image upload
-- Product images: per product type + location, 4:3 crop enforced client-side (cropperjs), equipment managers upload
-- Issue report images: attached to article events, no crop requirement, any user uploads when reporting
-- Server-side conversion to WebP via libvips (JPEG/PNG/HEIC input, up to 25MB raw)
-- Two variants: source (1920px/q80) + thumbnail (400×300/q70)
-- Strip all EXIF, apply rotation before processing
-- Stored as `{uuid}.webp` / `{uuid}_thumb.webp` on Docker volume
+#### Step 3: Image upload (in progress)
+See [images.md](docs/images.md) for full design doc.
+- Server-side image processing via govips: JPEG/PNG/WebP/HEIC input, EXIF strip, auto-rotate, 4:3 center crop (product), resize to source (1920px/q80) + thumbnail (400×300/q70) WebP variants
+- On-demand JPEG conversion for download (`?format=jpeg`)
+- Byte-level MIME detection including HEIC ftyp box and WebP RIFF header sniffing
+- Product image upload (manager-only), issue image upload (any user), serve with immutable caching, delete with file cleanup
+- `image_path` on articles, propagated to all articles sharing `commercial_name + location_id`
+- Docker: libvips in API image, `images` Docker volume for persistent storage
+- Frontend: thumbnails in browse page expanded info section and article detail page, with dialog-based lightbox viewer (tap to view full size, download as JPEG)
+- Seed script uploads images from `docs/seed-images/` directory
+- Integration tests: 8 subtests covering upload, serve, replace, delete, access control, JPEG download
+
+Remaining:
+- Product image upload UI (manager, from article edit and browse pages)
+- Issue report image attachment (any user, from report form)
+- Client-side 4:3 crop (cropperjs) before product image upload
+- Multiple images per product (gallery with horizontal scroll + fullscreen viewer)
+- Images in booking views (expandable items with thumbnail + description)
 
 ### Phase 3 — Production auth + notifications
 

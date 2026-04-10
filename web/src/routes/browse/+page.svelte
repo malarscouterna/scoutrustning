@@ -6,6 +6,7 @@
 	import { page } from '$app/stores';
 	import ReportIssueForm from '$lib/components/ReportIssueForm.svelte';
 	import ArticleEventHistory from '$lib/components/ArticleEventHistory.svelte';
+	import ImageViewer from '$lib/components/ImageViewer.svelte';
 
 	let { data }: { data: PageData } = $props();
 
@@ -485,7 +486,8 @@
 				</button>
 				{#if expanded}
 					{@const rep = group.articles[0]}
-					{@const hasInfo = !!(rep.description || rep.instructions || (isManager && rep.manager_notes))}
+					{@const hasImage = !!rep.image_path}
+					{@const hasInfo = !!(rep.description || rep.instructions || (isManager && rep.manager_notes) || hasImage)}
 					<div class="border-t px-4 py-2 bg-neutral-50">
 						{#if group.individuallyTracked}
 							{#if hasInfo}
@@ -628,6 +630,15 @@
 
 {#snippet infoBlock(a: Article)}
 	<div class="mb-2 space-y-2 text-xs text-neutral-600">
+		{#if a.image_path}
+			<ImageViewer
+				src="/api/v0/images/{a.image_path}.webp"
+				thumbSrc="/api/v0/images/{a.image_path}_thumb.webp"
+				alt={a.commercial_name || a.common_name}
+				downloadId={a.image_path}
+				class="block w-3/4"
+			/>
+		{/if}
 		{#if a.description}
 			<div>
 				<span class="font-medium text-neutral-500">Beskrivning:</span>

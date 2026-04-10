@@ -35,6 +35,8 @@ docker compose exec -T db psql -U utrustning -d utrustning -c "
   DELETE FROM articles;
   DELETE FROM units;
 " || echo "Warning: cleanup had errors, continuing..."
+# Clear image files (dev mode uses local mount)
+rm -rf data/images/*.webp 2>/dev/null || true
 echo "Cleared."
 
 echo "Importing articles from: $CSV"
@@ -58,6 +60,48 @@ for PROJECT in Valborgskommittén Läger Utrustningsgruppen IT-gruppen; do
 done
 
 # Report issues on some quantity-tracked articles to demo status mix
+echo ""
+echo "Uploading product images..."
+SEED_IMG_DIR="docs/seed-images"
+if [ -d "$SEED_IMG_DIR" ] && ls "$SEED_IMG_DIR"/* >/dev/null 2>&1; then
+  # Get all article groups (commercial_name + location_id pairs)
+  GROUPS_JSON=$(curl -s "$API/api/v0/articles" -H "$HEADER" | python3 -c "
+import json, sys, unicodedata
+def simplify(s):
+    s = unicodedata.normalize('NFD', s.lower())
+    return ''.join(c for c in s if unicodedata.category(c) != 'Mn')
+articles = json.load(sys.stdin)
+groups = {}
+for a in articles:
+    key = (a['commercial_name'], a['location_id'])
+    if key not in groups:
+        groups[key] = simplify(a['commercial_name'])
+for (name, loc_id), simplified in groups.items():
+    print(json.dumps({'name': name, 'location_id': loc_id, 'simplified': simplified}))
+")
+
+  for IMG_FILE in "$SEED_IMG_DIR"/*; do
+    [ -f "$IMG_FILE" ] || continue
+    BASENAME=$(basename "$IMG_FILE")
+    FILE_KEY=$(echo "${BASENAME%.*}" | tr '[:upper:]' '[:lower:]')
+    # Match against simplified commercial names
+    echo "$GROUPS_JSON" | while IFS= read -r GROUP; do
+      SIMPLIFIED=$(echo "$GROUP" | python3 -c "import json,sys; print(json.load(sys.stdin)['simplified'])")
+      if [ "$FILE_KEY" = "$SIMPLIFIED" ]; then
+        NAME=$(echo "$GROUP" | python3 -c "import json,sys; print(json.load(sys.stdin)['name'])")
+        LOC_ID=$(echo "$GROUP" | python3 -c "import json,sys; print(json.load(sys.stdin)['location_id'])")
+        curl -sf -X POST "$API/api/v0/images/product" \
+          -H "$HEADER" \
+          -F "file=@$IMG_FILE" \
+          -F "commercial_name=$NAME" \
+          -F "location_id=$LOC_ID" > /dev/null && echo "  $NAME → $BASENAME" || echo "  FAILED: $NAME"
+      fi
+    done
+  done
+else
+  echo "  Skipped (no images in $SEED_IMG_DIR)"
+fi
+
 echo ""
 echo "Reporting issues on quantity-tracked articles..."
 

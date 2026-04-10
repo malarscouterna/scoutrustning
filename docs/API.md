@@ -515,6 +515,58 @@ List all categories for the group, ordered by sort_order.
 
 ---
 
+## Images
+
+Product images are shared per product type + location (`commercial_name + location_id`). Issue images are standalone, referenced by UUID in article event metadata.
+
+Images are stored as WebP on a Docker volume. Two variants per image: source (1920px longest edge, q80) and thumbnail (400×300, q70). On-demand JPEG conversion for download.
+
+### 🔒 `POST /api/v0/images/product`
+Upload a product image. Multipart form upload. Accepts JPEG, PNG, WebP, HEIC up to 25MB. Server-side: strips EXIF, auto-rotates, center-crops to 4:3, generates source + thumbnail WebP. Updates `image_path` on all articles matching the commercial_name + location_id.
+
+**Form fields**:
+- `file` — image file
+- `commercial_name` — product type (e.g. "Sibley")
+- `location_id` — location UUID
+
+If an image already exists for this group, the old files are deleted.
+
+**Response** `200`
+```json
+{"image_id": "uuid"}
+```
+
+### `POST /api/v0/images/issue`
+Upload an issue report image. Any authenticated user. Same processing as product images but no 4:3 crop. Returns the UUID for the caller to include in the issue report.
+
+**Form fields**:
+- `file` — image file
+
+**Response** `200`
+```json
+{"image_id": "uuid"}
+```
+
+### `GET /api/v0/images/{uuid}.webp`
+Serve the source image. Returns `image/webp` with immutable cache headers.
+
+### `GET /api/v0/images/{uuid}_thumb.webp`
+Serve the thumbnail.
+
+### `GET /api/v0/images/{uuid}.webp?format=jpeg`
+Convert and serve as JPEG (quality 85) with `Content-Disposition: attachment` for download.
+
+### 🔒 `DELETE /api/v0/images/product`
+Delete a product image. Clears `image_path` on all matching articles, deletes files from disk.
+
+**Query parameters**:
+- `commercial_name` — product type
+- `location_id` — location UUID
+
+**Response** `204` | `404` (`no_image`)
+
+---
+
 ## Group Settings
 
 All endpoints require `equipment_manager` role.

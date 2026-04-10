@@ -5,6 +5,7 @@
 	import { page } from '$app/stores';
 	import ReportIssueForm from '$lib/components/ReportIssueForm.svelte';
 	import ArticleEventHistory from '$lib/components/ArticleEventHistory.svelte';
+	import ImageViewer from '$lib/components/ImageViewer.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -142,6 +143,15 @@
 	{/if}
 
 	<div class="mt-4 mb-6">
+		{#if article.image_path}
+			<ImageViewer
+				src="/api/v0/images/{article.image_path}.webp"
+				thumbSrc="/api/v0/images/{article.image_path}_thumb.webp"
+				alt={article.commercial_name || article.common_name}
+				downloadId={article.image_path}
+				class="block w-3/4 mb-4"
+			/>
+		{/if}
 		<div class="flex flex-wrap items-center gap-3 mb-2">
 			{#if isQuantityTracked}
 				<h1 class="text-heading-sm font-bold">{article.commercial_name || article.common_name}</h1>

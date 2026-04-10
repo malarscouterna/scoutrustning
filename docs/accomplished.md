@@ -145,6 +145,28 @@ Built the entire Phase 1 in one session:
 
 ## 2026-04-10
 
+### Image upload infrastructure and display (Phase 2 Step 3, partial)
+
+See [images.md](images.md) for the full design doc with 7-step implementation plan.
+
+**Image processing pipeline**: `api/internal/images/` package using govips (libvips CGO wrapper). Accepts JPEG, PNG, WebP, HEIC up to 25MB. Strips all EXIF metadata, auto-rotates, center-crops to 4:3 for product images (no crop for issue images). Produces two WebP variants: source (1920px longest edge, q80) and thumbnail (400×300, q70). On-demand JPEG conversion for download via `?format=jpeg` query parameter.
+
+**MIME detection**: Byte-level content sniffing — `http.DetectContentType` for JPEG/PNG, RIFF header check for WebP, ftyp box brand check for HEIC/HEIF. Robust against missing or incorrect Content-Type headers in multipart uploads.
+
+**API endpoints**: `POST /images/product` (manager-only), `POST /images/issue` (any user), `GET /images/{uuid}.webp` and `GET /images/{uuid}_thumb.webp` (serve with immutable cache), `DELETE /images/product` (manager-only). Product upload propagates `image_path` to all articles sharing `commercial_name + location_id + group_id`. Replace deletes old files. Delete clears `image_path` on all matching articles.
+
+**Docker changes**: API Dockerfile adds `gcc musl-dev vips-dev` (build) and `vips` (runtime). `images` Docker volume in `docker-compose.yml`, local `./data/images` mount in dev override. `IMAGE_DIR` env var.
+
+**Frontend display**: `image_path` field added to `Article` TypeScript interface. Browse page shows thumbnail in expanded info section ("Visa info" toggle). Article detail page shows thumbnail at top. Both use `ImageViewer` component — tap opens a `<dialog>`-based lightbox with full-resolution image and "Ladda ner" (JPEG download) link.
+
+**Seed script**: Uploads images from `docs/seed-images/` directory, mapping filenames to commercial names (e.g. `sibley.webp` → "Sibley", `stormkok.jpg` → "Stormkök" at both locations). Clears orphaned image files on re-seed.
+
+**Integration tests**: `TestImageUpload` with 8 subtests: leader cannot upload product image, manager uploads product image (files on disk + image_path on articles), serve WebP source, serve WebP thumbnail, serve JPEG download, 404 for nonexistent, replace deletes old files, delete clears image_path, leader can upload issue image.
+
+**sqlc queries**: `UpdateArticleGroupImagePath`, `ClearArticleGroupImagePath`, `GetArticleGroupImagePath`.
+
+**Test infrastructure**: `BaseURL()` method on `TestClient` for building custom multipart requests. `libvips-dev` documented as test prerequisite.
+
 ### Browse page manager mode + article detail enhancements (Phase 2 Step 2c, partial)
 
 See [inventory-management.md](inventory-management.md) for the full design doc.
