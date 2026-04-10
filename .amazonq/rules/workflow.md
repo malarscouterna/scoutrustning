@@ -46,7 +46,7 @@ When the user says done or finished, perform this checklist:
 3. **Security**: No missing auth checks, unscoped queries, or credential leaks.
 3. **Multi-tenancy**: `group_id` filtering on all new queries.
 4. **Style**: Code matches existing conventions (see `coding-conventions.md`).
-5. **Tests**: New functionality has integration tests covering the happy path. Run the test suite: `cd api && go test ./internal/handler/tests/ -timeout 180s -count=1 2>&1`
+5. **Tests**: New functionality has integration tests covering the happy path. Run the full test suite: `cd api && go test ./internal/handler/tests/ -timeout 180s -count=1 2>&1 && bash ../smoke-test.sh`
 6. **Svelte warnings**: Run `cd web && npx svelte-check` and verify zero warnings on Svelte files. Do not introduce new warnings.
 7. **Documentation** — verify each of these is still accurate and update if needed:
    - `docs/API.md` — reflects any new or changed endpoints

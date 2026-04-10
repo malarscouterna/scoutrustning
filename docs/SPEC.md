@@ -487,6 +487,19 @@ func TestBookingFlow(t *testing.T) {
 - `TestAccess_RoleEnforcement` — leader gets 403 on article CRUD and approval endpoints
 - `TestMultiTenancy_GroupIsolation` — articles/bookings/issues in group A invisible to group B users
 
+### SSR smoke tests (smoke-test.sh)
+
+A lightweight script that curls every page through SvelteKit (port 3000) and asserts no 500 errors. Catches SSR crashes from uninitialized state, broken load functions, and template errors during server-side rendering — bugs that are silent on client-side navigation but break on page reload.
+
+Runs against the live `docker compose` stack after seeding. Tests both leader and manager personas, fetches real IDs from the API for dynamic routes (`/bookings/{id}`, `/articles/{id}`), and verifies access control redirects (manager-only pages return 302 for leaders).
+
+```bash
+# Requires docker compose up + ./dev-seed.sh first
+bash smoke-test.sh
+```
+
+In CI, runs after `docker compose up` + seed, alongside the Go integration tests.
+
 ### Frontend E2E tests (Playwright)
 
 A smaller suite that verifies critical user journeys through the actual UI:
@@ -527,7 +540,7 @@ The personas and their claims are defined in `dev-personas.json`, used by Svelte
 
 ### CI
 
-All API integration tests run on every push. Playwright E2E tests run on PRs to main.
+All API integration tests run on every push. SSR smoke tests run after `docker compose up` + seed in CI. Playwright E2E tests run on PRs to main.
 
 ## Versioning and Releases
 

@@ -61,10 +61,13 @@ In dev mode (`DEV_MODE=true`), use the `X-Dev-Role-Override` header to switch pe
 ### Running tests
 
 ```bash
-cd api && go test ./internal/handler/tests/ -timeout 180s -count=1 2>&1
+# Full test suite (requires Docker for testcontainers + docker compose up + ./dev-seed.sh)
+cd api && go test ./internal/handler/tests/ -timeout 180s -count=1 2>&1 && bash ../smoke-test.sh
 ```
 
-Tests use testcontainers-go (requires Docker) and run against a real Postgres instance. A single shared container is reused across all tests for speed.
+API tests use testcontainers-go and run against a real Postgres instance. A single shared container is reused across all tests for speed.
+
+The smoke test curls every page through SvelteKit and asserts no 500 errors. Catches SSR crashes that are silent on client-side navigation but break on page reload.
 
 ## Environment modes
 

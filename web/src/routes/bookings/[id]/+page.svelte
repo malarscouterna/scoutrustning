@@ -11,14 +11,19 @@
 
 	const api = createApiClient();
 
-	let booking = $state<Booking>(undefined!);
-	let items = $state<BookingItem[]>([]);
+	// svelte-ignore state_referenced_locally
+	let booking = $state(data.booking);
+	// svelte-ignore state_referenced_locally
+	let items = $state(data.items);
 	let error = $state('');
 	let message = $state('');
 
 	$effect(() => {
 		booking = data.booking;
 		items = data.items;
+	});
+
+	$effect(() => {
 		const msg = $page.url.searchParams.get('msg');
 		if (msg) {
 			message = msg;
