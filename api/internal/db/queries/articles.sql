@@ -259,3 +259,7 @@ UPDATE articles SET
 WHERE group_id = @group_id
     AND commercial_name = @commercial_name
     AND id != @exclude_id;
+
+-- name: BulkUpdateArticleApproval :execrows
+UPDATE articles SET approval_level = @approval_level, updated_at = now()
+WHERE id = ANY(@ids::uuid[]) AND group_id = @group_id;

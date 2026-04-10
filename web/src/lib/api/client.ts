@@ -263,7 +263,7 @@ export function createApiClient(opts: FetchOptions = {}) {
 			requestMut<void>(`/articles/${id}`, 'DELETE', undefined, opts),
 
 		// Bulk operations
-		bulkUpdateArticles: (data: { article_ids: string[]; status?: string; location_id?: string }) =>
+		bulkUpdateArticles: (data: { article_ids: string[]; status?: string; location_id?: string; approval_level?: string; comment?: string }) =>
 			requestMut<{ updated: number; conflicts: Array<{ article_id: string; article_name: string; booking_id: string; booking_dates: string; booking_unit: string }> }>('/articles/bulk', 'PUT', data, opts),
 		updateGroupCount: (data: { commercial_name: string; location_id: string; new_count: number }) =>
 			requestMut<{ count: number }>('/articles/group-count', 'POST', data, opts),

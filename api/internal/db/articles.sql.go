@@ -11,6 +11,25 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const bulkUpdateArticleApproval = `-- name: BulkUpdateArticleApproval :execrows
+UPDATE articles SET approval_level = $1, updated_at = now()
+WHERE id = ANY($2::uuid[]) AND group_id = $3
+`
+
+type BulkUpdateArticleApprovalParams struct {
+	ApprovalLevel string        `json:"approval_level"`
+	Ids           []pgtype.UUID `json:"ids"`
+	GroupID       string        `json:"group_id"`
+}
+
+func (q *Queries) BulkUpdateArticleApproval(ctx context.Context, arg BulkUpdateArticleApprovalParams) (int64, error) {
+	result, err := q.db.Exec(ctx, bulkUpdateArticleApproval, arg.ApprovalLevel, arg.Ids, arg.GroupID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const bulkUpdateArticleLocation = `-- name: BulkUpdateArticleLocation :execrows
 UPDATE articles SET location_id = $1, updated_at = now()
 WHERE id = ANY($2::uuid[]) AND group_id = $3

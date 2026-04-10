@@ -191,3 +191,9 @@ See [inventory-management.md](inventory-management.md) for the full design doc.
 **Group edit — per-physical-item list**: Expandable "Visa enskilda artiklar (N st)" section below the form showing each physical item with status badge, purchase date, and purchase price.
 
 **Fixes**: Report issue form wraps on narrow screens. "Anteckning" → "Kommentar" in event type labels and input placeholder.
+
+**Bulk actions toolbar**: Manager mode toolbar with status change (ok/under repair/lost/archive), location move, and approval level dropdowns. Comment input appears for status/location changes. Per-article checkboxes in individually tracked expanded view. Archive option hidden when quantity tracked groups are selected (use count field on edit page instead). Events logged with comment for all bulk operations.
+
+**Browse page cleanup**: "Visa arkiverade" moved to manager-only row with "Hanteringsläge". Badge shows available/nonArchived count (archived items excluded). Removed inline count field from browse — count changes only on edit page where per-item list is visible. "Inköpspris per styck" label on create form.
+
+**Backlog additions**: View-only access tier, smarter count decrease on edit page, duplicate article name checking on create, per-item editing on count increase.

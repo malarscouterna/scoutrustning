@@ -449,7 +449,7 @@
 				<input type="date" bind:value={form.purchase_date} class="border rounded px-2 py-1.5 text-sm w-full" />
 			</label>
 			<label class="block">
-				<span class="text-sm text-neutral-600 block mb-1">Inköpspris (kr)</span>
+				<span class="text-sm text-neutral-600 block mb-1">Inköpspris per styck (kr)</span>
 				<input type="number" bind:value={form.purchase_price} step="0.01" min="0" class="border rounded px-2 py-1.5 text-sm w-full" />
 			</label>
 		</div>

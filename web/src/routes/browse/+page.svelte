@@ -12,15 +12,22 @@
 	let isManager = $derived(hasRole($page.data.user, 'equipment_manager'));
 	let managerMode = $state(false);
 	let selectedArticles = $state<Set<string>>(new Set());
+	let selectedGroups = $state<Set<string>>(new Set());
 	let bulkStatus = $state('');
 	let bulkLocationId = $state('');
+	let bulkApproval = $state('');
+	let bulkComment = $state('');
 	let bulkLoading = $state(false);
 	let bulkMessage = $state('');
 	let bulkConflicts = $state<Array<{ article_id: string; article_name: string; booking_id: string; booking_dates: string; booking_unit: string }>>([]);
-	let countEditing = $state<Map<string, number>>(new Map());
-	let countLoading = $state<Set<string>>(new Set());
 
 	let selectedCount = $derived(selectedArticles.size);
+	let hasQuantityGroupSelected = $derived(
+		[...selectedGroups].some(key => {
+			const g = groups.find(gr => gr.key === key);
+			return g && !g.individuallyTracked;
+		})
+	);
 
 	function toggleSelectArticle(id: string) {
 		const next = new Set(selectedArticles);
@@ -32,10 +39,13 @@
 		const ids = group.articles.map(a => a.id);
 		const allSelected = ids.every(id => selectedArticles.has(id));
 		const next = new Set(selectedArticles);
+		const nextGroups = new Set(selectedGroups);
 		for (const id of ids) {
 			if (allSelected) next.delete(id); else next.add(id);
 		}
+		if (allSelected) nextGroups.delete(group.key); else nextGroups.add(group.key);
 		selectedArticles = next;
+		selectedGroups = nextGroups;
 	}
 
 	function isGroupSelected(group: ArticleGroup): boolean {
@@ -44,15 +54,19 @@
 
 	async function executeBulkAction() {
 		if (selectedCount === 0) return;
+		const action = bulkStatus || bulkLocationId || bulkApproval;
+		if (!action) return;
 		bulkLoading = true;
 		bulkMessage = '';
 		bulkConflicts = [];
 		try {
-			const payload: { article_ids: string[]; status?: string; location_id?: string } = {
+			const payload: { article_ids: string[]; status?: string; location_id?: string; approval_level?: string; comment?: string } = {
 				article_ids: [...selectedArticles]
 			};
 			if (bulkStatus) payload.status = bulkStatus;
 			if (bulkLocationId) payload.location_id = bulkLocationId;
+			if (bulkApproval) payload.approval_level = bulkApproval;
+			if (bulkComment.trim()) payload.comment = bulkComment.trim();
 			const result = await api.bulkUpdateArticles(payload);
 			if (result.conflicts.length > 0) {
 				bulkConflicts = result.conflicts;
@@ -60,38 +74,17 @@
 			} else {
 				bulkMessage = `${result.updated} artiklar uppdaterade.`;
 				selectedArticles = new Set();
+				selectedGroups = new Set();
 				bulkStatus = '';
 				bulkLocationId = '';
+				bulkApproval = '';
+				bulkComment = '';
 				window.location.reload();
 			}
 		} catch (e: any) {
 			bulkMessage = e.message ?? 'Något gick fel.';
 		} finally {
 			bulkLoading = false;
-		}
-	}
-
-	async function updateCount(group: ArticleGroup, newCount: number) {
-		if (newCount < 0) return;
-		const key = group.key;
-		const loading = new Set(countLoading);
-		loading.add(key);
-		countLoading = loading;
-		try {
-			await api.updateGroupCount({
-				commercial_name: group.commercialName,
-				location_id: group.articles[0].location_id,
-				new_count: newCount
-			});
-			window.location.reload();
-		} catch (e: any) {
-			bulkMessage = e.message === 'cannot_reduce_count'
-				? 'Kan inte minska antal — artiklar i aktiva bokningar.'
-				: (e.message ?? 'Något gick fel.');
-		} finally {
-			const done = new Set(countLoading);
-			done.delete(key);
-			countLoading = done;
 		}
 	}
 
@@ -176,6 +169,7 @@
 		categoryName: string;
 		locationName: string;
 		count: number;
+		nonArchivedCount: number;
 		articles: Article[];
 		individuallyTracked: boolean;
 		representativeId: string;
@@ -188,6 +182,7 @@
 			const existing = map.get(key);
 			if (existing) {
 				existing.count++;
+				if (a.status !== 'archived') existing.nonArchivedCount++;
 				existing.articles.push(a);
 			} else {
 				map.set(key, {
@@ -196,6 +191,7 @@
 					categoryName: a.category_name,
 					locationName: a.location_name,
 					count: 1,
+					nonArchivedCount: a.status !== 'archived' ? 1 : 0,
 					articles: [a],
 					individuallyTracked: a.individually_tracked,
 					representativeId: a.id
@@ -369,17 +365,16 @@
 		{/if}
 	</div>
 
-	<label class="flex items-center gap-2 mb-4 text-sm">
-		<input type="checkbox" bind:checked={showArchived} onchange={applyFilters} />
-		Visa arkiverade
-	</label>
-
 	<p class="text-sm text-neutral-600 mb-4">
 		{articles.length} artiklar i {groups.length} grupper
 	</p>
 
 	{#if isManager}
 		<div class="flex flex-wrap items-center gap-3 mb-4">
+			<label class="flex items-center gap-2 text-sm">
+				<input type="checkbox" bind:checked={showArchived} onchange={applyFilters} />
+				Visa arkiverade
+			</label>
 			<label class="flex items-center gap-2 text-sm">
 				<input type="checkbox" bind:checked={managerMode} />
 				Hanteringsläge
@@ -388,6 +383,61 @@
 				<a href="/articles/new" class="text-sm bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700">+ Skapa artikel</a>
 			{/if}
 		</div>
+		{#if managerMode && selectedCount > 0}
+			{@const activeAction = bulkStatus ? 'status' : bulkLocationId ? 'location' : bulkApproval ? 'approval' : null}
+			<div class="flex flex-wrap items-center gap-2 mb-4 p-3 bg-blue-50 border border-blue-200 rounded text-sm">
+				<span class="font-medium">{selectedCount} markerade</span>
+				{#if !activeAction || activeAction === 'status'}
+					<select bind:value={bulkStatus} class="border rounded px-2 py-1 text-xs">
+						<option value="">Ändra status...</option>
+						<option value="ok">OK</option>
+						<option value="under_repair">Under reparation</option>
+						<option value="lost">Saknas</option>
+						{#if !hasQuantityGroupSelected}
+							<option value="archived">Arkivera</option>
+						{/if}
+					</select>
+				{/if}
+				{#if !activeAction || activeAction === 'location'}
+					<select bind:value={bulkLocationId} class="border rounded px-2 py-1 text-xs">
+						<option value="">Flytta till...</option>
+						{#each data.locations as loc}
+							<option value={loc.id}>{loc.name}</option>
+						{/each}
+					</select>
+				{/if}
+				{#if !activeAction || activeAction === 'approval'}
+					<select bind:value={bulkApproval} class="border rounded px-2 py-1 text-xs">
+						<option value="">Godkännande...</option>
+						<option value="none">Ingen</option>
+						<option value="low">Låg</option>
+						<option value="high">Hög</option>
+					</select>
+				{/if}
+				{#if activeAction}
+					<input
+						type="text"
+						bind:value={bulkComment}
+						placeholder="Kommentar..."
+						class="border rounded px-2 py-1 text-xs flex-1 min-w-32"
+					/>
+				{/if}
+				{#if activeAction}
+					<button
+						onclick={executeBulkAction}
+						disabled={bulkLoading}
+						class="text-xs bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 disabled:opacity-50"
+					>
+						{bulkLoading ? '...' : 'Utför'}
+					</button>
+					<button onclick={() => { bulkStatus = ''; bulkLocationId = ''; bulkApproval = ''; bulkComment = ''; }} class="text-xs text-neutral-500 underline">Ångra val</button>
+				{/if}
+				<button onclick={() => { selectedArticles = new Set(); selectedGroups = new Set(); bulkStatus = ''; bulkLocationId = ''; bulkApproval = ''; bulkComment = ''; }} class="text-xs text-neutral-500 underline">Avmarkera</button>
+				{#if hasQuantityGroupSelected && !activeAction}
+					<span class="text-xs text-neutral-500">Arkivering av antalsspårade grupper görs via antal-fältet</span>
+				{/if}
+			</div>
+		{/if}
 	{/if}
 
 	{#if bulkMessage}
@@ -426,9 +476,9 @@
 					<div class="flex items-center gap-2 text-sm text-neutral-600">
 						<span>{group.locationName}</span>
 						{#if group.individuallyTracked}
-							<span class="bg-blue-600 text-white px-2 py-0.5 rounded">{availableCount}/{group.count} st</span>
+							<span class="bg-blue-600 text-white px-2 py-0.5 rounded">{availableCount}/{group.nonArchivedCount} st</span>
 						{:else}
-							<span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded">×{availableCount}/{group.count}</span>
+							<span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded">×{availableCount}/{group.nonArchivedCount}</span>
 						{/if}
 						<span class="text-xs">{expanded ? '▲' : '▼'}</span>
 					</div>
@@ -452,6 +502,9 @@
 								{#each sortArticles(group.articles) as article}
 									<div class="py-2">
 										<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+											{#if managerMode}
+												<input type="checkbox" checked={selectedArticles.has(article.id)} onclick={() => toggleSelectArticle(article.id)} class="shrink-0" />
+											{/if}
 											<a href="/articles/{article.id}" class="inline-flex items-center gap-1 text-xs font-medium text-blue-700 border border-blue-200 bg-blue-50 rounded px-2 py-0.5 hover:bg-blue-100">{article.common_name} ›</a>
 											<span class="text-xs text-neutral-500">{article.place || '—'}</span>
 											{#if article.status !== 'ok' || article.current_booking_id}
@@ -513,21 +566,6 @@
 									<a href="/articles/{group.representativeId}" class="inline-flex items-center gap-1 text-xs text-blue-700 border border-blue-200 bg-blue-50 rounded px-2 py-1 hover:bg-blue-100">Visa artikelsida ›</a>
 									{#if isManager}
 										<a href="/articles/{group.representativeId}/edit?group=true" class="inline-flex items-center gap-1 text-xs text-neutral-600 border border-neutral-200 bg-neutral-50 rounded px-2 py-1 hover:bg-neutral-100">Redigera ›</a>
-										<label class="inline-flex items-center gap-1 text-xs text-neutral-600 ml-auto">
-											Antal:
-											<input
-												type="number"
-												value={group.count}
-												min="0"
-												max="999"
-												disabled={countLoading.has(group.key)}
-												onchange={(e) => {
-													const v = parseInt((e.target as HTMLInputElement).value);
-													if (!isNaN(v) && v !== group.count) updateCount(group, v);
-												}}
-												class="border rounded px-1.5 py-0.5 w-16 text-xs"
-											/>
-										</label>
 									{/if}
 									{#if hasInfo}
 										<button onclick={() => toggleDescription(group.key)} class="text-xs text-neutral-500 hover:text-neutral-700">

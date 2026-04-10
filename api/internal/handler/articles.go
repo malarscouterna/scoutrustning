@@ -959,9 +959,11 @@ func (h *ArticleHandler) BulkUpdate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	var req struct {
-		ArticleIDs []string `json:"article_ids"`
-		Status     string   `json:"status"`
-		LocationID string   `json:"location_id"`
+		ArticleIDs    []string `json:"article_ids"`
+		Status        string   `json:"status"`
+		LocationID    string   `json:"location_id"`
+		ApprovalLevel string   `json:"approval_level"`
+		Comment       string   `json:"comment"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		WriteError(w, http.StatusBadRequest, "invalid request body")
@@ -971,8 +973,8 @@ func (h *ArticleHandler) BulkUpdate(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusBadRequest, "article_ids required")
 		return
 	}
-	if req.Status == "" && req.LocationID == "" {
-		WriteError(w, http.StatusBadRequest, "status or location_id required")
+	if req.Status == "" && req.LocationID == "" && req.ApprovalLevel == "" {
+		WriteError(w, http.StatusBadRequest, "status, location_id, or approval_level required")
 		return
 	}
 
@@ -1078,7 +1080,7 @@ func (h *ArticleHandler) BulkUpdate(w http.ResponseWriter, r *http.Request) {
 		updated = n
 
 		for _, id := range ids {
-			LogArticleEvent(ctx, h.Q, claims, id, "status_change", "", map[string]string{
+			LogArticleEvent(ctx, h.Q, claims, id, "status_change", req.Comment, map[string]string{
 				"new_status": req.Status,
 				"bulk":       "true",
 			})
@@ -1096,6 +1098,26 @@ func (h *ArticleHandler) BulkUpdate(w http.ResponseWriter, r *http.Request) {
 		})
 		if err != nil {
 			slog.Error("failed to bulk update location", "error", err)
+			WriteError(w, http.StatusInternalServerError, "failed to update")
+			return
+		}
+		if updated == 0 {
+			updated = n
+		}
+		for _, id := range ids {
+			LogArticleEvent(ctx, h.Q, claims, id, "status_change", req.Comment, map[string]string{
+				"new_location_id": req.LocationID,
+				"bulk":            "true",
+			})
+		}
+	}
+
+	if req.ApprovalLevel != "" {
+		n, err := h.Q.BulkUpdateArticleApproval(ctx, db.BulkUpdateArticleApprovalParams{
+			ApprovalLevel: req.ApprovalLevel, Ids: ids, GroupID: claims.GroupID,
+		})
+		if err != nil {
+			slog.Error("failed to bulk update approval", "error", err)
 			WriteError(w, http.StatusInternalServerError, "failed to update")
 			return
 		}

@@ -345,7 +345,17 @@ DROP TABLE IF EXISTS group_settings;
 23. ✅ Event collapsing excludes notes (comments always show individually)
 24. ✅ Report issue form responsive fix (wraps on narrow screens)
 25. ✅ "Anteckning" → "Kommentar" terminology
-26. Remaining: bulk actions toolbar UI (status change, location move, archive dropdowns)
+26. ✅ Bulk actions toolbar: status change, location move, approval level, with comment input
+27. ✅ Per-article checkboxes in individually tracked expanded view
+28. ✅ Archive option hidden when quantity tracked groups selected
+29. ✅ Bulk approval level: `PUT /articles/bulk` accepts `approval_level`, new `BulkUpdateArticleApproval` query
+30. ✅ Bulk events logged with comment for status changes and location moves
+31. ✅ "Visa arkiverade" moved to manager-only, same row as "Hanteringsläge"
+32. ✅ Badge shows available/nonArchived (archived items excluded from count)
+33. ✅ Removed inline count field from browse (count changes only on edit page)
+34. ✅ "Inköpspris per styck" label clarification on create form
+35. ✅ Fixed double-brace template errors
+36. Remaining: none — bulk actions toolbar complete. Deferred items in backlog.
 
 **UPDATE**: Step 2c scope expanded significantly from original plan. Article detail page gained quantity tracked group support (status summary, aggregated purchase info, collapsed group events). Edit form split into three layouts with shared/per-item field distinction. Shared field propagation added for individually tracked articles. Approval level moved from shared to per-item (different locations may need different approval rules). Location is per-item (same product type can exist in multiple locations).
 

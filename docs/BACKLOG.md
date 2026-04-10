@@ -156,3 +156,31 @@ After adding a comment on the article detail page, the user should be able to de
 ## Article history management for managers
 
 On the article edit page, managers should be able to manage the article's event history: edit descriptions, delete erroneous events, add backdated notes. This is an admin tool for correcting mistakes, not a user-facing feature.
+
+## Quantity-tracked items — per-item editing on count increase
+
+When increasing count on a quantity tracked group, new articles get default per-item fields (status: ok, no purchase date/price). The expandable per-physical-item list on the group edit page should allow inline editing of these fields (purchase_date, purchase_price, status) per item. Could also support setting defaults for new items (e.g. "all new items purchased today at X kr").
+
+## Three-tier access: view-only, booking, managing
+
+Currently the system has two effective access levels: leader (can book) and equipment manager (full admin). Anyone who can log in via ScoutID but doesn't have a recognized role gets no access at all.
+
+Proposed three tiers:
+- **View-only** — authenticated members of the scout group who don't hold a trusted position (no unit leader role, no project role). Can browse articles, see availability, view article details and history. Cannot book, report issues, or manage anything. This is the default for any authenticated group member.
+- **Booking** — leaders and project leaders (current behavior). Can book, report issues, do pickup/return.
+- **Managing** — equipment managers (current behavior). Full inventory CRUD, approvals, settings.
+
+This requires changes to:
+- Auth middleware: recognize "authenticated but no role" as view-only instead of rejecting
+- Role mapping: any group member without a mapped role gets view-only
+- Frontend: hide booking/reporting UI for view-only users, show browse/detail as read-only
+- API: new permission checks distinguishing "can view" from "can book"
+
+## Quantity-tracked items — smarter count decrease on edit page
+
+When decreasing count on the group edit page, the system currently archives the newest non-booked articles. This is too blunt — the manager may want to archive a specific article (e.g. the broken one, not the newest one). The per-physical-item list on the edit page should allow the manager to select which specific articles to archive when decreasing count, rather than auto-selecting. Could be checkboxes on the item list with an "Arkivera markerade" action.
+
+## Duplicate article name checking on create
+
+When creating articles, there's no check for duplicate `common_name` within the group. Creating two "Sibley 1" articles would cause confusion. The API should check for existing articles with the same `common_name + group_id` and return a warning (not a hard block — the manager may intentionally want duplicates across locations). The frontend should show the warning and let the manager confirm.
+
