@@ -60,6 +60,11 @@ In dev mode (`DEV_MODE=true`), use the `X-Dev-Role-Override` header to switch pe
 
 ### Running tests
 
+**Prerequisites**: libvips is required for image processing tests.
+```bash
+sudo apt install libvips-dev   # Ubuntu/Debian
+```
+
 ```bash
 # Full test suite (requires Docker for testcontainers + docker compose up + ./dev-seed.sh)
 cd api && go test ./internal/handler/tests/ -timeout 180s -count=1 2>&1 && bash ../smoke-test.sh

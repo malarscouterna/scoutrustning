@@ -223,6 +223,10 @@ func (c *TestClient) Delete(path string) (*http.Response, error) {
 	return c.Do("DELETE", path, nil)
 }
 
+func (c *TestClient) BaseURL() string {
+	return c.baseURL
+}
+
 func findMigrationsDir() string {
 	_, filename, _, _ := runtime.Caller(0)
 	return filepath.Join(filepath.Dir(filename), "..", "..", "migrations")
