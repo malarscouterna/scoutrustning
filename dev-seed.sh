@@ -80,11 +80,12 @@ for (name, loc_id), simplified in groups.items():
     print(json.dumps({'name': name, 'location_id': loc_id, 'simplified': simplified}))
 ")
 
-  for IMG_FILE in "$SEED_IMG_DIR"/*; do
+  # Sort files so numbered variants upload in order (sibley.jpg, sibley-2.jpg, sibley-3.jpg)
+  for IMG_FILE in $(ls "$SEED_IMG_DIR"/* | sort); do
     [ -f "$IMG_FILE" ] || continue
     BASENAME=$(basename "$IMG_FILE")
-    FILE_KEY=$(echo "${BASENAME%.*}" | tr '[:upper:]' '[:lower:]')
-    # Match against simplified commercial names
+    # Strip extension, then strip -N suffix for matching (sibley-2.jpg -> sibley)
+    FILE_KEY=$(echo "${BASENAME%.*}" | sed 's/-[0-9]*$//' | tr '[:upper:]' '[:lower:]')
     echo "$GROUPS_JSON" | while IFS= read -r GROUP; do
       SIMPLIFIED=$(echo "$GROUP" | python3 -c "import json,sys; print(json.load(sys.stdin)['simplified'])")
       if [ "$FILE_KEY" = "$SIMPLIFIED" ]; then

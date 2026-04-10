@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -21,12 +22,12 @@ RETURNING id, group_id, article_id, actor_id, event_type, description, metadata,
 `
 
 type CreateArticleEventParams struct {
-	GroupID     string      `json:"group_id"`
-	ArticleID   pgtype.UUID `json:"article_id"`
-	ActorID     string      `json:"actor_id"`
-	EventType   string      `json:"event_type"`
-	Description string      `json:"description"`
-	Metadata    []byte      `json:"metadata"`
+	GroupID     string          `json:"group_id"`
+	ArticleID   pgtype.UUID     `json:"article_id"`
+	ActorID     string          `json:"actor_id"`
+	EventType   string          `json:"event_type"`
+	Description string          `json:"description"`
+	Metadata    json.RawMessage `json:"metadata"`
 }
 
 func (q *Queries) CreateArticleEvent(ctx context.Context, arg CreateArticleEventParams) (ArticleEvent, error) {
@@ -73,7 +74,7 @@ type ListArticleEventsRow struct {
 	ActorID     string             `json:"actor_id"`
 	EventType   string             `json:"event_type"`
 	Description string             `json:"description"`
-	Metadata    []byte             `json:"metadata"`
+	Metadata    json.RawMessage    `json:"metadata"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	ActorName   string             `json:"actor_name"`
 }
@@ -138,7 +139,7 @@ type ListArticleEventsByGroupRow struct {
 	ActorID     string             `json:"actor_id"`
 	EventType   string             `json:"event_type"`
 	Description string             `json:"description"`
-	Metadata    []byte             `json:"metadata"`
+	Metadata    json.RawMessage    `json:"metadata"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	ActorName   string             `json:"actor_name"`
 	ArticleName string             `json:"article_name"`
@@ -208,7 +209,7 @@ type ListArticleEventsByGroupLimitedRow struct {
 	ActorID     string             `json:"actor_id"`
 	EventType   string             `json:"event_type"`
 	Description string             `json:"description"`
-	Metadata    []byte             `json:"metadata"`
+	Metadata    json.RawMessage    `json:"metadata"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	ActorName   string             `json:"actor_name"`
 	ArticleName string             `json:"article_name"`
@@ -273,7 +274,7 @@ type ListArticleEventsLimitedRow struct {
 	ActorID     string             `json:"actor_id"`
 	EventType   string             `json:"event_type"`
 	Description string             `json:"description"`
-	Metadata    []byte             `json:"metadata"`
+	Metadata    json.RawMessage    `json:"metadata"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	ActorName   string             `json:"actor_name"`
 }

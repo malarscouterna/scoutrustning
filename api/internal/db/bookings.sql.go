@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -401,12 +402,12 @@ RETURNING id, group_id, booking_id, actor_id, event_type, message, metadata, cre
 `
 
 type CreateBookingEventParams struct {
-	GroupID   string      `json:"group_id"`
-	BookingID pgtype.UUID `json:"booking_id"`
-	ActorID   string      `json:"actor_id"`
-	EventType string      `json:"event_type"`
-	Message   string      `json:"message"`
-	Metadata  []byte      `json:"metadata"`
+	GroupID   string          `json:"group_id"`
+	BookingID pgtype.UUID     `json:"booking_id"`
+	ActorID   string          `json:"actor_id"`
+	EventType string          `json:"event_type"`
+	Message   string          `json:"message"`
+	Metadata  json.RawMessage `json:"metadata"`
 }
 
 func (q *Queries) CreateBookingEvent(ctx context.Context, arg CreateBookingEventParams) (BookingEvent, error) {
@@ -619,7 +620,7 @@ type ListBookingEventsRow struct {
 	ActorID   string             `json:"actor_id"`
 	EventType string             `json:"event_type"`
 	Message   string             `json:"message"`
-	Metadata  []byte             `json:"metadata"`
+	Metadata  json.RawMessage    `json:"metadata"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	ActorName string             `json:"actor_name"`
 }

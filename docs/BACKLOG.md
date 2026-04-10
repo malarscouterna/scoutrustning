@@ -184,3 +184,38 @@ When decreasing count on the group edit page, the system currently archives the 
 
 When creating articles, there's no check for duplicate `common_name` within the group. Creating two "Sibley 1" articles would cause confusion. The API should check for existing articles with the same `common_name + group_id` and return a warning (not a hard block — the manager may intentionally want duplicates across locations). The frontend should show the warning and let the manager confirm.
 
+
+## Article groups normalization
+
+The concept of a "product group" (articles sharing `commercial_name + location_id`) is implicit today — enforced by convention and propagation logic. Several features depend on this grouping:
+
+- Shared fields (description, instructions, manager_notes, category_id) propagated on save
+- Product images (per group)
+- Availability grouping in browse/booking
+- Quantity tracked count management
+- Group events aggregation
+
+A proper `article_groups` table would make this explicit:
+
+```
+article_groups (
+  id uuid PK,
+  group_id text FK → groups,
+  commercial_name text,
+  location_id uuid FK → locations,
+  category_id uuid FK → categories,
+  description text,
+  instructions text,
+  manager_notes text,
+  approval_level text,  -- default for new articles in the group
+  created_at timestamptz
+)
+```
+
+Articles would get an `article_group_id` FK instead of duplicating shared fields. The `product_images` table (currently keyed on `group_id + commercial_name + location_id`) would re-key to `article_group_id`.
+
+**Benefits**: single source of truth for shared fields, no propagation logic, cleaner FKs for images/packages/future features, simpler queries.
+
+**Cost**: large refactor touching most article queries and handlers. Migration must create groups from existing articles and backfill FKs.
+
+**Current approach**: `product_images` uses the composite key `(group_id, commercial_name, location_id)` — designed to be easily re-keyed to `article_group_id` later without structural changes. The table has its own UUID PK so all references (frontend, other tables) use the UUID and survive the re-keying. Migration path: add `article_group_id` column, backfill from composite key match, drop the three columns.

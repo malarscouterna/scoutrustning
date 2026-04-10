@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Location, Category } from '$lib/api/client';
+	import ImageUpload from './ImageUpload.svelte';
 
 	interface Props {
 		locations: Location[];
@@ -23,6 +24,7 @@
 			purchase_date?: string | null;
 			purchase_price?: string | null;
 			manager_notes?: string;
+			image_ids?: string[];
 		};
 		submitLabel?: string;
 		onSubmit: (articles: Record<string, unknown>[]) => Promise<void>;
@@ -56,8 +58,11 @@
 		manager_notes: ''
 	});
 
+	let imageIds = $state<string[]>([]);
+
 	$effect(() => {
 		if (!initial) return;
+		imageIds = Array.isArray(initial.image_ids) ? initial.image_ids : [];
 		form.commercial_name = initial.commercial_name ?? '';
 		form.common_name = initial.common_name ?? '';
 		form.category_id = initial.category_id ?? '';
@@ -214,6 +219,14 @@
 					<span class="text-sm text-neutral-600 block mb-1">Interna anteckningar (bara synligt för utrustningsansvariga)</span>
 					<textarea bind:value={form.manager_notes} rows="2" placeholder="Interna noteringar..." class="border rounded px-2 py-1.5 text-sm w-full bg-amber-50"></textarea>
 				</label>
+				{#if mode === 'edit' && form.commercial_name && form.location_id}
+					<ImageUpload
+						commercialName={form.commercial_name}
+						locationId={form.location_id}
+						{imageIds}
+						onUpdate={(ids) => imageIds = ids}
+					/>
+				{/if}
 			{/if}
 		</div>
 
@@ -339,6 +352,14 @@
 					<span class="text-sm text-neutral-600 block mb-1">Interna anteckningar (bara synligt för utrustningsansvariga)</span>
 					<textarea bind:value={form.manager_notes} rows="2" placeholder="Interna noteringar..." class="border rounded px-2 py-1.5 text-sm w-full bg-amber-50"></textarea>
 				</label>
+				{#if mode === 'edit' && form.commercial_name && form.location_id}
+					<ImageUpload
+						commercialName={form.commercial_name}
+						locationId={form.location_id}
+						{imageIds}
+						onUpdate={(ids) => imageIds = ids}
+					/>
+				{/if}
 			{/if}
 		</div>
 	{:else}

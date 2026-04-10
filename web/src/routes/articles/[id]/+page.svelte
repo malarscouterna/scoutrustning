@@ -143,14 +143,10 @@
 	{/if}
 
 	<div class="mt-4 mb-6">
-		{#if article.image_path}
-			<ImageViewer
-				src="/api/v0/images/{article.image_path}.webp"
-				thumbSrc="/api/v0/images/{article.image_path}_thumb.webp"
-				alt={article.commercial_name || article.common_name}
-				downloadId={article.image_path}
-				class="block w-3/4 mb-4"
-			/>
+		{#if article.image_ids?.length > 0}
+			<div class="mb-4">
+				<ImageViewer imageIds={article.image_ids} alt={article.commercial_name || article.common_name} />
+			</div>
 		{/if}
 		<div class="flex flex-wrap items-center gap-3 mb-2">
 			{#if isQuantityTracked}
