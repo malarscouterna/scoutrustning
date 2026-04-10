@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.0](https://github.com/malarscouterna/ms-utrustning/compare/v0.3.1...v0.4.0) (2026-04-10)
+
+
+### Features
+
+* **web,api:** browse info toggle, inline count, article comments, per-item list ([77ee4d4](https://github.com/malarscouterna/ms-utrustning/commit/77ee4d405421d4f1422632946131162e536e80ec))
+* **web,api:** bulk actions toolbar with one-action-at-a-time UX ([5b3bb1a](https://github.com/malarscouterna/ms-utrustning/commit/5b3bb1aa2fa37f24bb5dea3662aa42bacc20953c))
+
+
+### Bug Fixes
+
+* **web:** quantity tracked count change from edit page, cleanup duplicated labels ([48d2c52](https://github.com/malarscouterna/ms-utrustning/commit/48d2c526cd7325eec558386ffa6b59bc0a449f0c))
+
 ## [0.3.1](https://github.com/malarscouterna/ms-utrustning/compare/v0.3.0...v0.3.1) (2026-04-09)
 
 
