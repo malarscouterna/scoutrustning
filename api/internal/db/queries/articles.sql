@@ -263,3 +263,28 @@ WHERE group_id = @group_id
 -- name: BulkUpdateArticleApproval :execrows
 UPDATE articles SET approval_level = @approval_level, updated_at = now()
 WHERE id = ANY(@ids::uuid[]) AND group_id = @group_id;
+
+-- name: UpdateArticleGroupImagePath :execrows
+-- Sets image_path for all articles matching commercial_name + location_id in a group.
+UPDATE articles SET image_path = @image_path, updated_at = now()
+WHERE group_id = @group_id
+    AND commercial_name = @commercial_name
+    AND location_id = @location_id;
+
+-- name: ClearArticleGroupImagePath :execrows
+-- Clears image_path for all articles matching commercial_name + location_id in a group.
+-- Returns the old image_path so the caller can delete the file.
+UPDATE articles SET image_path = NULL, updated_at = now()
+WHERE group_id = @group_id
+    AND commercial_name = @commercial_name
+    AND location_id = @location_id
+    AND image_path IS NOT NULL;
+
+-- name: GetArticleGroupImagePath :one
+-- Returns the current image_path for an article group (for deletion).
+SELECT image_path FROM articles
+WHERE group_id = @group_id
+    AND commercial_name = @commercial_name
+    AND location_id = @location_id
+    AND image_path IS NOT NULL
+LIMIT 1;

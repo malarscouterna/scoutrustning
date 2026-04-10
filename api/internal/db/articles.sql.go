@@ -68,6 +68,30 @@ func (q *Queries) BulkUpdateArticleStatus(ctx context.Context, arg BulkUpdateArt
 	return result.RowsAffected(), nil
 }
 
+const clearArticleGroupImagePath = `-- name: ClearArticleGroupImagePath :execrows
+UPDATE articles SET image_path = NULL, updated_at = now()
+WHERE group_id = $1
+    AND commercial_name = $2
+    AND location_id = $3
+    AND image_path IS NOT NULL
+`
+
+type ClearArticleGroupImagePathParams struct {
+	GroupID        string      `json:"group_id"`
+	CommercialName string      `json:"commercial_name"`
+	LocationID     pgtype.UUID `json:"location_id"`
+}
+
+// Clears image_path for all articles matching commercial_name + location_id in a group.
+// Returns the old image_path so the caller can delete the file.
+func (q *Queries) ClearArticleGroupImagePath(ctx context.Context, arg ClearArticleGroupImagePathParams) (int64, error) {
+	result, err := q.db.Exec(ctx, clearArticleGroupImagePath, arg.GroupID, arg.CommercialName, arg.LocationID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const countArticlesByCategory = `-- name: CountArticlesByCategory :many
 SELECT c.id, c.name, COUNT(a.id) AS count
 FROM categories c
@@ -363,6 +387,29 @@ func (q *Queries) GetArticle(ctx context.Context, arg GetArticleParams) (GetArti
 		&i.CategoryName,
 	)
 	return i, err
+}
+
+const getArticleGroupImagePath = `-- name: GetArticleGroupImagePath :one
+SELECT image_path FROM articles
+WHERE group_id = $1
+    AND commercial_name = $2
+    AND location_id = $3
+    AND image_path IS NOT NULL
+LIMIT 1
+`
+
+type GetArticleGroupImagePathParams struct {
+	GroupID        string      `json:"group_id"`
+	CommercialName string      `json:"commercial_name"`
+	LocationID     pgtype.UUID `json:"location_id"`
+}
+
+// Returns the current image_path for an article group (for deletion).
+func (q *Queries) GetArticleGroupImagePath(ctx context.Context, arg GetArticleGroupImagePathParams) (pgtype.Text, error) {
+	row := q.db.QueryRow(ctx, getArticleGroupImagePath, arg.GroupID, arg.CommercialName, arg.LocationID)
+	var image_path pgtype.Text
+	err := row.Scan(&image_path)
+	return image_path, err
 }
 
 const getArticleGroupInfo = `-- name: GetArticleGroupInfo :one
@@ -1072,6 +1119,34 @@ func (q *Queries) UpdateArticleGroupFields(ctx context.Context, arg UpdateArticl
 		arg.GroupID,
 		arg.OldCommercialName,
 		arg.OldLocationID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const updateArticleGroupImagePath = `-- name: UpdateArticleGroupImagePath :execrows
+UPDATE articles SET image_path = $1, updated_at = now()
+WHERE group_id = $2
+    AND commercial_name = $3
+    AND location_id = $4
+`
+
+type UpdateArticleGroupImagePathParams struct {
+	ImagePath      pgtype.Text `json:"image_path"`
+	GroupID        string      `json:"group_id"`
+	CommercialName string      `json:"commercial_name"`
+	LocationID     pgtype.UUID `json:"location_id"`
+}
+
+// Sets image_path for all articles matching commercial_name + location_id in a group.
+func (q *Queries) UpdateArticleGroupImagePath(ctx context.Context, arg UpdateArticleGroupImagePathParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateArticleGroupImagePath,
+		arg.ImagePath,
+		arg.GroupID,
+		arg.CommercialName,
+		arg.LocationID,
 	)
 	if err != nil {
 		return 0, err

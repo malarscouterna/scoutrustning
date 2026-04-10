@@ -30,6 +30,7 @@ ms-utrustning/
 │   │   ├── crypto/         # AES-256-GCM encryption for sensitive settings
 │   │   ├── handler/        # HTTP handlers per resource
 │   │   ├── db/             # sqlc generated code + queries
+│   │   ├── images/         # Image upload, processing (govips), serving
 │   │   └── notify/         # Email + Google Chat notifications
 │   ├── migrations/         # goose SQL migration files
 │   ├── sqlc.yaml
@@ -150,6 +151,7 @@ Tool paths (may not be on default PATH):
 | pnpm | On PATH via snap or `corepack enable` |
 | sqlc | `$HOME/go/bin/sqlc` (`go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest`) |
 | Docker | `/usr/bin/docker` |
+| libvips | System package (`sudo apt install libvips-dev`) — required for image processing tests |
 
 When running Go commands, ensure PATH includes Go:
 ```bash

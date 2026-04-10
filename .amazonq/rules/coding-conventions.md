@@ -55,6 +55,7 @@ High — follow these unless they conflict with an explicit user instruction.
 - Use the test helper that sets up a group, seeds data, and provides an HTTP client with a fake JWT for a given role.
 - For edge cases that don't warrant a permanent persona (unknown group, no roles, malformed claims), use `env.ClientWithClaims(auth.Claims{...})` which sends a JSON-encoded `X-Dev-Claims` header. The auth middleware parses this in dev mode and injects the claims directly.
 - Test command: `cd api && go test ./internal/handler/tests/ -timeout 180s -count=1 2>&1 && bash ../smoke-test.sh` — runs API integration tests then SSR smoke tests in one go. No `-v` flag so only failing tests produce output. All Go tests share a single Postgres container via `TestMain`; each test truncates and reseeds tables for isolation. The smoke test requires `docker compose up` + `./dev-seed.sh` to be running.
+- Image processing tests require `libvips-dev` installed on the host (`sudo apt install libvips-dev`). The Docker images already include libvips.
 - When adding a new SvelteKit page route, add a corresponding check in `smoke-test.sh`. Every `+page.svelte` must have a smoke test entry.
 
 ### General

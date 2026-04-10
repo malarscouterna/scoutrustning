@@ -20,6 +20,7 @@ import (
 	"github.com/malarscouterna/ms-utrustning/api/internal/auth"
 	"github.com/malarscouterna/ms-utrustning/api/internal/db"
 	"github.com/malarscouterna/ms-utrustning/api/internal/handler"
+	"github.com/malarscouterna/ms-utrustning/api/internal/images"
 )
 
 func main() {
@@ -30,6 +31,10 @@ func main() {
 
 	dbURL := getenv("DATABASE_URL", "postgres://utrustning:utrustning@localhost:5432/utrustning?sslmode=disable")
 	devMode := getenv("DEV_MODE", "false") == "true"
+	imageDir := getenv("IMAGE_DIR", "/data/images")
+
+	images.InitVips()
+	defer images.ShutdownVips()
 
 	// Load role mapping config
 	var roleMapping *auth.RoleMapping
@@ -84,6 +89,7 @@ func main() {
 		bookings := &handler.BookingHandler{Q: queries}
 		units := &handler.UnitHandler{Q: queries}
 		groupSettings := &handler.GroupSettingsHandler{Q: queries}
+		imageHandler := &images.Handler{Q: queries, ImageDir: imageDir}
 
 		r.Mount("/articles", articles.Routes())
 		r.Mount("/locations", locations.Routes())
@@ -91,6 +97,7 @@ func main() {
 		r.Mount("/bookings", bookings.Routes())
 		r.Mount("/units", units.Routes())
 		r.Mount("/group-settings", groupSettings.Routes())
+		r.Mount("/images", imageHandler.Routes())
 	})
 
 	addr := getenv("ADDR", ":8080")
