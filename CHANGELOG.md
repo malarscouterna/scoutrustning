@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.1](https://github.com/malarscouterna/ms-utrustning/compare/v0.4.0...v0.4.1) (2026-04-10)
+
+
+### Bug Fixes
+
+* **web:** add @types/node to fix 22 svelte-check type errors ([18691a6](https://github.com/malarscouterna/ms-utrustning/commit/18691a64af9200b7b1fde9b6a00decedc8ed40f1))
+* **web:** fix SSR crash on booking detail page ([b59eb70](https://github.com/malarscouterna/ms-utrustning/commit/b59eb701378fbdedc3c0d5d7b58e1be79d526f6e))
+
 ## [0.4.0](https://github.com/malarscouterna/ms-utrustning/compare/v0.3.1...v0.4.0) (2026-04-10)
 
 
