@@ -219,3 +219,4 @@ Articles would get an `article_group_id` FK instead of duplicating shared fields
 **Cost**: large refactor touching most article queries and handlers. Migration must create groups from existing articles and backfill FKs.
 
 **Current approach**: `product_images` uses the composite key `(group_id, commercial_name, location_id)` — designed to be easily re-keyed to `article_group_id` later without structural changes. The table has its own UUID PK so all references (frontend, other tables) use the UUID and survive the re-keying. Migration path: add `article_group_id` column, backfill from composite key match, drop the three columns.
+

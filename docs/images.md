@@ -572,10 +572,46 @@ At ~200 unique product types per group: ~200MB source + ~6MB thumbnails per grou
 - [x] Delete button per image (removes from article group, checks file reference count)
 - [x] Reorder via move buttons (chevron ‹ › buttons per image)
 
-### Step 7: Issue report images
+### Bugs / improvements
 
-- [ ] Update `ReportIssueForm` component: optional image attachment
-- [ ] Update `UpdateStatus` handler to accept `image_id` in request body, store in event metadata
-- [ ] Article event history: display issue images inline (thumbnail, click for full size)
-- [ ] Issues page: show thumbnail in issue list when image exists
-- [ ] Integration test: report issue with image, verify event metadata, verify image served
+- [ ] "Mina bilder" on profile page shows "Inte kopplad till någon artikel" for all images despite being linked — article link query/frontend logic broken
+- [ ] Profile page: move "Mina inställningar" above "Mina bilder" since the images section can grow large
+
+### Step 7: Image attachment on article events
+
+Any action that creates an article event supports optional image attachment. Compact UI: small thumbnail row with inline SVG `add_a_photo` icon (Material Symbols, no font dependency) next to the text input. Users can attach multiple images or ignore entirely.
+
+**Upload flow**: tap icon → file picker → `POST /images/issue` (existing, no crop) → UUID returned → thumbnail appears in row → repeat for more. Collected UUIDs sent as `image_ids` array with the event request.
+
+**UI contexts** (all get the same compact attachment row):
+- `ReportIssueForm` on article detail page
+- Pickup report flow in `PickupChecklist` ("Rapportera" action)
+- Return status form in `ReturnChecklist` (reported_usable/reported_unusable/lost)
+- Manager status changes on issues page
+- Article comment/note input (article detail page)
+
+**API changes**:
+- `POST /articles/{id}/status` — add optional `image_ids` string array, store in event `metadata` jsonb
+- `POST /articles/{id}/events` — add optional `image_ids` string array, store in event `metadata` jsonb
+- Pickup/return handlers that create article events (reported_usable/reported_unusable/lost) — add optional `image_ids` to request body, pass through to `LogArticleEvent` metadata
+
+**Display**:
+- `ArticleEventHistory` component: events with `image_ids` in metadata show inline thumbnails (small, horizontal row). Tap thumbnail → PhotoSwipe fullscreen.
+- Issues page: show small thumbnail indicator on events that have images.
+
+**Implementation details**:
+- Inline SVG for `add_a_photo` icon (Material Symbols path data, no font/CDN dependency)
+- Extract a shared `ImageAttachInput.svelte` component: `+` icon button, file input (hidden), upload on select, thumbnail row with `×` remove per image, exposes `imageIds` bindable
+- No crop dialog — issue/comment images upload as-is via existing `POST /images/issue`
+- Multiple images per event: `metadata.image_ids` is a JSON array of UUID strings
+- No new database table — images are standalone files on disk, referenced by UUID in event metadata
+
+**Steps**:
+- [ ] Create `ImageAttachInput.svelte` component (icon button + upload + thumbnail row)
+- [ ] Wire into `ReportIssueForm`, pickup report, return status form, manager status change, article comment input
+- [ ] Update `POST /articles/{id}/events` handler to accept and store `image_ids`
+- [ ] Update `POST /articles/{id}/status` handler to accept and store `image_ids`
+- [ ] Update pickup/return handlers to pass `image_ids` through to article event metadata
+- [ ] Update `ArticleEventHistory` to display inline thumbnails for events with `image_ids`
+- [ ] Update issues page to show thumbnail indicator
+- [ ] Integration test: report issue with images, verify event metadata, verify images served

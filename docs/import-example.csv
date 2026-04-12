@@ -2,9 +2,9 @@ titelgrupp,title,count,description,instructions,manager_notes,location,plats,rum
 Sibley,Sibley 1,,"Stort bomullstält för 8–12 personer. Kräver 2 personer för uppsättning.","Torka alltid tältet innan det packas ihop. Vädra efter regn. Se guide på anslagstavlan i förrådet.","Impregnerad 2024. Nästa impregnering 2026.",Hajkförrådet,,Stora rummet,Vänster vägg,Sova,low
 Sibley,Sibley 2,,"Stort bomullstält för 8–12 personer. Kräver 2 personer för uppsättning.","Torka alltid tältet innan det packas ihop. Vädra efter regn. Se guide på anslagstavlan i förrådet.",,Hajkförrådet,,Stora rummet,Vänster vägg,Sova,low
 Sibley,Sibley 3,,"Stort bomullstält för 8–12 personer. Kräver 2 personer för uppsättning.","Torka alltid tältet innan det packas ihop. Vädra efter regn. Se guide på anslagstavlan i förrådet.",,Hajkförrådet,,Stora rummet,Vänster vägg,Sova,low
-Primus,Primus 1,,"Gasolkök Primus Firestick. Använd med Primus-gasol, ej generisk.","Kontrollera att ventilen är stängd innan gasol kopplas. Testa tändning utomhus.",,Hajkförrådet,,Köksrummet,Hylla 2,Sova,
-Primus,Primus 2,,"Gasolkök Primus Firestick. Använd med Primus-gasol, ej generisk.","Kontrollera att ventilen är stängd innan gasol kopplas. Testa tändning utomhus.",,Hajkförrådet,,Köksrummet,Hylla 2,Sova,
-Primus,Primus 3,,"Gasolkök Primus Firestick. Använd med Primus-gasol, ej generisk.","Kontrollera att ventilen är stängd innan gasol kopplas. Testa tändning utomhus.",,Hajkförrådet,,Köksrummet,Hylla 2,Sova,
+Primus,Primus 1,,"Gasolkök Primus Firestick. Använd med Primus-gasol, ej generisk.","Kontrollera att ventilen är stängd innan gasol kopplas. Testa tändning utomhus.",,Hajkförrådet,,Köksrummet,Hylla 2,Mat,
+Primus,Primus 2,,"Gasolkök Primus Firestick. Använd med Primus-gasol, ej generisk.","Kontrollera att ventilen är stängd innan gasol kopplas. Testa tändning utomhus.",,Hajkförrådet,,Köksrummet,Hylla 2,Mat,
+Primus,Primus 3,,"Gasolkök Primus Firestick. Använd med Primus-gasol, ej generisk.","Kontrollera att ventilen är stängd innan gasol kopplas. Testa tändning utomhus.",,Hajkförrådet,,Köksrummet,Hylla 2,Mat,
 Stormkök,Stormkök 1,,"Trangia 25-serien. Komplett med vindskydd, brännare och kastruller.","Fyll aldrig på bränsle medan brännaren är varm. Rengör efter användning.",,Hajkförrådet,,Köksrummet,Hylla 1,Mat,
 Stormkök,Stormkök 2,,"Trangia 25-serien. Komplett med vindskydd, brännare och kastruller.","Fyll aldrig på bränsle medan brännaren är varm. Rengör efter användning.",,Hajkförrådet,,Köksrummet,Hylla 1,Mat,
 Stormkök,Stormkök 3,,"Trangia 25-serien. Komplett med vindskydd, brännare och kastruller.","Fyll aldrig på bränsle medan brännaren är varm. Rengör efter användning.",,Hajkförrådet,,Köksrummet,Hylla 1,Mat,
@@ -14,16 +14,16 @@ Stormkök,Stormkök 6,,"Trangia 25-serien. Komplett med vindskydd, brännare och
 Stormkök,Stormkök 7,,"Trangia 25-serien. Komplett med vindskydd, brännare och kastruller.","Fyll aldrig på bränsle medan brännaren är varm. Rengör efter användning.",,Karsvik,Ostergarden,Mötesförrådet,Kökshylla,Mat,low
 Stormkök,Stormkök 8,,"Trangia 25-serien. Komplett med vindskydd, brännare och kastruller.","Fyll aldrig på bränsle medan brännaren är varm. Rengör efter användning.",,Karsvik,Ostergarden,Mötesförrådet,Kökshylla,Mat,low
 Brandfilt,Brandfilt,6,"120×120 cm glasfiberfilt. Kontrollera att förpackningen är obruten.","Dra ut filten och lägg över elden. Återanvänd ej efter användning — byt ut.",,Hajkförrådet,,Köksrummet,Hylla 3,Säkerhet,
-Yxa,Yxa Stor,,"Gränsfors Bruks skogsyxa. Slipa med bryne, ej slipmaskin.","Använd alltid skydd vid transport. Slipa med bryne efter användning.","Skaft bytt 2023.",Hajkförrådet,,Verktygsrummet,Väggkrok,Verktyg,
-Yxa,Yxa Liten,,"Gränsfors Bruks handyxa. Bra för tälj och vedklyvning.","Använd alltid skydd vid transport. Slipa med bryne efter användning.",,Hajkförrådet,,Verktygsrummet,Väggkrok,Verktyg,
-Bryne,Bryne,2,"Dubbelsidig diamantbryne för knivar och yxor.",,,Hajkförrådet,,Verktygsrummet,Låda 1,Verktyg,
-Bryne,Bryne,2,"Dubbelsidig diamantbryne för knivar och yxor.",,,Karsvik,Ostergarden,Mötesförrådet,Knivar,Verktyg,
-Boombox,Boombox Ladan,,"JBL Boombox 3. Ladda fullt innan utlåning, laddare medföljer.","Ladda fullt (ca 6 timmar). Laddare ligger i väskan. Stänk ej vatten på laddporten.","Inköpt 2023. Garanti till 2025-09.",Karsvik,Ladan,Stolsförråd,,Elektronik,
-Liggunderlag,Liggunderlag,8,"Thermarest Z Lite Sol. Vikbar, gul/silver.",,,Hajkförrådet,,Stora rummet,Höger hylla,Sova,
 Tältlampa LED,Tältlampa LED,8,"Uppladdningsbar LED-lampa med karbinhake.","Ladda via USB-C innan utlåning. Håller ca 8 timmar på max.",,Hajkförrådet,,Stora rummet,Lådor,Sova,
-Pannlampa,Pannlampa,4,"Petzl Tikkina 300 lumen. Batterier medföljer (AAA).","Kontrollera batterier innan utlåning. Extra batterier i lådan.",,Hajkförrådet,,Stora rummet,Lådor,Sova,
 Presenning,Presenning Stor,,"4×6 m presenning med öljetter. Bra som markskydd eller regnskydd.",,,Hajkförrådet,,Stora rummet,Översta hyllan,Sova,
 Presenning,Presenning Liten,,"3×4 m presenning med öljetter.",,,Hajkförrådet,,Stora rummet,Översta hyllan,Sova,
 Vindskydd,Vindskydd 1,,"Hilleberg Windscreen UL. 6 sektioner, aluminiumpinnar.","Fäst med medföljande pinnar. Vik ihop sektion för sektion.",,Hajkförrådet,,Stora rummet,Höger vägg,Sova,
 Vindskydd,Vindskydd 2,,"Hilleberg Windscreen UL. 6 sektioner, aluminiumpinnar.","Fäst med medföljande pinnar. Vik ihop sektion för sektion.",,Hajkförrådet,,Stora rummet,Höger vägg,Sova,
-MS-fana,MS-fana,,"Mälarscouternas officiella fana. Hanteras varsamt, förvaras i fodral.","Bär alltid i fodral vid transport. Häng aldrig i direkt sol.","Renoverad 2022. Kontakta ordförande vid skada.",Kammaren,,,,Övrigt,high
+Kanot,Kanot 1,,"Grumman 17 fot aluminium. Plats för 3 personer.","Bär alltid flytväst. Kontrollera att pluggen sitter i innan sjösättning.","Lackad 2024.",Hajkförrådet,,Stora rummet,Golvet,Friluftsliv,high
+Kanot,Kanot 2,,"Grumman 17 fot aluminium. Plats för 3 personer.","Bär alltid flytväst. Kontrollera att pluggen sitter i innan sjösättning.",,Hajkförrådet,,Stora rummet,Golvet,Friluftsliv,high
+Matkåsa,Matkåsa,4,"Komplett matkåsa för 8 personer. Tallrikar, muggar, bestick och skärbräda.",,,Hajkförrådet,,Köksrummet,Hylla 2,Mat,
+Jägarpanna,Jägarpanna,3,"Stor stekpanna i kolstål med långt skaft. Perfekt över öppen eld.",,,Hajkförrådet,,Köksrummet,Hylla 1,Mat,
+Lykta,Lykta,4,"Oljelykta i mässing. Använd lampolja, ej T-röd.","Fyll på utomhus. Torka av spill innan tändning.",,Hajkförrådet,,Stora rummet,Lådor,Friluftsliv,
+Eldstad,Eldstad,2,"Portabel eldstad i rostfritt stål. Lämnar inga spår på marken.","Låt svalna helt innan packning. Aska töms i avsedd behållare.",,Karsvik,Ostergarden,Mötesförrådet,Golvet,Friluftsliv,
+Tarp,Tarp,3,"3×3 m tarp i silnylon med öljetter och linor. Lätt och kompakt.",,,Hajkförrådet,,Stora rummet,Översta hyllan,Sova,
+Fana,Fana,,"Svensk fana. Hanteras varsamt, förvaras i fodral.","Bär alltid i fodral vid transport. Häng aldrig i direkt sol.",,Kammaren,,,,Övrigt,high

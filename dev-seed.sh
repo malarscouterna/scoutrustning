@@ -64,41 +64,76 @@ done
 echo ""
 echo "Uploading product images..."
 SEED_IMG_DIR="docs/seed-images"
-if [ -d "$SEED_IMG_DIR" ] && ls "$SEED_IMG_DIR"/* >/dev/null 2>&1; then
-  # Get all article groups (commercial_name + location_id pairs)
-  GROUPS_JSON=$(curl -s "$API/api/v0/articles" -H "$HEADER" | python3 -c "
-import json, sys, unicodedata
+if [ -d "$SEED_IMG_DIR" ]; then
+  # Get all article groups and compute upload plan in one Python pass
+  ARTICLES_JSON=$(curl -s "$API/api/v0/articles" -H "$HEADER")
+  UPLOAD_PLAN=$(ARTICLES_JSON="$ARTICLES_JSON" SEED_IMG_DIR="$SEED_IMG_DIR" python3 << 'PYEOF'
+import json, os, re, unicodedata, glob, sys
+
 def simplify(s):
-    s = unicodedata.normalize('NFD', s.lower())
-    return ''.join(c for c in s if unicodedata.category(c) != 'Mn')
-articles = json.load(sys.stdin)
+    s = unicodedata.normalize("NFD", s.lower())
+    return "".join(c for c in s if unicodedata.category(c) != "Mn")
+
+articles = json.loads(os.environ["ARTICLES_JSON"])
+img_dir = os.environ["SEED_IMG_DIR"]
+
+# Build article groups: simplified_name -> [{name, location_id, location_name}]
 groups = {}
 for a in articles:
-    key = (a['commercial_name'], a['location_id'])
+    key = (a["commercial_name"], a["location_id"])
     if key not in groups:
-        groups[key] = simplify(a['commercial_name'])
-for (name, loc_id), simplified in groups.items():
-    print(json.dumps({'name': name, 'location_id': loc_id, 'simplified': simplified}))
-")
+        groups[key] = {"name": a["commercial_name"], "location_id": a["location_id"], "location_name": a["location_name"]}
+by_name = {}
+for g in groups.values():
+    by_name.setdefault(simplify(g["name"]), []).append(g)
+for v in by_name.values():
+    v.sort(key=lambda x: x["location_name"])
 
-  # Sort files so numbered variants upload in order (sibley.jpg, sibley-2.jpg, sibley-3.jpg)
-  for IMG_FILE in $(ls "$SEED_IMG_DIR"/* | sort); do
-    [ -f "$IMG_FILE" ] || continue
-    BASENAME=$(basename "$IMG_FILE")
-    # Strip extension, then strip -N suffix for matching (sibley-2.jpg -> sibley)
-    FILE_KEY=$(echo "${BASENAME%.*}" | sed 's/-[0-9]*$//' | tr '[:upper:]' '[:lower:]')
-    echo "$GROUPS_JSON" | while IFS= read -r GROUP; do
-      SIMPLIFIED=$(echo "$GROUP" | python3 -c "import json,sys; print(json.load(sys.stdin)['simplified'])")
-      if [ "$FILE_KEY" = "$SIMPLIFIED" ]; then
-        NAME=$(echo "$GROUP" | python3 -c "import json,sys; print(json.load(sys.stdin)['name'])")
-        LOC_ID=$(echo "$GROUP" | python3 -c "import json,sys; print(json.load(sys.stdin)['location_id'])")
-        curl -sf -X POST "$API/api/v0/images/product" \
-          -H "$HEADER" \
-          -F "file=@$IMG_FILE" \
-          -F "commercial_name=$NAME" \
-          -F "location_id=$LOC_ID" > /dev/null && echo "  $NAME → $BASENAME" || echo "  FAILED: $NAME"
-      fi
-    done
+descriptions = ["{name} ute i verkligheten", "{name} i skogen"]
+group_idx = {}
+
+files = sorted(glob.glob(os.path.join(img_dir, "*")))
+for f in files:
+    ext = os.path.splitext(f)[1].lower()
+    if ext not in (".jpg", ".jpeg", ".png", ".webp", ".heic"):
+        continue
+    base = os.path.splitext(os.path.basename(f))[0]
+    m = re.match(r"^(.+?)(?:-(\d+))?$", base.lower())
+    file_key, file_num = m.group(1), int(m.group(2) or 1)
+    if file_key not in by_name:
+        continue
+    locations = by_name[file_key]
+    # Multi-location split: first half of numbered images → first location, rest → second
+    if len(locations) > 1:
+        target = locations[0 if file_num <= 2 else min(1, len(locations) - 1)]
+    else:
+        target = locations[0]
+    gkey = (target["name"], target["location_id"])
+    idx = group_idx.get(gkey, 0)
+    group_idx[gkey] = idx + 1
+    desc = descriptions[idx % 2].format(name=target["name"])
+    print(json.dumps({"file": f, "name": target["name"], "location_id": target["location_id"], "title": target["name"], "description": desc}))
+PYEOF
+  )
+
+  ATTRIBUTION="Teo, Mälarscouterna"
+  TEO="X-Dev-Role-Override: leader-unit-it"
+  echo "$UPLOAD_PLAN" | while IFS= read -r LINE; do
+    [ -z "$LINE" ] && continue
+    file=$(echo "$LINE" | python3 -c "import json,sys; print(json.load(sys.stdin)['file'])")
+    name=$(echo "$LINE" | python3 -c "import json,sys; print(json.load(sys.stdin)['name'])")
+    location_id=$(echo "$LINE" | python3 -c "import json,sys; print(json.load(sys.stdin)['location_id'])")
+    title=$(echo "$LINE" | python3 -c "import json,sys; print(json.load(sys.stdin)['title'])")
+    description=$(echo "$LINE" | python3 -c "import json,sys; print(json.load(sys.stdin)['description'])")
+    BASENAME=$(basename "$file")
+    curl -sf -X POST "$API/api/v0/images/product" \
+      -H "$TEO" \
+      -F "file=@$file" \
+      -F "commercial_name=$name" \
+      -F "location_id=$location_id" \
+      -F "title=$title" \
+      -F "description=$description" \
+      -F "attribution=$ATTRIBUTION" > /dev/null && echo "  $name → $BASENAME" || echo "  FAILED: $name → $BASENAME"
   done
 else
   echo "  Skipped (no images in $SEED_IMG_DIR)"
@@ -144,17 +179,17 @@ curl -sf -X PUT "$API/api/v0/articles/$LAMP3/status" \
   -d '{"status":"under_repair","comment":"Skickad för batteribyte","expected_available_date":"2026-07-10"}' > /dev/null
 echo "  Tältlampa LED: 1 under repair (beräknas klar 10 jul)"
 
-# Pannlampa: archive one
-PANN_IDS=$(curl -s "$API/api/v0/articles?search=Pannlampa" -H "$HEADER" | python3 -c "
+# Lykta: archive one
+LYKTA_IDS=$(curl -s "$API/api/v0/articles?search=Lykta" -H "$HEADER" | python3 -c "
 import json,sys
 ids = [a['id'] for a in json.load(sys.stdin)]
 for i in ids: print(i)
 ")
-PANN1=$(echo "$PANN_IDS" | sed -n '1p')
-curl -sf -X PUT "$API/api/v0/articles/$PANN1/status" \
+LYKTA1=$(echo "$LYKTA_IDS" | sed -n '1p')
+curl -sf -X PUT "$API/api/v0/articles/$LYKTA1/status" \
   -H "$HEADER" -H "Content-Type: application/json" \
   -d '{"status":"archived","comment":"Uttjänt, ersätts inte"}' > /dev/null
-echo "  Pannlampa: 1 archived"
+echo "  Lykta: 1 archived"
 
 # Stormkök: report issues on a couple
 STORM_IDS=$(curl -s "$API/api/v0/articles?search=Stormk%C3%B6k" -H "$HEADER" | python3 -c "
@@ -316,13 +351,13 @@ echo "  Sibley 2: leader reported unusable a third time (8 events total)"
 echo ""
 echo "Creating standalone issue reports..."
 
-# Bryne: reported usable
-BRYNE_ID=$(curl -s "$API/api/v0/articles?search=Bryne" -H "$HEADER" | python3 -c "import json,sys; arts=[a for a in json.load(sys.stdin) if a['location_name']=='Hajkförrådet']; print(arts[0]['id'] if arts else '')")
-if [ -n "$BRYNE_ID" ]; then
-  curl -sf -X PUT "$API/api/v0/articles/$BRYNE_ID/status" \
+# Jägarpanna: reported usable
+JAGAR_ID=$(curl -s "$API/api/v0/articles?search=J%C3%A4garpanna" -H "$HEADER" | python3 -c "import json,sys; arts=json.load(sys.stdin); print(arts[0]['id'] if arts else '')")
+if [ -n "$JAGAR_ID" ]; then
+  curl -sf -X PUT "$API/api/v0/articles/$JAGAR_ID/status" \
     -H "$LEADER" -H "Content-Type: application/json" \
-    -d '{"status":"reported_usable","comment":"Slitet och behöver slipas"}' > /dev/null
-  echo "  Bryne: reported usable (slitet)"
+    -d '{"status":"reported_usable","comment":"Rostfläckar på pannan"}' > /dev/null
+  echo "  Jägarpanna: reported usable (rostfläckar)"
 fi
 
 # ─── Booking 2: Confirmed, reserved for next week (not yet picked up) ───
@@ -342,11 +377,11 @@ curl -sf -X POST "$API/api/v0/bookings/$BOOKING2_ID/items" \
   -d '{"commercial_name":"Primus","quantity":1}' > /dev/null
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING2_ID/items" \
   -H "$LEADER" -H "Content-Type: application/json" \
-  -d '{"commercial_name":"Liggunderlag","quantity":4}' > /dev/null
+  -d '{"commercial_name":"Matk\u00e5sa","quantity":2}' > /dev/null
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING2_ID/submit" \
   -H "$LEADER" -H "Content-Type: application/json" \
   -d '{"message":"Behöver hämta på fredag kväll, går det bra?"}' > /dev/null
-echo "  Booking 2 (confirmed): 2x Brandfilt, 1x Primus, 4x Liggunderlag"
+echo "  Booking 2 (confirmed): 2x Brandfilt, 1x Primus, 2x Matkåsa"
 
 # ─── Booking 3: Submitted, waiting for approval (leader booked Sibley = low) ───
 echo ""
@@ -437,9 +472,9 @@ BOOKING6_ID=$(curl -s -X POST "$API/api/v0/bookings" \
 
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING6_ID/items" \
   -H "$MANAGER" -H "Content-Type: application/json" \
-  -d '{"commercial_name":"Pannlampa","quantity":2}' > /dev/null
+  -d '{"commercial_name":"Lykta","quantity":2}' > /dev/null
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING6_ID/submit" -H "$MANAGER" > /dev/null
-echo "  Booking 6 (confirmed): 2x Pannlampa (manager's personal booking)"
+echo "  Booking 6 (confirmed): 2x Lykta (manager's personal booking)"
 
 # ─── Booking 7: Rejected → edited → resubmitted (approval conversation) ───
 echo ""
@@ -448,25 +483,25 @@ END_27D=$(date -d "+27 days" +%Y-%m-%d 2>/dev/null || date -v+27d +%Y-%m-%d)
 echo "Creating booking 7 (rejected then resubmitted, $START_25D to $END_27D)..."
 BOOKING7_ID=$(curl -s -X POST "$API/api/v0/bookings" \
   -H "$LEADER" -H "Content-Type: application/json" \
-  -d "{\"start_date\":\"$START_25D\",\"end_date\":\"$END_27D\",\"used_by_unit_id\":\"$UNIT_ID\",\"notes\":\"Hajk med Yggdrasil — behöver tält och yxor\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+  -d "{\"start_date\":\"$START_25D\",\"end_date\":\"$END_27D\",\"used_by_unit_id\":\"$UNIT_ID\",\"notes\":\"Hajk med Yggdrasil — behöver tält och tarp\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
 
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING7_ID/items" \
   -H "$LEADER" -H "Content-Type: application/json" \
   -d '{"commercial_name":"Sibley","quantity":2}' > /dev/null
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING7_ID/items" \
   -H "$LEADER" -H "Content-Type: application/json" \
-  -d '{"commercial_name":"Yxa","quantity":2}' > /dev/null
+  -d '{"commercial_name":"Tarp","quantity":2}' > /dev/null
 
 # Leader submits with explanation
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING7_ID/submit" \
   -H "$LEADER" -H "Content-Type: application/json" \
-  -d '{"message":"Vi ska på hajk med 15 utmanare, behöver 2 Sibley för att alla ska få plats. Yxorna behövs för vedhuggning."}' > /dev/null
+  -d '{"message":"Vi ska på hajk med 15 utmanare, behöver 2 Sibley för att alla ska få plats. Tarparna behövs som regnskydd."}' > /dev/null
 echo "  Submitted with message"
 
 # Manager rejects
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING7_ID/reject" \
   -H "$HEADER" -H "Content-Type: application/json" \
-  -d '{"message":"Sibley 2 är under reparation just nu, boka bara 1 Sibley + 1 Vindskydd istället. Yxorna är ok."}' > /dev/null
+  -d '{"message":"Sibley 2 är under reparation just nu, boka bara 1 Sibley + 1 Vindskydd istället. Tarparna är ok."}' > /dev/null
 echo "  Manager rejected with feedback"
 
 # Leader removes one Sibley, adds a Vindskydd
@@ -489,7 +524,7 @@ curl -sf -X POST "$API/api/v0/bookings/$BOOKING7_ID/submit" \
   -H "$LEADER" -H "Content-Type: application/json" \
   -d '{"message":"Ändrat till 1x Sibley + 1x Vindskydd som du föreslog, tack!"}' > /dev/null
 echo "  Leader edited and resubmitted"
-echo "  Booking 7 (submitted): approval conversation with 3 events"
+echo "  Booking 7 (submitted): 1x Sibley, 2x Tarp, 1x Vindskydd — approval conversation with 3 events"
 
 # ─── Booking 8: Force-approval on freely bookable items ───
 echo ""
