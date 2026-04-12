@@ -21,6 +21,55 @@
 		units: user.role_units?.[role] ?? []
 	})));
 
+	let myImages = $state<{ id: string; file_id: string; title: string; description: string; format: string; shared: boolean; created_at: string; own_group_count: number; other_group_count: number }[]>([]);
+	let myImagesLoaded = $state(false);
+	let expandedImageId = $state<string | null>(null);
+	let expandedArticles = $state<{ commercial_name: string; location_name: string; article_id: string }[]>([]);
+
+	async function loadMyImages() {
+		if (myImagesLoaded) return;
+		try {
+			myImages = await api.listMyImages();
+		} catch { /* ignore */ }
+		myImagesLoaded = true;
+	}
+
+	async function toggleImageDetail(img: typeof myImages[0]) {
+		if (expandedImageId === img.id) {
+			expandedImageId = null;
+			return;
+		}
+		expandedImageId = img.id;
+		try {
+			expandedArticles = await api.listArticlesUsingImage(img.id);
+		} catch {
+			expandedArticles = [];
+		}
+	}
+
+	async function deleteMyImage(img: typeof myImages[0]) {
+		const totalRefs = img.own_group_count + img.other_group_count;
+		let msg = 'Är du säker på att du vill ta bort bilden?';
+		if (totalRefs > 1) {
+			const parts: string[] = [];
+			if (img.own_group_count > 1) parts.push(`${img.own_group_count - 1} i din kår`);
+			if (img.other_group_count > 0) parts.push(`${img.other_group_count} i andra kårer`);
+			msg = `Bilden används på ${parts.join(' och ')}. Om du tar bort den försvinner den därifrån också. Fortsätt?`;
+		}
+		if (!confirm(msg)) return;
+		try {
+			await api.deleteMyImage(img.id);
+			myImages = myImages.filter(i => i.id !== img.id);
+			if (expandedImageId === img.id) expandedImageId = null;
+		} catch (e: any) {
+			alert(e.message ?? 'Borttagning misslyckades');
+		}
+	}
+
+	$effect(() => {
+		if (tab === 'profile') loadMyImages();
+	});
+
 	type Tab = 'profile' | 'group';
 	let tab = $state<Tab>('profile');
 
@@ -137,6 +186,68 @@
 								{#each group.units as unit}
 									<span class="text-xs bg-neutral-100 text-neutral-700 px-2 py-1 rounded">{unit}</span>
 								{/each}
+							</div>
+						{/if}
+					</div>
+				{/each}
+			</div>
+		{/if}
+
+		<h2 class="text-sm font-semibold text-neutral-600 uppercase tracking-wide mt-8 mb-3">Mina bilder</h2>
+
+		{#if !myImagesLoaded}
+			<p class="text-sm text-neutral-400">Laddar...</p>
+		{:else if myImages.length === 0}
+			<p class="text-sm text-neutral-500">Du har inte laddat upp några bilder ännu.</p>
+		{:else}
+			<p class="text-xs text-neutral-400 mb-2">{myImages.length} {myImages.length === 1 ? 'bild' : 'bilder'}</p>
+			<div class="flex flex-wrap gap-3">
+				{#each myImages as img}
+					<div class="border rounded overflow-hidden w-[calc(33.333%-0.5rem)]">
+						<img
+							src="/api/v0/images/{img.file_id}_thumb.webp"
+							alt={img.title || 'Bild'}
+							class="w-full h-[160px] rounded-t object-contain bg-neutral-50"
+							loading="lazy"
+						/>
+						<div class="px-2 py-1.5">
+							<p class="text-xs font-medium truncate">{img.title || 'Utan titel'}</p>
+							{#if img.shared}
+								<span class="text-[10px] bg-blue-100 text-blue-700 px-1 rounded">Delad</span>
+							{/if}
+							<button type="button" onclick={() => toggleImageDetail(img)} class="text-[10px] text-blue-700 hover:underline mt-1">
+								{expandedImageId === img.id ? 'Dölj detaljer' : 'Detaljer'}
+							</button>
+						</div>
+
+						{#if expandedImageId === img.id}
+							<div class="border-t px-2 py-2 space-y-2 bg-neutral-50">
+
+								{#if img.description}
+									<p class="text-xs text-neutral-600">{img.description}</p>
+								{/if}
+
+								<p class="text-[10px] text-neutral-400">
+									{img.format === 'landscape' ? 'Liggande' : img.format === 'portrait' ? 'Stående' : 'Kvadrat'}
+									· {new Date(img.created_at).toLocaleDateString('sv')}
+								</p>
+
+								{#if expandedArticles.length > 0}
+									<div>
+										<span class="text-[10px] font-medium text-neutral-500">Används på:</span>
+										{#each expandedArticles as a}
+											<a href="/articles/{a.article_id}" class="block text-[10px] text-blue-700 hover:underline">{a.commercial_name} — {a.location_name}</a>
+										{/each}
+									</div>
+								{:else}
+									<p class="text-[10px] text-neutral-400">Inte kopplad till någon artikel</p>
+								{/if}
+
+								{#if img.other_group_count > 0}
+									<p class="text-[10px] text-neutral-400">Används även av {img.other_group_count} {img.other_group_count === 1 ? 'annan kår' : 'andra kårer'}</p>
+								{/if}
+
+								<button type="button" onclick={() => deleteMyImage(img)} class="text-[10px] text-red-600 hover:underline">Ta bort bild</button>
 							</div>
 						{/if}
 					</div>

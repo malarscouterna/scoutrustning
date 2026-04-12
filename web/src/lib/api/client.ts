@@ -287,12 +287,17 @@ export function createApiClient(opts: FetchOptions = {}) {
 			return res.json();
 		},
 
-		uploadProductImage: async (file: File, commercialName: string, locationId: string) => {
+		uploadProductImage: async (file: Blob | File, commercialName: string, locationId: string, meta?: { title?: string; description?: string; format?: string; shared?: boolean; attribution?: string }) => {
 			const f = opts.fetch ?? globalThis.fetch;
 			const formData = new FormData();
-			formData.append('file', file);
+			formData.append('file', file, file instanceof File ? file.name : 'crop.jpg');
 			formData.append('commercial_name', commercialName);
 			formData.append('location_id', locationId);
+			if (meta?.title) formData.append('title', meta.title);
+			if (meta?.description) formData.append('description', meta.description);
+			if (meta?.format) formData.append('format', meta.format);
+			if (meta?.shared) formData.append('shared', 'true');
+			if (meta?.attribution) formData.append('attribution', meta.attribution);
 			const res = await f(`${API_BASE}/images/product`, {
 				method: 'POST',
 				body: formData
@@ -301,12 +306,20 @@ export function createApiClient(opts: FetchOptions = {}) {
 				const b = await res.json().catch(() => ({}));
 				throw new ApiError(b.error || res.statusText, res.status, b);
 			}
-			return res.json() as Promise<{ image_id: string; image_ids: string[] }>;
+			return res.json() as Promise<{ image: Record<string, any>; image_ids: string[] }>;
 		},
 		deleteProductImage: async (imageId: string, commercialName: string, locationId: string) => {
 			const query = new URLSearchParams({ commercial_name: commercialName, location_id: locationId });
 			return requestMut<void>(`/images/product/${imageId}?${query}`, 'DELETE', undefined, opts);
 		},
+		getProductImageMeta: (imageId: string) =>
+			request<{ id: string; file_id: string; title: string; description: string; format: string; shared: boolean; attribution: string; ref_count: number }>(`/images/product/${imageId}`, opts),
+		listMyImages: () =>
+			request<{ id: string; file_id: string; title: string; description: string; format: string; shared: boolean; created_at: string; own_group_count: number; other_group_count: number }[]>('/images/my', opts),
+		listArticlesUsingImage: (imageId: string) =>
+			request<{ commercial_name: string; location_name: string; article_id: string }[]>(`/images/my/${imageId}/articles`, opts),
+		deleteMyImage: (imageId: string) =>
+			requestMut<void>(`/images/my/${imageId}`, 'DELETE', undefined, opts),
 		reorderProductImages: (commercialName: string, locationId: string, imageIds: string[]) =>
 			requestMut<{ image_ids: string[] }>('/images/product/reorder', 'PUT', {
 				commercial_name: commercialName,

@@ -26,6 +26,9 @@ importers:
       photoswipe:
         specifier: ^5.4.4
         version: 5.4.4
+      svelte-easy-crop:
+        specifier: ^5.0.1
+        version: 5.0.1(svelte@5.55.1)
     devDependencies:
       '@sveltejs/adapter-node':
         specifier: ^5.5.4
@@ -1044,6 +1047,11 @@ packages:
     resolution: {integrity: sha512-ot0WnXS9fgdkgIcePe6RHNk1WA8+muPa6cSjeR3V8K27q9BB1rTE3R1p7Hv0z1ZyAc8s6Vvv8DIyWf681MAt0w==}
     engines: {node: '>= 0.4'}
 
+  svelte-easy-crop@5.0.1:
+    resolution: {integrity: sha512-Dq2rgmPsSEo+K8k49TFGXZAJwJa537AR6hW1RqKEdYj7QKlc4Ya7l4VlSYWlOV8/uAiQ10VyGRdSVAUcZiMwjg==}
+    peerDependencies:
+      svelte: ^5.0.0
+
   svelte@5.55.1:
     resolution: {integrity: sha512-QjvU7EFemf6mRzdMGlAFttMWtAAVXrax61SZYHdkD6yoVGQ89VeyKfZD4H1JrV1WLmJBxWhFch9H6ig/87VGjw==}
     engines: {node: '>=18'}
@@ -1986,6 +1994,10 @@ snapshots:
       inline-style-parser: 0.2.7
 
   supports-preserve-symlinks-flag@1.0.0: {}
+
+  svelte-easy-crop@5.0.1(svelte@5.55.1):
+    dependencies:
+      svelte: 5.55.1
 
   svelte@5.55.1:
     dependencies:

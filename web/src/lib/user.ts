@@ -1,6 +1,7 @@
 export interface User {
 	member_id: string;
 	group_id: string;
+	group_name: string;
 	name: string;
 	email: string;
 	roles: string[];

@@ -29,6 +29,7 @@ High — follow these unless they conflict with an explicit user instruction.
 - API calls go through a typed client in `src/lib/api/`.
 - Server-side load functions fetch data; forms use SvelteKit form actions or fetch to the Go API.
 - Mobile-first responsive design. Test layouts at 375px width.
+- Never distort images. Lock height and let width follow the image's natural aspect ratio. Use `object-contain` (not `object-cover` or forced aspect ratios) when the image format varies.
 - Extract shared UI patterns into reusable components in `src/lib/components/`. If the same UI appears in two or more pages, extract it.
 - No page or component should ever reference personas, cookies, or auth headers directly. Consume `data.user` from the layout and call `createApiClient()` without auth options.
 - Follow Svelte 5 reactivity rules: use `$derived` for values derived from props/data, `$effect` to sync `$state` from reactive sources. Never capture `data.*` or other reactive values in `const` or `$state()` initializers — this triggers `state_referenced_locally` warnings.

@@ -6,17 +6,25 @@
 	import ReportIssueForm from '$lib/components/ReportIssueForm.svelte';
 	import ArticleEventHistory from '$lib/components/ArticleEventHistory.svelte';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
+	import ImageUpload from '$lib/components/ImageUpload.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 	const api = createApiClient();
 
 	let isManager = $derived(hasRole($page.data.user, 'equipment_manager'));
+	let user = $derived($page.data.user);
 	let article = $derived(data.article);
 	let groupArticles = $derived(data.groupArticles);
 	let isQuantityTracked = $derived(!article.individually_tracked && groupArticles !== null);
 	let statusOverride = $state<string | null>(null);
 	let effectiveStatus = $derived(statusOverride ?? article.status);
+	let imageIds = $state<string[]>([]);
+
+	$effect(() => {
+		imageIds = article.image_ids ?? [];
+	});
+
 	let reporting = $state(false);
 	let message = $state('');
 
@@ -143,10 +151,20 @@
 	{/if}
 
 	<div class="mt-4 mb-6">
-		{#if article.image_ids?.length > 0}
+		{#if imageIds.length > 0}
 			<div class="mb-4">
-				<ImageViewer imageIds={article.image_ids} alt={article.commercial_name || article.common_name} />
+				<ImageViewer imageIds={imageIds} alt={article.commercial_name || article.common_name} />
 			</div>
+		{/if}
+		{#if article.commercial_name && article.location_id}
+			<ImageUpload
+				commercialName={article.commercial_name}
+				locationId={article.location_id}
+				{imageIds}
+				userName={user?.name ?? ''}
+				userGroup={user?.group_name ?? ''}
+				onUpdate={(ids) => imageIds = ids}
+			/>
 		{/if}
 		<div class="flex flex-wrap items-center gap-3 mb-2">
 			{#if isQuantityTracked}

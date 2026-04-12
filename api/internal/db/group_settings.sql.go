@@ -46,7 +46,7 @@ func (q *Queries) CountArticlesForLocation(ctx context.Context, arg CountArticle
 }
 
 const getGroupSettings = `-- name: GetGroupSettings :one
-SELECT group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url, default_approval_level, created_at, updated_at FROM group_settings
+SELECT group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url, default_approval_level, created_at, updated_at, image_upload_role FROM group_settings
 WHERE group_id = $1
 `
 
@@ -61,20 +61,22 @@ func (q *Queries) GetGroupSettings(ctx context.Context, groupID string) (GroupSe
 		&i.DefaultApprovalLevel,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ImageUploadRole,
 	)
 	return i, err
 }
 
 const upsertGroupSettings = `-- name: UpsertGroupSettings :one
-INSERT INTO group_settings (group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url, default_approval_level)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO group_settings (group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url, default_approval_level, image_upload_role)
+VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (group_id) DO UPDATE SET
     notification_email_from = $2,
     smtp_key_encrypted = $3,
     gchat_webhook_url = $4,
     default_approval_level = $5,
+    image_upload_role = $6,
     updated_at = now()
-RETURNING group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url, default_approval_level, created_at, updated_at
+RETURNING group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url, default_approval_level, created_at, updated_at, image_upload_role
 `
 
 type UpsertGroupSettingsParams struct {
@@ -83,6 +85,7 @@ type UpsertGroupSettingsParams struct {
 	SmtpKeyEncrypted      []byte `json:"smtp_key_encrypted"`
 	GchatWebhookUrl       string `json:"gchat_webhook_url"`
 	DefaultApprovalLevel  string `json:"default_approval_level"`
+	ImageUploadRole       string `json:"image_upload_role"`
 }
 
 func (q *Queries) UpsertGroupSettings(ctx context.Context, arg UpsertGroupSettingsParams) (GroupSetting, error) {
@@ -92,6 +95,7 @@ func (q *Queries) UpsertGroupSettings(ctx context.Context, arg UpsertGroupSettin
 		arg.SmtpKeyEncrypted,
 		arg.GchatWebhookUrl,
 		arg.DefaultApprovalLevel,
+		arg.ImageUploadRole,
 	)
 	var i GroupSetting
 	err := row.Scan(
@@ -102,6 +106,7 @@ func (q *Queries) UpsertGroupSettings(ctx context.Context, arg UpsertGroupSettin
 		&i.DefaultApprovalLevel,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ImageUploadRole,
 	)
 	return i, err
 }
