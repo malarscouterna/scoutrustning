@@ -117,6 +117,7 @@ function parseUserFromSession(session: any): SessionParseResult {
 			user: {
 				member_id: memberID,
 				group_id: groupID,
+				group_name: rm.groups[groupID]?.name || '',
 				name,
 				email: payload.email || '',
 				roles: [...appRoles],
@@ -139,8 +140,13 @@ export const load: LayoutServerLoad = async ({ cookies, locals, url }) => {
 		const personas = loadPersonas();
 
 		if (personaCookie && personas[personaCookie]) {
+			const persona = personas[personaCookie];
+			if (!persona.group_name) {
+				const rm = loadRoleMapping();
+				persona.group_name = rm?.groups?.[persona.group_id]?.name || '';
+			}
 			return {
-				user: personas[personaCookie],
+				user: persona,
 				dev: { personas, currentPersona: personaCookie },
 				demo: DEMO_MODE,
 				oidcName: null

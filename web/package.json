@@ -14,7 +14,8 @@
     "@scouterna/tailwind-theme": "^0.0.4",
     "@scouterna/ui-webc": "^3.2.0",
     "marked": "^17.0.6",
-    "photoswipe": "^5.4.4"
+    "photoswipe": "^5.4.4",
+    "svelte-easy-crop": "^5.0.1"
   },
   "devDependencies": {
     "@sveltejs/adapter-node": "^5.5.4",

@@ -517,30 +517,81 @@ List all categories for the group, ordered by sort_order.
 
 ## Images
 
-Product images are shared per product type + location (`commercial_name + location_id`). Issue images are standalone, referenced by UUID in article event metadata.
+Product images are shared per product type + location (`commercial_name + location_id`). Multiple images per product, stored in `product_images` table with metadata (title, description, format, sharing, attribution). Issue images are standalone, referenced by UUID in article event metadata.
 
-Images are stored as WebP on a Docker volume. Two variants per image: source (1920px longest edge, q80) and thumbnail (400×300, q70). On-demand JPEG conversion for download.
+Images are stored as WebP on a Docker volume. Two variants per image: source (1920px longest edge, q80) and thumbnail (300px height, q70). Thumbnail width varies by format (landscape 400×300, portrait 225×300, square 300×300). On-demand JPEG conversion for download.
 
 ### 🔒 `POST /api/v0/images/product`
-Upload a product image. Multipart form upload. Accepts JPEG, PNG, WebP, HEIC up to 25MB. Server-side: strips EXIF, auto-rotates, center-crops to 4:3, generates source + thumbnail WebP. Updates `image_path` on all articles matching the commercial_name + location_id.
+Upload a product image. Multipart form upload. Accepts JPEG, PNG, WebP, HEIC up to 25MB. Client crops via cropperjs; server validates ratio, strips EXIF, generates source + thumbnail WebP. Appends to `image_ids` on all articles matching commercial_name + location_id. Upload permission controlled by `image_upload_role` group setting.
 
 **Form fields**:
-- `file` — image file
+- `file` — image file (pre-cropped by client)
 - `commercial_name` — product type (e.g. "Sibley")
 - `location_id` — location UUID
-
-If an image already exists for this group, the old files are deleted.
+- `title` — image title (optional, defaults to empty)
+- `description` — image description (optional)
+- `format` — `landscape` (4:3), `portrait` (3:4), or `square` (1:1). Default: `landscape`
+- `shared` — `true` to share with other scout groups (optional, default false)
+- `attribution_mode` — `first_name` (default), `full_name`, or `custom`
+- `attribution_name` — free text attribution (only used when mode is `custom`)
 
 **Response** `200`
 ```json
-{"image_id": "uuid"}
+{"image": {"id": "uuid", "file_id": "uuid", "title": "...", ...}, "image_ids": ["uuid", ...]}
 ```
 
-### `POST /api/v0/images/issue`
-Upload an issue report image. Any authenticated user. Same processing as product images but no 4:3 crop. Returns the UUID for the caller to include in the issue report.
+### 🔒 `POST /api/v0/images/product/from-shared`
+Add a shared image to an article group. Creates a new `product_images` row referencing the same files on disk.
 
-**Form fields**:
-- `file` — image file
+**Body** (JSON):
+- `source_image_id` — UUID of the shared image
+- `commercial_name` — target product type
+- `location_id` — target location UUID
+- `title` — title for the new reference
+- `description` — description for the new reference
+
+**Response** `200` — same as upload
+
+### `GET /api/v0/images/product`
+List product images for an article group.
+
+**Query parameters**: `commercial_name`, `location_id`
+
+**Response** `200` — array of image objects
+
+### `GET /api/v0/images/product/{imageId}`
+Get metadata for a single product image, including `ref_count` (how many product_images rows reference the same file).
+
+### 🔒🔧 `PUT /api/v0/images/product/reorder`
+Reorder images for an article group. Manager only.
+
+**Body** (JSON): `{"commercial_name": "...", "location_id": "...", "image_ids": ["uuid", ...]}`
+
+### 🔒 `DELETE /api/v0/images/product/{imageId}`
+Delete a product image. Removes from article `image_ids`, deletes `product_images` row. Files deleted only if no other rows reference the same `file_id`. Uploader or equipment manager can delete.
+
+**Query parameters**: `commercial_name`, `location_id`
+
+**Response** `204`
+
+### `GET /api/v0/images/shared`
+Browse shared images across all groups plus own group's images. Attribution resolved per `attribution_mode`.
+
+**Query parameters**: `search` (optional, filters on title/description)
+
+### `GET /api/v0/images/my`
+List images uploaded by the current user, with usage counts (`own_group_count`, `other_group_count`).
+
+### `GET /api/v0/images/my/{imageId}/articles`
+List article groups using a specific image (deduplicated by commercial_name + location).
+
+### `DELETE /api/v0/images/my/{imageId}`
+Delete own image. Removes from all articles' `image_ids` in the group, deletes row, deletes files if no other references.
+
+### `POST /api/v0/images/issue`
+Upload an issue report image. Any authenticated user. No crop. Returns UUID for inclusion in issue report metadata.
+
+**Form fields**: `file` — image file
 
 **Response** `200`
 ```json
@@ -555,15 +606,6 @@ Serve the thumbnail.
 
 ### `GET /api/v0/images/{uuid}.webp?format=jpeg`
 Convert and serve as JPEG (quality 85) with `Content-Disposition: attachment` for download.
-
-### 🔒 `DELETE /api/v0/images/product`
-Delete a product image. Clears `image_path` on all matching articles, deletes files from disk.
-
-**Query parameters**:
-- `commercial_name` — product type
-- `location_id` — location UUID
-
-**Response** `204` | `404` (`no_image`)
 
 ---
 

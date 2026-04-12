@@ -115,6 +115,7 @@ type GroupSetting struct {
 	DefaultApprovalLevel  string             `json:"default_approval_level"`
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	ImageUploadRole       string             `json:"image_upload_role"`
 }
 
 type Location struct {
@@ -143,6 +144,19 @@ type PackageItem struct {
 	CategoryID pgtype.UUID `json:"category_id"`
 	ArticleID  pgtype.UUID `json:"article_id"`
 	Quantity   int32       `json:"quantity"`
+}
+
+type ProductImage struct {
+	ID          pgtype.UUID        `json:"id"`
+	FileID      pgtype.UUID        `json:"file_id"`
+	GroupID     string             `json:"group_id"`
+	UploadedBy  string             `json:"uploaded_by"`
+	Title       string             `json:"title"`
+	Description string             `json:"description"`
+	Format      string             `json:"format"`
+	Shared      bool               `json:"shared"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	Attribution string             `json:"attribution"`
 }
 
 type Unit struct {

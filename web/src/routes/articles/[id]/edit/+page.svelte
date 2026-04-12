@@ -8,6 +8,7 @@
 
 	let { data }: { data: PageData } = $props();
 	const api = createApiClient();
+	let user = $derived(data.user);
 
 	let isGroupEdit = $derived($page.url.searchParams.get('group') === 'true');
 	let error = $state('');
@@ -66,6 +67,8 @@
 		categories={data.categories}
 		initial={data.article}
 		isManager={true}
+		userName={user?.name ?? ''}
+		userGroup={user?.group_name ?? ''}
 		individuallyTrackedEdit={data.article.individually_tracked && !isGroupEdit}
 		quantityTrackedEdit={isGroupEdit}
 		groupCount={data.groupCount}

@@ -147,25 +147,27 @@ Built the entire Phase 1 in one session:
 
 ### Image upload infrastructure and display (Phase 2 Step 3, partial)
 
-See [images.md](images.md) for the full design doc with 7-step implementation plan.
+See [images.md](images.md) for the full design doc.
 
-**Image processing pipeline**: `api/internal/images/` package using govips (libvips CGO wrapper). Accepts JPEG, PNG, WebP, HEIC up to 25MB. Strips all EXIF metadata, auto-rotates, center-crops to 4:3 for product images (no crop for issue images). Produces two WebP variants: source (1920px longest edge, q80) and thumbnail (400×300, q70). On-demand JPEG conversion for download via `?format=jpeg` query parameter.
+**Image processing pipeline**: `api/internal/images/` package using govips (libvips CGO wrapper). Accepts JPEG, PNG, WebP, HEIC up to 25MB. Strips all EXIF metadata, auto-rotates. Client-side crop via cropperjs with selectable format (landscape 4:3, portrait 3:4, square 1:1). Server validates ratio and produces two WebP variants: source (1920px longest edge, q80) and thumbnail (300px height, q70). On-demand JPEG conversion for download via `?format=jpeg` query parameter.
 
-**MIME detection**: Byte-level content sniffing — `http.DetectContentType` for JPEG/PNG, RIFF header check for WebP, ftyp box brand check for HEIC/HEIF. Robust against missing or incorrect Content-Type headers in multipart uploads.
+**MIME detection**: Byte-level content sniffing — `http.DetectContentType` for JPEG/PNG, RIFF header check for WebP, ftyp box brand check for HEIC/HEIF.
 
-**API endpoints**: `POST /images/product` (manager-only), `POST /images/issue` (any user), `GET /images/{uuid}.webp` and `GET /images/{uuid}_thumb.webp` (serve with immutable cache), `DELETE /images/product` (manager-only). Product upload propagates `image_path` to all articles sharing `commercial_name + location_id + group_id`. Replace deletes old files. Delete clears `image_path` on all matching articles.
+**`product_images` table** (migration 00014): Stores per-image metadata (title, description, format, shared flag, attribution). `file_id` separate from row `id` to support shared images referencing the same files on disk. Migration 00015 replaced `name_display` with `attribution_mode` (`first_name`/`full_name`/`custom`) + `attribution_name` for flexible photographer attribution.
+
+**API endpoints**: `POST /images/product` (upload with metadata + crop), `POST /images/product/from-shared` (add shared image to article group), `GET /images/product` (list for article group), `GET /images/product/{id}` (metadata + ref count), `PUT /images/product/reorder` (manager), `DELETE /images/product/{id}` (uploader or manager), `GET /images/shared` (browse cross-group), `GET /images/my` (user's uploads with usage counts), `GET /images/my/{id}/articles` (articles using image), `DELETE /images/my/{id}` (delete own image from all articles), `POST /images/issue` (any user), `GET /images/{uuid}.webp` and `GET /images/{uuid}_thumb.webp` (serve with immutable cache).
+
+**Upload permission**: Controlled by `image_upload_role` group setting (`any`/`leader`/`project_leader`/`equipment_manager`, default `leader`). Added to `group_settings` table in migration 00014.
+
+**Frontend**: `ImageCropDialog` (cropperjs with format switcher), `ImageUploadDialog` (crop + metadata + attribution radio buttons + sharing), `ImageUpload` (upload button on article page), `ImageViewer` (PhotoSwipe lightbox gallery). "Mina bilder" section on profile page shows user's uploads with details (format, date, article links, usage counts, delete).
 
 **Docker changes**: API Dockerfile adds `gcc musl-dev vips-dev` (build) and `vips` (runtime). `images` Docker volume in `docker-compose.yml`, local `./data/images` mount in dev override. `IMAGE_DIR` env var.
 
-**Frontend display**: `image_path` field added to `Article` TypeScript interface. Browse page shows thumbnail in expanded info section ("Visa info" toggle). Article detail page shows thumbnail at top. Both use `ImageViewer` component — tap opens a `<dialog>`-based lightbox with full-resolution image and "Ladda ner" (JPEG download) link.
+**Seed script**: Uploads images from `docs/seed-images/` directory, mapping filenames to commercial names.
 
-**Seed script**: Uploads images from `docs/seed-images/` directory, mapping filenames to commercial names (e.g. `sibley.webp` → "Sibley", `stormkok.jpg` → "Stormkök" at both locations). Clears orphaned image files on re-seed.
+**Integration tests**: Upload with metadata, serve WebP/JPEG, delete with ref counting, access control, shared image browsing, format variants.
 
-**Integration tests**: `TestImageUpload` with 8 subtests: leader cannot upload product image, manager uploads product image (files on disk + image_path on articles), serve WebP source, serve WebP thumbnail, serve JPEG download, 404 for nonexistent, replace deletes old files, delete clears image_path, leader can upload issue image.
-
-**sqlc queries**: `UpdateArticleGroupImagePath`, `ClearArticleGroupImagePath`, `GetArticleGroupImagePath`.
-
-**Test infrastructure**: `BaseURL()` method on `TestClient` for building custom multipart requests. `libvips-dev` documented as test prerequisite.
+**sqlc queries**: `InsertProductImage`, `GetProductImage`, `ListProductImagesByIds`, `ListSharedImages`, `DeleteProductImage`, `CountProductImagesByFileId`, `ListProductImagesByUploader`, `ListArticlesUsingImage`, `GetImageUploadRole`, `RemoveImageIdFromAllArticles`, `GetArticleGroupImageIds`, `UpdateArticleGroupImageIds`.
 
 ### Browse page manager mode + article detail enhancements (Phase 2 Step 2c, partial)
 

@@ -7,6 +7,8 @@
 		categories: Category[];
 		mode: 'create' | 'edit';
 		isManager?: boolean;
+		userName?: string;
+		userGroup?: string;
 		individuallyTrackedEdit?: boolean;
 		quantityTrackedEdit?: boolean;
 		groupCount?: number | null;
@@ -33,7 +35,7 @@
 		saving?: boolean;
 	}
 
-	let { locations, categories, mode, isManager = false, individuallyTrackedEdit = false, quantityTrackedEdit = false, groupCount = null, initial, submitLabel = 'Spara', onSubmit, onCancel, error = '', saving = false }: Props = $props();
+	let { locations, categories, mode, isManager = false, userName = '', userGroup = '', individuallyTrackedEdit = false, quantityTrackedEdit = false, groupCount = null, initial, submitLabel = 'Spara', onSubmit, onCancel, error = '', saving = false }: Props = $props();
 
 	let countValue = $state(0);
 	let countSaving = $state(false);
@@ -224,6 +226,8 @@
 						commercialName={form.commercial_name}
 						locationId={form.location_id}
 						{imageIds}
+						{userName}
+						{userGroup}
 						onUpdate={(ids) => imageIds = ids}
 					/>
 				{/if}
@@ -357,6 +361,8 @@
 						commercialName={form.commercial_name}
 						locationId={form.location_id}
 						{imageIds}
+						{userName}
+						{userGroup}
 						onUpdate={(ids) => imageIds = ids}
 					/>
 				{/if}

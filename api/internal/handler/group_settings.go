@@ -29,6 +29,7 @@ type groupSettingsResponse struct {
 	SmtpKeyMasked         string `json:"smtp_key_masked"`
 	GchatWebhookURL       string `json:"gchat_webhook_url"`
 	DefaultApprovalLevel  string `json:"default_approval_level"`
+	ImageUploadRole       string `json:"image_upload_role"`
 }
 
 func (h *GroupSettingsHandler) Get(w http.ResponseWriter, r *http.Request) {
@@ -39,6 +40,7 @@ func (h *GroupSettingsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		// No settings yet — return defaults
 		WriteJSON(w, http.StatusOK, groupSettingsResponse{
 			DefaultApprovalLevel: "none",
+			ImageUploadRole:      "leader",
 		})
 		return
 	}
@@ -47,6 +49,7 @@ func (h *GroupSettingsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		NotificationEmailFrom: settings.NotificationEmailFrom,
 		GchatWebhookURL:       settings.GchatWebhookUrl,
 		DefaultApprovalLevel:  settings.DefaultApprovalLevel,
+		ImageUploadRole:       settings.ImageUploadRole,
 	}
 
 	if len(settings.SmtpKeyEncrypted) > 0 {
@@ -65,6 +68,7 @@ type groupSettingsRequest struct {
 	SmtpKey               *string `json:"smtp_key"`
 	GchatWebhookURL       string  `json:"gchat_webhook_url"`
 	DefaultApprovalLevel  string  `json:"default_approval_level"`
+	ImageUploadRole       string  `json:"image_upload_role"`
 }
 
 func (h *GroupSettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
@@ -83,6 +87,16 @@ func (h *GroupSettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	validLevels := map[string]bool{"none": true, "low": true, "high": true}
 	if !validLevels[approvalLevel] {
 		WriteError(w, http.StatusBadRequest, "invalid default_approval_level")
+		return
+	}
+
+	imageUploadRole := req.ImageUploadRole
+	if imageUploadRole == "" {
+		imageUploadRole = "leader"
+	}
+	validRoles := map[string]bool{"any": true, "leader": true, "project_leader": true, "equipment_manager": true}
+	if !validRoles[imageUploadRole] {
+		WriteError(w, http.StatusBadRequest, "invalid image_upload_role")
 		return
 	}
 
@@ -112,6 +126,7 @@ func (h *GroupSettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		SmtpKeyEncrypted:      smtpKeyEncrypted,
 		GchatWebhookUrl:       req.GchatWebhookURL,
 		DefaultApprovalLevel:  approvalLevel,
+		ImageUploadRole:       imageUploadRole,
 	})
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, "failed to save settings")
@@ -122,6 +137,7 @@ func (h *GroupSettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		NotificationEmailFrom: settings.NotificationEmailFrom,
 		GchatWebhookURL:       settings.GchatWebhookUrl,
 		DefaultApprovalLevel:  settings.DefaultApprovalLevel,
+		ImageUploadRole:       settings.ImageUploadRole,
 		SmtpKeySet:            len(settings.SmtpKeyEncrypted) > 0,
 	}
 	if len(settings.SmtpKeyEncrypted) > 0 {
