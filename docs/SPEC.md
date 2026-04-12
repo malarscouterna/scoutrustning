@@ -726,7 +726,6 @@ Remaining:
 - Issue report image attachment (any user, from report form)
 - Client-side 4:3 crop (cropperjs) before product image upload
 - Multiple images per product (gallery with horizontal scroll + fullscreen viewer)
-- Images in booking views (expandable items with thumbnail + description)
 
 ### Phase 3 — Production auth + notifications
 

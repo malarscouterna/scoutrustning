@@ -487,10 +487,15 @@
 				{#if expanded}
 					{@const rep = group.articles[0]}
 					{@const hasImage = rep.image_ids?.length > 0}
-					{@const hasInfo = !!(rep.description || rep.instructions || (isManager && rep.manager_notes) || hasImage)}
+					{@const hasTextInfo = !!(rep.description || rep.instructions || (isManager && rep.manager_notes))}
 					<div class="border-t px-4 py-2 bg-neutral-50">
+						{#if !managerMode && hasImage}
+							<div class="mb-2">
+								<ImageViewer imageIds={rep.image_ids} alt={rep.commercial_name || rep.common_name} commercialName={rep.commercial_name} locationId={rep.location_id} />
+							</div>
+						{/if}
 						{#if group.individuallyTracked}
-							{#if hasInfo}
+							{#if hasTextInfo}
 								<div class="mb-2">
 									<button onclick={() => toggleDescription(group.key)} class="text-xs text-neutral-500 hover:text-neutral-700">
 										{showDescriptionFor.has(group.key) ? 'Dölj info ▲' : 'Visa info ▼'}
@@ -498,7 +503,7 @@
 								</div>
 							{/if}
 							{#if showDescriptionFor.has(group.key)}
-								{@render infoBlock(rep)}
+								{@render textInfoBlock(rep)}
 							{/if}
 							<div class="divide-y divide-neutral-200 text-sm">
 								{#each sortArticles(group.articles) as article}
@@ -569,14 +574,14 @@
 									{#if isManager}
 										<a href="/articles/{group.representativeId}/edit?group=true" class="inline-flex items-center gap-1 text-xs text-neutral-600 border border-neutral-200 bg-neutral-50 rounded px-2 py-1 hover:bg-neutral-100">Redigera ›</a>
 									{/if}
-									{#if hasInfo}
+									{#if hasTextInfo}
 										<button onclick={() => toggleDescription(group.key)} class="text-xs text-neutral-500 hover:text-neutral-700">
 											{showDescriptionFor.has(group.key) ? 'Dölj info ▲' : 'Visa info ▼'}
 										</button>
 									{/if}
 								</div>
 								{#if showDescriptionFor.has(group.key)}
-									{@render infoBlock(rep)}
+									{@render textInfoBlock(rep)}
 								{/if}
 								{#each rows as row}
 									{@const comment = row.articleIds.map(id => latestComments.get(id)).find(c => c)}
@@ -628,11 +633,8 @@
 	</div>
 </div>
 
-{#snippet infoBlock(a: Article)}
+{#snippet textInfoBlock(a: Article)}
 	<div class="mb-2 space-y-2 text-xs text-neutral-600">
-		{#if a.image_ids?.length > 0}
-			<ImageViewer imageIds={a.image_ids} alt={a.commercial_name || a.common_name} commercialName={a.commercial_name} locationId={a.location_id} />
-		{/if}
 		{#if a.description}
 			<div>
 				<span class="font-medium text-neutral-500">Beskrivning:</span>

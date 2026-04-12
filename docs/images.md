@@ -551,23 +551,26 @@ At ~200 unique product types per group: ~200MB source + ~6MB thumbnails per grou
 - [x] Wire into article edit page as "Bläddra" button
 - [x] Deduplicate shared images by `file_id` (DISTINCT ON in SQL)
 
-### Step 5: Display in browse + booking flows (partial)
+### Step 5: Display in browse + booking flows ✅
 
 - [x] PhotoSwipe fullscreen: title + description + attribution as caption overlay
 - [x] Correct PhotoSwipe dimensions via `data-pswp-width`/`data-pswp-height` from format metadata
-- [ ] Browse page: description preview (2 lines, `line-clamp-2`) below thumbnails
-- [ ] Booking detail / pickup / return: images in expanded article card with description preview
-- [ ] Handle broken references (404 from deleted shared images) with placeholder
+- [x] Booking detail / pickup / return: images in expanded article card with description + instructions
+- [x] Availability picker: expandable info block with images, description, instructions per product group
+- [x] API: `AvailableArticles` and `ListBookingItems` queries return `image_ids`, `description`, `instructions`
+- [x] Handle broken references (404 from deleted shared images) with placeholder
+- [x] Image description preview (2 lines, `line-clamp-2`) below thumbnails everywhere — tap to expand fully
+- [x] Removed `showDescription` prop — description always shown when metadata exists
 
-### Step 6: Article edit page image management (partial)
+### Step 6: Article edit page image management ✅
 
 - [x] Horizontal scrollable row of thumbnails on edit page (ImageViewer with showMeta)
 - [x] "Ladda upp" button → ImageUploadDialog
 - [x] "Bläddra" button → SharedImageBrowser with potential match indicator
 - [x] Edit image metadata (title, description, attribution, shared) — full-width inline form, permission-aware (manager: any, user: own)
 - [x] Edit from article detail page and profile "Mina bilder"
-- [ ] Delete button per image (removes from article group, checks file reference count)
-- [ ] Reorder via drag or move buttons
+- [x] Delete button per image (removes from article group, checks file reference count)
+- [x] Reorder via move buttons (chevron ‹ › buttons per image)
 
 ### Step 7: Issue report images
 

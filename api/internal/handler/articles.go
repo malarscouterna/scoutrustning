@@ -387,14 +387,18 @@ func (h *ArticleHandler) Availability(w http.ResponseWriter, r *http.Request) {
 
 	// Group by commercial_name + location
 	type availGroup struct {
-		CommercialName      string `json:"commercial_name"`
-		AvailableCount      int    `json:"available_count"`
-		ReportedUsableCount int    `json:"reported_usable_count"`
-		IncomingCount       int    `json:"incoming_count"`
-		UnderRepairCount    int    `json:"under_repair_count"`
-		ApprovalLevel       string `json:"approval_level"`
-		CategoryName        string `json:"category_name"`
-		LocationName        string `json:"location_name"`
+		CommercialName      string          `json:"commercial_name"`
+		AvailableCount      int             `json:"available_count"`
+		ReportedUsableCount int             `json:"reported_usable_count"`
+		IncomingCount       int             `json:"incoming_count"`
+		UnderRepairCount    int             `json:"under_repair_count"`
+		ApprovalLevel       string          `json:"approval_level"`
+		CategoryName        string          `json:"category_name"`
+		LocationName        string          `json:"location_name"`
+		ImageIds            json.RawMessage `json:"image_ids"`
+		LocationID          string          `json:"location_id"`
+		Description         string          `json:"description"`
+		Instructions        string          `json:"instructions"`
 	}
 	type groupKey struct {
 		name     string
@@ -423,10 +427,14 @@ func (h *ArticleHandler) Availability(w http.ResponseWriter, r *http.Request) {
 		g, ok := groups[key]
 		if !ok {
 			g = &availGroup{
-				CommercialName:   a.CommercialName,
-				ApprovalLevel:   a.ApprovalLevel,
-				CategoryName:     a.CategoryName,
-				LocationName:     a.LocationName,
+				CommercialName: a.CommercialName,
+				ApprovalLevel:  a.ApprovalLevel,
+				CategoryName:   a.CategoryName,
+				LocationName:   a.LocationName,
+				ImageIds:       a.ImageIds,
+				LocationID:     formatUUID(a.LocationID),
+				Description:    a.Description,
+				Instructions:   a.Instructions,
 			}
 			groups[key] = g
 		}

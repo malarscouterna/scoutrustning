@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { createApiClient, type AvailabilityGroup, type BookingItem, type Category, type Location } from '$lib/api/client';
+	import ImageViewer from '$lib/components/ImageViewer.svelte';
 
 	interface Props {
 		bookingId: string;
@@ -36,6 +37,7 @@
 	let quantities = $state<Record<string, number>>({});
 	let error = $state('');
 	let expandedDetails = $state<string | null>(null);
+	let expandedInfo = $state<Set<string>>(new Set());
 	let detailArticles = $state<Map<string, { articles: any[]; comments: Map<string, string> }>>(new Map());
 
 	let filteredAvailability = $derived(
@@ -108,6 +110,16 @@
 		loadAvailability();
 	}
 
+	function hasExpandableContent(g: AvailabilityGroup): boolean {
+		return (g.image_ids?.length ?? 0) > 0 || !!g.description || !!g.instructions;
+	}
+
+	function toggleInfo(key: string) {
+		const next = new Set(expandedInfo);
+		if (next.has(key)) next.delete(key); else next.add(key);
+		expandedInfo = next;
+	}
+
 	async function addToCart(commercialName: string, locationName: string) {
 		const key = commercialName + '||' + locationName;
 		const qty = quantities[key] || 1;
@@ -157,17 +169,20 @@
 		{@const key = group.commercial_name + '||' + group.location_name}
 		{@const hasFlags = group.reported_usable_count > 0 || group.incoming_count > 0 || group.under_repair_count > 0}
 		{@const booked = bookedCounts.get(key) ?? 0}
+		{@const expandable = hasExpandableContent(group)}
+		{@const infoExpanded = expandedInfo.has(key)}
 		<div class="border rounded">
 			<div class="flex flex-wrap items-center justify-between gap-2 px-4 py-2">
-				<div class="min-w-0">
+				<button type="button" onclick={() => expandable && toggleInfo(key)} class="min-w-0 text-left" class:cursor-pointer={expandable} class:cursor-default={!expandable}>
 					<span class="font-medium">{group.commercial_name}</span>
+					{#if expandable}<span class="text-xs text-neutral-400 ml-1">{infoExpanded ? '▲' : '▼'}</span>{/if}
 					<span class="text-xs text-neutral-500 ml-2">{group.category_name} · {group.location_name}</span>
 					{#if group.approval_level === 'low'}
 						<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded ml-1">Kräver godkännande</span>
 					{:else if group.approval_level === 'high'}
 						<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded ml-1">Kräver särskilt godkännande</span>
 					{/if}
-				</div>
+				</button>
 				<div class="flex items-center gap-2">
 					<div class="text-sm text-neutral-600 text-right">
 						{#if booked > 0}
@@ -198,6 +213,25 @@
 					</button>
 				</div>
 			</div>
+			{#if infoExpanded}
+				<div class="px-4 py-2 border-t space-y-2 text-xs text-neutral-600">
+					{#if (group.image_ids?.length ?? 0) > 0}
+						<ImageViewer imageIds={group.image_ids} alt={group.commercial_name} commercialName={group.commercial_name} locationId={group.location_id} />
+					{/if}
+					{#if group.description}
+						<div>
+							<span class="font-medium text-neutral-500">Beskrivning:</span>
+							<p class="mt-0.5">{group.description}</p>
+						</div>
+					{/if}
+					{#if group.instructions}
+						<div>
+							<span class="font-medium text-neutral-500">Instruktioner:</span>
+							<p class="mt-0.5">{group.instructions}</p>
+						</div>
+					{/if}
+				</div>
+			{/if}
 			{#if expandedDetails === key}
 				{@const detail = detailArticles.get(key)}
 				<div class="border-t px-4 py-2 bg-neutral-50 text-sm space-y-1">

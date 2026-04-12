@@ -66,13 +66,17 @@ export interface BookingItem {
 	article_id: string;
 	commercial_name: string;
 	common_name: string;
+	location_id: string;
 	location_name: string;
 	category_name: string;
 	place: string;
+	article_description: string;
+	article_instructions: string;
 	article_status: string;
 	article_expected_available_date: string | null;
 	approval_level: string;
 	individually_tracked: boolean;
+	image_ids: string[];
 	pickup_status: string | null;
 	return_status: string | null;
 }
@@ -108,6 +112,10 @@ export interface AvailabilityGroup {
 	approval_level: string;
 	category_name: string;
 	location_name: string;
+	image_ids: string[];
+	location_id: string;
+	description: string;
+	instructions: string;
 }
 
 export interface GroupSettings {

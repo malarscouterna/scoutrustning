@@ -21,16 +21,28 @@
 		commercialName?: string;
 		locationId?: string;
 		showMeta?: boolean;
+		editMode?: boolean;
 		userId?: string;
 		isManager?: boolean;
+		onDelete?: (imageId: string, newIds: string[]) => void;
+		onReorder?: (newIds: string[]) => void;
 	}
 
-	let { imageIds, alt, thumbClass = 'h-[225px]', commercialName, locationId, showMeta = false, userId = '', isManager = false }: Props = $props();
+	let { imageIds, alt, thumbClass = 'h-[225px]', commercialName, locationId, showMeta = false, editMode = false, userId = '', isManager = false, onDelete, onReorder }: Props = $props();
+
+	let expandedDescriptions = $state<Set<string>>(new Set());
+
+	function toggleDescription(imgId: string) {
+		const next = new Set(expandedDescriptions);
+		if (next.has(imgId)) next.delete(imgId); else next.add(imgId);
+		expandedDescriptions = next;
+	}
 
 	const api = createApiClient();
 	let metaMap = $state<Map<string, ImageMeta>>(new Map());
 	let galleryEl = $state<HTMLElement | null>(null);
 	let lightbox: any = null;
+	let brokenIds = $state<Set<string>>(new Set());
 
 	// Edit state
 	let editingMeta = $state<ImageMeta | null>(null);
@@ -40,8 +52,8 @@
 	let editAttribution = $state('');
 	let saving = $state(false);
 	let editError = $state('');
+	let deleting = $state<string | null>(null);
 
-	// Source image dimensions by format (longest edge = 2560, square = 2048)
 	const formatDimensions: Record<string, { w: number; h: number }> = {
 		landscape: { w: 2560, h: 1920 },
 		portrait:  { w: 1920, h: 2560 },
@@ -53,11 +65,9 @@
 		if (meta?.format && formatDimensions[meta.format]) {
 			return formatDimensions[meta.format];
 		}
-		// Fallback: assume landscape
 		return { w: 1920, h: 1440 };
 	}
 
-	// Always fetch metadata when commercialName/locationId provided (needed for fullscreen captions + dimensions)
 	$effect(() => {
 		if (commercialName && locationId && imageIds.length > 0) {
 			fetchMeta(commercialName, locationId);
@@ -113,6 +123,35 @@
 		} finally {
 			saving = false;
 		}
+	}
+
+	async function handleDelete(imgId: string) {
+		if (!commercialName || !locationId) return;
+		const meta = metaMap.get(imgId);
+		if (!meta) return;
+		if (!confirm('Ta bort bilden från denna artikelgrupp?')) return;
+		deleting = imgId;
+		try {
+			await api.deleteProductImage(meta.id, commercialName, locationId);
+			const newIds = imageIds.filter(id => id !== imgId);
+			onDelete?.(imgId, newIds);
+		} catch {
+			// ignore
+		} finally {
+			deleting = null;
+		}
+	}
+
+	function moveImage(index: number, direction: -1 | 1) {
+		const newIndex = index + direction;
+		if (newIndex < 0 || newIndex >= imageIds.length) return;
+		const newIds = [...imageIds];
+		[newIds[index], newIds[newIndex]] = [newIds[newIndex], newIds[index]];
+		onReorder?.(newIds);
+	}
+
+	function handleImgError(imgId: string) {
+		brokenIds = new Set([...brokenIds, imgId]);
 	}
 
 	onMount(() => {
@@ -202,18 +241,30 @@
 	</div>
 {:else}
 	<div bind:this={galleryEl} class="flex gap-2 overflow-x-auto pb-1 scroll-smooth snap-x snap-mandatory">
-		{#each imageIds as imgId}
+		{#each imageIds as imgId, i}
 			{@const meta = metaMap.get(imgId)}
 			{@const dims = getDimensions(imgId)}
+			{@const broken = brokenIds.has(imgId)}
 			<div class="shrink-0 snap-start">
-				<a
-					href="/api/v0/images/{imgId}.webp"
-					data-pswp-width={dims.w}
-					data-pswp-height={dims.h}
-					class="pswp-link block cursor-zoom-in {thumbClass}"
-				>
-					<img {alt} src="/api/v0/images/{imgId}_thumb.webp" class="h-full rounded object-contain" loading="lazy" />
-				</a>
+				{#if broken}
+					<div class="flex items-center justify-center bg-neutral-100 rounded text-neutral-400 text-xs {thumbClass}" style="width: 200px;">
+						Bilden saknas
+					</div>
+				{:else}
+					<a
+						href="/api/v0/images/{imgId}.webp"
+						data-pswp-width={dims.w}
+						data-pswp-height={dims.h}
+						class="pswp-link block cursor-zoom-in {thumbClass}"
+					>
+						<img {alt} src="/api/v0/images/{imgId}_thumb.webp" class="h-full rounded object-contain" loading="lazy" onerror={() => handleImgError(imgId)} />
+					</a>
+				{/if}
+				{#if meta?.description}
+					<button type="button" onclick={() => toggleDescription(imgId)} class="text-xs text-neutral-500 mt-1 max-w-[200px] sm:max-w-[280px] text-left cursor-pointer" class:line-clamp-2={!expandedDescriptions.has(imgId)}>
+						{meta.description}
+					</button>
+				{/if}
 				{#if showMeta && meta}
 					<div class="flex items-baseline gap-1 mt-0.5">
 						{#if meta.attribution}
@@ -224,6 +275,17 @@
 						{#if canEdit(meta)}
 							<button type="button" onclick={() => startEdit(meta)} class="text-[10px] text-blue-600 hover:text-blue-800 shrink-0">Redigera</button>
 						{/if}
+					</div>
+				{/if}
+				{#if editMode && !broken}
+					<div class="flex items-center gap-1.5 mt-1.5">
+						{#if imageIds.length > 1}
+							<button type="button" onclick={() => moveImage(i, -1)} disabled={i === 0} class="text-sm font-bold border rounded px-2 py-1 text-neutral-500 hover:text-neutral-700 hover:bg-neutral-50 disabled:opacity-30" title="Flytta vänster">‹</button>
+							<button type="button" onclick={() => moveImage(i, 1)} disabled={i === imageIds.length - 1} class="text-sm font-bold border rounded px-2 py-1 text-neutral-500 hover:text-neutral-700 hover:bg-neutral-50 disabled:opacity-30" title="Flytta höger">›</button>
+						{/if}
+						<button type="button" onclick={() => handleDelete(imgId)} disabled={deleting === imgId} class="text-sm border border-red-200 rounded px-2 py-1 text-red-500 hover:text-red-700 hover:bg-red-50 ml-auto" title="Ta bort">
+							{deleting === imgId ? '...' : 'Ta bort'}
+						</button>
 					</div>
 				{/if}
 			</div>

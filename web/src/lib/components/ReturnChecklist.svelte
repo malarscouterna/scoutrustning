@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { createApiClient, type BookingItem } from '$lib/api/client';
+	import ImageViewer from '$lib/components/ImageViewer.svelte';
 
 	interface Props {
 		bookingId: string;
@@ -19,6 +20,7 @@
 	let lastExpectedDate = $state('');
 	let delayWarning = $state('');
 	let quantityInputs = $state<Record<string, number>>({});
+	let expandedGroups = $state<Set<string>>(new Set());
 
 	const labels: Record<string, string> = { returned_ok: 'OK', delayed: 'Försenad', reported_usable: 'Problem — användbar', reported_unusable: 'Problem — ej användbar', lost: 'Saknas' };
 	const colors: Record<string, string> = { returned_ok: 'bg-green-100 text-green-800', delayed: 'bg-orange-100 text-orange-800', reported_usable: 'bg-orange-100 text-orange-800', reported_unusable: 'bg-red-100 text-red-800', lost: 'bg-challengerpink-100 text-challengerpink-800' };
@@ -40,6 +42,44 @@
 		return [...m.values()];
 	});
 
+	interface TrackedImageGroup {
+		commercialName: string;
+		imageIds: string[];
+		locationId: string;
+		description: string;
+		instructions: string;
+		items: BookingItem[];
+	}
+	let trackedImageGroups = $derived.by(() => {
+		const map = new Map<string, TrackedImageGroup>();
+		for (const item of tracked) {
+			const existing = map.get(item.commercial_name);
+			if (existing) {
+				existing.items.push(item);
+			} else {
+				map.set(item.commercial_name, {
+					commercialName: item.commercial_name,
+					imageIds: item.image_ids ?? [],
+					locationId: item.location_id,
+					description: item.article_description ?? '',
+					instructions: item.article_instructions ?? '',
+					items: [item]
+				});
+			}
+		}
+		return [...map.values()];
+	});
+
+	function toggleExpand(key: string) {
+		const next = new Set(expandedGroups);
+		if (next.has(key)) next.delete(key); else next.add(key);
+		expandedGroups = next;
+	}
+
+	function hasExpandable(imageIds: string[], desc: string, instr: string): boolean {
+		return imageIds.length > 0 || !!desc || !!instr;
+	}
+
 	function groupRows(g: QGroup): QRow[] {
 		const byStatus = new Map<string, BookingItem[]>();
 		for (const i of g.picked) {
@@ -47,7 +87,6 @@
 			byStatus.set(s, [...(byStatus.get(s) ?? []), i]);
 		}
 		const rows: QRow[] = [];
-		// Show handled statuses first, unhandled last
 		for (const [s, items] of byStatus) {
 			if (s !== '_unhandled') rows.push({ status: s, count: items.length, items });
 		}
@@ -63,7 +102,6 @@
 	async function reload() { onUpdate((await api.getBooking(bookingId)).items); }
 	function flash(key: string) { savedKey = key; setTimeout(() => { if (savedKey === key) savedKey = null; }, 2000); }
 
-	// --- Individual items ---
 	async function setReturn(itemId: string, status: string, extra?: { expected_return_date?: string; notes?: string }) {
 		error = '';
 		try {
@@ -87,7 +125,6 @@
 		form = { status: '', expectedReturnDate: lastExpectedDate, notes: '' }; delayWarning = '';
 	}
 
-	// --- Quantity groups ---
 	async function returnGroupOk(g: QGroup) {
 		error = '';
 		const unhandled = g.picked.filter((i) => !i.return_status || i.return_status === 'pending');
@@ -145,42 +182,76 @@
 	}
 </script>
 
+{#snippet infoBlock(imageIds: string[], commercialName: string, locationId: string, description: string, instructions: string)}
+	<div class="px-4 py-2 border-t space-y-2 text-xs text-neutral-600">
+		{#if imageIds.length > 0}
+			<ImageViewer {imageIds} alt={commercialName} {commercialName} {locationId} />
+		{/if}
+		{#if description}
+			<div>
+				<span class="font-medium text-neutral-500">Beskrivning:</span>
+				<p class="mt-0.5">{description}</p>
+			</div>
+		{/if}
+		{#if instructions}
+			<div>
+				<span class="font-medium text-neutral-500">Instruktioner:</span>
+				<p class="mt-0.5">{instructions}</p>
+			</div>
+		{/if}
+	</div>
+{/snippet}
+
 {#if error}<div class="bg-red-50 border border-red-200 rounded p-3 mb-3 text-red-800 text-sm">{error}</div>{/if}
 <p class="text-sm text-neutral-500 mb-3">Återlämnad: {returnedCount} / {pickedUp.length}</p>
 
 <div class="space-y-1">
 	{#each groups as g}
+		{@const rep = g.picked[0] ?? items.find(i => !i.individually_tracked && i.commercial_name === g.name)}
+		{@const gImageIds = rep?.image_ids ?? []}
+		{@const expandable = hasExpandable(gImageIds, rep?.article_description ?? '', rep?.article_instructions ?? '')}
+		{@const expanded = expandedGroups.has(g.key)}
 		{#if g.picked.length === 0}
-			<div class="border rounded px-4 py-3 flex items-center gap-3 bg-neutral-50">
-				<div class="flex-1"><div class="font-medium text-sm">{g.name}</div><div class="text-xs text-neutral-500">{g.loc}{g.place ? ` · ${g.place}` : ''}</div></div>
-				<span class="text-xs text-neutral-400">Ej hämtad ({g.notPicked} st)</span>
+			<div class="border rounded">
+				<div class="px-4 py-3 flex items-center gap-3 bg-neutral-50">
+					<button type="button" onclick={() => expandable && toggleExpand(g.key)} class="flex-1 text-left" class:cursor-pointer={expandable} class:cursor-default={!expandable}>
+						<div class="font-medium text-sm">{g.name}{#if expandable}<span class="text-xs text-neutral-400 ml-1">{expanded ? '▲' : '▼'}</span>{/if}</div>
+						<div class="text-xs text-neutral-500">{g.loc}{g.place ? ` · ${g.place}` : ''}</div>
+					</button>
+					<span class="text-xs text-neutral-400">Ej hämtad ({g.notPicked} st)</span>
+				</div>
+				{#if expanded}
+					{@render infoBlock(gImageIds, g.name, rep?.location_id ?? '', rep?.article_description ?? '', rep?.article_instructions ?? '')}
+				{/if}
 			</div>
 		{:else}
 			{@const rows = groupRows(g)}
 			{#each rows as row}
-				<div class="border rounded px-4 py-3 flex items-center gap-3"
+				<div class="border rounded"
 					class:bg-green-50={row.status === 'returned_ok'}
 					class:bg-orange-50={row.status === 'delayed' || row.status === 'reported_usable'}
 					class:bg-red-50={row.status === 'reported_unusable'}
 					class:bg-challengerpink-50={row.status === 'lost'}
 				>
-					<div class="flex-1">
-						<div class="font-medium text-sm">{g.name} × {row.count}</div>
-						<div class="text-xs text-neutral-500">{g.loc}{g.place ? ` · ${g.place}` : ''}{#if g.notPicked > 0}<span class="text-orange-600"> · {g.notPicked} ej hämtade</span>{/if}</div>
-					</div>
+					<div class="px-4 py-3 flex items-center gap-3">
+						<button type="button" onclick={() => expandable && toggleExpand(g.key)} class="flex-1 text-left" class:cursor-pointer={expandable} class:cursor-default={!expandable}>
+							<div class="font-medium text-sm">{g.name} × {row.count}{#if expandable && rows[0] === row}<span class="text-xs text-neutral-400 ml-1">{expanded ? '▲' : '▼'}</span>{/if}</div>
+							<div class="text-xs text-neutral-500">{g.loc}{g.place ? ` · ${g.place}` : ''}{#if g.notPicked > 0}<span class="text-orange-600"> · {g.notPicked} ej hämtade</span>{/if}</div>
+						</button>
 
-					{#if row.status === '_unhandled' && activeGroupKey !== g.key}
-						{@const unhandledCount = row.count}
-						<input type="number" min="0" max={unhandledCount} value={quantityInputs[g.key] ?? unhandledCount} oninput={(e) => quantityInputs[g.key] = parseInt(e.currentTarget.value) || 0} class="w-16 text-center border rounded px-2 py-1 text-sm" />
-						<button onclick={() => returnGroupOk(g)} class="text-xs bg-green-700 text-white px-2 py-1 rounded">OK</button>
-						<button onclick={() => openGroupForm(g)} class="text-xs border px-2 py-1 rounded text-neutral-700">Annat...</button>
-					{:else if row.status === '_unhandled'}
-						<!-- hidden while form is open -->
-					{:else}
-						<span class="text-xs px-2 py-0.5 rounded {colors[row.status] ?? ''}">{labels[row.status] ?? row.status}</span>
-						{#if savedKey === g.key}<span class="text-xs text-green-600">Sparad</span>{/if}
-						<button onclick={() => undoGroupRow(row)} class="text-xs text-neutral-400 hover:text-neutral-600">Ångra</button>
-					{/if}
+						{#if row.status === '_unhandled' && activeGroupKey !== g.key}
+							{@const unhandledCount = row.count}
+							<input type="number" min="0" max={unhandledCount} value={quantityInputs[g.key] ?? unhandledCount} oninput={(e) => quantityInputs[g.key] = parseInt(e.currentTarget.value) || 0} class="w-16 text-center border rounded px-2 py-1 text-sm" />
+							<button onclick={() => returnGroupOk(g)} class="text-xs bg-green-700 text-white px-2 py-1 rounded">OK</button>
+							<button onclick={() => openGroupForm(g)} class="text-xs border px-2 py-1 rounded text-neutral-700">Annat...</button>
+						{:else if row.status === '_unhandled'}
+							<!-- hidden while form is open -->
+						{:else}
+							<span class="text-xs px-2 py-0.5 rounded {colors[row.status] ?? ''}">{labels[row.status] ?? row.status}</span>
+							{#if savedKey === g.key}<span class="text-xs text-green-600">Sparad</span>{/if}
+							<button onclick={() => undoGroupRow(row)} class="text-xs text-neutral-400 hover:text-neutral-600">Ångra</button>
+						{/if}
+					</div>
 				</div>
 			{/each}
 
@@ -212,25 +283,42 @@
 					</div>
 				</div>
 			{/if}
+			{#if expanded}
+				<div class="border rounded">
+					{@render infoBlock(gImageIds, g.name, rep?.location_id ?? '', rep?.article_description ?? '', rep?.article_instructions ?? '')}
+				</div>
+			{/if}
 		{/if}
 	{/each}
 
-	{#each tracked as item}
+	{#each trackedImageGroups as tGroup}
+		{@const tKey = tGroup.commercialName}
+		{@const expandable = hasExpandable(tGroup.imageIds, tGroup.description, tGroup.instructions)}
+		{@const expanded = expandedGroups.has(tKey)}
+		{#each tGroup.items as item}
 		{@const notPicked = !item.pickup_status || item.pickup_status === 'lost'}
 		{@const hasReturn = item.return_status && item.return_status !== 'pending'}
-		<div class="border rounded px-4 py-3 flex items-center gap-3" class:bg-green-50={item.return_status === 'returned_ok'} class:bg-orange-50={item.return_status === 'delayed' || item.return_status === 'reported_usable'} class:bg-red-50={item.return_status === 'reported_unusable'} class:bg-challengerpink-50={item.return_status === 'lost'} class:bg-neutral-50={notPicked}>
-			<div class="flex-1"><div class="font-medium text-sm">{item.common_name}</div><div class="text-xs text-neutral-500">{item.location_name}{item.place ? ` · ${item.place}` : ''}</div></div>
-			{#if notPicked}
-				<span class="text-xs text-neutral-400">Ej hämtad</span>
-			{:else if hasReturn}
-				<span class="text-xs px-2 py-0.5 rounded {colors[item.return_status ?? ''] ?? ''}">{labels[item.return_status ?? ''] ?? item.return_status}</span>
-				{#if savedKey === item.id}<span class="text-xs text-green-600">Sparad</span>{/if}
-				<button onclick={() => setReturn(item.id, '')} class="text-xs text-neutral-400 hover:text-neutral-600">Ångra</button>
-			{:else if activeItemId !== item.id}
-				<div class="flex gap-1">
-					<button onclick={() => setReturn(item.id, 'returned_ok')} class="text-xs bg-green-700 text-white px-2 py-1 rounded">OK</button>
-					<button onclick={() => openForm(item.id)} class="text-xs border px-2 py-1 rounded text-neutral-700">Annat...</button>
-				</div>
+		<div class="border rounded" class:bg-green-50={item.return_status === 'returned_ok'} class:bg-orange-50={item.return_status === 'delayed' || item.return_status === 'reported_usable'} class:bg-red-50={item.return_status === 'reported_unusable'} class:bg-challengerpink-50={item.return_status === 'lost'} class:bg-neutral-50={notPicked}>
+			<div class="px-4 py-3 flex items-center gap-3">
+				<button type="button" onclick={() => expandable && toggleExpand(tKey)} class="flex-1 text-left" class:cursor-pointer={expandable} class:cursor-default={!expandable}>
+					<div class="font-medium text-sm">{item.common_name}{#if expandable && tGroup.items[0] === item}<span class="text-xs text-neutral-400 ml-1">{expanded ? '▲' : '▼'}</span>{/if}</div>
+					<div class="text-xs text-neutral-500">{item.location_name}{item.place ? ` · ${item.place}` : ''}</div>
+				</button>
+				{#if notPicked}
+					<span class="text-xs text-neutral-400">Ej hämtad</span>
+				{:else if hasReturn}
+					<span class="text-xs px-2 py-0.5 rounded {colors[item.return_status ?? ''] ?? ''}">{labels[item.return_status ?? ''] ?? item.return_status}</span>
+					{#if savedKey === item.id}<span class="text-xs text-green-600">Sparad</span>{/if}
+					<button onclick={() => setReturn(item.id, '')} class="text-xs text-neutral-400 hover:text-neutral-600">Ångra</button>
+				{:else if activeItemId !== item.id}
+					<div class="flex gap-1">
+						<button onclick={() => setReturn(item.id, 'returned_ok')} class="text-xs bg-green-700 text-white px-2 py-1 rounded">OK</button>
+						<button onclick={() => openForm(item.id)} class="text-xs border px-2 py-1 rounded text-neutral-700">Annat...</button>
+					</div>
+				{/if}
+			</div>
+			{#if expanded && tGroup.items[0] === item}
+				{@render infoBlock(tGroup.imageIds, tGroup.commercialName, tGroup.locationId, tGroup.description, tGroup.instructions)}
 			{/if}
 		</div>
 		{#if activeItemId === item.id}
@@ -255,6 +343,7 @@
 				</div>
 			</div>
 		{/if}
+		{/each}
 	{/each}
 </div>
 
