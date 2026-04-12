@@ -815,6 +815,12 @@ Integration with ms-utrustning is minimal: a `<script>` tag in `web/src/app.html
 
 This is not part of the ms-utrustning deployment or release cycle.
 
+## Future Ideas
+
+### Category-based image grid browse and booking flow
+
+A more visual browse and booking experience: user first picks a category (e.g. "Sova", "Mat", "Friluftsliv"), then sees an image grid of all products in that category. Selecting a product opens availability and booking. More intuitive than the current list-based browse, especially for users unfamiliar with the inventory. Requires good image coverage across articles to be effective.
+
 ## Open / TBD
 
 - Overdue reminder schedule (daily? configurable?)
