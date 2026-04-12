@@ -631,7 +631,7 @@
 {#snippet infoBlock(a: Article)}
 	<div class="mb-2 space-y-2 text-xs text-neutral-600">
 		{#if a.image_ids?.length > 0}
-			<ImageViewer imageIds={a.image_ids} alt={a.commercial_name || a.common_name} />
+			<ImageViewer imageIds={a.image_ids} alt={a.commercial_name || a.common_name} commercialName={a.commercial_name} locationId={a.location_id} />
 		{/if}
 		{#if a.description}
 			<div>

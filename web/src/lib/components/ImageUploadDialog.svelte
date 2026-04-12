@@ -80,7 +80,7 @@
 				description,
 				format,
 				shared,
-				attribution: shared ? attributionPreview : '',
+				attribution: attributionPreview,
 			});
 			onComplete(result);
 		} catch (e: any) {
@@ -126,40 +126,33 @@
 					<textarea bind:value={description} rows={2} class="border rounded px-2 py-1.5 text-sm w-full"></textarea>
 				</label>
 
-				<div class="space-y-2">
+				<div class="space-y-3">
+					<fieldset class="space-y-1.5 text-xs text-neutral-600">
+						<legend class="text-sm text-neutral-600 mb-1">Fotograf</legend>
+						<label class="flex items-center gap-2">
+							<input type="radio" bind:group={attributionMode} value="first_name" />
+							{firstNameOnly}, {userGroup}
+						</label>
+						<label class="flex items-center gap-2">
+							<input type="radio" bind:group={attributionMode} value="full_name" />
+							{userName}, {userGroup}
+						</label>
+						<label class="flex items-center gap-2">
+							<input type="radio" bind:group={attributionMode} value="custom" />
+							Egen text
+						</label>
+						{#if attributionMode === 'custom'}
+							<input type="text" bind:value={customAttribution} placeholder="T.ex. namn eller organisation" class="border rounded px-2 py-1 text-xs w-full mt-1" />
+						{/if}
+					</fieldset>
+
 					<label class="flex items-center gap-2 text-sm">
 						<input type="checkbox" bind:checked={shared} />
 						Dela med andra scoutkårer
 					</label>
 
 					{#if shared}
-						<div class="ml-6 space-y-3 text-xs text-neutral-600">
-							<p>Du behöver ha tagit bilden själv eller ha tillåtelse att dela den. Alla identifierbara personer måste ha gett sitt godkännande. Bilder delas enbart bakom scoutinloggning.</p>
-
-							<fieldset class="space-y-1.5">
-								<legend class="text-xs text-neutral-500 mb-1">Visas som</legend>
-								<label class="flex items-center gap-2">
-									<input type="radio" bind:group={attributionMode} value="first_name" />
-									{firstNameOnly}, {userGroup}
-								</label>
-								<label class="flex items-center gap-2">
-									<input type="radio" bind:group={attributionMode} value="full_name" />
-									{userName}, {userGroup}
-								</label>
-								<label class="flex items-center gap-2">
-									<input type="radio" bind:group={attributionMode} value="custom" />
-									Egen text
-								</label>
-								{#if attributionMode === 'custom'}
-									<input type="text" bind:value={customAttribution} placeholder="T.ex. namn eller organisation" class="border rounded px-2 py-1 text-xs w-full mt-1" />
-								{/if}
-							</fieldset>
-
-							<div class="bg-neutral-50 border rounded p-2 text-neutral-500">
-								<span class="block text-[10px] uppercase tracking-wide text-neutral-400 mb-0.5">Förhandsgranskning</span>
-								{attributionPreview || '—'}
-							</div>
-						</div>
+						<p class="ml-6 text-xs text-neutral-500">Du behöver ha tagit bilden själv eller ha tillåtelse att dela den. Alla identifierbara personer måste ha gett sitt godkännande. Bilder delas enbart bakom scoutinloggning.</p>
 					{/if}
 				</div>
 

@@ -20,8 +20,9 @@ WHERE pi.file_id = ANY(@ids::uuid[])
 ORDER BY array_position(@ids::uuid[], pi.file_id);
 
 -- name: ListSharedImages :many
--- Returns images shared by any group plus all images from the current group.
-SELECT pi.*, u.name AS uploaded_by_name, g.name AS uploaded_by_group
+-- Returns one image per file_id: shared by any group plus own group's images.
+-- Uses DISTINCT ON to deduplicate, preferring the current group's row.
+SELECT DISTINCT ON (pi.file_id) pi.*, u.name AS uploaded_by_name, g.name AS uploaded_by_group
 FROM product_images pi
 JOIN users u ON pi.uploaded_by = u.id
 JOIN groups g ON pi.group_id = g.id
@@ -29,10 +30,16 @@ WHERE (pi.shared = true OR pi.group_id = @group_id)
     AND (sqlc.narg('search')::text IS NULL
         OR pi.title ILIKE '%' || sqlc.narg('search') || '%'
         OR pi.description ILIKE '%' || sqlc.narg('search') || '%')
-ORDER BY pi.created_at DESC;
+ORDER BY pi.file_id, (pi.group_id = @group_id) DESC, pi.created_at DESC;
 
 -- name: DeleteProductImage :exec
 DELETE FROM product_images WHERE id = @id AND group_id = @group_id;
+
+-- name: UpdateProductImage :one
+UPDATE product_images
+SET title = @title, description = @description, shared = @shared, attribution = @attribution
+WHERE id = @id AND group_id = @group_id
+RETURNING *;
 
 -- name: CountProductImagesByFileId :one
 -- Counts how many product_images rows reference the same file on disk.

@@ -118,6 +118,17 @@ export interface GroupSettings {
 	default_approval_level: string;
 }
 
+export interface SharedImage {
+	id: string;
+	file_id: string;
+	title: string;
+	description: string;
+	format: string;
+	shared: boolean;
+	attribution: string;
+	created_at: string;
+}
+
 interface FetchOptions {
 	fetch?: typeof globalThis.fetch;
 }
@@ -314,12 +325,32 @@ export function createApiClient(opts: FetchOptions = {}) {
 		},
 		getProductImageMeta: (imageId: string) =>
 			request<{ id: string; file_id: string; title: string; description: string; format: string; shared: boolean; attribution: string; ref_count: number }>(`/images/product/${imageId}`, opts),
+		updateProductImage: (imageId: string, data: { title: string; description: string; shared: boolean; attribution: string }) =>
+			requestMut<{ id: string; file_id: string; title: string; description: string; format: string; shared: boolean }>(`/images/product/${imageId}`, 'PUT', data, opts),
 		listMyImages: () =>
 			request<{ id: string; file_id: string; title: string; description: string; format: string; shared: boolean; created_at: string; own_group_count: number; other_group_count: number }[]>('/images/my', opts),
 		listArticlesUsingImage: (imageId: string) =>
 			request<{ commercial_name: string; location_name: string; article_id: string }[]>(`/images/my/${imageId}/articles`, opts),
 		deleteMyImage: (imageId: string) =>
 			requestMut<void>(`/images/my/${imageId}`, 'DELETE', undefined, opts),
+		listProductImages: (commercialName: string, locationId: string) => {
+			const query = new URLSearchParams({ commercial_name: commercialName, location_id: locationId });
+			return request<{ id: string; file_id: string; title: string; description: string; format: string; shared: boolean; attribution: string; uploaded_by: string; created_at: string }[]>(`/images/product?${query}`, opts);
+		},
+		listSharedImages: (search?: string) => {
+			const query = new URLSearchParams();
+			if (search) query.set('search', search);
+			const qs = query.toString();
+			return request<SharedImage[]>(`/images/shared${qs ? '?' + qs : ''}`, opts);
+		},
+		addFromShared: (sourceImageId: string, commercialName: string, locationId: string, title: string, description: string) =>
+			requestMut<{ image: Record<string, any>; image_ids: string[] }>('/images/product/from-shared', 'POST', {
+				source_image_id: sourceImageId,
+				commercial_name: commercialName,
+				location_id: locationId,
+				title,
+				description
+			}, opts),
 		reorderProductImages: (commercialName: string, locationId: string, imageIds: string[]) =>
 			requestMut<{ image_ids: string[] }>('/images/product/reorder', 'PUT', {
 				commercial_name: commercialName,

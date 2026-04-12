@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { createApiClient } from '$lib/api/client';
 	import ImageUploadDialog from './ImageUploadDialog.svelte';
+	import SharedImageBrowser from './SharedImageBrowser.svelte';
 
 	interface Props {
 		commercialName: string;
@@ -12,23 +12,35 @@
 	}
 
 	let { commercialName, locationId, imageIds, userName, userGroup, onUpdate }: Props = $props();
-	const api = createApiClient();
 
 	let showUploadDialog = $state(false);
+	let showBrowser = $state(false);
 	let error = $state('');
 
 	function handleUploadComplete(result: { image_ids: string[] }) {
 		showUploadDialog = false;
 		onUpdate(result.image_ids);
 	}
+
+	function handleBrowseComplete(result: { image_ids: string[] }) {
+		showBrowser = false;
+		onUpdate(result.image_ids);
+	}
 </script>
 
 <div class="space-y-2">
-	<button
-		type="button"
-		onclick={() => showUploadDialog = true}
-		class="inline-flex items-center gap-2 text-sm text-blue-700 border border-blue-200 bg-blue-50 rounded px-3 py-1.5 cursor-pointer hover:bg-blue-100"
-	>+ Lägg till bild</button>
+	<div class="flex gap-2">
+		<button
+			type="button"
+			onclick={() => showUploadDialog = true}
+			class="inline-flex items-center gap-2 text-sm text-blue-700 border border-blue-200 bg-blue-50 rounded px-3 py-1.5 cursor-pointer hover:bg-blue-100"
+		>Ladda upp</button>
+		<button
+			type="button"
+			onclick={() => showBrowser = true}
+			class="inline-flex items-center gap-2 text-sm text-neutral-600 border border-neutral-200 bg-neutral-50 rounded px-3 py-1.5 cursor-pointer hover:bg-neutral-100"
+		>Bläddra</button>
+	</div>
 
 	{#if error}
 		<p class="text-xs text-red-600">{error}</p>
@@ -44,5 +56,15 @@
 		{userGroup}
 		onComplete={handleUploadComplete}
 		onCancel={() => showUploadDialog = false}
+	/>
+{/if}
+
+{#if showBrowser}
+	<SharedImageBrowser
+		{commercialName}
+		{locationId}
+		imageIndex={imageIds.length + 1}
+		onComplete={handleBrowseComplete}
+		onCancel={() => showBrowser = false}
 	/>
 {/if}

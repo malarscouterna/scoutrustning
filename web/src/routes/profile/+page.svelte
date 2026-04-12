@@ -26,6 +26,43 @@
 	let expandedImageId = $state<string | null>(null);
 	let expandedArticles = $state<{ commercial_name: string; location_name: string; article_id: string }[]>([]);
 
+	let editingMyImage = $state<typeof myImages[0] | null>(null);
+	let editMyTitle = $state('');
+	let editMyDescription = $state('');
+	let editMyShared = $state(false);
+	let editMyAttribution = $state('');
+	let editMySaving = $state(false);
+	let editMyError = $state('');
+
+	function startEditMyImage(img: typeof myImages[0]) {
+		editingMyImage = img;
+		editMyTitle = img.title;
+		editMyDescription = img.description;
+		editMyShared = img.shared;
+		editMyAttribution = '';
+		editMyError = '';
+	}
+
+	async function saveEditMyImage() {
+		if (!editingMyImage) return;
+		editMySaving = true;
+		editMyError = '';
+		try {
+			await api.updateProductImage(editingMyImage.id, {
+				title: editMyTitle,
+				description: editMyDescription,
+				shared: editMyShared,
+				attribution: editMyAttribution,
+			});
+			myImages = myImages.map(i => i.id === editingMyImage!.id ? { ...i, title: editMyTitle, description: editMyDescription, shared: editMyShared } : i);
+			editingMyImage = null;
+		} catch (e: any) {
+			editMyError = e.message ?? 'Kunde inte spara';
+		} finally {
+			editMySaving = false;
+		}
+	}
+
 	async function loadMyImages() {
 		if (myImagesLoaded) return;
 		try {
@@ -201,6 +238,38 @@
 			<p class="text-sm text-neutral-500">Du har inte laddat upp några bilder ännu.</p>
 		{:else}
 			<p class="text-xs text-neutral-400 mb-2">{myImages.length} {myImages.length === 1 ? 'bild' : 'bilder'}</p>
+			{#if editingMyImage}
+				<div class="border rounded-lg p-4 bg-white space-y-3 mb-4">
+					<div class="flex items-start gap-4">
+						<img src="/api/v0/images/{editingMyImage.file_id}_thumb.webp" alt={editingMyImage.title} class="h-32 rounded object-contain shrink-0" />
+						<div class="flex-1 space-y-3 min-w-0">
+							<label class="block">
+								<span class="text-sm text-neutral-600 block mb-1">Titel</span>
+								<input type="text" bind:value={editMyTitle} class="border rounded px-2 py-1.5 text-sm w-full" />
+							</label>
+							<label class="block">
+								<span class="text-sm text-neutral-600 block mb-1">Beskrivning</span>
+								<textarea bind:value={editMyDescription} rows={2} class="border rounded px-2 py-1.5 text-sm w-full"></textarea>
+							</label>
+							<label class="block">
+								<span class="text-sm text-neutral-600 block mb-1">Fotograf</span>
+								<input type="text" bind:value={editMyAttribution} class="border rounded px-2 py-1.5 text-sm w-full" />
+							</label>
+							<label class="flex items-center gap-2 text-sm">
+								<input type="checkbox" bind:checked={editMyShared} />
+								Dela med andra kårer
+							</label>
+						</div>
+					</div>
+					{#if editMyError}
+						<p class="text-xs text-red-600">{editMyError}</p>
+					{/if}
+					<div class="flex gap-2">
+						<button type="button" onclick={saveEditMyImage} disabled={editMySaving} class="text-sm bg-blue-700 text-white px-4 py-2 rounded disabled:opacity-50">{editMySaving ? 'Sparar...' : 'Spara'}</button>
+						<button type="button" onclick={() => editingMyImage = null} class="text-sm text-neutral-500 underline">Avbryt</button>
+					</div>
+				</div>
+			{/if}
 			<div class="flex flex-wrap gap-3">
 				{#each myImages as img}
 					<div class="border rounded overflow-hidden w-[calc(33.333%-0.5rem)]">
@@ -218,6 +287,7 @@
 							<button type="button" onclick={() => toggleImageDetail(img)} class="text-[10px] text-blue-700 hover:underline mt-1">
 								{expandedImageId === img.id ? 'Dölj detaljer' : 'Detaljer'}
 							</button>
+							<button type="button" onclick={() => startEditMyImage(img)} class="text-[10px] text-blue-700 hover:underline mt-1 ml-2">Redigera</button>
 						</div>
 
 						{#if expandedImageId === img.id}

@@ -59,24 +59,8 @@
 
 <div class="fixed inset-0 bg-black/70 z-50 flex flex-col">
 	<div class="flex items-center justify-between px-4 py-2 bg-neutral-900 text-white text-sm">
-		<button
-			type="button"
-			onclick={onCancel} class="underline">Avbryt</button>
-		<div class="flex gap-1">
-			{#each formats as f}
-				<button
-					type="button"
-					onclick={() => { format = f.value; crop = { x: 0, y: 0 }; zoom = 1; }}
-					class="px-3 py-1 rounded text-xs {format === f.value ? 'bg-white text-black' : 'bg-neutral-700'}"
-				>{f.label}</button>
-			{/each}
-		</div>
-		<button
-			type="button"
-			onclick={handleConfirm}
-			disabled={!pixelCrop || cropping}
-			class="bg-blue-600 px-3 py-1 rounded disabled:opacity-50"
-		>{cropping ? 'Beskär...' : 'Beskär'}</button>
+		<button type="button" onclick={onCancel} class="underline">Avbryt</button>
+		<span class="text-xs text-neutral-400">Dra för att justera</span>
 	</div>
 
 	<div class="relative flex-1">
@@ -89,10 +73,27 @@
 		/>
 	</div>
 
-	<div class="px-4 py-2 bg-neutral-900 flex justify-center">
-		<label class="flex items-center gap-2 text-white text-xs">
-			<input type="range" min={1} max={3} step={0.01} bind:value={zoom} class="w-40" />
-			Zoom
-		</label>
+	<div class="px-4 py-3 bg-neutral-900 space-y-3">
+		<div class="flex justify-center gap-1">
+			{#each formats as f}
+				<button
+					type="button"
+					onclick={() => { format = f.value; crop = { x: 0, y: 0 }; zoom = 1; }}
+					class="px-3 py-1.5 rounded text-xs {format === f.value ? 'bg-white text-black' : 'bg-neutral-700 text-white'}"
+				>{f.label}</button>
+			{/each}
+		</div>
+		<div class="flex items-center justify-between gap-4">
+			<label class="flex items-center gap-2 text-white text-xs flex-1">
+				<input type="range" min={1} max={3} step={0.01} bind:value={zoom} class="w-full" />
+				Zoom
+			</label>
+			<button
+				type="button"
+				onclick={handleConfirm}
+				disabled={!pixelCrop || cropping}
+				class="bg-blue-600 text-white px-4 py-1.5 rounded text-sm disabled:opacity-50 shrink-0"
+			>{cropping ? 'Beskär...' : 'Beskär'}</button>
+		</div>
 	</div>
 </div>

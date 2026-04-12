@@ -221,3 +221,27 @@ See [inventory-management.md](inventory-management.md) for the full design doc.
 **Browse page cleanup**: "Visa arkiverade" moved to manager-only row with "Hanteringsläge". Badge shows available/nonArchived count (archived items excluded). Removed inline count field from browse — count changes only on edit page where per-item list is visible. "Inköpspris per styck" label on create form.
 
 **Backlog additions**: View-only access tier, smarter count decrease on edit page, duplicate article name checking on create, per-item editing on count increase.
+
+## 2026-04-11
+
+### Shared image browser + image metadata editing (Phase 2 Step 3 continued)
+
+See [images.md](images.md) for updated step tracking.
+
+**Shared image browser** (`SharedImageBrowser.svelte`): Modal with search (debounced 300ms), 2/3/4-column responsive grid, potential match indicator (green "Match" badge, sorted to top), expandable description per card. Two-phase flow: browse → confirm with editable title (pre-populated as `{commercialName} {index}`) and description (pre-populated from original). Wired into `ImageUpload` as "Bläddra" button alongside "Ladda upp".
+
+**Shared image deduplication**: `ListSharedImages` SQL query uses `DISTINCT ON (file_id)` to show one entry per physical image, preferring the current group's row.
+
+**Image metadata editing**: New `PUT /images/product/{imageId}` endpoint (uploader or manager). `UpdateProductImage` sqlc query. `ImageViewer` shows "Redigera" link per image when user has permission (manager: any image, user: own images). Full-width inline edit form with title, description, attribution ("Fotograf"), and shared checkbox. Editable from article detail page, article edit page, and profile "Mina bilder".
+
+**Attribution always stored**: Attribution radio buttons moved out of the sharing conditional in upload dialog — always visible as "Fotograf". Attribution is saved regardless of shared flag. Shown on article page, edit page, shared browser, and fullscreen — not on inventory browse or booking pages.
+
+**PhotoSwipe improvements**: Fullscreen caption now shows title + description + attribution (was title-only). Correct initial dimensions via `data-pswp-width`/`data-pswp-height` attributes derived from format metadata (landscape 1920×1440, portrait 1440×1920, square 1920×1920) — eliminates layout shift on open.
+
+**ImageViewer `showMeta` prop**: Controls whether attribution and edit buttons appear below thumbnails. Metadata is always fetched when `commercialName`/`locationId` provided (for fullscreen captions). Article detail + edit pages pass `showMeta`; browse page does not.
+
+**Crop dialog mobile fix**: Format buttons (Liggande/Stående/Kvadrat) and Beskär button moved from top bar to bottom bar, preventing overlap with persona switcher on phones.
+
+**API client additions**: `SharedImage` type, `listProductImages`, `listSharedImages`, `addFromShared`, `updateProductImage`.
+
+**`ListProductImages` response**: Now includes `uploaded_by` field for frontend permission checks.

@@ -153,7 +153,7 @@
 	<div class="mt-4 mb-6">
 		{#if imageIds.length > 0}
 			<div class="mb-4">
-				<ImageViewer imageIds={imageIds} alt={article.commercial_name || article.common_name} />
+				<ImageViewer imageIds={imageIds} alt={article.commercial_name || article.common_name} commercialName={article.commercial_name} locationId={article.location_id} showMeta userId={user?.member_id ?? ''} {isManager} />
 			</div>
 		{/if}
 		{#if article.commercial_name && article.location_id}

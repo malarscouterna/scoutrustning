@@ -542,26 +542,29 @@ At ~200 unique product types per group: ~200MB source + ~6MB thumbnails per grou
 - [x] Upload dialog: three radio buttons with preview, sends resolved string to API
 - [x] "Mina bilder" section on profile page with per-image details, article links, delete
 
-### Step 4: Shared image browser
+### Step 4: Shared image browser ✅
 
-- [ ] Create `SharedImageBrowser` component: modal with search, grid of thumbnails with metadata, potential match indicator
-- [ ] On select: pre-populate title (article name + index) and description (from original), editable before confirming
-- [ ] Wire into article edit page as "Bläddra" button
+- [x] Create `SharedImageBrowser` component: modal with search, grid of thumbnails with metadata, potential match indicator
+- [x] On select: pre-populate title (article name + index) and description (from original), editable before confirming
+- [x] Wire into article edit page as "Bläddra" button
+- [x] Deduplicate shared images by `file_id` (DISTINCT ON in SQL)
 
-### Step 5: Display in browse + booking flows
+### Step 5: Display in browse + booking flows (partial)
 
-- [ ] Browse page: show images on article expand (not in manage mode), thumbnails at 225px height (phone) / 300px (tablet+), description preview (2 lines, `line-clamp-2`) below, tap → fullscreen with title + full description
-- [ ] Update `ImageViewer` to show title as caption and description in PhotoSwipe fullscreen
-- [ ] Article detail page: thumbnails + titles, tap → fullscreen
+- [x] PhotoSwipe fullscreen: title + description + attribution as caption overlay
+- [x] Correct PhotoSwipe dimensions via `data-pswp-width`/`data-pswp-height` from format metadata
+- [ ] Browse page: description preview (2 lines, `line-clamp-2`) below thumbnails
 - [ ] Booking detail / pickup / return: images in expanded article card with description preview
 - [ ] Handle broken references (404 from deleted shared images) with placeholder
 
-### Step 6: Article edit page image management
+### Step 6: Article edit page image management (partial)
 
-- [ ] Horizontal scrollable row of thumbnails with titles
+- [x] Horizontal scrollable row of thumbnails on edit page (ImageViewer with showMeta)
+- [x] "Ladda upp" button → ImageUploadDialog
+- [x] "Bläddra" button → SharedImageBrowser with potential match indicator
+- [x] Edit image metadata (title, description, attribution, shared) — full-width inline form, permission-aware (manager: any, user: own)
+- [x] Edit from article detail page and profile "Mina bilder"
 - [ ] Delete button per image (removes from article group, checks file reference count)
-- [ ] "Ladda upp" button → ImageUploadDialog
-- [ ] "Bläddra" button → SharedImageBrowser with potential match indicator
 - [ ] Reorder via drag or move buttons
 
 ### Step 7: Issue report images
