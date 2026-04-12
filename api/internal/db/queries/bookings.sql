@@ -103,10 +103,14 @@ SELECT bi.*,
     a.commercial_name,
     a.common_name,
     a.place,
+    a.description AS article_description,
+    a.instructions AS article_instructions,
     a.status AS article_status,
     a.expected_available_date AS article_expected_available_date,
     a.approval_level,
     a.individually_tracked,
+    a.image_ids,
+    a.location_id,
     l.name AS location_name,
     c.name AS category_name
 FROM booking_items bi
@@ -121,7 +125,8 @@ ORDER BY c.name, a.commercial_name, a.common_name;
 SELECT a.id, a.commercial_name, a.common_name, a.category_id, a.location_id,
     l.name AS location_name, c.name AS category_name, a.place, a.status,
     a.individually_tracked, a.approval_level,
-    a.expected_available_date
+    a.expected_available_date,
+    a.image_ids, a.description, a.instructions
 FROM articles a
 JOIN locations l ON a.location_id = l.id
 JOIN categories c ON a.category_id = c.id

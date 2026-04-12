@@ -120,7 +120,8 @@ const availableArticles = `-- name: AvailableArticles :many
 SELECT a.id, a.commercial_name, a.common_name, a.category_id, a.location_id,
     l.name AS location_name, c.name AS category_name, a.place, a.status,
     a.individually_tracked, a.approval_level,
-    a.expected_available_date
+    a.expected_available_date,
+    a.image_ids, a.description, a.instructions
 FROM articles a
 JOIN locations l ON a.location_id = l.id
 JOIN categories c ON a.category_id = c.id
@@ -149,18 +150,21 @@ type AvailableArticlesParams struct {
 }
 
 type AvailableArticlesRow struct {
-	ID                    pgtype.UUID `json:"id"`
-	CommercialName        string      `json:"commercial_name"`
-	CommonName            string      `json:"common_name"`
-	CategoryID            pgtype.UUID `json:"category_id"`
-	LocationID            pgtype.UUID `json:"location_id"`
-	LocationName          string      `json:"location_name"`
-	CategoryName          string      `json:"category_name"`
-	Place                 string      `json:"place"`
-	Status                string      `json:"status"`
-	IndividuallyTracked   bool        `json:"individually_tracked"`
-	ApprovalLevel         string      `json:"approval_level"`
-	ExpectedAvailableDate pgtype.Date `json:"expected_available_date"`
+	ID                    pgtype.UUID     `json:"id"`
+	CommercialName        string          `json:"commercial_name"`
+	CommonName            string          `json:"common_name"`
+	CategoryID            pgtype.UUID     `json:"category_id"`
+	LocationID            pgtype.UUID     `json:"location_id"`
+	LocationName          string          `json:"location_name"`
+	CategoryName          string          `json:"category_name"`
+	Place                 string          `json:"place"`
+	Status                string          `json:"status"`
+	IndividuallyTracked   bool            `json:"individually_tracked"`
+	ApprovalLevel         string          `json:"approval_level"`
+	ExpectedAvailableDate pgtype.Date     `json:"expected_available_date"`
+	ImageIds              json.RawMessage `json:"image_ids"`
+	Description           string          `json:"description"`
+	Instructions          string          `json:"instructions"`
 }
 
 // Returns articles that are bookable and not reserved by overlapping bookings.
@@ -186,6 +190,9 @@ func (q *Queries) AvailableArticles(ctx context.Context, arg AvailableArticlesPa
 			&i.IndividuallyTracked,
 			&i.ApprovalLevel,
 			&i.ExpectedAvailableDate,
+			&i.ImageIds,
+			&i.Description,
+			&i.Instructions,
 		); err != nil {
 			return nil, err
 		}
@@ -660,10 +667,14 @@ SELECT bi.id, bi.group_id, bi.booking_id, bi.article_id, bi.pickup_status, bi.re
     a.commercial_name,
     a.common_name,
     a.place,
+    a.description AS article_description,
+    a.instructions AS article_instructions,
     a.status AS article_status,
     a.expected_available_date AS article_expected_available_date,
     a.approval_level,
     a.individually_tracked,
+    a.image_ids,
+    a.location_id,
     l.name AS location_name,
     c.name AS category_name
 FROM booking_items bi
@@ -680,22 +691,26 @@ type ListBookingItemsParams struct {
 }
 
 type ListBookingItemsRow struct {
-	ID                           pgtype.UUID `json:"id"`
-	GroupID                      string      `json:"group_id"`
-	BookingID                    pgtype.UUID `json:"booking_id"`
-	ArticleID                    pgtype.UUID `json:"article_id"`
-	PickupStatus                 pgtype.Text `json:"pickup_status"`
-	ReturnStatus                 pgtype.Text `json:"return_status"`
-	Notes                        string      `json:"notes"`
-	CommercialName               string      `json:"commercial_name"`
-	CommonName                   string      `json:"common_name"`
-	Place                        string      `json:"place"`
-	ArticleStatus                string      `json:"article_status"`
-	ArticleExpectedAvailableDate pgtype.Date `json:"article_expected_available_date"`
-	ApprovalLevel                string      `json:"approval_level"`
-	IndividuallyTracked          bool        `json:"individually_tracked"`
-	LocationName                 string      `json:"location_name"`
-	CategoryName                 string      `json:"category_name"`
+	ID                           pgtype.UUID     `json:"id"`
+	GroupID                      string          `json:"group_id"`
+	BookingID                    pgtype.UUID     `json:"booking_id"`
+	ArticleID                    pgtype.UUID     `json:"article_id"`
+	PickupStatus                 pgtype.Text     `json:"pickup_status"`
+	ReturnStatus                 pgtype.Text     `json:"return_status"`
+	Notes                        string          `json:"notes"`
+	CommercialName               string          `json:"commercial_name"`
+	CommonName                   string          `json:"common_name"`
+	Place                        string          `json:"place"`
+	ArticleDescription           string          `json:"article_description"`
+	ArticleInstructions          string          `json:"article_instructions"`
+	ArticleStatus                string          `json:"article_status"`
+	ArticleExpectedAvailableDate pgtype.Date     `json:"article_expected_available_date"`
+	ApprovalLevel                string          `json:"approval_level"`
+	IndividuallyTracked          bool            `json:"individually_tracked"`
+	ImageIds                     json.RawMessage `json:"image_ids"`
+	LocationID                   pgtype.UUID     `json:"location_id"`
+	LocationName                 string          `json:"location_name"`
+	CategoryName                 string          `json:"category_name"`
 }
 
 func (q *Queries) ListBookingItems(ctx context.Context, arg ListBookingItemsParams) ([]ListBookingItemsRow, error) {
@@ -718,10 +733,14 @@ func (q *Queries) ListBookingItems(ctx context.Context, arg ListBookingItemsPara
 			&i.CommercialName,
 			&i.CommonName,
 			&i.Place,
+			&i.ArticleDescription,
+			&i.ArticleInstructions,
 			&i.ArticleStatus,
 			&i.ArticleExpectedAvailableDate,
 			&i.ApprovalLevel,
 			&i.IndividuallyTracked,
+			&i.ImageIds,
+			&i.LocationID,
 			&i.LocationName,
 			&i.CategoryName,
 		); err != nil {

@@ -69,7 +69,10 @@
 
 	{#if imageIds.length > 0}
 		<div class="mb-4">
-			<ImageViewer {imageIds} alt={data.article.commercial_name || data.article.common_name} commercialName={data.article.commercial_name} locationId={data.article.location_id} showMeta userId={user?.member_id ?? ''} isManager={true} />
+			<ImageViewer {imageIds} alt={data.article.commercial_name || data.article.common_name} commercialName={data.article.commercial_name} locationId={data.article.location_id} showMeta userId={user?.member_id ?? ''} isManager={true} editMode
+				onDelete={(_, newIds) => { imageIds = newIds; }}
+				onReorder={async (newIds) => { try { const result = await api.reorderProductImages(data.article.commercial_name, data.article.location_id, newIds); imageIds = result.image_ids; } catch { /* ignore */ } }}
+			/>
 		</div>
 	{/if}
 
