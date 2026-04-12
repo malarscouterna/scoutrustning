@@ -519,7 +519,7 @@ List all categories for the group, ordered by sort_order.
 
 Product images are shared per product type + location (`commercial_name + location_id`). Multiple images per product, stored in `product_images` table with metadata (title, description, format, sharing, attribution). Issue images are standalone, referenced by UUID in article event metadata.
 
-Images are stored as WebP on a Docker volume. Two variants per image: source (1920px longest edge, q80) and thumbnail (300px height, q70). Thumbnail width varies by format (landscape 400×300, portrait 225×300, square 300×300). On-demand JPEG conversion for download.
+Images are stored as WebP on a Docker volume. Two variants per image: source (2560px longest edge, 2048px for square, q85) and thumbnail (400px height, q75). Thumbnail width varies by format (landscape 533×400, portrait 300×400, square 400×400). On-demand JPEG conversion for download.
 
 ### 🔒 `POST /api/v0/images/product`
 Upload a product image. Multipart form upload. Accepts JPEG, PNG, WebP, HEIC up to 25MB. Client crops via cropperjs; server validates ratio, strips EXIF, generates source + thumbnail WebP. Appends to `image_ids` on all articles matching commercial_name + location_id. Upload permission controlled by `image_upload_role` group setting.

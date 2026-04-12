@@ -57,7 +57,7 @@
 	}
 </script>
 
-<div class="fixed inset-0 bg-black/70 z-50 flex flex-col">
+<div class="fixed inset-0 bg-black/70 z-[60] flex flex-col">
 	<div class="flex items-center justify-between px-4 py-2 bg-neutral-900 text-white text-sm">
 		<button type="button" onclick={onCancel} class="underline">Avbryt</button>
 		<span class="text-xs text-neutral-400">Dra för att justera</span>

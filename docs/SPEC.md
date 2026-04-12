@@ -225,8 +225,8 @@ Issue report images are separate — attached to article events, documenting spe
 - Convert server-side to WebP using libvips (handles all input formats, EXIF rotation, metadata stripping)
 - Strip all EXIF data (privacy: GPS, device info). No EXIF fields are preserved — the DB already captures who uploaded, when, and in what context
 - Two variants per image:
-  - Source: 1920px longest edge, WebP quality 80 (~0.5–1MB) — for detail views
-  - Thumbnail: 400×300px, WebP quality 70 (~10–30KB) — for cards and lists
+  - Source: 2560px longest edge (2048px for square), WebP quality 85 (~0.4–1MB) — for detail views
+  - Thumbnail: 400px height (width varies by format), WebP quality 75 (~25–50KB) — for cards and lists
 - Stored on disk as `{uuid}.webp` / `{uuid}_thumb.webp` in a Docker volume
 - Referenced by UUID in the database
 
@@ -711,7 +711,7 @@ Remaining:
 
 #### Step 3: Image upload (in progress)
 See [images.md](docs/images.md) for full design doc.
-- Server-side image processing via govips: JPEG/PNG/WebP/HEIC input, EXIF strip, auto-rotate, 4:3 center crop (product), resize to source (1920px/q80) + thumbnail (400×300/q70) WebP variants
+- Server-side image processing via govips: JPEG/PNG/WebP/HEIC input, EXIF strip, auto-rotate, 4:3 center crop (product), resize to source (2560px/q85, 2048px for square) + thumbnail (400px height/q75) WebP variants
 - On-demand JPEG conversion for download (`?format=jpeg`)
 - Byte-level MIME detection including HEIC ftyp box and WebP RIFF header sniffing
 - Product image upload (manager-only), issue image upload (any user), serve with immutable caching, delete with file cleanup

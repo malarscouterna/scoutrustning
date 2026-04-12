@@ -96,25 +96,25 @@ Using `github.com/davidbyttow/govips/v2`:
 4. Strip all EXIF/metadata
 5. For product images: crop to the format specified by the client (the client sends pre-cropped data via cropperjs, but the server validates the ratio and trims if needed)
 6. Generate two variants:
-   - **Source**: longest edge 1920px, WebP quality 80
-   - **Thumbnail**: 300px height (width varies by format), WebP quality 70
+   - **Source**: longest edge 2560px (2048px for square), WebP quality 85
+   - **Thumbnail**: 400px height (width varies by format), WebP quality 75
 7. Save as `{file_id}.webp` and `{file_id}_thumb.webp`
 8. Insert `product_images` row, update `image_ids` on articles
 9. Return the image metadata
 
 ### Thumbnail dimensions
 
-Thumbnails are saved at **300px height**. Width varies by format:
+Thumbnails are saved at **400px height**. Width varies by format:
 
 | Format    | Aspect | Thumb size | CSS display (phone) | CSS display (tablet+) |
 |-----------|--------|------------|---------------------|-----------------------|
-| landscape | 4:3    | 400×300    | 300×225             | 400×300               |
-| portrait  | 3:4    | 225×300    | 169×225             | 225×300               |
-| square    | 1:1    | 300×300    | 225×225             | 300×300               |
+| landscape | 4:3    | 533×400    | ~300×225            | ~400×300              |
+| portrait  | 3:4    | 300×400    | ~169×225            | ~225×300              |
+| square    | 1:1    | 400×400    | ~225×225            | ~300×300              |
 
-Saving at 300px height gives headroom for larger displays without visible quality loss. The CSS constrains display size. File size difference vs 225px is negligible (~5KB).
+Saving at 400px height gives headroom for larger displays without visible quality loss. The CSS constrains display size.
 
-If display sizes change later, thumbnails can be regenerated from the source files (1920px) which are always kept.
+If display sizes change later, thumbnails can be regenerated from the source files (2560px) which are always kept.
 
 ## Client-side crop (cropperjs)
 
@@ -207,7 +207,7 @@ Images show when pressing on an article card (expanding it). Thumbnail + descrip
 
 ### Fullscreen (PhotoSwipe)
 
-Shows source image (1920px). Title displayed as caption. Full description below title.
+Shows source image (2560px, 2048px for square). Title displayed as caption. Full description below title.
 
 ## API endpoints
 
@@ -340,8 +340,8 @@ Any authenticated user. No crop, no metadata table entry.
 ### Serve image
 
 ```
-GET /api/v0/images/{uuid}.webp        → source (1920px)
-GET /api/v0/images/{uuid}_thumb.webp  → thumbnail (300px height)
+GET /api/v0/images/{uuid}.webp        → source (2560px)
+GET /api/v0/images/{uuid}_thumb.webp  → thumbnail (400px height)
 ```
 
 Returns `image/webp` with `Cache-Control: public, max-age=31536000, immutable` (images are content-addressed by UUID — new upload = new UUID).
@@ -462,8 +462,10 @@ services:
 
 | Variant | Dimensions | Quality | Typical size |
 |---|---|---|---|
-| Source | 1920px longest edge | WebP q80 | 200KB–1MB |
-| Thumbnail | 300px height | WebP q70 | 10–30KB |
+| Source (landscape) | 2560×1920 | WebP q85 | 400KB–1MB |
+| Source (portrait) | 1920×2560 | WebP q85 | 400KB–1MB |
+| Source (square) | 2048×2048 | WebP q85 | 400KB–1MB |
+| Thumbnail | 400px height | WebP q75 | 25–50KB |
 
 At ~200 unique product types per group: ~200MB source + ~6MB thumbnails per group. Well within Docker volume limits.
 
@@ -524,7 +526,7 @@ At ~200 unique product types per group: ~200MB source + ~6MB thumbnails per grou
 ### Step 2: Format support (landscape / portrait / square) ✅
 
 - [x] `ProcessProductImage` accepts format parameter, crops to matching aspect ratio
-- [x] Thumbnail generation: 300px height, width varies by format
+- [x] Thumbnail generation: 400px height, width varies by format
 - [x] Server-side validation: verify uploaded image roughly matches declared format
 
 ### Step 3: Client-side crop UI (cropperjs) ✅
