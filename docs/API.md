@@ -562,6 +562,21 @@ List product images for an article group.
 ### `GET /api/v0/images/product/{imageId}`
 Get metadata for a single product image, including `ref_count` (how many product_images rows reference the same file).
 
+### `PUT /api/v0/images/product/{imageId}`
+Update metadata for a product image. Uploader or equipment manager can edit.
+
+**Body** (JSON):
+```json
+{
+  "title": "Sibley 3",
+  "description": "Insida med extra markis",
+  "shared": false,
+  "attribution": "Anna, Mälarscouterna"
+}
+```
+
+**Response** `200` | `400` | `403` | `404`
+
 ### 🔒🔧 `PUT /api/v0/images/product/reorder`
 Reorder images for an article group. Manager only.
 

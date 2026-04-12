@@ -316,7 +316,7 @@ func (q *Queries) ListProductImagesByUploader(ctx context.Context, arg ListProdu
 }
 
 const listSharedImages = `-- name: ListSharedImages :many
-SELECT pi.id, pi.file_id, pi.group_id, pi.uploaded_by, pi.title, pi.description, pi.format, pi.shared, pi.created_at, pi.attribution, u.name AS uploaded_by_name, g.name AS uploaded_by_group
+SELECT DISTINCT ON (pi.file_id) pi.id, pi.file_id, pi.group_id, pi.uploaded_by, pi.title, pi.description, pi.format, pi.shared, pi.created_at, pi.attribution, u.name AS uploaded_by_name, g.name AS uploaded_by_group
 FROM product_images pi
 JOIN users u ON pi.uploaded_by = u.id
 JOIN groups g ON pi.group_id = g.id
@@ -324,7 +324,7 @@ WHERE (pi.shared = true OR pi.group_id = $1)
     AND ($2::text IS NULL
         OR pi.title ILIKE '%' || $2 || '%'
         OR pi.description ILIKE '%' || $2 || '%')
-ORDER BY pi.created_at DESC
+ORDER BY pi.file_id, (pi.group_id = $1) DESC, pi.created_at DESC
 `
 
 type ListSharedImagesParams struct {
@@ -347,7 +347,8 @@ type ListSharedImagesRow struct {
 	UploadedByGroup string             `json:"uploaded_by_group"`
 }
 
-// Returns images shared by any group plus all images from the current group.
+// Returns one image per file_id: shared by any group plus own group's images.
+// Uses DISTINCT ON to deduplicate, preferring the current group's row.
 func (q *Queries) ListSharedImages(ctx context.Context, arg ListSharedImagesParams) ([]ListSharedImagesRow, error) {
 	rows, err := q.db.Query(ctx, listSharedImages, arg.GroupID, arg.Search)
 	if err != nil {
@@ -400,4 +401,45 @@ func (q *Queries) RemoveImageIdFromAllArticles(ctx context.Context, arg RemoveIm
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const updateProductImage = `-- name: UpdateProductImage :one
+UPDATE product_images
+SET title = $1, description = $2, shared = $3, attribution = $4
+WHERE id = $5 AND group_id = $6
+RETURNING id, file_id, group_id, uploaded_by, title, description, format, shared, created_at, attribution
+`
+
+type UpdateProductImageParams struct {
+	Title       string      `json:"title"`
+	Description string      `json:"description"`
+	Shared      bool        `json:"shared"`
+	Attribution string      `json:"attribution"`
+	ID          pgtype.UUID `json:"id"`
+	GroupID     string      `json:"group_id"`
+}
+
+func (q *Queries) UpdateProductImage(ctx context.Context, arg UpdateProductImageParams) (ProductImage, error) {
+	row := q.db.QueryRow(ctx, updateProductImage,
+		arg.Title,
+		arg.Description,
+		arg.Shared,
+		arg.Attribution,
+		arg.ID,
+		arg.GroupID,
+	)
+	var i ProductImage
+	err := row.Scan(
+		&i.ID,
+		&i.FileID,
+		&i.GroupID,
+		&i.UploadedBy,
+		&i.Title,
+		&i.Description,
+		&i.Format,
+		&i.Shared,
+		&i.CreatedAt,
+		&i.Attribution,
+	)
+	return i, err
 }

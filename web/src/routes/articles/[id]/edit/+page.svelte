@@ -4,6 +4,7 @@
 	import { createApiClient } from '$lib/api/client';
 	import { statusLabels, statusColors } from '$lib/labels';
 	import ArticleForm from '$lib/components/ArticleForm.svelte';
+	import ImageViewer from '$lib/components/ImageViewer.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -14,6 +15,11 @@
 	let error = $state('');
 	let saving = $state(false);
 	let showItems = $state(false);
+	let imageIds = $state<string[]>([]);
+
+	$effect(() => {
+		imageIds = data.article.image_ids ?? [];
+	});
 
 	function statusBadgeClass(status: string): string {
 		return statusColors[status] ?? 'bg-neutral-100';
@@ -60,6 +66,12 @@
 	<h1 class="text-heading-sm font-bold mt-2 mb-4">
 		Redigera {isGroupEdit ? data.article.commercial_name || data.article.common_name : data.article.common_name}
 	</h1>
+
+	{#if imageIds.length > 0}
+		<div class="mb-4">
+			<ImageViewer {imageIds} alt={data.article.commercial_name || data.article.common_name} commercialName={data.article.commercial_name} locationId={data.article.location_id} showMeta userId={user?.member_id ?? ''} isManager={true} />
+		</div>
+	{/if}
 
 	<ArticleForm
 		mode="edit"
