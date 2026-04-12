@@ -32,6 +32,7 @@ docker compose exec -T db psql -U utrustning -d utrustning -c "
   DELETE FROM booking_events;
   DELETE FROM booking_items;
   DELETE FROM bookings;
+  DELETE FROM product_images;
   DELETE FROM articles;
   DELETE FROM units;
 " || echo "Warning: cleanup had errors, continuing..."

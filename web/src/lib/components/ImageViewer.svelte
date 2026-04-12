@@ -41,11 +41,11 @@
 	let saving = $state(false);
 	let editError = $state('');
 
-	// Source image dimensions by format (longest edge = 1920)
+	// Source image dimensions by format (longest edge = 2560, square = 2048)
 	const formatDimensions: Record<string, { w: number; h: number }> = {
-		landscape: { w: 1920, h: 1440 },
-		portrait:  { w: 1440, h: 1920 },
-		square:    { w: 1920, h: 1920 },
+		landscape: { w: 2560, h: 1920 },
+		portrait:  { w: 1920, h: 2560 },
+		square:    { w: 2048, h: 2048 },
 	};
 
 	function getDimensions(imgId: string): { w: number; h: number } {
