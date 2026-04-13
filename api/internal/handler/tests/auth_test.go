@@ -99,12 +99,12 @@ func TestAuth_UnknownGroupReturns403(t *testing.T) {
 	})
 
 	client := env.ClientWithClaims(auth.Claims{
-		MemberID: "9999999",
-		GroupID:  "unknown_group",
-		Name:     "Unknown User",
-		Email:    "unknown@example.com",
-		Roles:    []string{"leader"},
-		Units:    []string{"Some Unit"},
+		MemberID:  "9999999",
+		GroupID:   "unknown_group",
+		Name:      "Unknown User",
+		Email:     "unknown@example.com",
+		Teams:     []auth.TeamMembership{{TeamID: "x", TeamName: "Some Team", TeamType: "troop", AccessLevel: "book"}},
+		MaxAccess: "book",
 	})
 
 	resp, err := client.Get("/api/v0/articles")

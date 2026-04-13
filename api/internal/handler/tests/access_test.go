@@ -20,7 +20,7 @@ func mountAll(env *testutil.TestEnv) {
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
 		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries}).Routes())
-		r.Mount("/units", (&handler.UnitHandler{Q: env.Queries}).Routes())
+		r.Mount("/teams", (&handler.TeamHandler{Q: env.Queries}).Routes())
 	})
 }
 
@@ -50,7 +50,7 @@ func createBookingWithUnit(t *testing.T, client *testutil.TestClient, unitID str
 	t.Helper()
 	body := map[string]any{
 		"start_date": "2026-06-01", "end_date": "2026-06-05",
-		"used_by_unit_id": unitID,
+		"used_by_team_id": unitID,
 	}
 	b, _ := json.Marshal(body)
 	resp, err := client.Post("/api/v0/bookings", bytes.NewReader(b))
@@ -70,7 +70,7 @@ func createBookingWithUnit(t *testing.T, client *testutil.TestClient, unitID str
 // getUnitID returns the unit ID for a given unit name.
 func getUnitID(t *testing.T, client *testutil.TestClient, name string) string {
 	t.Helper()
-	resp, _ := client.Get("/api/v0/units")
+	resp, _ := client.Get("/api/v0/teams")
 	defer resp.Body.Close()
 	var units []map[string]any
 	json.NewDecoder(resp.Body).Decode(&units)
@@ -107,13 +107,7 @@ func TestAccess_UnitBookingVisibility(t *testing.T) {
 	leaderYgg := env.ClientAs("leader-yggdrasil")
 	leaderSpi := env.ClientAs("leader-flaskpost")
 
-	// Create units
-	for _, name := range []string{"Yggdrasil", "Spindlarna"} {
-		b, _ := json.Marshal(map[string]any{"name": name, "type": "unit"})
-		resp, _ := manager.Post("/api/v0/units", bytes.NewReader(b))
-		resp.Body.Close()
-	}
-
+	// Teams are seeded by SetupTestEnv
 	yggID := getUnitID(t, leaderYgg, "Yggdrasil")
 
 	// Yggdrasil leader creates a unit booking
@@ -217,7 +211,7 @@ func TestAccess_RoleEnforcementAllEndpoints(t *testing.T) {
 		{"delete article", "DELETE", "/api/v0/articles/" + articleID, nil},
 		{"create location", "POST", "/api/v0/locations", map[string]any{"name": "Test", "sort_order": 99}},
 		{"create category", "POST", "/api/v0/categories", map[string]any{"name": "Test", "sort_order": 99}},
-		{"create unit", "POST", "/api/v0/units", map[string]any{"name": "TestUnit"}},
+		{"create unit", "POST", "/api/v0/teams", map[string]any{"name": "TestUnit"}},
 	}
 
 	for _, tc := range tests {
@@ -247,7 +241,7 @@ func TestAccess_RoleEnforcementAllEndpoints(t *testing.T) {
 		{"list articles", "/api/v0/articles"},
 		{"list locations", "/api/v0/locations"},
 		{"list categories", "/api/v0/categories"},
-		{"list units", "/api/v0/units"},
+		{"list units", "/api/v0/teams"},
 		{"list bookings", "/api/v0/bookings"},
 		{"check availability", "/api/v0/articles/availability?start_date=2026-01-01&end_date=2026-01-05"},
 	}
@@ -394,15 +388,7 @@ func TestAccess_UnitMembershipOnBooking(t *testing.T) {
 	leaderSpi := env.ClientAs("leader-flaskpost")
 	projectLeader := env.ClientAs("project-leader")
 
-	// Create units and a project
-	for _, u := range []struct{ name, typ string }{
-		{"Yggdrasil", "unit"}, {"Spindlarna", "unit"}, {"Valborgskommittén", "project"},
-	} {
-		b, _ := json.Marshal(map[string]any{"name": u.name, "type": u.typ})
-		resp, _ := manager.Post("/api/v0/units", bytes.NewReader(b))
-		resp.Body.Close()
-	}
-
+	// Teams are seeded by SetupTestEnv
 	yggID := getUnitID(t, leaderYgg, "Yggdrasil")
 	spiID := getUnitID(t, leaderSpi, "Spindlarna")
 	valborgID := getUnitID(t, projectLeader, "Valborgskommittén")
@@ -410,7 +396,7 @@ func TestAccess_UnitMembershipOnBooking(t *testing.T) {
 	t.Run("leader can book for own unit", func(t *testing.T) {
 		b, _ := json.Marshal(map[string]any{
 			"start_date": "2026-06-01", "end_date": "2026-06-05",
-			"used_by_unit_id": yggID,
+			"used_by_team_id": yggID,
 		})
 		resp, _ := leaderYgg.Post("/api/v0/bookings", bytes.NewReader(b))
 		defer resp.Body.Close()
@@ -423,7 +409,7 @@ func TestAccess_UnitMembershipOnBooking(t *testing.T) {
 	t.Run("leader cannot book for other unit", func(t *testing.T) {
 		b, _ := json.Marshal(map[string]any{
 			"start_date": "2026-06-01", "end_date": "2026-06-05",
-			"used_by_unit_id": spiID,
+			"used_by_team_id": spiID,
 		})
 		resp, _ := leaderYgg.Post("/api/v0/bookings", bytes.NewReader(b))
 		defer resp.Body.Close()
@@ -435,7 +421,7 @@ func TestAccess_UnitMembershipOnBooking(t *testing.T) {
 	t.Run("project leader can book for own project", func(t *testing.T) {
 		b, _ := json.Marshal(map[string]any{
 			"start_date": "2026-06-01", "end_date": "2026-06-05",
-			"used_by_unit_id": valborgID,
+			"used_by_team_id": valborgID,
 		})
 		resp, _ := projectLeader.Post("/api/v0/bookings", bytes.NewReader(b))
 		defer resp.Body.Close()
@@ -448,7 +434,7 @@ func TestAccess_UnitMembershipOnBooking(t *testing.T) {
 	t.Run("project leader cannot book for a unit", func(t *testing.T) {
 		b, _ := json.Marshal(map[string]any{
 			"start_date": "2026-06-01", "end_date": "2026-06-05",
-			"used_by_unit_id": yggID,
+			"used_by_team_id": yggID,
 		})
 		resp, _ := projectLeader.Post("/api/v0/bookings", bytes.NewReader(b))
 		defer resp.Body.Close()
@@ -461,7 +447,7 @@ func TestAccess_UnitMembershipOnBooking(t *testing.T) {
 		for _, id := range []string{yggID, spiID, valborgID} {
 			b, _ := json.Marshal(map[string]any{
 				"start_date": "2026-07-01", "end_date": "2026-07-05",
-				"used_by_unit_id": id,
+				"used_by_team_id": id,
 			})
 			resp, _ := manager.Post("/api/v0/bookings", bytes.NewReader(b))
 			defer resp.Body.Close()
@@ -482,7 +468,7 @@ func TestAccess_PickupEventLogging(t *testing.T) {
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
 		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries}).Routes())
-		r.Mount("/units", (&handler.UnitHandler{Q: env.Queries}).Routes())
+		r.Mount("/teams", (&handler.TeamHandler{Q: env.Queries}).Routes())
 		r.Get("/me", func(w http.ResponseWriter, r *http.Request) {
 			claims, _ := auth.ClaimsFromContext(r.Context())
 			handler.WriteJSON(w, http.StatusOK, claims)

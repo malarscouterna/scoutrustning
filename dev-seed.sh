@@ -1,5 +1,5 @@
 #!/bin/bash
-# Seed the development database with inventory and units.
+# Seed the development database with inventory and teams.
 # Usage: ./dev-seed.sh [path-to-csv]
 #
 # Requires the API to be running (docker compose up).
@@ -17,6 +17,38 @@ until curl -sf "$API/api/health" > /dev/null 2>&1; do
 done
 echo "API ready."
 
+echo "Clearing existing seed data..."
+docker compose exec -T db psql -U utrustning -d utrustning -c "
+  DELETE FROM article_events;
+  DELETE FROM booking_events;
+  DELETE FROM booking_items;
+  DELETE FROM bookings;
+  DELETE FROM product_images;
+  DELETE FROM articles;
+  DELETE FROM team_claim_mappings;
+  DELETE FROM teams;
+  DELETE FROM group_settings;
+  DELETE FROM categories;
+  DELETE FROM locations;
+  DELETE FROM users;
+  DELETE FROM groups;
+" || echo "Warning: cleanup had errors, continuing..."
+# Clear image files (dev mode uses local mount)
+rm -rf data/images/*.webp 2>/dev/null || true
+echo "Cleared."
+
+echo "Bootstrapping groups..."
+# In dev mode (air), binary is at ./tmp/server; in production, /bin/server
+SERVER_BIN=$(docker compose exec -T api sh -c 'test -f ./tmp/server && echo ./tmp/server || echo /bin/server')
+docker compose exec -T api $SERVER_BIN init-group \
+  --group-id 766 --group-name "Mälarscouterna" \
+  --manager-claim "group:766:material_responsible" --team-name "Utrustningsgruppen" \
+  --seed-locations
+
+docker compose exec -T api $SERVER_BIN init-group \
+  --group-id 999 --group-name "Testkåren" \
+  --manager-claim "group:999:admin" --team-name "Admin"
+
 # Check that the API is in dev mode (X-Dev-Role-Override must work)
 HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v0/locations" -H "$HEADER")
 if [ "$HTTP_CODE" != "200" ]; then
@@ -26,39 +58,31 @@ if [ "$HTTP_CODE" != "200" ]; then
   exit 1
 fi
 
-echo "Clearing existing seed data..."
-docker compose exec -T db psql -U utrustning -d utrustning -c "
-  DELETE FROM article_events;
-  DELETE FROM booking_events;
-  DELETE FROM booking_items;
-  DELETE FROM bookings;
-  DELETE FROM product_images;
-  DELETE FROM articles;
-  DELETE FROM units;
-" || echo "Warning: cleanup had errors, continuing..."
-# Clear image files (dev mode uses local mount)
-rm -rf data/images/*.webp 2>/dev/null || true
-echo "Cleared."
-
 echo "Importing articles from: $CSV"
 RESULT=$(curl -sf -X POST "$API/api/v0/articles/import" \
   -H "$HEADER" \
   -F "file=@$CSV")
 echo "$RESULT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'Imported: {d[\"imported\"]}, skipped: {d[\"skipped\"]}')"
 
-echo "Creating units and projects..."
-for UNIT in Yggdrasil Spindlarna Valarna Flaskpostorné; do
-  curl -sf -X POST "$API/api/v0/units" \
-    -H "$HEADER" \
-    -H "Content-Type: application/json" \
-    -d "{\"name\":\"$UNIT\",\"type\":\"unit\"}" > /dev/null && echo "  Created unit: $UNIT" || echo "  Exists: $UNIT"
+echo "Creating teams..."
+# Troops (book level)
+for entry in "Yggdrasil:troop:17443:book" "Spindlarna:troop:9109:book" "Valarna:troop:19260:book" "Flaskpostorné:troop:20956:book"; do
+  IFS=: read NAME TYPE CLAIM_ID ACCESS <<< "$entry"
+  curl -sf -X POST "$API/api/v0/teams" \
+    -H "$HEADER" -H "Content-Type: application/json" \
+    -d "{\"name\":\"$NAME\",\"type\":\"$TYPE\",\"access_level\":\"$ACCESS\",\"claim_scope\":\"troop\",\"claim_id\":\"$CLAIM_ID\"}" > /dev/null && echo "  Created: $NAME ($ACCESS)" || echo "  Exists: $NAME"
 done
-for PROJECT in Valborgskommittén Läger Utrustningsgruppen IT-gruppen; do
-  curl -sf -X POST "$API/api/v0/units" \
-    -H "$HEADER" \
-    -H "Content-Type: application/json" \
-    -d "{\"name\":\"$PROJECT\",\"type\":\"project\"}" > /dev/null && echo "  Created project: $PROJECT" || echo "  Exists: $PROJECT"
+# Roles with specific access levels (Utrustningsgruppen already created by init-group)
+for entry in "IT-gruppen:role:it_manager:manager" "Valborgskommittén:role:walpurgis_committee:trusted" "Läger:role:group_camp_committee:trusted"; do
+  IFS=: read NAME TYPE CLAIM_ID ACCESS <<< "$entry"
+  curl -sf -X POST "$API/api/v0/teams" \
+    -H "$HEADER" -H "Content-Type: application/json" \
+    -d "{\"name\":\"$NAME\",\"type\":\"$TYPE\",\"access_level\":\"$ACCESS\",\"claim_scope\":\"group\",\"claim_id\":\"$CLAIM_ID\"}" > /dev/null && echo "  Created: $NAME ($ACCESS)" || echo "  Exists: $NAME"
 done
+# Test group team
+curl -sf -X POST "$API/api/v0/teams" \
+  -H "X-Dev-Role-Override: other-kar-leader" -H "Content-Type: application/json" \
+  -d '{"name":"Avdelning 1","type":"troop","access_level":"book","claim_scope":"troop","claim_id":"99901"}' > /dev/null && echo "  Created: Avdelning 1 (book, group 999)" || echo "  Exists: Avdelning 1"
 
 # Report issues on some quantity-tracked articles to demo status mix
 echo ""
@@ -117,7 +141,7 @@ PYEOF
   )
 
   ATTRIBUTION="Teo, Mälarscouterna"
-  TEO="X-Dev-Role-Override: leader-unit-it"
+  TEO="X-Dev-Role-Override: leader-team-it"
   echo "$UPLOAD_PLAN" | while IFS= read -r LINE; do
     [ -z "$LINE" ] && continue
     file=$(echo "$LINE" | python3 -c "import json,sys; print(json.load(sys.stdin)['file'])")
@@ -248,7 +272,7 @@ for a in json.load(sys.stdin):
 "
 }
 
-UNIT_ID=$(curl -s "$API/api/v0/units" -H "$LEADER" | python3 -c "import json,sys; print([u['id'] for u in json.load(sys.stdin) if u['name']=='Yggdrasil'][0])")
+TEAM_ID=$(curl -s "$API/api/v0/teams" -H "$LEADER" | python3 -c "import json,sys; print([u['id'] for u in json.load(sys.stdin) if u['name']=='Yggdrasil'][0])")
 
 # ─── Booking 1: Active booking in picked_up state (checked out right now) ───
 echo ""
@@ -257,7 +281,7 @@ END_5D=$(date -d "+5 days" +%Y-%m-%d 2>/dev/null || date -v+5d +%Y-%m-%d)
 echo "Creating booking 1 (active, picked_up, $TODAY to $END_5D)..."
 BOOKING_ID=$(curl -s -X POST "$API/api/v0/bookings" \
   -H "$LEADER" -H "Content-Type: application/json" \
-  -d "{\"start_date\":\"$TODAY\",\"end_date\":\"$END_5D\",\"used_by_unit_id\":\"$UNIT_ID\",\"notes\":\"Hajk med Yggdrasil\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+  -d "{\"start_date\":\"$TODAY\",\"end_date\":\"$END_5D\",\"used_by_team_id\":\"$TEAM_ID\",\"notes\":\"Hajk med Yggdrasil\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
 echo "  Booking: $BOOKING_ID"
 
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING_ID/items" \
@@ -367,7 +391,7 @@ END_12D=$(date -d "+12 days" +%Y-%m-%d 2>/dev/null || date -v+12d +%Y-%m-%d)
 echo "Creating booking 2 (confirmed, $START_7D to $END_12D)..."
 BOOKING2_ID=$(curl -s -X POST "$API/api/v0/bookings" \
   -H "$LEADER" -H "Content-Type: application/json" \
-  -d "{\"start_date\":\"$START_7D\",\"end_date\":\"$END_12D\",\"used_by_unit_id\":\"$UNIT_ID\",\"notes\":\"Sommarläger vid Karsvik, 12 utmanare + 3 ledare\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+  -d "{\"start_date\":\"$START_7D\",\"end_date\":\"$END_12D\",\"used_by_team_id\":\"$TEAM_ID\",\"notes\":\"Sommarläger vid Karsvik, 12 utmanare + 3 ledare\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
 
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING2_ID/items" \
   -H "$LEADER" -H "Content-Type: application/json" \
@@ -386,13 +410,13 @@ echo "  Booking 2 (confirmed): 2x Brandfilt, 1x Primus, 2x Matkåsa"
 # ─── Booking 3: Submitted, waiting for approval (leader booked Sibley = low) ───
 echo ""
 FLASKPOST="X-Dev-Role-Override: leader-flaskpost"
-FLASK_UNIT_ID=$(curl -s "$API/api/v0/units" -H "$FLASKPOST" | python3 -c "import json,sys; print([u['id'] for u in json.load(sys.stdin) if u['name']=='Flaskpostorné'][0])")
+FLASK_TEAM_ID=$(curl -s "$API/api/v0/teams" -H "$FLASKPOST" | python3 -c "import json,sys; print([u['id'] for u in json.load(sys.stdin) if u['name']=='Flaskpostorné'][0])")
 START_14D=$(date -d "+14 days" +%Y-%m-%d 2>/dev/null || date -v+14d +%Y-%m-%d)
 END_16D=$(date -d "+16 days" +%Y-%m-%d 2>/dev/null || date -v+16d +%Y-%m-%d)
 echo "Creating booking 3 (submitted, awaiting approval, $START_14D to $END_16D)..."
 BOOKING3_ID=$(curl -s -X POST "$API/api/v0/bookings" \
   -H "$FLASKPOST" -H "Content-Type: application/json" \
-  -d "{\"start_date\":\"$START_14D\",\"end_date\":\"$END_16D\",\"used_by_unit_id\":\"$FLASK_UNIT_ID\",\"notes\":\"Helgutflykt med Flaskpostorné, övernattning vid sjön\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+  -d "{\"start_date\":\"$START_14D\",\"end_date\":\"$END_16D\",\"used_by_team_id\":\"$FLASK_TEAM_ID\",\"notes\":\"Helgutflykt med Flaskpostorné, övernattning vid sjön\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
 
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING3_ID/items" \
   -H "$FLASKPOST" -H "Content-Type: application/json" \
@@ -405,16 +429,16 @@ curl -sf -X POST "$API/api/v0/bookings/$BOOKING3_ID/submit" \
   -d '{"message":"Vi är 8 scouter och 2 ledare, behöver ett stort tält för samling"}' > /dev/null
 echo "  Booking 3 (submitted): 1x Sibley (low), 2x Stormkök — waiting for approval"
 
-# ─── Booking 4: Project leader booking (auto-confirmed despite low approval) ───
+# ─── Booking 4: Trusted team booking (auto-confirmed despite low approval) ───
 echo ""
 PROJECT_LEADER="X-Dev-Role-Override: project-unit-leader"
-VALBORG_ID=$(curl -s "$API/api/v0/units" -H "$PROJECT_LEADER" | python3 -c "import json,sys; print([u['id'] for u in json.load(sys.stdin) if u['name']=='Valborgskommittén'][0])")
+VALBORG_ID=$(curl -s "$API/api/v0/teams" -H "$PROJECT_LEADER" | python3 -c "import json,sys; print([u['id'] for u in json.load(sys.stdin) if u['name']=='Valborgskommittén'][0])")
 START_21D=$(date -d "+21 days" +%Y-%m-%d 2>/dev/null || date -v+21d +%Y-%m-%d)
 END_22D=$(date -d "+22 days" +%Y-%m-%d 2>/dev/null || date -v+22d +%Y-%m-%d)
-echo "Creating booking 4 (project leader, auto-confirmed, $START_21D to $END_22D)..."
+echo "Creating booking 4 (trusted team, auto-confirmed, $START_21D to $END_22D)..."
 BOOKING4_ID=$(curl -s -X POST "$API/api/v0/bookings" \
   -H "$PROJECT_LEADER" -H "Content-Type: application/json" \
-  -d "{\"start_date\":\"$START_21D\",\"end_date\":\"$END_22D\",\"used_by_unit_id\":\"$VALBORG_ID\",\"notes\":\"Valborg 2026 — uppställning och fest\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+  -d "{\"start_date\":\"$START_21D\",\"end_date\":\"$END_22D\",\"used_by_team_id\":\"$VALBORG_ID\",\"notes\":\"Valborg 2026 — uppställning och fest\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
 
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING4_ID/items" \
   -H "$PROJECT_LEADER" -H "Content-Type: application/json" \
@@ -423,7 +447,7 @@ curl -sf -X POST "$API/api/v0/bookings/$BOOKING4_ID/items" \
   -H "$PROJECT_LEADER" -H "Content-Type: application/json" \
   -d '{"commercial_name":"Brandfilt","quantity":3}' > /dev/null
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING4_ID/submit" -H "$PROJECT_LEADER" > /dev/null
-echo "  Booking 4 (confirmed): 1x Sibley (low, auto-approved), 3x Brandfilt"
+echo "  Booking 4 (confirmed): 1x Sibley (low, auto-approved via trusted team), 3x Brandfilt"
 
 # ─── Booking 5: Returned booking from two weeks ago ───
 echo ""
@@ -432,7 +456,7 @@ END_PAST=$(date -d "-10 days" +%Y-%m-%d 2>/dev/null || date -v-10d +%Y-%m-%d)
 echo "Creating booking 5 (returned, $START_PAST to $END_PAST)..."
 BOOKING5_ID=$(curl -s -X POST "$API/api/v0/bookings" \
   -H "$LEADER" -H "Content-Type: application/json" \
-  -d "{\"start_date\":\"$START_PAST\",\"end_date\":\"$END_PAST\",\"used_by_unit_id\":\"$UNIT_ID\",\"notes\":\"Helgövning i skogen\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+  -d "{\"start_date\":\"$START_PAST\",\"end_date\":\"$END_PAST\",\"used_by_team_id\":\"$TEAM_ID\",\"notes\":\"Helgövning i skogen\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
 
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING5_ID/items" \
   -H "$LEADER" -H "Content-Type: application/json" \
@@ -483,7 +507,7 @@ END_27D=$(date -d "+27 days" +%Y-%m-%d 2>/dev/null || date -v+27d +%Y-%m-%d)
 echo "Creating booking 7 (rejected then resubmitted, $START_25D to $END_27D)..."
 BOOKING7_ID=$(curl -s -X POST "$API/api/v0/bookings" \
   -H "$LEADER" -H "Content-Type: application/json" \
-  -d "{\"start_date\":\"$START_25D\",\"end_date\":\"$END_27D\",\"used_by_unit_id\":\"$UNIT_ID\",\"notes\":\"Hajk med Yggdrasil — behöver tält och tarp\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+  -d "{\"start_date\":\"$START_25D\",\"end_date\":\"$END_27D\",\"used_by_team_id\":\"$TEAM_ID\",\"notes\":\"Hajk med Yggdrasil — behöver tält och tarp\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
 
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING7_ID/items" \
   -H "$LEADER" -H "Content-Type: application/json" \
@@ -533,7 +557,7 @@ END_32D=$(date -d "+32 days" +%Y-%m-%d 2>/dev/null || date -v+32d +%Y-%m-%d)
 echo "Creating booking 8 (force-approval, $START_30D to $END_32D)..."
 BOOKING8_ID=$(curl -s -X POST "$API/api/v0/bookings" \
   -H "$LEADER" -H "Content-Type: application/json" \
-  -d "{\"start_date\":\"$START_30D\",\"end_date\":\"$END_32D\",\"used_by_unit_id\":\"$UNIT_ID\",\"notes\":\"Prova-på-dag för nya scouter\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+  -d "{\"start_date\":\"$START_30D\",\"end_date\":\"$END_32D\",\"used_by_team_id\":\"$TEAM_ID\",\"notes\":\"Prova-på-dag för nya scouter\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
 
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING8_ID/items" \
   -H "$LEADER" -H "Content-Type: application/json" \

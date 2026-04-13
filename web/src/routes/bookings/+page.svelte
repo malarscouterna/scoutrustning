@@ -1,15 +1,16 @@
 <script lang="ts">
+	import { isManager as checkManager } from '$lib/user';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 
-	let isManager = $derived(data.user?.roles.includes('equipment_manager') ?? false);
-	let userUnits = $derived(data.user?.units ?? []);
+	let mgr = $derived(checkManager(data.user));
+	let userTeamNames = $derived((data.user?.teams ?? []).map(t => t.team_name));
 
 	let filter = $state<'mine' | 'all' | 'pending'>('mine');
 
 	$effect(() => {
-		filter = data.user?.roles.includes('equipment_manager')
+		filter = mgr
 			? (data.pendingCount > 0 ? 'pending' : 'all')
 			: 'mine';
 	});
@@ -38,12 +39,12 @@
 
 	function isMine(booking: any): boolean {
 		if (booking.created_by === data.user?.member_id) return true;
-		if (booking.unit_name && userUnits.includes(booking.unit_name)) return true;
+		if (booking.team_name && userTeamNames.includes(booking.team_name)) return true;
 		return false;
 	}
 
 	let filteredBookings = $derived.by(() => {
-		if (!isManager) return data.bookings;
+		if (!mgr) return data.bookings;
 		switch (filter) {
 			case 'pending':
 				return data.bookings.filter(b => b.status === 'submitted');
@@ -61,7 +62,7 @@
 		<a href="/book" class="bg-blue-700 text-white px-4 py-2 rounded text-sm">Ny bokning</a>
 	</div>
 
-	{#if isManager}
+	{#if mgr}
 		<div class="flex gap-2 mb-4">
 			{#if data.pendingCount > 0}
 				<button
@@ -100,8 +101,8 @@
 					<div class="flex flex-wrap items-center justify-between gap-1">
 						<div class="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
 							<span class="font-medium">{booking.start_date} — {booking.end_date}</span>
-							{#if booking.unit_name}
-								<span class="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">{booking.unit_name}</span>
+							{#if booking.team_name}
+								<span class="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">{booking.team_name}</span>
 							{:else if booking.used_by_external}
 								<span class="text-xs bg-neutral-50 text-neutral-600 px-1.5 py-0.5 rounded">{booking.used_by_external}</span>
 							{:else}

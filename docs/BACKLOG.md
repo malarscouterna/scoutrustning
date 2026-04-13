@@ -2,24 +2,14 @@
 
 Deferred work items — things to grab when there's time, smaller tasks set aside during major work. When an item is completed, move it to [accomplished.md](accomplished.md).
 
-## Admin UI for group/role management
+## ~~Admin UI for group/role management~~ → Access levels
 
-Currently, group access is controlled by a static `role-mapping.json` file. Users from groups not in this file see a "group not configured" message.
+**Superseded by the access levels feature** (see [access-levels.md](access-levels.md)). The static `role-mapping.json` is being replaced by DB-driven `team_claim_mappings` + per-team access levels. The `init-group` CLI bootstraps groups, and managers configure teams/access via the settings UI.
 
-**Decided approach** (see [inventory-management.md](inventory-management.md)):
-- System-level admin (adding/removing groups) stays text-based — no UI, CLI/SQL only. `role-mapping.json` remains the bootstrap mechanism.
-- Per-group settings (notification routing, SMTP key, default approval level) are stored in `group_settings` table, editable by equipment managers via `/settings` page. **Being built in Phase 2 Step 2.**
-- Per-group role mapping UI (which Scoutnet roles map to which app roles) is deferred until onboarding a second group. The `role-mapping.json` serves as bootstrap/override — system admin sets the first manager, then that manager takes over in the UI.
-
-Future plan:
-- Auto-register groups/troops/roles when users attempt to log in (store what was seen in the token)
-- Admin interface where managers can:
-  - See all groups that have attempted login
-  - Grant groups access to the system
-  - Add groups by Scoutnet role or group ID
-  - Assign access levels per unit/role: none, normal (booking access), low (project leader level), manager
-- Replace "project" concept with "funktionärsroll" (functional role) — a role should be given none, normal, low, or manager level access
-- A unit should be given normal access to the booking system by default
+Remaining from the original item:
+- Auto-register groups/troops/roles when users attempt to log in → implemented as auto-discovery in auth middleware
+- Admin interface for access levels → being built as kanban UI on settings page
+- Replace "project" concept → done, replaced with `role` team type
 
 ## Date change conflict UX
 
@@ -131,7 +121,7 @@ Backdate article events in the seed script for realistic history spread. No API 
 
 ## Booking flow — date change with items in cart
 
-When dates change on a booking with items, re-validate all items against the new range. Currently the API returns 409 for conflicts but the UI doesn't handle it gracefully. Temporary fix: disable date editing after items are added.
+When dates change on a booking with items, re-validate all items against the new range. Currently the API returns 409 for conflicts but the UI doesn't handle it gracefully. The date fields should be locked once items are added to the cart — changing dates could invalidate the entire cart (articles no longer available). To change dates, the user should remove all items first, or the UI should show which items conflict and offer to remove them. Until this is built, date inputs are disabled after the first item is added.
 
 ## Quantity-tracked items — batch issue reporting
 
@@ -161,20 +151,9 @@ On the article edit page, managers should be able to manage the article's event 
 
 When increasing count on a quantity tracked group, new articles get default per-item fields (status: ok, no purchase date/price). The expandable per-physical-item list on the group edit page should allow inline editing of these fields (purchase_date, purchase_price, status) per item. Could also support setting defaults for new items (e.g. "all new items purchased today at X kr").
 
-## Three-tier access: view-only, booking, managing
+## ~~Three-tier access: view-only, booking, managing~~ → Access levels
 
-Currently the system has two effective access levels: leader (can book) and equipment manager (full admin). Anyone who can log in via ScoutID but doesn't have a recognized role gets no access at all.
-
-Proposed three tiers:
-- **View-only** — authenticated members of the scout group who don't hold a trusted position (no unit leader role, no project role). Can browse articles, see availability, view article details and history. Cannot book, report issues, or manage anything. This is the default for any authenticated group member.
-- **Booking** — leaders and project leaders (current behavior). Can book, report issues, do pickup/return.
-- **Managing** — equipment managers (current behavior). Full inventory CRUD, approvals, settings.
-
-This requires changes to:
-- Auth middleware: recognize "authenticated but no role" as view-only instead of rejecting
-- Role mapping: any group member without a mapped role gets view-only
-- Frontend: hide booking/reporting UI for view-only users, show browse/detail as read-only
-- API: new permission checks distinguishing "can view" from "can book"
+**Superseded by the access levels feature** (see [access-levels.md](access-levels.md)). The four access levels (view, book, trusted, manager) cover this and more. Per-team configuration replaces the hardcoded three tiers.
 
 ## Quantity-tracked items — smarter count decrease on edit page
 
@@ -220,6 +199,10 @@ Articles would get an `article_group_id` FK instead of duplicating shared fields
 
 **Current approach**: `product_images` uses the composite key `(group_id, commercial_name, location_id)` — designed to be easily re-keyed to `article_group_id` later without structural changes. The table has its own UUID PK so all references (frontend, other tables) use the UUID and survive the re-keying. Migration path: add `article_group_id` column, backfill from composite key match, drop the three columns.
 
+
+## ~~Availability filter — access-level-aware "show locked items"~~ → Done
+
+Implemented in the access levels feature. Approval badges on the availability picker now reflect the selected team's access level: `low`-approval items show "Kräver godkännande" only for `view`/`book` teams (trusted+ auto-confirms). `high` always shows the badge. Badges update reactively when the team picker changes.
 
 ## Front page redesign
 

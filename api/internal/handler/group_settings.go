@@ -29,6 +29,9 @@ type groupSettingsResponse struct {
 	SmtpKeyMasked         string `json:"smtp_key_masked"`
 	GchatWebhookURL       string `json:"gchat_webhook_url"`
 	DefaultApprovalLevel  string `json:"default_approval_level"`
+	DefaultAccessUnknown  string `json:"default_access_unknown"`
+	DefaultAccessTroop    string `json:"default_access_troop"`
+	DefaultAccessRole     string `json:"default_access_role"`
 	ImageUploadRole       string `json:"image_upload_role"`
 }
 
@@ -40,7 +43,10 @@ func (h *GroupSettingsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		// No settings yet — return defaults
 		WriteJSON(w, http.StatusOK, groupSettingsResponse{
 			DefaultApprovalLevel: "none",
-			ImageUploadRole:      "leader",
+			DefaultAccessUnknown: "view",
+			DefaultAccessTroop:   "book",
+			DefaultAccessRole:    "book",
+			ImageUploadRole:      "book",
 		})
 		return
 	}
@@ -92,10 +98,9 @@ func (h *GroupSettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	imageUploadRole := req.ImageUploadRole
 	if imageUploadRole == "" {
-		imageUploadRole = "leader"
+		imageUploadRole = "book"
 	}
-	validRoles := map[string]bool{"any": true, "leader": true, "project_leader": true, "equipment_manager": true}
-	if !validRoles[imageUploadRole] {
+	if !validAccessLevel(imageUploadRole) {
 		WriteError(w, http.StatusBadRequest, "invalid image_upload_role")
 		return
 	}
@@ -137,6 +142,9 @@ func (h *GroupSettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		NotificationEmailFrom: settings.NotificationEmailFrom,
 		GchatWebhookURL:       settings.GchatWebhookUrl,
 		DefaultApprovalLevel:  settings.DefaultApprovalLevel,
+		DefaultAccessUnknown:  settings.DefaultAccessUnknown,
+		DefaultAccessTroop:    settings.DefaultAccessTroop,
+		DefaultAccessRole:     settings.DefaultAccessRole,
 		ImageUploadRole:       settings.ImageUploadRole,
 		SmtpKeySet:            len(settings.SmtpKeyEncrypted) > 0,
 	}

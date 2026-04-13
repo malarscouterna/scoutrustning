@@ -20,7 +20,7 @@
 	let bulkComment = $state('');
 	let bulkLoading = $state(false);
 	let bulkMessage = $state('');
-	let bulkConflicts = $state<Array<{ article_id: string; article_name: string; booking_id: string; booking_dates: string; booking_unit: string }>>([]);
+	let bulkConflicts = $state<Array<{ article_id: string; article_name: string; booking_id: string; booking_dates: string; booking_team: string }>>([]);
 
 	let selectedCount = $derived(selectedArticles.size);
 	let hasQuantityGroupSelected = $derived(
@@ -128,7 +128,7 @@
 
 	function bookingLabel(a: Article): string | null {
 		if (!a.current_booking_id) return null;
-		const unit = a.current_booking_unit_name ?? 'Okänd';
+		const unit = a.current_booking_team_name ?? 'Okänd';
 		const endDate = a.current_booking_end_date ? formatDate(a.current_booking_end_date) : '?';
 		if (a.current_booking_status === 'picked_up') return `Utlånad till ${unit}, tillbaka ${endDate}`;
 		return `Reserverad för ${unit}, ${endDate}`;
@@ -447,7 +447,7 @@
 			{#if bulkConflicts.length > 0}
 				<ul class="mt-1 list-disc list-inside">
 					{#each bulkConflicts as c}
-						<li>{c.article_name} — bokad av {c.booking_unit} ({c.booking_dates})</li>
+						<li>{c.article_name} — bokad av {c.booking_team} ({c.booking_dates})</li>
 					{/each}
 				</ul>
 			{/if}

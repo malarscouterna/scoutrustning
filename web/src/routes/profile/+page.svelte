@@ -7,20 +7,21 @@
 	let { data }: { data: PageData } = $props();
 	let user = $derived(data.user!);
 	const api = createApiClient();
-	let isManager = $derived(user.roles.includes('equipment_manager'));
+	let mgr = $derived(user.max_access === 'manager');
 
-	const roleConfig: Record<string, { label: string; description: string }> = {
-		leader: { label: 'Ledare', description: 'Kan boka utrustning för sina avdelningar' },
-		project_leader: { label: 'Projektledare', description: 'Kan boka utrustning utan godkännande' },
-		equipment_manager: { label: 'Utrustningsansvarig', description: 'Full tillgång till inventarie, ärenden och godkännanden' }
+	const accessLevelConfig: Record<string, { label: string; description: string }> = {
+		view: { label: 'Visa', description: 'Kan se utrustning och rapportera problem' },
+		book: { label: 'Boka', description: 'Kan boka utrustning' },
+		trusted: { label: 'Betrodd', description: 'Automatiskt godkännande för låg nivå' },
+		manager: { label: 'Utrustningsansvarig', description: 'Full tillgång till inventarie, ärenden och godkännanden' }
 	};
 
-	let accessGroups = $derived(user.roles.map(role => ({
-		role,
-		label: roleConfig[role]?.label ?? role,
-		description: roleConfig[role]?.description ?? '',
-		units: user.role_units?.[role] ?? []
-	})));
+	let teamsByAccess = $derived(
+		user.teams.reduce((acc: Record<string, typeof user.teams>, t) => {
+			(acc[t.access_level] ??= []).push(t);
+			return acc;
+		}, {} as Record<string, typeof user.teams>)
+	);
 
 	let myImages = $state<{ id: string; file_id: string; title: string; description: string; format: string; shared: boolean; created_at: string; own_group_count: number; other_group_count: number }[]>([]);
 	let myImagesLoaded = $state(false);
@@ -218,7 +219,7 @@
 			onclick={() => tab = 'profile'}
 			class="px-3 py-2 text-sm -mb-px {tab === 'profile' ? 'border-b-2 border-blue-700 font-medium text-blue-700' : 'text-neutral-500'}"
 		>Profil</button>
-		{#if isManager}
+		{#if mgr}
 			<button
 				onclick={() => tab = 'group'}
 				class="px-3 py-2 text-sm -mb-px {tab === 'group' ? 'border-b-2 border-blue-700 font-medium text-blue-700' : 'text-neutral-500'}"
@@ -230,21 +231,22 @@
 	{#if tab === 'profile'}
 		<h2 class="text-sm font-semibold text-neutral-600 uppercase tracking-wide mb-3">Behörigheter</h2>
 
-		{#if accessGroups.length === 0}
-			<p class="text-sm text-neutral-500">Inga roller tilldelade.</p>
+		{#if user.teams.length === 0}
+			<p class="text-sm text-neutral-500">Inga avdelningar eller roller tilldelade.</p>
 		{:else}
 			<div class="space-y-4">
-				{#each accessGroups as group}
+				{#each Object.entries(teamsByAccess) as [level, teams]}
 					<div class="border rounded-lg p-4">
-						<div class="font-medium">{group.label}</div>
-						<div class="text-sm text-neutral-500 mb-2">{group.description}</div>
-						{#if group.units.length > 0}
-							<div class="flex flex-wrap gap-2">
-								{#each group.units as unit}
-									<span class="text-xs bg-neutral-100 text-neutral-700 px-2 py-1 rounded">{unit}</span>
-								{/each}
-							</div>
-						{/if}
+						<div class="font-medium">{accessLevelConfig[level]?.label ?? level}</div>
+						<div class="text-sm text-neutral-500 mb-2">{accessLevelConfig[level]?.description ?? ''}</div>
+						<div class="flex flex-wrap gap-2">
+							{#each teams as team}
+								<span class="text-xs bg-neutral-100 text-neutral-700 px-2 py-1 rounded">
+									{team.team_name}
+									<span class="text-neutral-400">{team.team_type === 'troop' ? 'Avd.' : 'Roll'}</span>
+								</span>
+							{/each}
+						</div>
 					</div>
 				{/each}
 			</div>

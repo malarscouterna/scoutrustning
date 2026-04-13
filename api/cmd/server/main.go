@@ -26,6 +26,12 @@ import (
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 
+	// Subcommand dispatch
+	if len(os.Args) > 1 && os.Args[1] == "init-group" {
+		runInitGroup(os.Args[2:])
+		return
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
@@ -35,18 +41,6 @@ func main() {
 
 	images.InitVips()
 	defer images.ShutdownVips()
-
-	// Load role mapping config
-	var roleMapping *auth.RoleMapping
-	if rmPath := getenv("ROLE_MAPPING_PATH", "role-mapping.json"); rmPath != "" {
-		rm, err := auth.LoadRoleMapping(rmPath)
-		if err != nil {
-			slog.Warn("could not load role mapping", "path", rmPath, "error", err)
-		} else {
-			roleMapping = rm
-			slog.Info("loaded role mapping", "groups", len(rm.Groups))
-		}
-	}
 
 	// Run migrations with database/sql (goose requirement)
 	if err := runMigrations(dbURL); err != nil {
@@ -79,15 +73,38 @@ func main() {
 			JWKSURL:      getenv("JWKS_URL", ""),
 			DevMode:      devMode,
 			PersonasPath: getenv("DEV_PERSONAS_PATH", "dev-personas.json"),
-			RoleMapping:  roleMapping,
+			Resolver:     &handler.DBTeamResolver{Q: queries},
 		}))
 		r.Use(handler.UpsertUserMiddleware(queries))
+
+		// User info (returns resolved claims)
+		r.Get("/me", func(w http.ResponseWriter, r *http.Request) {
+			claims, ok := auth.ClaimsFromContext(r.Context())
+			if !ok {
+				handler.WriteError(w, http.StatusUnauthorized, "unauthorized")
+				return
+			}
+			// Get group name
+			groupName := ""
+			if g, err := queries.GetGroup(r.Context(), claims.GroupID); err == nil {
+				groupName = g.Name
+			}
+			handler.WriteJSON(w, http.StatusOK, map[string]any{
+				"member_id":  claims.MemberID,
+				"group_id":   claims.GroupID,
+				"group_name": groupName,
+				"name":       claims.Name,
+				"email":      claims.Email,
+				"teams":      claims.Teams,
+				"max_access": claims.MaxAccess,
+			})
+		})
 
 		articles := &handler.ArticleHandler{Q: queries}
 		locations := &handler.LocationHandler{Q: queries}
 		categories := &handler.CategoryHandler{Q: queries}
 		bookings := &handler.BookingHandler{Q: queries}
-		units := &handler.UnitHandler{Q: queries}
+		teams := &handler.TeamHandler{Q: queries}
 		groupSettings := &handler.GroupSettingsHandler{Q: queries}
 		imageHandler := &images.Handler{Q: queries, ImageDir: imageDir}
 
@@ -95,7 +112,7 @@ func main() {
 		r.Mount("/locations", locations.Routes())
 		r.Mount("/categories", categories.Routes())
 		r.Mount("/bookings", bookings.Routes())
-		r.Mount("/units", units.Routes())
+		r.Mount("/teams", teams.Routes())
 		r.Mount("/group-settings", groupSettings.Routes())
 		r.Mount("/images", imageHandler.Routes())
 	})

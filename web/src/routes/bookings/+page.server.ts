@@ -1,4 +1,5 @@
 import { createApiClient } from '$lib/api/client';
+import { isManager } from '$lib/user';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ fetch, parent }) => {
@@ -7,7 +8,7 @@ export const load: PageServerLoad = async ({ fetch, parent }) => {
 	const bookings = await api.listBookings();
 
 	let pendingCount = 0;
-	if (user?.roles.includes('equipment_manager')) {
+	if (isManager(user)) {
 		pendingCount = bookings.filter(b => b.status === 'submitted').length;
 	}
 

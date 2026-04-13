@@ -2,6 +2,7 @@
 	import '../app.css';
 	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
+	import { canBook } from '$lib/user';
 	import DevPersonaSwitcher from '$lib/components/DevPersonaSwitcher.svelte';
 
 	if (browser) {
@@ -9,6 +10,7 @@
 	}
 
 	let { children, data } = $props();
+	let showBook = $derived(canBook(data.user));
 
 	const iconLogo = `<img src="/PNG Utrustningsgruppen - Logotyp.png" alt="Hem" style="width:48px;height:48px;object-fit:contain" />`;
 	const iconBrowse = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" /></svg>`;
@@ -17,11 +19,11 @@
 	const iconIssues = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg>`;
 
 	const navItems = [
-		{ href: '/', icon: iconLogo, label: '', match: (p: string) => p === '/' },
-		{ href: '/browse', icon: iconBrowse, label: 'Utrustn.', match: (p: string) => p.startsWith('/browse') },
-		{ href: '/book', icon: iconBook, label: 'Boka', match: (p: string) => p === '/book' },
-		{ href: '/bookings', icon: iconBookings, label: 'Bokningar', match: (p: string) => p.startsWith('/bookings') },
-		{ href: '/issues', icon: iconIssues, label: 'Ärenden', match: (p: string) => p.startsWith('/issues') },
+		{ href: '/', icon: iconLogo, label: '', match: (p: string) => p === '/', needsBook: false },
+		{ href: '/browse', icon: iconBrowse, label: 'Utrustn.', match: (p: string) => p.startsWith('/browse'), needsBook: false },
+		{ href: '/book', icon: iconBook, label: 'Boka', match: (p: string) => p === '/book', needsBook: true },
+		{ href: '/bookings', icon: iconBookings, label: 'Bokningar', match: (p: string) => p.startsWith('/bookings'), needsBook: false },
+		{ href: '/issues', icon: iconIssues, label: 'Ärenden', match: (p: string) => p.startsWith('/issues'), needsBook: false },
 	];
 </script>
 
@@ -47,11 +49,13 @@
 		<div class="max-w-4xl mx-auto px-4 py-2 flex items-center gap-4">
 			<a href="/" class="font-bold text-blue-800">ms-utrustning</a>
 			<a href="/browse" class="text-sm hover:underline" class:font-medium={$page.url.pathname.startsWith('/browse')}>Utrustning</a>
-			<a href="/book" class="text-sm hover:underline" class:font-medium={$page.url.pathname === '/book'}>Boka</a>
+			{#if showBook}
+				<a href="/book" class="text-sm hover:underline" class:font-medium={$page.url.pathname === '/book'}>Boka</a>
+			{/if}
 			<a href="/bookings" class="text-sm hover:underline" class:font-medium={$page.url.pathname.startsWith('/bookings')}>Bokningar</a>
 			<a href="/issues" class="text-sm hover:underline" class:font-medium={$page.url.pathname.startsWith('/issues')}>Ärenden</a>
 			<a href="/guide" class="text-sm hover:underline" class:font-medium={$page.url.pathname.startsWith('/guide')}>Guide</a>
-			<a href="/profile" class="ml-auto text-sm font-medium hover:underline">{data.user.name}</a>
+			<a href="/profile" class="ml-auto text-sm font-medium hover:underline">{data.user.name} · {data.user.group_name}</a>
 		</div>
 	</nav>
 
@@ -67,7 +71,7 @@
 {#if data.user}
 	<!-- Mobile bottom bar -->
 	<nav class="sm:hidden fixed bottom-0 left-0 right-0 z-10 flex bg-white border-t border-neutral-100">
-		{#each navItems as item}
+		{#each navItems.filter(i => !i.needsBook || showBook) as item}
 			{@const active = item.match($page.url.pathname)}
 			<a
 				href={item.href}

@@ -5,16 +5,16 @@ export const load: PageServerLoad = async ({ fetch, url }) => {
 	const api = createApiClient({ fetch });
 	const bookingId = url.searchParams.get('id');
 
-	const [locations, categories, units] = await Promise.all([
+	const [locations, categories, teams] = await Promise.all([
 		api.listLocations(),
 		api.listCategories(),
-		api.listUnits()
+		api.listTeams()
 	]);
 
 	if (bookingId) {
 		const { booking, items } = await api.getBooking(bookingId);
-		return { locations, categories, units, existing: { booking, items } };
+		return { locations, categories, teams, existing: { booking, items } };
 	}
 
-	return { locations, categories, units, existing: null };
+	return { locations, categories, teams, existing: null };
 };

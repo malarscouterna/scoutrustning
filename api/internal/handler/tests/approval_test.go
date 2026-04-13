@@ -21,7 +21,7 @@ func TestApprovalFlow(t *testing.T) {
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
 		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries}).Routes())
-		r.Mount("/units", (&handler.UnitHandler{Q: env.Queries}).Routes())
+		r.Mount("/teams", (&handler.TeamHandler{Q: env.Queries}).Routes())
 	})
 
 	manager := env.ClientAs("manager-equipment")

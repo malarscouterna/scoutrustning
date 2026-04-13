@@ -1,4 +1,5 @@
 import { createApiClient } from '$lib/api/client';
+import { isManager } from '$lib/user';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ fetch, parent }) => {
@@ -6,7 +7,7 @@ export const load: PageServerLoad = async ({ fetch, parent }) => {
 	if (!user) return { locations: [], categories: [], groupSettings: null };
 
 	const api = createApiClient({ fetch });
-	const isManager = user.roles.includes('equipment_manager');
+	const mgr = isManager(user);
 
 	const [locations, categories] = await Promise.all([
 		api.listLocations(),
@@ -14,7 +15,7 @@ export const load: PageServerLoad = async ({ fetch, parent }) => {
 	]);
 
 	let groupSettings = null;
-	if (isManager) {
+	if (mgr) {
 		try {
 			groupSettings = await api.getGroupSettings();
 		} catch { /* defaults */ }

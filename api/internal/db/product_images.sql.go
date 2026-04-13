@@ -50,7 +50,7 @@ func (q *Queries) GetImageUploadRole(ctx context.Context, groupID string) (strin
 }
 
 const getProductImage = `-- name: GetProductImage :one
-SELECT pi.id, pi.file_id, pi.group_id, pi.uploaded_by, pi.title, pi.description, pi.format, pi.shared, pi.created_at, pi.attribution, pi.is_reference, u.name AS uploaded_by_name, g.name AS uploaded_by_group
+SELECT pi.id, pi.file_id, pi.group_id, pi.uploaded_by, pi.title, pi.description, pi.attribution, pi.format, pi.shared, pi.is_reference, pi.created_at, u.name AS uploaded_by_name, g.name AS uploaded_by_group
 FROM product_images pi
 JOIN users u ON pi.uploaded_by = u.id
 JOIN groups g ON pi.group_id = g.id
@@ -64,11 +64,11 @@ type GetProductImageRow struct {
 	UploadedBy      string             `json:"uploaded_by"`
 	Title           string             `json:"title"`
 	Description     string             `json:"description"`
+	Attribution     string             `json:"attribution"`
 	Format          string             `json:"format"`
 	Shared          bool               `json:"shared"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-	Attribution     string             `json:"attribution"`
 	IsReference     bool               `json:"is_reference"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UploadedByName  string             `json:"uploaded_by_name"`
 	UploadedByGroup string             `json:"uploaded_by_group"`
 }
@@ -83,11 +83,11 @@ func (q *Queries) GetProductImage(ctx context.Context, id pgtype.UUID) (GetProdu
 		&i.UploadedBy,
 		&i.Title,
 		&i.Description,
+		&i.Attribution,
 		&i.Format,
 		&i.Shared,
-		&i.CreatedAt,
-		&i.Attribution,
 		&i.IsReference,
+		&i.CreatedAt,
 		&i.UploadedByName,
 		&i.UploadedByGroup,
 	)
@@ -97,7 +97,7 @@ func (q *Queries) GetProductImage(ctx context.Context, id pgtype.UUID) (GetProdu
 const insertProductImage = `-- name: InsertProductImage :one
 INSERT INTO product_images (id, file_id, group_id, uploaded_by, title, description, format, shared, attribution, is_reference)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-RETURNING id, file_id, group_id, uploaded_by, title, description, format, shared, created_at, attribution, is_reference
+RETURNING id, file_id, group_id, uploaded_by, title, description, attribution, format, shared, is_reference, created_at
 `
 
 type InsertProductImageParams struct {
@@ -134,11 +134,11 @@ func (q *Queries) InsertProductImage(ctx context.Context, arg InsertProductImage
 		&i.UploadedBy,
 		&i.Title,
 		&i.Description,
+		&i.Attribution,
 		&i.Format,
 		&i.Shared,
-		&i.CreatedAt,
-		&i.Attribution,
 		&i.IsReference,
+		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -194,7 +194,7 @@ func (q *Queries) ListArticlesUsingImage(ctx context.Context, arg ListArticlesUs
 }
 
 const listProductImagesByIds = `-- name: ListProductImagesByIds :many
-SELECT pi.id, pi.file_id, pi.group_id, pi.uploaded_by, pi.title, pi.description, pi.format, pi.shared, pi.created_at, pi.attribution, pi.is_reference, u.name AS uploaded_by_name, g.name AS uploaded_by_group
+SELECT pi.id, pi.file_id, pi.group_id, pi.uploaded_by, pi.title, pi.description, pi.attribution, pi.format, pi.shared, pi.is_reference, pi.created_at, u.name AS uploaded_by_name, g.name AS uploaded_by_group
 FROM product_images pi
 JOIN users u ON pi.uploaded_by = u.id
 JOIN groups g ON pi.group_id = g.id
@@ -209,11 +209,11 @@ type ListProductImagesByIdsRow struct {
 	UploadedBy      string             `json:"uploaded_by"`
 	Title           string             `json:"title"`
 	Description     string             `json:"description"`
+	Attribution     string             `json:"attribution"`
 	Format          string             `json:"format"`
 	Shared          bool               `json:"shared"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-	Attribution     string             `json:"attribution"`
 	IsReference     bool               `json:"is_reference"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UploadedByName  string             `json:"uploaded_by_name"`
 	UploadedByGroup string             `json:"uploaded_by_group"`
 }
@@ -235,11 +235,11 @@ func (q *Queries) ListProductImagesByIds(ctx context.Context, ids []pgtype.UUID)
 			&i.UploadedBy,
 			&i.Title,
 			&i.Description,
+			&i.Attribution,
 			&i.Format,
 			&i.Shared,
-			&i.CreatedAt,
-			&i.Attribution,
 			&i.IsReference,
+			&i.CreatedAt,
 			&i.UploadedByName,
 			&i.UploadedByGroup,
 		); err != nil {
@@ -254,7 +254,7 @@ func (q *Queries) ListProductImagesByIds(ctx context.Context, ids []pgtype.UUID)
 }
 
 const listProductImagesByUploader = `-- name: ListProductImagesByUploader :many
-SELECT pi.id, pi.file_id, pi.group_id, pi.uploaded_by, pi.title, pi.description, pi.format, pi.shared, pi.created_at, pi.attribution, pi.is_reference, u.name AS uploaded_by_name, g.name AS uploaded_by_group,
+SELECT pi.id, pi.file_id, pi.group_id, pi.uploaded_by, pi.title, pi.description, pi.attribution, pi.format, pi.shared, pi.is_reference, pi.created_at, u.name AS uploaded_by_name, g.name AS uploaded_by_group,
     (SELECT COUNT(*) FROM product_images p2 WHERE p2.file_id = pi.file_id AND p2.group_id = pi.group_id) AS own_group_count,
     (SELECT COUNT(*) FROM product_images p3 WHERE p3.file_id = pi.file_id AND p3.group_id != pi.group_id) AS other_group_count
 FROM product_images pi
@@ -276,11 +276,11 @@ type ListProductImagesByUploaderRow struct {
 	UploadedBy      string             `json:"uploaded_by"`
 	Title           string             `json:"title"`
 	Description     string             `json:"description"`
+	Attribution     string             `json:"attribution"`
 	Format          string             `json:"format"`
 	Shared          bool               `json:"shared"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-	Attribution     string             `json:"attribution"`
 	IsReference     bool               `json:"is_reference"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UploadedByName  string             `json:"uploaded_by_name"`
 	UploadedByGroup string             `json:"uploaded_by_group"`
 	OwnGroupCount   int64              `json:"own_group_count"`
@@ -304,11 +304,11 @@ func (q *Queries) ListProductImagesByUploader(ctx context.Context, arg ListProdu
 			&i.UploadedBy,
 			&i.Title,
 			&i.Description,
+			&i.Attribution,
 			&i.Format,
 			&i.Shared,
-			&i.CreatedAt,
-			&i.Attribution,
 			&i.IsReference,
+			&i.CreatedAt,
 			&i.UploadedByName,
 			&i.UploadedByGroup,
 			&i.OwnGroupCount,
@@ -325,7 +325,7 @@ func (q *Queries) ListProductImagesByUploader(ctx context.Context, arg ListProdu
 }
 
 const listSharedImages = `-- name: ListSharedImages :many
-SELECT pi.id, pi.file_id, pi.group_id, pi.uploaded_by, pi.title, pi.description, pi.format, pi.shared, pi.created_at, pi.attribution, pi.is_reference, u.name AS uploaded_by_name, g.name AS uploaded_by_group
+SELECT pi.id, pi.file_id, pi.group_id, pi.uploaded_by, pi.title, pi.description, pi.attribution, pi.format, pi.shared, pi.is_reference, pi.created_at, u.name AS uploaded_by_name, g.name AS uploaded_by_group
 FROM product_images pi
 JOIN users u ON pi.uploaded_by = u.id
 JOIN groups g ON pi.group_id = g.id
@@ -349,11 +349,11 @@ type ListSharedImagesRow struct {
 	UploadedBy      string             `json:"uploaded_by"`
 	Title           string             `json:"title"`
 	Description     string             `json:"description"`
+	Attribution     string             `json:"attribution"`
 	Format          string             `json:"format"`
 	Shared          bool               `json:"shared"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-	Attribution     string             `json:"attribution"`
 	IsReference     bool               `json:"is_reference"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UploadedByName  string             `json:"uploaded_by_name"`
 	UploadedByGroup string             `json:"uploaded_by_group"`
 }
@@ -375,11 +375,11 @@ func (q *Queries) ListSharedImages(ctx context.Context, arg ListSharedImagesPara
 			&i.UploadedBy,
 			&i.Title,
 			&i.Description,
+			&i.Attribution,
 			&i.Format,
 			&i.Shared,
-			&i.CreatedAt,
-			&i.Attribution,
 			&i.IsReference,
+			&i.CreatedAt,
 			&i.UploadedByName,
 			&i.UploadedByGroup,
 		); err != nil {
@@ -418,7 +418,7 @@ const updateProductImage = `-- name: UpdateProductImage :one
 UPDATE product_images
 SET title = $1, description = $2, shared = $3, attribution = $4
 WHERE id = $5 AND group_id = $6
-RETURNING id, file_id, group_id, uploaded_by, title, description, format, shared, created_at, attribution, is_reference
+RETURNING id, file_id, group_id, uploaded_by, title, description, attribution, format, shared, is_reference, created_at
 `
 
 type UpdateProductImageParams struct {
@@ -447,11 +447,11 @@ func (q *Queries) UpdateProductImage(ctx context.Context, arg UpdateProductImage
 		&i.UploadedBy,
 		&i.Title,
 		&i.Description,
+		&i.Attribution,
 		&i.Format,
 		&i.Shared,
-		&i.CreatedAt,
-		&i.Attribution,
 		&i.IsReference,
+		&i.CreatedAt,
 	)
 	return i, err
 }

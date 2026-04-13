@@ -25,11 +25,9 @@ services:
       ADDR: ":8080"
       DEV_MODE: ${DEV_MODE}
       JWKS_URL: ${JWKS_URL}
-      ROLE_MAPPING_PATH: /config/role-mapping.json
       DEV_PERSONAS_PATH: /config/dev-personas.json
       IMAGE_DIR: /data/images
     volumes:
-      - ./role-mapping.json:/config/role-mapping.json:ro
       - ./dev-personas.json:/config/dev-personas.json:ro
       - images:/data/images
     depends_on:
@@ -54,7 +52,6 @@ services:
       AUTH_KEYCLOAK_ISSUER: ${AUTH_KEYCLOAK_ISSUER}
       AUTH_TRUST_HOST: "true"
     volumes:
-      - ./role-mapping.json:/app/role-mapping.json:ro
       - ./dev-personas.json:/app/dev-personas.json:ro
       - ./docs/guide.md:/app/guide.md:ro
     depends_on:

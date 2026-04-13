@@ -55,7 +55,7 @@ func (h *ArticleHandler) List(w http.ResponseWriter, r *http.Request) {
 			GroupID:   claims.GroupID,
 			Statuses:  statuses,
 			UserID:    claims.MemberID,
-			UnitNames: claims.Units,
+			TeamNames: claims.TeamNames(),
 		})
 		if err != nil {
 			WriteError(w, http.StatusInternalServerError, "failed to list articles")
@@ -624,7 +624,7 @@ func (h *ArticleHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 
 	// Anyone can report issues; other statuses require manager
 	userStatuses := map[string]bool{"reported_usable": true, "reported_unusable": true, "lost": true}
-	if !userStatuses[req.Status] && !claims.HasRole("equipment_manager") {
+	if !userStatuses[req.Status] && !claims.IsManager() {
 		WriteError(w, http.StatusForbidden, "forbidden")
 		return
 	}
@@ -1001,7 +1001,7 @@ func (h *ArticleHandler) BulkUpdate(w http.ResponseWriter, r *http.Request) {
 		ArticleName  string `json:"article_name"`
 		BookingID    string `json:"booking_id"`
 		BookingDates string `json:"booking_dates"`
-		BookingUnit  string `json:"booking_unit"`
+		BookingTeam  string `json:"booking_team"`
 	}
 
 	// For archive: check active booking conflicts and attempt auto-replacement
@@ -1047,7 +1047,7 @@ func (h *ArticleHandler) BulkUpdate(w http.ResponseWriter, r *http.Request) {
 					ArticleName:  c.ArticleName,
 					BookingID:    formatUUID(c.BookingID),
 					BookingDates: startStr + " — " + endStr,
-					BookingUnit:  c.BookingUnit,
+					BookingTeam:  c.BookingTeam,
 				})
 				continue
 			}

@@ -74,8 +74,8 @@ ms-utrustning/
 - `groups.id` is `text`, using the Keycloak org ID directly (e.g. `"766"` for Mälarscouterna)
 - `users.id` is `text`, using the Keycloak member ID directly (e.g. `"3000924"`)
 - All other tables use `uuid` primary keys
-- Units are a managed table (`units`), not free text — populated from OIDC claims or created by admins. The `units` table has a `type` column (`unit` or `project`) to distinguish scout units from temporary projects.
-- Booking approval is per-article (`articles.approval_level`). Three levels: `none` (freely bookable), `low` (project leaders auto-approve, regular leaders need manager approval), `high` (always needs manager approval, except managers themselves). If any item in a booking requires approval for the current user, the whole booking waits.
+- Units are a managed table (`teams`), not free text — populated from OIDC claims or created by admins. The `teams` table has a `type` column (`troop` or `role`) to distinguish scout troops from functional roles. Each team has a configurable `access_level` (view, book, trusted, manager).
+- Booking approval is per-article (`articles.approval_level`). Three levels: `none` (freely bookable), `low` (trusted teams auto-approve, book-level teams need manager approval), `high` (always needs manager approval, including managers themselves). If any item in a booking requires approval for the current user, the whole booking waits.
 
 ## Article model
 

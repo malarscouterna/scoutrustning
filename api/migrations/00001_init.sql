@@ -15,18 +15,35 @@ CREATE TABLE users (
     email text NOT NULL,
     notification_channel text NOT NULL DEFAULT 'email',
     gchat_webhook_url text,
+    active_group_id text REFERENCES groups(id),
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
 );
 
--- Units (managed entity, populated from OIDC or by admins)
-CREATE TABLE units (
+-- Teams (troops, roles — populated from OIDC claims or by managers)
+CREATE TABLE teams (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     group_id text NOT NULL REFERENCES groups(id),
     name text NOT NULL,
+    type text NOT NULL DEFAULT 'troop',
+    access_level text NOT NULL DEFAULT 'book',
     gchat_webhook_url text,
     created_at timestamptz NOT NULL DEFAULT now(),
-    UNIQUE (group_id, name)
+    CONSTRAINT teams_type_check CHECK (type IN ('troop', 'role')),
+    CONSTRAINT teams_access_level_check CHECK (access_level IN ('view', 'book', 'trusted', 'manager')),
+    UNIQUE (group_id, name, type)
+);
+
+-- Team claim mappings (OIDC claim → team)
+CREATE TABLE team_claim_mappings (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    group_id text NOT NULL REFERENCES groups(id),
+    team_id uuid NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    claim_scope text NOT NULL,
+    claim_id text NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT tcm_scope_check CHECK (claim_scope IN ('group', 'troop')),
+    CONSTRAINT tcm_unique_claim UNIQUE (group_id, claim_scope, claim_id)
 );
 
 -- Locations
@@ -58,21 +75,39 @@ CREATE TABLE articles (
     location_id uuid NOT NULL REFERENCES locations(id),
     status text NOT NULL DEFAULT 'ok',
     individually_tracked boolean NOT NULL DEFAULT true,
-    requires_approval boolean NOT NULL DEFAULT false,
-    image_path text,
+    approval_level text NOT NULL DEFAULT 'none',
+    image_ids jsonb NOT NULL DEFAULT '[]',
     description text NOT NULL DEFAULT '',
     instructions text NOT NULL DEFAULT '',
+    manager_notes text NOT NULL DEFAULT '',
     purchase_date date,
     purchase_price numeric,
     place text NOT NULL DEFAULT '',
-    drying_until date,
+    expected_available_date date,
+    import_batch_id uuid,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT articles_status_check CHECK (status IN (
-        'ok', 'reported_usable', 'reported_unusable',
-        'under_repair', 'loaned', 'drying', 'booked',
-        'archived', 'new'
-    ))
+        'ok', 'reported_usable', 'incoming',
+        'reported_unusable', 'under_repair', 'lost', 'archived'
+    )),
+    CONSTRAINT articles_approval_level_check CHECK (approval_level IN ('none', 'low', 'high'))
+);
+
+-- Product images
+CREATE TABLE product_images (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    file_id uuid NOT NULL,
+    group_id text NOT NULL REFERENCES groups(id),
+    uploaded_by text NOT NULL REFERENCES users(id),
+    title text NOT NULL DEFAULT '',
+    description text NOT NULL DEFAULT '',
+    attribution text NOT NULL DEFAULT '',
+    format text NOT NULL DEFAULT 'landscape',
+    shared boolean NOT NULL DEFAULT false,
+    is_reference boolean NOT NULL DEFAULT false,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT product_images_format_check CHECK (format IN ('landscape', 'portrait', 'square'))
 );
 
 -- Packages
@@ -103,13 +138,14 @@ CREATE TABLE bookings (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     group_id text NOT NULL REFERENCES groups(id),
     created_by text NOT NULL REFERENCES users(id),
-    used_by_unit_id uuid REFERENCES units(id),
+    used_by_team_id uuid REFERENCES teams(id),
     used_by_external text,
     used_by_external_contact text,
     status text NOT NULL DEFAULT 'draft',
     start_date date NOT NULL,
     end_date date NOT NULL,
     notes text NOT NULL DEFAULT '',
+    pre_pickup_status text,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT bookings_status_check CHECK (status IN (
@@ -129,29 +165,64 @@ CREATE TABLE booking_items (
     return_status text,
     notes text NOT NULL DEFAULT '',
     CONSTRAINT booking_items_pickup_check CHECK (pickup_status IS NULL OR pickup_status IN (
-        'picked_up', 'swapped', 'not_available'
+        'picked_up', 'swapped', 'lost'
     )),
     CONSTRAINT booking_items_return_check CHECK (return_status IS NULL OR return_status IN (
-        'returned_ok', 'delayed', 'broken', 'lost', 'pending'
+        'returned_ok', 'delayed', 'reported_usable', 'reported_unusable', 'lost', 'pending'
     )),
     CONSTRAINT booking_items_unique_article UNIQUE (booking_id, article_id)
 );
 
--- Issue reports
-CREATE TABLE issue_reports (
+-- Article events
+CREATE TABLE article_events (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     group_id text NOT NULL REFERENCES groups(id),
     article_id uuid NOT NULL REFERENCES articles(id),
-    reporter_id text NOT NULL REFERENCES users(id),
-    description text NOT NULL,
-    severity text NOT NULL,
-    status text NOT NULL DEFAULT 'open',
-    resolution text,
-    resolved_by text REFERENCES users(id),
+    actor_id text NOT NULL REFERENCES users(id),
+    event_type text NOT NULL,
+    description text NOT NULL DEFAULT '',
+    metadata jsonb NOT NULL DEFAULT '{}',
     created_at timestamptz NOT NULL DEFAULT now(),
-    resolved_at timestamptz,
-    CONSTRAINT issue_reports_severity_check CHECK (severity IN ('usable', 'unusable')),
-    CONSTRAINT issue_reports_status_check CHECK (status IN ('open', 'resolved'))
+    CONSTRAINT article_events_type_check CHECK (event_type IN (
+        'status_change', 'issue_reported', 'issue_resolved',
+        'booked', 'picked_up', 'returned', 'note', 'count_changed'
+    ))
+);
+
+-- Booking events
+CREATE TABLE booking_events (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    group_id text NOT NULL REFERENCES groups(id),
+    booking_id uuid NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
+    actor_id text NOT NULL REFERENCES users(id),
+    event_type text NOT NULL,
+    message text NOT NULL DEFAULT '',
+    metadata jsonb NOT NULL DEFAULT '{}',
+    created_at timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT booking_events_type_check CHECK (event_type IN (
+        'submitted', 'approved', 'rejected', 'cancelled', 'note',
+        'items_changed', 'dates_changed', 'details_changed'
+    ))
+);
+
+-- Group settings
+CREATE TABLE group_settings (
+    group_id text PRIMARY KEY REFERENCES groups(id),
+    notification_email_from text NOT NULL DEFAULT '',
+    smtp_key_encrypted bytea,
+    gchat_webhook_url text NOT NULL DEFAULT '',
+    default_approval_level text NOT NULL DEFAULT 'none',
+    default_access_unknown text NOT NULL DEFAULT 'view',
+    default_access_troop text NOT NULL DEFAULT 'book',
+    default_access_role text NOT NULL DEFAULT 'book',
+    image_upload_role text NOT NULL DEFAULT 'book',
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT group_settings_approval_check CHECK (default_approval_level IN ('none', 'low', 'high')),
+    CONSTRAINT gs_access_unknown_check CHECK (default_access_unknown IN ('view', 'book', 'trusted', 'manager')),
+    CONSTRAINT gs_access_troop_check CHECK (default_access_troop IN ('view', 'book', 'trusted', 'manager')),
+    CONSTRAINT gs_access_role_check CHECK (default_access_role IN ('view', 'book', 'trusted', 'manager')),
+    CONSTRAINT gs_image_upload_role_check CHECK (image_upload_role IN ('view', 'book', 'trusted', 'manager'))
 );
 
 -- Audit log
@@ -168,55 +239,46 @@ CREATE TABLE audit_log (
 
 -- Indexes
 CREATE INDEX idx_users_group ON users(group_id);
-CREATE INDEX idx_units_group ON units(group_id);
+CREATE INDEX idx_teams_group ON teams(group_id);
+CREATE INDEX idx_tcm_group ON team_claim_mappings(group_id);
 CREATE INDEX idx_locations_group ON locations(group_id);
 CREATE INDEX idx_categories_group ON categories(group_id);
 CREATE INDEX idx_articles_group ON articles(group_id);
 CREATE INDEX idx_articles_category ON articles(category_id);
 CREATE INDEX idx_articles_location ON articles(location_id);
 CREATE INDEX idx_articles_status ON articles(group_id, status);
+CREATE INDEX idx_articles_import_batch ON articles(import_batch_id) WHERE import_batch_id IS NOT NULL;
+CREATE INDEX idx_product_images_group ON product_images(group_id);
+CREATE INDEX idx_product_images_shared ON product_images(shared) WHERE shared = true;
 CREATE INDEX idx_packages_group ON packages(group_id);
 CREATE INDEX idx_bookings_group ON bookings(group_id);
 CREATE INDEX idx_bookings_dates ON bookings(group_id, start_date, end_date);
 CREATE INDEX idx_bookings_status ON bookings(group_id, status);
 CREATE INDEX idx_bookings_created_by ON bookings(created_by);
-CREATE INDEX idx_bookings_unit ON bookings(used_by_unit_id);
+CREATE INDEX idx_bookings_team ON bookings(used_by_team_id);
 CREATE INDEX idx_booking_items_booking ON booking_items(booking_id);
 CREATE INDEX idx_booking_items_article ON booking_items(article_id);
-CREATE INDEX idx_issue_reports_group ON issue_reports(group_id);
-CREATE INDEX idx_issue_reports_article ON issue_reports(article_id);
-CREATE INDEX idx_issue_reports_status ON issue_reports(group_id, status);
+CREATE INDEX idx_article_events_article ON article_events(article_id);
+CREATE INDEX idx_article_events_group ON article_events(group_id);
+CREATE INDEX idx_booking_events_booking ON booking_events(booking_id);
+CREATE INDEX idx_booking_events_group ON booking_events(group_id);
 CREATE INDEX idx_audit_log_group ON audit_log(group_id);
 CREATE INDEX idx_audit_log_entity ON audit_log(entity_type, entity_id);
 
--- Seed data: Mälarscouterna
-INSERT INTO groups (id, name) VALUES ('766', 'Mälarscouterna');
-INSERT INTO groups (id, name) VALUES ('999', 'Testkåren');
-
-INSERT INTO locations (group_id, name, sort_order) VALUES
-    ('766', 'Kammaren', 1),
-    ('766', 'Östergården', 2),
-    ('766', 'Ladan', 3),
-    ('766', 'Kallförrådet', 4),
-    ('766', 'Hajkförrådet', 5),
-    ('766', 'Magasinet', 6),
-    ('766', 'Verkstan', 7),
-    ('999', 'Förrådet', 1);
-
-INSERT INTO categories (group_id, name, sort_order) VALUES
-    ('766', 'Övrigt', 1),
-    ('999', 'Övrigt', 1);
-
 -- +goose Down
 DROP TABLE IF EXISTS audit_log;
-DROP TABLE IF EXISTS issue_reports;
+DROP TABLE IF EXISTS group_settings;
+DROP TABLE IF EXISTS booking_events;
+DROP TABLE IF EXISTS article_events;
 DROP TABLE IF EXISTS booking_items;
 DROP TABLE IF EXISTS bookings;
 DROP TABLE IF EXISTS package_items;
 DROP TABLE IF EXISTS packages;
+DROP TABLE IF EXISTS product_images;
 DROP TABLE IF EXISTS articles;
 DROP TABLE IF EXISTS categories;
 DROP TABLE IF EXISTS locations;
-DROP TABLE IF EXISTS units;
+DROP TABLE IF EXISTS team_claim_mappings;
+DROP TABLE IF EXISTS teams;
 DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS groups;

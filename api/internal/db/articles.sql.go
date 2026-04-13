@@ -172,7 +172,7 @@ INSERT INTO articles (
     $6, $7, $8,
     $9, $10, $11, $12, $13, $14
 )
-RETURNING id, group_id, commercial_name, common_name, category_id, location_id, status, individually_tracked, description, instructions, purchase_date, purchase_price, place, created_at, updated_at, expected_available_date, approval_level, import_batch_id, manager_notes, image_ids
+RETURNING id, group_id, commercial_name, common_name, category_id, location_id, status, individually_tracked, approval_level, image_ids, description, instructions, manager_notes, purchase_date, purchase_price, place, expected_available_date, import_batch_id, created_at, updated_at
 `
 
 type CreateArticleParams struct {
@@ -219,18 +219,18 @@ func (q *Queries) CreateArticle(ctx context.Context, arg CreateArticleParams) (A
 		&i.LocationID,
 		&i.Status,
 		&i.IndividuallyTracked,
+		&i.ApprovalLevel,
+		&i.ImageIds,
 		&i.Description,
 		&i.Instructions,
+		&i.ManagerNotes,
 		&i.PurchaseDate,
 		&i.PurchasePrice,
 		&i.Place,
+		&i.ExpectedAvailableDate,
+		&i.ImportBatchID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.ExpectedAvailableDate,
-		&i.ApprovalLevel,
-		&i.ImportBatchID,
-		&i.ManagerNotes,
-		&i.ImageIds,
 	)
 	return i, err
 }
@@ -297,7 +297,7 @@ func (q *Queries) FindReplacementArticle(ctx context.Context, arg FindReplacemen
 }
 
 const getArticle = `-- name: GetArticle :one
-SELECT a.id, a.group_id, a.commercial_name, a.common_name, a.category_id, a.location_id, a.status, a.individually_tracked, a.description, a.instructions, a.purchase_date, a.purchase_price, a.place, a.created_at, a.updated_at, a.expected_available_date, a.approval_level, a.import_batch_id, a.manager_notes, a.image_ids,
+SELECT a.id, a.group_id, a.commercial_name, a.common_name, a.category_id, a.location_id, a.status, a.individually_tracked, a.approval_level, a.image_ids, a.description, a.instructions, a.manager_notes, a.purchase_date, a.purchase_price, a.place, a.expected_available_date, a.import_batch_id, a.created_at, a.updated_at,
     l.name AS location_name,
     c.name AS category_name
 FROM articles a
@@ -320,18 +320,18 @@ type GetArticleRow struct {
 	LocationID            pgtype.UUID        `json:"location_id"`
 	Status                string             `json:"status"`
 	IndividuallyTracked   bool               `json:"individually_tracked"`
+	ApprovalLevel         string             `json:"approval_level"`
+	ImageIds              json.RawMessage    `json:"image_ids"`
 	Description           string             `json:"description"`
 	Instructions          string             `json:"instructions"`
+	ManagerNotes          string             `json:"manager_notes"`
 	PurchaseDate          pgtype.Date        `json:"purchase_date"`
 	PurchasePrice         pgtype.Numeric     `json:"purchase_price"`
 	Place                 string             `json:"place"`
+	ExpectedAvailableDate pgtype.Date        `json:"expected_available_date"`
+	ImportBatchID         pgtype.UUID        `json:"import_batch_id"`
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
-	ExpectedAvailableDate pgtype.Date        `json:"expected_available_date"`
-	ApprovalLevel         string             `json:"approval_level"`
-	ImportBatchID         pgtype.UUID        `json:"import_batch_id"`
-	ManagerNotes          string             `json:"manager_notes"`
-	ImageIds              json.RawMessage    `json:"image_ids"`
 	LocationName          string             `json:"location_name"`
 	CategoryName          string             `json:"category_name"`
 }
@@ -348,18 +348,18 @@ func (q *Queries) GetArticle(ctx context.Context, arg GetArticleParams) (GetArti
 		&i.LocationID,
 		&i.Status,
 		&i.IndividuallyTracked,
+		&i.ApprovalLevel,
+		&i.ImageIds,
 		&i.Description,
 		&i.Instructions,
+		&i.ManagerNotes,
 		&i.PurchaseDate,
 		&i.PurchasePrice,
 		&i.Place,
+		&i.ExpectedAvailableDate,
+		&i.ImportBatchID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.ExpectedAvailableDate,
-		&i.ApprovalLevel,
-		&i.ImportBatchID,
-		&i.ManagerNotes,
-		&i.ImageIds,
 		&i.LocationName,
 		&i.CategoryName,
 	)
@@ -389,7 +389,7 @@ func (q *Queries) GetArticleGroupImageIds(ctx context.Context, arg GetArticleGro
 }
 
 const getArticleGroupInfo = `-- name: GetArticleGroupInfo :one
-SELECT a.id, a.group_id, a.commercial_name, a.common_name, a.category_id, a.location_id, a.status, a.individually_tracked, a.description, a.instructions, a.purchase_date, a.purchase_price, a.place, a.created_at, a.updated_at, a.expected_available_date, a.approval_level, a.import_batch_id, a.manager_notes, a.image_ids,
+SELECT a.id, a.group_id, a.commercial_name, a.common_name, a.category_id, a.location_id, a.status, a.individually_tracked, a.approval_level, a.image_ids, a.description, a.instructions, a.manager_notes, a.purchase_date, a.purchase_price, a.place, a.expected_available_date, a.import_batch_id, a.created_at, a.updated_at,
     l.name AS location_name,
     c.name AS category_name
 FROM articles a
@@ -417,18 +417,18 @@ type GetArticleGroupInfoRow struct {
 	LocationID            pgtype.UUID        `json:"location_id"`
 	Status                string             `json:"status"`
 	IndividuallyTracked   bool               `json:"individually_tracked"`
+	ApprovalLevel         string             `json:"approval_level"`
+	ImageIds              json.RawMessage    `json:"image_ids"`
 	Description           string             `json:"description"`
 	Instructions          string             `json:"instructions"`
+	ManagerNotes          string             `json:"manager_notes"`
 	PurchaseDate          pgtype.Date        `json:"purchase_date"`
 	PurchasePrice         pgtype.Numeric     `json:"purchase_price"`
 	Place                 string             `json:"place"`
+	ExpectedAvailableDate pgtype.Date        `json:"expected_available_date"`
+	ImportBatchID         pgtype.UUID        `json:"import_batch_id"`
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
-	ExpectedAvailableDate pgtype.Date        `json:"expected_available_date"`
-	ApprovalLevel         string             `json:"approval_level"`
-	ImportBatchID         pgtype.UUID        `json:"import_batch_id"`
-	ManagerNotes          string             `json:"manager_notes"`
-	ImageIds              json.RawMessage    `json:"image_ids"`
 	LocationName          string             `json:"location_name"`
 	CategoryName          string             `json:"category_name"`
 }
@@ -446,18 +446,18 @@ func (q *Queries) GetArticleGroupInfo(ctx context.Context, arg GetArticleGroupIn
 		&i.LocationID,
 		&i.Status,
 		&i.IndividuallyTracked,
+		&i.ApprovalLevel,
+		&i.ImageIds,
 		&i.Description,
 		&i.Instructions,
+		&i.ManagerNotes,
 		&i.PurchaseDate,
 		&i.PurchasePrice,
 		&i.Place,
+		&i.ExpectedAvailableDate,
+		&i.ImportBatchID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.ExpectedAvailableDate,
-		&i.ApprovalLevel,
-		&i.ImportBatchID,
-		&i.ManagerNotes,
-		&i.ImageIds,
 		&i.LocationName,
 		&i.CategoryName,
 	)
@@ -468,11 +468,11 @@ const listActiveBookingConflicts = `-- name: ListActiveBookingConflicts :many
 SELECT DISTINCT a.id AS article_id, a.common_name AS article_name,
     b.id AS booking_id,
     b.start_date AS booking_start_date, b.end_date AS booking_end_date,
-    COALESCE(u.name, b.used_by_external, '') AS booking_unit
+    COALESCE(t.name, b.used_by_external, '') AS booking_team
 FROM articles a
 JOIN booking_items bi ON bi.article_id = a.id
 JOIN bookings b ON bi.booking_id = b.id
-LEFT JOIN units u ON b.used_by_unit_id = u.id
+LEFT JOIN teams t ON b.used_by_team_id = t.id
 WHERE a.id = ANY($1::uuid[]) AND a.group_id = $2
     AND b.status IN ('confirmed', 'approved', 'picked_up')
     AND (bi.return_status IS NULL OR bi.return_status IN ('pending', 'delayed'))
@@ -489,7 +489,7 @@ type ListActiveBookingConflictsRow struct {
 	BookingID        pgtype.UUID `json:"booking_id"`
 	BookingStartDate pgtype.Date `json:"booking_start_date"`
 	BookingEndDate   pgtype.Date `json:"booking_end_date"`
-	BookingUnit      string      `json:"booking_unit"`
+	BookingTeam      string      `json:"booking_team"`
 }
 
 // Returns articles from the given list that are in active bookings (confirmed/approved/picked_up)
@@ -509,7 +509,7 @@ func (q *Queries) ListActiveBookingConflicts(ctx context.Context, arg ListActive
 			&i.BookingID,
 			&i.BookingStartDate,
 			&i.BookingEndDate,
-			&i.BookingUnit,
+			&i.BookingTeam,
 		); err != nil {
 			return nil, err
 		}
@@ -522,7 +522,7 @@ func (q *Queries) ListActiveBookingConflicts(ctx context.Context, arg ListActive
 }
 
 const listArticles = `-- name: ListArticles :many
-SELECT a.id, a.group_id, a.commercial_name, a.common_name, a.category_id, a.location_id, a.status, a.individually_tracked, a.description, a.instructions, a.purchase_date, a.purchase_price, a.place, a.created_at, a.updated_at, a.expected_available_date, a.approval_level, a.import_batch_id, a.manager_notes, a.image_ids,
+SELECT a.id, a.group_id, a.commercial_name, a.common_name, a.category_id, a.location_id, a.status, a.individually_tracked, a.approval_level, a.image_ids, a.description, a.instructions, a.manager_notes, a.purchase_date, a.purchase_price, a.place, a.expected_available_date, a.import_batch_id, a.created_at, a.updated_at,
     l.name AS location_name,
     c.name AS category_name
 FROM articles a
@@ -553,18 +553,18 @@ type ListArticlesRow struct {
 	LocationID            pgtype.UUID        `json:"location_id"`
 	Status                string             `json:"status"`
 	IndividuallyTracked   bool               `json:"individually_tracked"`
+	ApprovalLevel         string             `json:"approval_level"`
+	ImageIds              json.RawMessage    `json:"image_ids"`
 	Description           string             `json:"description"`
 	Instructions          string             `json:"instructions"`
+	ManagerNotes          string             `json:"manager_notes"`
 	PurchaseDate          pgtype.Date        `json:"purchase_date"`
 	PurchasePrice         pgtype.Numeric     `json:"purchase_price"`
 	Place                 string             `json:"place"`
+	ExpectedAvailableDate pgtype.Date        `json:"expected_available_date"`
+	ImportBatchID         pgtype.UUID        `json:"import_batch_id"`
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
-	ExpectedAvailableDate pgtype.Date        `json:"expected_available_date"`
-	ApprovalLevel         string             `json:"approval_level"`
-	ImportBatchID         pgtype.UUID        `json:"import_batch_id"`
-	ManagerNotes          string             `json:"manager_notes"`
-	ImageIds              json.RawMessage    `json:"image_ids"`
 	LocationName          string             `json:"location_name"`
 	CategoryName          string             `json:"category_name"`
 }
@@ -593,18 +593,18 @@ func (q *Queries) ListArticles(ctx context.Context, arg ListArticlesParams) ([]L
 			&i.LocationID,
 			&i.Status,
 			&i.IndividuallyTracked,
+			&i.ApprovalLevel,
+			&i.ImageIds,
 			&i.Description,
 			&i.Instructions,
+			&i.ManagerNotes,
 			&i.PurchaseDate,
 			&i.PurchasePrice,
 			&i.Place,
+			&i.ExpectedAvailableDate,
+			&i.ImportBatchID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.ExpectedAvailableDate,
-			&i.ApprovalLevel,
-			&i.ImportBatchID,
-			&i.ManagerNotes,
-			&i.ImageIds,
 			&i.LocationName,
 			&i.CategoryName,
 		); err != nil {
@@ -619,7 +619,7 @@ func (q *Queries) ListArticles(ctx context.Context, arg ListArticlesParams) ([]L
 }
 
 const listArticlesByUserBookings = `-- name: ListArticlesByUserBookings :many
-SELECT a.id, a.group_id, a.commercial_name, a.common_name, a.category_id, a.location_id, a.status, a.individually_tracked, a.description, a.instructions, a.purchase_date, a.purchase_price, a.place, a.created_at, a.updated_at, a.expected_available_date, a.approval_level, a.import_batch_id, a.manager_notes, a.image_ids,
+SELECT a.id, a.group_id, a.commercial_name, a.common_name, a.category_id, a.location_id, a.status, a.individually_tracked, a.approval_level, a.image_ids, a.description, a.instructions, a.manager_notes, a.purchase_date, a.purchase_price, a.place, a.expected_available_date, a.import_batch_id, a.created_at, a.updated_at,
     l.name AS location_name,
     c.name AS category_name
 FROM articles a
@@ -632,8 +632,8 @@ WHERE a.group_id = $1
             SELECT bi.article_id FROM booking_items bi
             JOIN bookings b ON bi.booking_id = b.id
             WHERE b.group_id = $1
-                AND (b.created_by = $3 OR b.used_by_unit_id = ANY(
-                    SELECT un.id FROM units un WHERE un.group_id = $1 AND un.name = ANY($4::text[])
+                AND (b.created_by = $3 OR b.used_by_team_id = ANY(
+                    SELECT tm.id FROM teams tm WHERE tm.group_id = $1 AND tm.name = ANY($4::text[])
                 ))
         )
         OR a.id IN (
@@ -648,7 +648,7 @@ type ListArticlesByUserBookingsParams struct {
 	GroupID   string   `json:"group_id"`
 	Statuses  []string `json:"statuses"`
 	UserID    string   `json:"user_id"`
-	UnitNames []string `json:"unit_names"`
+	TeamNames []string `json:"team_names"`
 }
 
 type ListArticlesByUserBookingsRow struct {
@@ -660,31 +660,31 @@ type ListArticlesByUserBookingsRow struct {
 	LocationID            pgtype.UUID        `json:"location_id"`
 	Status                string             `json:"status"`
 	IndividuallyTracked   bool               `json:"individually_tracked"`
+	ApprovalLevel         string             `json:"approval_level"`
+	ImageIds              json.RawMessage    `json:"image_ids"`
 	Description           string             `json:"description"`
 	Instructions          string             `json:"instructions"`
+	ManagerNotes          string             `json:"manager_notes"`
 	PurchaseDate          pgtype.Date        `json:"purchase_date"`
 	PurchasePrice         pgtype.Numeric     `json:"purchase_price"`
 	Place                 string             `json:"place"`
+	ExpectedAvailableDate pgtype.Date        `json:"expected_available_date"`
+	ImportBatchID         pgtype.UUID        `json:"import_batch_id"`
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
-	ExpectedAvailableDate pgtype.Date        `json:"expected_available_date"`
-	ApprovalLevel         string             `json:"approval_level"`
-	ImportBatchID         pgtype.UUID        `json:"import_batch_id"`
-	ManagerNotes          string             `json:"manager_notes"`
-	ImageIds              json.RawMessage    `json:"image_ids"`
 	LocationName          string             `json:"location_name"`
 	CategoryName          string             `json:"category_name"`
 }
 
 // Returns articles with given statuses that are linked to the user's bookings
-// (created by user or assigned to one of their units), or where the user
+// (created by user or assigned to one of their teams), or where the user
 // reported an issue (is an actor on an article event).
 func (q *Queries) ListArticlesByUserBookings(ctx context.Context, arg ListArticlesByUserBookingsParams) ([]ListArticlesByUserBookingsRow, error) {
 	rows, err := q.db.Query(ctx, listArticlesByUserBookings,
 		arg.GroupID,
 		arg.Statuses,
 		arg.UserID,
-		arg.UnitNames,
+		arg.TeamNames,
 	)
 	if err != nil {
 		return nil, err
@@ -702,18 +702,18 @@ func (q *Queries) ListArticlesByUserBookings(ctx context.Context, arg ListArticl
 			&i.LocationID,
 			&i.Status,
 			&i.IndividuallyTracked,
+			&i.ApprovalLevel,
+			&i.ImageIds,
 			&i.Description,
 			&i.Instructions,
+			&i.ManagerNotes,
 			&i.PurchaseDate,
 			&i.PurchasePrice,
 			&i.Place,
+			&i.ExpectedAvailableDate,
+			&i.ImportBatchID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.ExpectedAvailableDate,
-			&i.ApprovalLevel,
-			&i.ImportBatchID,
-			&i.ManagerNotes,
-			&i.ImageIds,
 			&i.LocationName,
 			&i.CategoryName,
 		); err != nil {
@@ -728,18 +728,18 @@ func (q *Queries) ListArticlesByUserBookings(ctx context.Context, arg ListArticl
 }
 
 const listArticlesWithAvailability = `-- name: ListArticlesWithAvailability :many
-SELECT a.id, a.group_id, a.commercial_name, a.common_name, a.category_id, a.location_id, a.status, a.individually_tracked, a.description, a.instructions, a.purchase_date, a.purchase_price, a.place, a.created_at, a.updated_at, a.expected_available_date, a.approval_level, a.import_batch_id, a.manager_notes, a.image_ids,
+SELECT a.id, a.group_id, a.commercial_name, a.common_name, a.category_id, a.location_id, a.status, a.individually_tracked, a.approval_level, a.image_ids, a.description, a.instructions, a.manager_notes, a.purchase_date, a.purchase_price, a.place, a.expected_available_date, a.import_batch_id, a.created_at, a.updated_at,
     l.name AS location_name,
     c.name AS category_name,
     cur_booking.id AS current_booking_id,
     COALESCE(cur_booking.status, '') AS current_booking_status,
     cur_booking.end_date AS current_booking_end_date,
-    cur_unit.name AS current_booking_unit_name
+    cur_team.name AS current_booking_team_name
 FROM articles a
 JOIN locations l ON a.location_id = l.id
 JOIN categories c ON a.category_id = c.id
 LEFT JOIN LATERAL (
-    SELECT b.id, b.status, b.end_date, b.used_by_unit_id
+    SELECT b.id, b.status, b.end_date, b.used_by_team_id
     FROM booking_items bi
     JOIN bookings b ON bi.booking_id = b.id
     WHERE bi.article_id = a.id
@@ -751,7 +751,7 @@ LEFT JOIN LATERAL (
     ORDER BY b.start_date
     LIMIT 1
 ) cur_booking ON true
-LEFT JOIN units cur_unit ON cur_booking.used_by_unit_id = cur_unit.id
+LEFT JOIN teams cur_team ON cur_booking.used_by_team_id = cur_team.id
 WHERE a.group_id = $2
     AND ($3::uuid IS NULL OR a.category_id = $3)
     AND ($4::uuid IS NULL OR a.location_id = $4)
@@ -778,24 +778,24 @@ type ListArticlesWithAvailabilityRow struct {
 	LocationID             pgtype.UUID        `json:"location_id"`
 	Status                 string             `json:"status"`
 	IndividuallyTracked    bool               `json:"individually_tracked"`
+	ApprovalLevel          string             `json:"approval_level"`
+	ImageIds               json.RawMessage    `json:"image_ids"`
 	Description            string             `json:"description"`
 	Instructions           string             `json:"instructions"`
+	ManagerNotes           string             `json:"manager_notes"`
 	PurchaseDate           pgtype.Date        `json:"purchase_date"`
 	PurchasePrice          pgtype.Numeric     `json:"purchase_price"`
 	Place                  string             `json:"place"`
+	ExpectedAvailableDate  pgtype.Date        `json:"expected_available_date"`
+	ImportBatchID          pgtype.UUID        `json:"import_batch_id"`
 	CreatedAt              pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
-	ExpectedAvailableDate  pgtype.Date        `json:"expected_available_date"`
-	ApprovalLevel          string             `json:"approval_level"`
-	ImportBatchID          pgtype.UUID        `json:"import_batch_id"`
-	ManagerNotes           string             `json:"manager_notes"`
-	ImageIds               json.RawMessage    `json:"image_ids"`
 	LocationName           string             `json:"location_name"`
 	CategoryName           string             `json:"category_name"`
 	CurrentBookingID       pgtype.UUID        `json:"current_booking_id"`
 	CurrentBookingStatus   string             `json:"current_booking_status"`
 	CurrentBookingEndDate  pgtype.Date        `json:"current_booking_end_date"`
-	CurrentBookingUnitName pgtype.Text        `json:"current_booking_unit_name"`
+	CurrentBookingTeamName pgtype.Text        `json:"current_booking_team_name"`
 }
 
 // Returns articles enriched with current booking context for a given date.
@@ -824,24 +824,24 @@ func (q *Queries) ListArticlesWithAvailability(ctx context.Context, arg ListArti
 			&i.LocationID,
 			&i.Status,
 			&i.IndividuallyTracked,
+			&i.ApprovalLevel,
+			&i.ImageIds,
 			&i.Description,
 			&i.Instructions,
+			&i.ManagerNotes,
 			&i.PurchaseDate,
 			&i.PurchasePrice,
 			&i.Place,
+			&i.ExpectedAvailableDate,
+			&i.ImportBatchID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.ExpectedAvailableDate,
-			&i.ApprovalLevel,
-			&i.ImportBatchID,
-			&i.ManagerNotes,
-			&i.ImageIds,
 			&i.LocationName,
 			&i.CategoryName,
 			&i.CurrentBookingID,
 			&i.CurrentBookingStatus,
 			&i.CurrentBookingEndDate,
-			&i.CurrentBookingUnitName,
+			&i.CurrentBookingTeamName,
 		); err != nil {
 			return nil, err
 		}
@@ -980,7 +980,7 @@ UPDATE articles SET
     manager_notes = $13,
     updated_at = now()
 WHERE id = $14 AND group_id = $15
-RETURNING id, group_id, commercial_name, common_name, category_id, location_id, status, individually_tracked, description, instructions, purchase_date, purchase_price, place, created_at, updated_at, expected_available_date, approval_level, import_batch_id, manager_notes, image_ids
+RETURNING id, group_id, commercial_name, common_name, category_id, location_id, status, individually_tracked, approval_level, image_ids, description, instructions, manager_notes, purchase_date, purchase_price, place, expected_available_date, import_batch_id, created_at, updated_at
 `
 
 type UpdateArticleParams struct {
@@ -1029,18 +1029,18 @@ func (q *Queries) UpdateArticle(ctx context.Context, arg UpdateArticleParams) (A
 		&i.LocationID,
 		&i.Status,
 		&i.IndividuallyTracked,
+		&i.ApprovalLevel,
+		&i.ImageIds,
 		&i.Description,
 		&i.Instructions,
+		&i.ManagerNotes,
 		&i.PurchaseDate,
 		&i.PurchasePrice,
 		&i.Place,
+		&i.ExpectedAvailableDate,
+		&i.ImportBatchID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.ExpectedAvailableDate,
-		&i.ApprovalLevel,
-		&i.ImportBatchID,
-		&i.ManagerNotes,
-		&i.ImageIds,
 	)
 	return i, err
 }
@@ -1133,7 +1133,7 @@ func (q *Queries) UpdateArticleGroupImageIds(ctx context.Context, arg UpdateArti
 const updateArticleStatus = `-- name: UpdateArticleStatus :one
 UPDATE articles SET status = $1, expected_available_date = $2, updated_at = now()
 WHERE id = $3 AND group_id = $4
-RETURNING id, group_id, commercial_name, common_name, category_id, location_id, status, individually_tracked, description, instructions, purchase_date, purchase_price, place, created_at, updated_at, expected_available_date, approval_level, import_batch_id, manager_notes, image_ids
+RETURNING id, group_id, commercial_name, common_name, category_id, location_id, status, individually_tracked, approval_level, image_ids, description, instructions, manager_notes, purchase_date, purchase_price, place, expected_available_date, import_batch_id, created_at, updated_at
 `
 
 type UpdateArticleStatusParams struct {
@@ -1160,18 +1160,18 @@ func (q *Queries) UpdateArticleStatus(ctx context.Context, arg UpdateArticleStat
 		&i.LocationID,
 		&i.Status,
 		&i.IndividuallyTracked,
+		&i.ApprovalLevel,
+		&i.ImageIds,
 		&i.Description,
 		&i.Instructions,
+		&i.ManagerNotes,
 		&i.PurchaseDate,
 		&i.PurchasePrice,
 		&i.Place,
+		&i.ExpectedAvailableDate,
+		&i.ImportBatchID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.ExpectedAvailableDate,
-		&i.ApprovalLevel,
-		&i.ImportBatchID,
-		&i.ManagerNotes,
-		&i.ImageIds,
 	)
 	return i, err
 }
