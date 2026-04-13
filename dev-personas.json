@@ -55,6 +55,14 @@
       "groups": {
         "999": ["Avdelning 1"]
       }
+    },
+    "view-only": {
+      "member_id": "3000008",
+      "name": "Vera Visa",
+      "email": "vera@example.com",
+      "groups": {
+        "766": []
+      }
     }
   }
 }

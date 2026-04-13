@@ -17,7 +17,7 @@ import (
 func TestApprovalFlow(t *testing.T) {
 	env := testutil.SetupTestEnv(t)
 	env.V1(func(r chi.Router) {
-		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries}).Routes())
+		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
 		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries}).Routes())
@@ -84,11 +84,25 @@ func TestApprovalFlow(t *testing.T) {
 
 	// Helper: create booking, add item, submit, return booking status
 	dateCounter := 0
-	bookAndSubmitWithOpts := func(client *testutil.TestClient, commercialName string, message string, forceApproval bool) (string, string) {
+	bookAndSubmitWithOpts := func(client *testutil.TestClient, commercialName string, message string, forceApproval bool, teamName ...string) (string, string) {
 		dateCounter++
 		startDate := fmt.Sprintf("2026-%02d-01", dateCounter%12+1)
 		endDate := fmt.Sprintf("2026-%02d-05", dateCounter%12+1)
-		b, _ := json.Marshal(map[string]any{"start_date": startDate, "end_date": endDate})
+		bookingData := map[string]any{"start_date": startDate, "end_date": endDate}
+		if len(teamName) > 0 {
+			// Look up team ID by name
+			resp, _ := client.Get("/api/v0/teams")
+			var teams []map[string]any
+			json.NewDecoder(resp.Body).Decode(&teams)
+			resp.Body.Close()
+			for _, t := range teams {
+				if t["name"] == teamName[0] {
+					bookingData["used_by_team_id"] = t["id"]
+					break
+				}
+			}
+		}
+		b, _ := json.Marshal(bookingData)
 		resp, _ := client.Post("/api/v0/bookings", bytes.NewReader(b))
 		var booking map[string]any
 		json.NewDecoder(resp.Body).Decode(&booking)
@@ -113,8 +127,8 @@ func TestApprovalFlow(t *testing.T) {
 
 		return bookingID, booking["status"].(string)
 	}
-	bookAndSubmit := func(client *testutil.TestClient, commercialName string) (string, string) {
-		return bookAndSubmitWithOpts(client, commercialName, "", false)
+	bookAndSubmit := func(client *testutil.TestClient, commercialName string, teamName ...string) (string, string) {
+		return bookAndSubmitWithOpts(client, commercialName, "", false, teamName...)
 	}
 
 	t.Run("none approval auto-confirms for leader", func(t *testing.T) {
@@ -131,24 +145,24 @@ func TestApprovalFlow(t *testing.T) {
 		}
 	})
 
-	t.Run("low approval auto-confirms for project leader", func(t *testing.T) {
-		_, status := bookAndSubmit(projectLeader, "LowGear")
+	t.Run("low approval auto-confirms for trusted team", func(t *testing.T) {
+		_, status := bookAndSubmit(projectLeader, "LowGear", "Valborgskommittén")
 		if status != "confirmed" {
 			t.Errorf("expected confirmed, got %s", status)
 		}
 	})
 
-	t.Run("high approval needs approval for project leader", func(t *testing.T) {
-		_, status := bookAndSubmit(projectLeader, "HighGear")
+	t.Run("high approval needs approval for trusted team", func(t *testing.T) {
+		_, status := bookAndSubmit(projectLeader, "HighGear", "Valborgskommittén")
 		if status != "submitted" {
 			t.Errorf("expected submitted, got %s", status)
 		}
 	})
 
-	t.Run("high approval auto-confirms for manager", func(t *testing.T) {
-		_, status := bookAndSubmit(manager, "HighGear")
-		if status != "confirmed" {
-			t.Errorf("expected confirmed, got %s", status)
+	t.Run("high approval needs approval for manager", func(t *testing.T) {
+		_, status := bookAndSubmit(manager, "HighGear", "Utrustningsgruppen")
+		if status != "submitted" {
+			t.Errorf("expected submitted, got %s", status)
 		}
 	})
 
@@ -321,7 +335,7 @@ func TestApprovalFlow(t *testing.T) {
 	})
 
 	t.Run("force_approval sends none-items to submitted", func(t *testing.T) {
-		_, status := bookAndSubmitWithOpts(leader, "FreeGear", "", true)
+		_, status := bookAndSubmitWithOpts(leader, "FreeGear", "", true, "Yggdrasil")
 		if status != "submitted" {
 			t.Errorf("expected submitted with force_approval, got %s", status)
 		}

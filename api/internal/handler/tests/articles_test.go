@@ -20,7 +20,7 @@ import (
 func TestArticleCRUD(t *testing.T) {
 	env := testutil.SetupTestEnv(t)
 	env.V1(func(r chi.Router) {
-		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries}).Routes())
+		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
 	})
@@ -131,7 +131,7 @@ func TestArticleCRUD(t *testing.T) {
 func TestArticleCSVImport(t *testing.T) {
 	env := testutil.SetupTestEnv(t)
 	env.V1(func(r chi.Router) {
-		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries}).Routes())
+		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
 	})

@@ -1,6 +1,6 @@
 # ms-utrustning
 
-Equipment booking service for scout groups. Book tents, stoves, and other gear — track inventory, handle pickups and returns with checklists, report issues.
+Equipment booking service for scout groups. Book tents, stoves, and other gear - track inventory, handle pickups and returns with checklists, report issues.
 
 See [docs/SPEC.md](docs/SPEC.md) for the full specification and [docs/API.md](docs/API.md) for the API reference.
 
@@ -10,19 +10,21 @@ Pre-release (`v0`). Breaking changes expected. Currently implements:
 - Article inventory with CSV import (including approval level per article)
 - Article browsing with category/location/search filters
 - Booking flow: create, add items, submit, cancel, copy
-- Three-level approval: none (free), low (project leaders auto-approve), high (always needs manager)
+- Three-level approval: none (free), low (trusted teams auto-approve), high (always needs manager approval)
 - Approval conversation thread with booking events (submit/reject/resubmit/approve with messages)
-- Force-approval option for leaders who want manager review on freely bookable items
+- Force-approval option for users who want manager review on freely bookable items
 - Availability calculation with double-booking prevention
 - Location-scoped availability (same product in different locations shown separately)
 - Pickup and return checklists with swap support
-- Issue reporting with per-article event history
-- Role-based access (leader, project leader, equipment manager)
+- Issue reporting with per-article event history and image attachments
+- Product images with crop, sharing, and attribution
+- Configurable per-team access levels (view, book, trusted, manager)
+- Auto-discovery of troops/roles from OIDC claims
 - Multi-tenancy (group-scoped, ready for multiple organizations)
 
 ## Stack
 
-- **API**: Go 1.26 (Chi v5, pgx v5, sqlc, govips) — `/api/v0/*`
+- **API**: Go 1.26 (Chi v5, pgx v5, sqlc, govips) - `/api/v0/*`
 - **Frontend**: SvelteKit 2 + Svelte 5 + @scouterna/ui-webc 3
 - **Styling**: Tailwind CSS 4 + @scouterna/tailwind-theme
 - **Database**: PostgreSQL 17
@@ -39,7 +41,7 @@ Pre-release (`v0`). Breaking changes expected. Currently implements:
 # Start everything with hot reload (Go API + SvelteKit + Postgres)
 docker compose up
 
-# In another terminal, seed the database (import inventory + create units)
+# In another terminal, seed the database (import inventory + create teams)
 ./dev-seed.sh
 ```
 
@@ -51,7 +53,7 @@ You still need `docker compose up --build` when:
 - Adding new Go or Node dependencies
 - Changing a Dockerfile
 
-The seed script imports from `docs/Utrustningsregister MS.xlsx - data.csv` by default. Pass a different path as an argument:
+The seed script imports from `docs/import-example.csv` by default. Pass a different path as an argument:
 ```bash
 ./dev-seed.sh path/to/other.csv
 ```
@@ -85,8 +87,8 @@ All differences between dev, demo, and production are controlled via `.env`. Gen
 ```
 
 Flags:
-- `--force` — overwrite existing `.env` (preserves user-edited values like `ORIGIN` and `AUTH_KEYCLOAK_SECRET`)
-- `--local` — use local image names, localhost origin, and static Postgres password (for testing demo/prod modes on a dev machine). No effect on `dev` mode which is already local.
+- `--force` - overwrite existing `.env` (preserves user-edited values like `ORIGIN` and `AUTH_KEYCLOAK_SECRET`)
+- `--local` - use local image names, localhost origin, and static Postgres password (for testing demo/prod modes on a dev machine). No effect on `dev` mode which is already local.
 
 | | Dev | Demo | Production |
 |---|---|---|---|
@@ -111,8 +113,8 @@ The `--build` is needed when switching modes to rebuild images with the correct 
 
 ### Security model
 
-- The Go API port (8080) is bound to `127.0.0.1` — only reachable from the host machine, not from the network. The SvelteKit app proxies `/api/*` requests internally via the Docker network.
-- The proxy **strips** `X-Dev-Role-Override` and `Authorization` headers from incoming browser requests before forwarding. Identity is injected server-side from the OIDC session or persona cookie — users cannot forge it.
+- The Go API port (8080) is bound to `127.0.0.1` - only reachable from the host machine, not from the network. The SvelteKit app proxies `/api/*` requests internally via the Docker network.
+- The proxy **strips** `X-Dev-Role-Override` and `Authorization` headers from incoming browser requests before forwarding. Identity is injected server-side from the OIDC session or persona cookie - users cannot forge it.
 - `DEV_MODE=true` in demo is safe because the persona override header only reaches the Go API through the SvelteKit proxy, which controls it. Direct access to the API container is blocked from the network.
 - Postgres is not exposed to the host in demo/prod (no `docker-compose.override.yml`). Password is randomly generated.
 - Your reverse proxy should only forward traffic to the SvelteKit port (3000). Never expose the API port (8080) directly.
@@ -135,13 +137,13 @@ ms-utrustning/
 ├── gen-env.sh
 ├── dev-seed.sh
 ├── dev-personas.json       # Persona definitions (needed for demo mode)
-├── role-mapping.json       # Scoutnet role → app role mapping
 └── docs/
     ├── import-example.csv  # Or your real inventory CSV
+    ├── seed-images/        # Product images uploaded during seeding
     └── guide.md            # User guide (shown in the UI)
 ```
 
-Do **not** copy `docker-compose.override.yml` — that file enables dev-only features (local builds, source mounts, exposed Postgres port).
+Do **not** copy `docker-compose.override.yml` - that file enables dev-only features (local builds, source mounts, exposed Postgres port).
 
 ### Demo deployment
 
@@ -160,7 +162,12 @@ echo "YOUR_GITHUB_PAT" | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password
 docker compose pull
 docker compose up -d
 
-# 5. Seed the database with inventory and sample bookings
+# 5. Bootstrap the group (first time only)
+docker compose exec api /bin/server init-group \
+  --group-id 766 --group-name "Mälarscouterna" \
+  --manager-claim "group:766:material_responsible" --team-name "Utrustningsgruppen"
+
+# 6. Seed the database with inventory and sample bookings
 ./dev-seed.sh
 ```
 
@@ -176,9 +183,16 @@ docker compose up -d
 docker compose pull
 docker compose up -d
 
-# 4. Import your inventory
+# 4. Bootstrap the group
+docker compose exec api /bin/server init-group \
+  --group-id YOUR_ORG_ID --group-name "Your Scout Group" \
+  --manager-claim "group:YOUR_ORG_ID:material_responsible" --team-name "Equipment Managers"
+
+# 5. Import your inventory
 ./dev-seed.sh path/to/your-inventory.csv
 ```
+
+The `init-group` command creates the group, default settings, and the first manager team with its OIDC claim mapping. It's idempotent - running it twice is safe. Additional teams are auto-created when users log in, or can be pre-created by managers in the settings UI.
 
 ### Reverse proxy setup
 
@@ -203,7 +217,7 @@ Then add it to `COMPOSE_FILE` in `.env`:
 COMPOSE_FILE=docker-compose.yml:docker-compose.caddy.yml
 ```
 
-If your reverse proxy runs directly on the host (not in Docker), no extra network config is needed — it connects to `localhost:3000` (or whatever `WEB_PORT` is set to).
+If your reverse proxy runs directly on the host (not in Docker), no extra network config is needed - it connects to `localhost:3000` (or whatever `WEB_PORT` is set to).
 
 ### Updating
 
@@ -230,7 +244,7 @@ Copyright © 2025 Teo Elmfeldt (<teo.elmfeldt@malarscouterna.se>)
 
 This project is licensed under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).
 
-The AGPL was chosen as a starting point to ensure all derivatives remain open source, including modifications deployed as network services. In the future there might be reason to relicense under a more permissive open-source license as the project matures. Starting with AGPL preserves that option — going the other direction (permissive → copyleft) is much harder once external contributions exist.
+The AGPL was chosen as a starting point to ensure all derivatives remain open source, including modifications deployed as network services. In the future there might be reason to relicense under a more permissive open-source license as the project matures. Starting with AGPL preserves that option - going the other direction (permissive → copyleft) is much harder once external contributions exist.
 
 ## Contributing
 
@@ -254,7 +268,7 @@ Pull requests with unsigned commits will not be accepted.
 
 ### AI-assisted contributions
 
-Contributors are welcome to use AI tools (code assistants, generators, etc.) when writing contributions. You are responsible for ensuring that any code you submit — regardless of what tools were used to produce it — is something you have the right to contribute under the DCO.
+Contributors are welcome to use AI tools (code assistants, generators, etc.) when writing contributions. You are responsible for ensuring that any code you submit - regardless of what tools were used to produce it - is something you have the right to contribute under the DCO.
 
 ### How to contribute
 

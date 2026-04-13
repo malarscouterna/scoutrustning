@@ -735,7 +735,7 @@ Note: Utrustningsgruppen is already created by `init-group` with `manager` acces
    - `high` items always show "Kräver godkännande" (red)
    - Fully booked items hidden in default view, visible with toggle
 
-### Step 4: Manager settings UI
+### Step 4: Manager settings UI ✅
 
 1. Kanban-style access level columns on settings page
 2. Team cards with inline rename, type badge, claim ID
@@ -744,7 +744,7 @@ Note: Utrustningsgruppen is already created by `init-group` with `manager` acces
 5. Delete team (blocked if active bookings)
 6. Group default dropdowns
 
-### Step 5: Tests + cleanup
+### Step 5: Tests + cleanup ✅
 
 1. Update all integration tests for new Claims format
 2. New tests: access level resolution, per-team booking approval, view-only restrictions
