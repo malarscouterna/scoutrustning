@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
 	import { createApiClient, type ArticleEvent } from '$lib/api/client';
 	import { statusLabels, eventTypeLabels, eventTypeColors } from '$lib/labels';
 
@@ -15,6 +17,8 @@
 	let hasMore = $state(false);
 	let loading = $state(true);
 	let showingAll = $state(false);
+	let containerEl = $state<HTMLElement | null>(null);
+	let lightbox: any = null;
 
 	function formatMeta(event: ArticleEvent): string {
 		const m = event.metadata ?? {};
@@ -26,6 +30,13 @@
 			parts.push(`→ ${statusLabels[m.new_status] ?? m.new_status}`);
 		}
 		return parts.join(' · ');
+	}
+
+	function hasImages(): boolean {
+		return events.some(e => {
+			const ids = e.metadata?.image_ids;
+			return Array.isArray(ids) && ids.length > 0;
+		});
 	}
 
 	async function loadEvents(limit?: number) {
@@ -49,6 +60,28 @@
 	$effect(() => {
 		loadEvents(DEFAULT_LIMIT);
 	});
+
+	$effect(() => {
+		if (!loading && hasImages() && containerEl && browser && !lightbox) {
+			initLightbox();
+		}
+	});
+
+	onMount(() => {
+		return () => { lightbox?.destroy(); lightbox = null; };
+	});
+
+	async function initLightbox() {
+		const { default: PhotoSwipeLightbox } = await import('photoswipe/lightbox');
+		await import('photoswipe/style.css');
+		const lb = new PhotoSwipeLightbox({
+			gallery: containerEl!,
+			children: 'a.pswp-event-img',
+			pswpModule: () => import('photoswipe'),
+		});
+		lb.init();
+		lightbox = lb;
+	}
 </script>
 
 {#if loading}
@@ -56,8 +89,9 @@
 {:else if events.length === 0}
 	<p class="text-xs text-neutral-400 py-1">Ingen historik</p>
 {:else}
-	<div class="space-y-1.5 mt-1">
+	<div bind:this={containerEl} class="space-y-1.5 mt-1">
 		{#each events as event}
+			{@const eventImageIds = event.metadata?.image_ids as string[] | undefined}
 			<div class="text-xs">
 				<div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
 					<span class="text-neutral-400 shrink-0">{new Date(event.created_at).toLocaleDateString('sv')}</span>
@@ -65,8 +99,24 @@
 					{#if formatMeta(event)}<span class="text-neutral-500">{formatMeta(event)}</span>{/if}
 					<span class="text-neutral-400 shrink-0">{event.actor_name}</span>
 				</div>
-				{#if event.description}
-					<p class="text-neutral-600 mt-0.5 pl-0.5">{event.description}</p>
+				{#if event.description || eventImageIds?.length}
+					<div class="flex flex-wrap items-start gap-2 mt-0.5 pl-0.5">
+						{#if eventImageIds?.length}
+							{#each eventImageIds as imgId}
+								<a
+									href="/api/v0/images/{imgId}.webp"
+									data-pswp-width="1920"
+									data-pswp-height="1440"
+									class="pswp-event-img block cursor-zoom-in shrink-0"
+								>
+									<img src="/api/v0/images/{imgId}_thumb.webp" alt="" class="h-40 rounded object-contain" />
+								</a>
+							{/each}
+						{/if}
+						{#if event.description}
+							<p class="text-neutral-600 min-w-[10rem] flex-1">{event.description}</p>
+						{/if}
+					</div>
 				{/if}
 			</div>
 		{/each}

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { createApiClient, type BookingItem } from '$lib/api/client';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
+	import ImageAttachInput from '$lib/components/ImageAttachInput.svelte';
 
 	interface Props {
 		bookingId: string;
@@ -17,8 +18,10 @@
 	let error = $state('');
 	let swappingItemId = $state<string | null>(null);
 	let reportingItemId = $state<string | null>(null);
+	let reportingGroupKey = $state<string | null>(null);
 	let reportStatus = $state('');
 	let reportComment = $state('');
+	let reportImageIds = $state<string[]>([]);
 	let swapCandidates = $state<{ id: string; common_name: string; location_name: string; place: string; status: string; expected_available_date: string | null }[]>([]);
 	let selectedSwapArticle = $state('');
 	let loading = $state(false);
@@ -156,14 +159,26 @@
 
 	function startReport(itemId: string) {
 		reportingItemId = itemId;
+		reportingGroupKey = null;
 		reportStatus = '';
 		reportComment = '';
+		reportImageIds = [];
+	}
+
+	function startGroupReport(group: QuantityGroup) {
+		reportingGroupKey = groupKey(group);
+		reportingItemId = null;
+		reportStatus = '';
+		reportComment = '';
+		reportImageIds = [];
 	}
 
 	function cancelReport() {
 		reportingItemId = null;
+		reportingGroupKey = null;
 		reportStatus = '';
 		reportComment = '';
+		reportImageIds = [];
 	}
 
 	async function confirmReport(itemId: string) {
@@ -171,7 +186,24 @@
 		error = '';
 		try {
 			const pickupStatus = reportStatus === 'reported_usable' ? 'picked_up' : 'lost';
-			await api.updateItemPickup(bookingId, itemId, pickupStatus, reportStatus, reportComment.trim());
+			await api.updateItemPickup(bookingId, itemId, pickupStatus, reportStatus, reportComment.trim(), reportImageIds.length ? reportImageIds : undefined);
+			await reload();
+			cancelReport();
+		} catch (e: any) {
+			error = e.message;
+		}
+	}
+
+	async function confirmGroupReport(group: QuantityGroup) {
+		if (!reportStatus || !reportComment.trim()) return;
+		error = '';
+		try {
+			const target = group.items.find((i) => !i.pickup_status) ?? group.items[0];
+			await api.updateArticleStatus(target.article_id, {
+				status: reportStatus,
+				comment: reportComment.trim(),
+				image_ids: reportImageIds.length ? reportImageIds : undefined
+			});
 			await reload();
 			cancelReport();
 		} catch (e: any) {
@@ -308,6 +340,7 @@
 				{:else}
 					{@const key = groupKey(group)}
 					{@const max = groupMax(group)}
+					{#if reportingGroupKey !== qKey}
 					<div class="flex items-center gap-2">
 						<span class="text-sm text-neutral-600">Hämta {group.items.length} st</span>
 						<input
@@ -322,16 +355,43 @@
 							onclick={() => markQuantityGroup(group, quantityInputs[key] ?? group.items.length)}
 							class="text-xs bg-green-700 text-white px-3 py-1 rounded"
 						>Bekräfta</button>
-						{#if (extraAvailable[key] ?? 0) > 0}
+						{#if (extraAvailable[key] ?? 0) > 0}}
 							<span class="text-xs text-neutral-400">max {max}</span>
 						{/if}
 					</div>
+					{/if}
 				{/if}
 			</div>
 			{#if expanded}
 				{@render infoBlock(qImageIds, group.commercialName, rep?.location_id ?? '', rep?.article_description ?? '', rep?.article_instructions ?? '')}
 			{/if}
 		</div>
+		{#if reportingGroupKey === qKey}
+			<div class="border rounded p-3 bg-orange-50 text-sm mt-1">
+				<p class="mb-2 font-medium">Rapportera problem — {group.commercialName}:</p>
+				<p class="text-xs text-neutral-500 mb-2">Rapporterar på en artikel utan att påverka hämtningen.</p>
+				<div class="space-y-2">
+					<label class="flex items-center gap-2">
+						<input type="radio" name="report-q-{qKey}" value="reported_usable" bind:group={reportStatus} />
+						Användbar men felaktig <span class="text-xs text-neutral-500">(hämtas ändå)</span>
+					</label>
+					<label class="flex items-center gap-2">
+						<input type="radio" name="report-q-{qKey}" value="reported_unusable" bind:group={reportStatus} />
+						Ej användbar <span class="text-xs text-neutral-500">(hämtas inte)</span>
+					</label>
+					<label class="flex items-center gap-2">
+						<input type="radio" name="report-q-{qKey}" value="lost" bind:group={reportStatus} />
+						Saknas
+					</label>
+					<textarea bind:value={reportComment} placeholder="Beskriv problemet..." rows="2" class="block border rounded px-2 py-1 text-sm w-full"></textarea>
+					<ImageAttachInput bind:imageIds={reportImageIds} />
+					<div class="flex gap-2">
+						<button onclick={() => confirmGroupReport(group)} disabled={!reportStatus || !reportComment.trim()} class="text-xs bg-orange-600 text-white px-3 py-1 rounded disabled:opacity-50">Bekräfta</button>
+						<button onclick={cancelReport} class="text-xs text-neutral-600 underline">Avbryt</button>
+					</div>
+				</div>
+			</div>
+		{/if}
 	{/each}
 
 	<!-- Individually tracked items -->
@@ -394,6 +454,9 @@
 						Saknas
 					</label>
 					<textarea bind:value={reportComment} placeholder="Beskriv problemet..." rows="2" class="block border rounded px-2 py-1 text-sm w-full"></textarea>
+					<div class="flex items-center gap-2">
+						<ImageAttachInput bind:imageIds={reportImageIds} />
+					</div>
 					<div class="flex gap-2">
 						<button onclick={() => confirmReport(item.id)} disabled={!reportStatus || !reportComment.trim()} class="text-xs bg-orange-600 text-white px-3 py-1 rounded disabled:opacity-50">Bekräfta</button>
 						<button onclick={cancelReport} class="text-xs text-neutral-600 underline">Avbryt</button>

@@ -575,18 +575,18 @@ func (h *ArticleHandler) AddNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Message string `json:"message"`
+		Message  string   `json:"message"`
+		ImageIds []string `json:"image_ids"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Message == "" {
 		WriteError(w, http.StatusBadRequest, "message required")
 		return
 	}
-	// Verify article exists in group
 	if _, err := h.Q.GetArticle(r.Context(), db.GetArticleParams{ID: id, GroupID: claims.GroupID}); err != nil {
 		WriteError(w, http.StatusNotFound, "article not found")
 		return
 	}
-	LogArticleEvent(r.Context(), h.Q, claims, id, "note", req.Message, nil)
+	LogArticleEventWithImages(r.Context(), h.Q, claims, id, "note", req.Message, nil, req.ImageIds)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -602,9 +602,10 @@ func (h *ArticleHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Status                string  `json:"status"`
-		Comment               string  `json:"comment"`
-		ExpectedAvailableDate *string `json:"expected_available_date"`
+		Status                string   `json:"status"`
+		Comment               string   `json:"comment"`
+		ExpectedAvailableDate *string  `json:"expected_available_date"`
+		ImageIds              []string `json:"image_ids"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		WriteError(w, http.StatusBadRequest, "invalid request body")
@@ -677,10 +678,10 @@ func (h *ArticleHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		eventType = "issue_resolved"
 	}
 
-	LogArticleEvent(r.Context(), h.Q, claims, id, eventType, req.Comment, map[string]string{
+	LogArticleEventWithImages(r.Context(), h.Q, claims, id, eventType, req.Comment, map[string]string{
 		"old_status": article.Status,
 		"new_status": req.Status,
-	})
+	}, req.ImageIds)
 
 	WriteJSON(w, http.StatusOK, updated)
 }

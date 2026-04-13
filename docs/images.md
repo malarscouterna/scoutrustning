@@ -622,14 +622,15 @@ Any action that creates an article event supports optional image attachment. Com
 - No new database table — images are standalone files on disk, referenced by UUID in event metadata
 
 **Steps**:
-- [ ] Create `ImageAttachInput.svelte` component (icon button + upload + thumbnail row)
-- [ ] Wire into `ReportIssueForm`, pickup report, return status form, manager status change, article comment input
-- [ ] Update `POST /articles/{id}/events` handler to accept and store `image_ids`
-- [ ] Update `POST /articles/{id}/status` handler to accept and store `image_ids`
-- [ ] Update pickup/return handlers to pass `image_ids` through to article event metadata
-- [ ] Update `ArticleEventHistory` to display inline thumbnails for events with `image_ids`
-- [ ] Update issues page to show thumbnail indicator
+- [x] Create `ImageAttachInput.svelte` component (icon button + upload + thumbnail row with PhotoSwipe)
+- [x] Wire into `ReportIssueForm`, pickup report, return status form, manager status change, article comment input
+- [x] Update `POST /articles/{id}/events` handler to accept and store `image_ids`
+- [x] Update `PUT /articles/{id}/status` handler to accept and store `image_ids`
+- [x] Update pickup/return handlers to pass `image_ids` through to article event metadata
+- [x] Update `ArticleEventHistory` to display inline thumbnails for events with `image_ids`
+- [x] Update issues page to show inline thumbnails in event history
+- [x] Seed script uploads issue images and attaches to Sibley 2, Tältlampa LED, and Stormkök reports
 - [ ] Integration test: report issue with images, verify event metadata, verify images served
 
 **file path**
-The images volume should be separated into issues and article images. In those folders we should group by group_id so each group's images are easily available. If we use groupid/articles or articles/groupid is up for discussion.
+All images (product and issue) are stored in a single flat directory (`/data/images`). UUIDs ensure no collisions. Subdirectory separation by group/type was considered but deferred — the per-serve directory scan cost wasn't worth the organizational benefit. Can revisit if there's an operational need (backup, cleanup).

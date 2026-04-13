@@ -7,6 +7,7 @@
 	import ArticleEventHistory from '$lib/components/ArticleEventHistory.svelte';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
+	import ImageAttachInput from '$lib/components/ImageAttachInput.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -115,14 +116,16 @@
 
 	let noteText = $state('');
 	let noteSaving = $state(false);
+	let noteImageIds = $state<string[]>([]);
 	let historyKey = $state(0);
 
 	async function addNote() {
 		if (!noteText.trim()) return;
 		noteSaving = true;
 		try {
-			await api.addArticleNote(article.id, noteText.trim());
+			await api.addArticleNote(article.id, noteText.trim(), noteImageIds.length ? noteImageIds : undefined);
 			noteText = '';
+			noteImageIds = [];
 			if (isQuantityTracked) {
 				await loadGroupEvents(groupEventsShowAll ? undefined : 6);
 			} else {
@@ -264,7 +267,7 @@
 		{/if}
 	</div>
 
-	<div class="flex gap-2 mb-4">
+	<div class="flex gap-2 mb-2">
 		<input
 			type="text"
 			bind:value={noteText}
@@ -275,6 +278,9 @@
 		<button onclick={addNote} disabled={noteSaving || !noteText.trim()} class="text-sm bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 disabled:opacity-50">
 			{noteSaving ? '...' : 'Spara'}
 		</button>
+	</div>
+	<div class="mb-4">
+		<ImageAttachInput bind:imageIds={noteImageIds} />
 	</div>
 
 	<h2 class="font-medium mb-2">Historik</h2>

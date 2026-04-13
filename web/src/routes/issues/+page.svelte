@@ -3,6 +3,9 @@
 	import { statusLabels, statusColors, eventTypeLabels } from '$lib/labels';
 	import { hasRole } from '$lib/user';
 	import { page } from '$app/stores';
+	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
+	import ImageAttachInput from '$lib/components/ImageAttachInput.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -24,6 +27,26 @@
 	let comment = $state('');
 	let error = $state('');
 	let message = $state('');
+	let issueImageIds = $state<string[]>([]);
+	let eventsContainerEl = $state<HTMLElement | null>(null);
+	let lightbox: any = null;
+
+	onMount(() => {
+		return () => { lightbox?.destroy(); lightbox = null; };
+	});
+
+	async function initLightbox() {
+		if (lightbox || !browser || !eventsContainerEl) return;
+		const { default: PhotoSwipeLightbox } = await import('photoswipe/lightbox');
+		await import('photoswipe/style.css');
+		const lb = new PhotoSwipeLightbox({
+			gallery: eventsContainerEl!,
+			children: 'a.pswp-issue-img',
+			pswpModule: () => import('photoswipe'),
+		});
+		lb.init();
+		lightbox = lb;
+	}
 
 	const allFilterOptions = [
 		{ value: 'reported_usable', label: 'Felrapporterad — användbar', color: 'bg-orange-500' },
@@ -76,6 +99,8 @@
 		newStatus = '';
 		comment = '';
 		error = '';
+		issueImageIds = [];
+		lightbox?.destroy(); lightbox = null;
 		loadingEvents = true;
 		try {
 			const result = await api.listArticleEvents(article.id, EVENT_LIMIT);
@@ -83,6 +108,9 @@
 			hasMoreEvents = result.has_more;
 		} catch { events = []; hasMoreEvents = false; }
 		loadingEvents = false;
+		if (events.some(e => Array.isArray(e.metadata?.image_ids) && e.metadata.image_ids.length > 0)) {
+			setTimeout(() => initLightbox(), 0);
+		}
 	}
 
 	function flash(msg: string) { message = msg; setTimeout(() => message = '', 4000); }
@@ -91,7 +119,7 @@
 		if (!newStatus) return;
 		error = '';
 		try {
-			const updated = await api.updateArticleStatus(articleId, { status: newStatus, comment: comment.trim() || undefined });
+			const updated = await api.updateArticleStatus(articleId, { status: newStatus, comment: comment.trim() || undefined, image_ids: issueImageIds.length ? issueImageIds : undefined });
 			localOverrides = new Map(localOverrides).set(articleId, { status: updated.status });
 			const result = await api.listArticleEvents(articleId, EVENT_LIMIT);
 			events = result.events;
@@ -99,6 +127,7 @@
 			flash(`Status ändrad till ${statusLabels[newStatus] ?? newStatus}`);
 			newStatus = '';
 			comment = '';
+			issueImageIds = [];
 		} catch (e: any) { error = e.message; }
 	}
 </script>
@@ -175,6 +204,7 @@
 									<button onclick={() => updateStatus(article.id)} disabled={!newStatus} class="text-xs bg-blue-700 text-white px-3 py-1.5 rounded disabled:opacity-50">Uppdatera</button>
 								</div>
 								<textarea bind:value={comment} placeholder="Kommentar..." rows="2" class="block border rounded px-2 py-1 text-sm w-full"></textarea>
+								<ImageAttachInput bind:imageIds={issueImageIds} />
 							</div>
 
 							<hr class="border-neutral-200" />
@@ -186,7 +216,7 @@
 								{:else if events.length === 0}
 									<p class="text-xs text-neutral-400">Ingen historik</p>
 								{:else}
-									<div class="space-y-1">
+									<div bind:this={eventsContainerEl} class="space-y-1">
 										{#each events as event}
 											<div class="text-xs">
 												<div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
@@ -195,8 +225,19 @@
 													{#if formatEventMeta(event)}<span class="text-neutral-500">{formatEventMeta(event)}</span>{/if}
 													<span class="text-neutral-400 shrink-0">{event.actor_name}</span>
 												</div>
-												{#if event.description}
-													<p class="text-neutral-600 mt-0.5 pl-0.5">{event.description}</p>
+												{#if event.description || (Array.isArray(event.metadata?.image_ids) && event.metadata.image_ids.length > 0)}
+													<div class="flex flex-wrap items-start gap-2 mt-0.5 pl-0.5">
+														{#if Array.isArray(event.metadata?.image_ids) && event.metadata.image_ids.length > 0}
+															{#each event.metadata.image_ids as imgId}
+																<a href="/api/v0/images/{imgId}.webp" data-pswp-width="1920" data-pswp-height="1440" class="pswp-issue-img block cursor-zoom-in shrink-0">
+																	<img src="/api/v0/images/{imgId}_thumb.webp" alt="" class="h-40 rounded object-contain" />
+																</a>
+															{/each}
+														{/if}
+														{#if event.description}
+															<p class="text-neutral-600 min-w-[10rem] flex-1">{event.description}</p>
+														{/if}
+													</div>
 												{/if}
 											</div>
 										{/each}
@@ -208,6 +249,8 @@
 												const result = await api.listArticleEvents(article.id);
 												events = result.events;
 												hasMoreEvents = false;
+												lightbox?.destroy(); lightbox = null;
+												setTimeout(() => initLightbox(), 0);
 											}}
 										>
 											Visa alla händelser

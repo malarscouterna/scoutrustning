@@ -24,7 +24,19 @@ func WriteError(w http.ResponseWriter, status int, msg string) {
 
 // LogArticleEvent is a fire-and-forget helper for recording article history.
 func LogArticleEvent(ctx context.Context, q *db.Queries, claims auth.Claims, articleID pgtype.UUID, eventType, description string, meta map[string]string) {
-	metadata, _ := json.Marshal(meta)
+	LogArticleEventWithImages(ctx, q, claims, articleID, eventType, description, meta, nil)
+}
+
+// LogArticleEventWithImages records article history with optional attached image IDs.
+func LogArticleEventWithImages(ctx context.Context, q *db.Queries, claims auth.Claims, articleID pgtype.UUID, eventType, description string, meta map[string]string, imageIds []string) {
+	merged := make(map[string]any, len(meta)+1)
+	for k, v := range meta {
+		merged[k] = v
+	}
+	if len(imageIds) > 0 {
+		merged["image_ids"] = imageIds
+	}
+	metadata, _ := json.Marshal(merged)
 	q.CreateArticleEvent(ctx, db.CreateArticleEventParams{
 		GroupID:     claims.GroupID,
 		ArticleID:   articleID,
