@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { createApiClient, type BookingItem } from '$lib/api/client';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
+	import ImageAttachInput from '$lib/components/ImageAttachInput.svelte';
 
 	interface Props {
 		bookingId: string;
@@ -17,6 +18,7 @@
 	let activeItemId = $state<string | null>(null);
 	let activeGroupKey = $state<string | null>(null);
 	let form = $state({ status: '', expectedReturnDate: '', notes: '' });
+	let formImageIds = $state<string[]>([]);
 	let lastExpectedDate = $state('');
 	let delayWarning = $state('');
 	let quantityInputs = $state<Record<string, number>>({});
@@ -102,7 +104,7 @@
 	async function reload() { onUpdate((await api.getBooking(bookingId)).items); }
 	function flash(key: string) { savedKey = key; setTimeout(() => { if (savedKey === key) savedKey = null; }, 2000); }
 
-	async function setReturn(itemId: string, status: string, extra?: { expected_return_date?: string; notes?: string }) {
+	async function setReturn(itemId: string, status: string, extra?: { expected_return_date?: string; notes?: string; image_ids?: string[] }) {
 		error = '';
 		try {
 			await api.updateItemReturn(bookingId, itemId, { return_status: status, ...extra });
@@ -115,14 +117,17 @@
 		if (form.status === 'delayed' && form.expectedReturnDate) lastExpectedDate = form.expectedReturnDate;
 		await setReturn(itemId, form.status, {
 			expected_return_date: form.status === 'delayed' ? form.expectedReturnDate : undefined,
-			notes: form.notes || undefined
+			notes: form.notes || undefined,
+			image_ids: formImageIds.length ? formImageIds : undefined
 		});
 		activeItemId = null;
+		formImageIds = [];
 	}
 
 	function openForm(id: string) {
 		activeItemId = id; activeGroupKey = null;
 		form = { status: '', expectedReturnDate: lastExpectedDate, notes: '' }; delayWarning = '';
+		formImageIds = [];
 	}
 
 	async function returnGroupOk(g: QGroup) {
@@ -148,10 +153,12 @@
 				await api.updateItemReturn(bookingId, unhandled[i].id, {
 					return_status: form.status,
 					expected_return_date: form.status === 'delayed' ? form.expectedReturnDate : undefined,
-					notes: form.notes || undefined
+					notes: form.notes || undefined,
+					image_ids: formImageIds.length ? formImageIds : undefined
 				});
 			activeGroupKey = null;
 			delete quantityInputs[`${g.key}_form`];
+			formImageIds = [];
 			await reload(); flash(g.key);
 		} catch (e: any) { error = e.message; }
 	}
@@ -168,6 +175,7 @@
 		const unhandled = g.picked.filter((i) => !i.return_status || i.return_status === 'pending');
 		activeGroupKey = g.key; activeItemId = null;
 		form = { status: '', expectedReturnDate: lastExpectedDate, notes: '' }; delayWarning = '';
+		formImageIds = [];
 		quantityInputs[`${g.key}_form`] = quantityInputs[g.key] ?? unhandled.length;
 	}
 
@@ -276,6 +284,7 @@
 					{#if form.status === 'reported_usable' || form.status === 'reported_unusable' || form.status === 'lost'}
 						<label class="block"><span class="text-xs text-neutral-600">Beskrivning</span>
 							<input type="text" bind:value={form.notes} placeholder="Vad hände?" class="block border rounded px-2 py-1 text-sm w-full" /></label>
+						<ImageAttachInput bind:imageIds={formImageIds} />
 					{/if}
 					<div class="flex gap-2">
 						<button onclick={() => confirmGroupForm(g)} disabled={!form.status || (form.status === 'delayed' && !form.expectedReturnDate)} class="text-xs bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50">Bekräfta</button>
@@ -336,6 +345,7 @@
 				{#if form.status === 'reported_usable' || form.status === 'reported_unusable' || form.status === 'lost'}
 					<label class="block"><span class="text-xs text-neutral-600">Beskrivning</span>
 						<input type="text" bind:value={form.notes} placeholder="Vad hände?" class="block border rounded px-2 py-1 text-sm w-full" /></label>
+					<ImageAttachInput bind:imageIds={formImageIds} />
 				{/if}
 				<div class="flex gap-2">
 					<button onclick={() => confirmForm(item.id)} disabled={!form.status || (form.status === 'delayed' && !form.expectedReturnDate)} class="text-xs bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50">Bekräfta</button>

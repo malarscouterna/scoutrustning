@@ -211,3 +211,7 @@ The front page (/) needs to look better and be clearer about what the user can d
 ## Group settings on tab bar
 
 The group settings page has too many fields to fit comfortably. Consider a compact layout where the most important fields are always visible on the tab bar area, with a "Fler inställningar" expander for the rest. Needs design thinking about which fields are most-used (locations, categories) vs rarely changed (SMTP key, webhook URL, image upload role). Possibly a two-column layout on wider screens with sections collapsed by default on mobile.
+
+## Quantity-tracked items — issue reporting during pickup
+
+Allow reporting issues on quantity-tracked items during the pickup flow. The report should be orthogonal to pickup — reporting a broken item doesn't reduce the pickup count (the user grabs a different physical unit instead). Implementation started (state + handler in PickupChecklist, button removed) but deferred because the interaction model needs more thought: should the report target a specific physical article? How does it interact with the pickup count confirmation? The dead code (`startGroupReport`, `confirmGroupReport`, `reportingGroupKey`) is still in PickupChecklist.svelte.

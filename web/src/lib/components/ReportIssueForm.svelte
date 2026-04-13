@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { createApiClient } from '$lib/api/client';
+	import ImageAttachInput from '$lib/components/ImageAttachInput.svelte';
 
 	interface Props {
 		articleId: string;
@@ -15,6 +16,7 @@
 	let status = $state('reported_usable');
 	let error = $state('');
 	let submitting = $state(false);
+	let imageIds = $state<string[]>([]);
 
 	const options = [
 		{ value: 'reported_usable', label: 'Användbar', color: 'bg-orange-600', resultLabel: 'rapporterad — användbar' },
@@ -29,7 +31,7 @@
 		error = '';
 		submitting = true;
 		try {
-			await api.updateArticleStatus(articleId, { status, comment: description.trim() });
+			await api.updateArticleStatus(articleId, { status, comment: description.trim(), image_ids: imageIds.length ? imageIds : undefined });
 			onReported(status);
 		} catch (e: any) {
 			error = e.message;
@@ -43,6 +45,9 @@
 	<p class="font-medium">Rapportera problem — {articleName}</p>
 	{#if error}<p class="text-red-600 text-xs">{error}</p>{/if}
 	<textarea bind:value={description} placeholder="Beskriv problemet..." rows="2" class="block border rounded px-2 py-1 text-sm w-full"></textarea>
+	<div class="flex items-center gap-2">
+		<ImageAttachInput bind:imageIds />
+	</div>
 	<div class="flex flex-wrap gap-2 items-center">
 		{#each options as opt}
 			<button onclick={() => status = opt.value} class="text-xs px-3 py-1 rounded border" class:text-white={status === opt.value} class:bg-orange-600={status === opt.value && opt.value === 'reported_usable'} class:bg-red-600={status === opt.value && opt.value === 'reported_unusable'} class:bg-challengerpink-600={status === opt.value && opt.value === 'lost'}>{opt.label}</button>

@@ -90,7 +90,7 @@ export interface ArticleEvent {
 	actor_name: string;
 	event_type: string;
 	description: string;
-	metadata: Record<string, string>;
+	metadata: Record<string, any>;
 	created_at: string;
 }
 
@@ -226,11 +226,12 @@ export function createApiClient(opts: FetchOptions = {}) {
 			requestMut<{ booking: Booking; items_copied: number; items_total: number }>(`/bookings/${id}/copy`, 'POST', {}, opts),
 		pickupBooking: (id: string) =>
 			requestMut<Booking>(`/bookings/${id}/pickup`, 'POST', {}, opts),
-		updateItemPickup: (bookingId: string, itemId: string, pickupStatus: string, articleStatus?: string, comment?: string) =>
+		updateItemPickup: (bookingId: string, itemId: string, pickupStatus: string, articleStatus?: string, comment?: string, imageIds?: string[]) =>
 			requestMut<BookingItem>(`/bookings/${bookingId}/items/${itemId}/pickup`, 'PUT', {
 				pickup_status: pickupStatus,
 				...(articleStatus ? { article_status: articleStatus } : {}),
-				...(comment ? { comment } : {})
+				...(comment ? { comment } : {}),
+				...(imageIds?.length ? { image_ids: imageIds } : {})
 			}, opts),
 		swapItem: (bookingId: string, itemId: string, newArticleId: string) =>
 			requestMut<BookingItem>(`/bookings/${bookingId}/items/${itemId}/swap`, 'POST', { new_article_id: newArticleId }, opts),
@@ -242,7 +243,7 @@ export function createApiClient(opts: FetchOptions = {}) {
 		},
 		returnBooking: (id: string) =>
 			requestMut<Booking>(`/bookings/${id}/return`, 'POST', {}, opts),
-		updateItemReturn: (bookingId: string, itemId: string, data: { return_status: string; expected_return_date?: string; notes?: string }) =>
+		updateItemReturn: (bookingId: string, itemId: string, data: { return_status: string; expected_return_date?: string; notes?: string; image_ids?: string[] }) =>
 			requestMut<BookingItem>(`/bookings/${bookingId}/items/${itemId}/return`, 'PUT', data, opts),
 		listTeams: () => request<Team[]>('/teams', opts),
 		createTeam: (data: { name: string; type: string; access_level?: string; claim_scope?: string; claim_id?: string }) =>
@@ -269,7 +270,7 @@ export function createApiClient(opts: FetchOptions = {}) {
 		listPendingApprovals: () => request<Booking[]>('/bookings?status=submitted', opts),
 
 		// Article status & events
-		updateArticleStatus: (articleId: string, data: { status: string; comment?: string }) =>
+		updateArticleStatus: (articleId: string, data: { status: string; comment?: string; image_ids?: string[] }) =>
 			requestMut<Article>(`/articles/${articleId}/status`, 'PUT', data, opts),
 		listArticleEvents: (articleId: string, limit?: number) => {
 			const query = new URLSearchParams();
@@ -283,8 +284,8 @@ export function createApiClient(opts: FetchOptions = {}) {
 			const qs = query.toString();
 			return request<{ events: ArticleEvent[]; has_more: boolean }>(`/articles/${articleId}/group-events${qs ? '?' + qs : ''}`, opts);
 		},
-		addArticleNote: (articleId: string, message: string) =>
-			requestMut<void>(`/articles/${articleId}/events`, 'POST', { message }, opts),
+		addArticleNote: (articleId: string, message: string, imageIds?: string[]) =>
+			requestMut<void>(`/articles/${articleId}/events`, 'POST', { message, ...(imageIds?.length ? { image_ids: imageIds } : {}) }, opts),
 
 		// Group settings
 		getGroupSettings: () => request<GroupSettings>('/group-settings', opts),
@@ -321,6 +322,21 @@ export function createApiClient(opts: FetchOptions = {}) {
 				throw new Error(b.error || res.statusText);
 			}
 			return res.json();
+		},
+
+		uploadIssueImage: async (file: File) => {
+			const f = opts.fetch ?? globalThis.fetch;
+			const formData = new FormData();
+			formData.append('file', file);
+			const res = await f(`${API_BASE}/images/issue`, {
+				method: 'POST',
+				body: formData
+			});
+			if (!res.ok) {
+				const b = await res.json().catch(() => ({}));
+				throw new ApiError(b.error || res.statusText, res.status, b);
+			}
+			return res.json() as Promise<{ image_id: string }>;
 		},
 
 		uploadProductImage: async (file: Blob | File, commercialName: string, locationId: string, meta?: { title?: string; description?: string; format?: string; shared?: boolean; attribution?: string }) => {

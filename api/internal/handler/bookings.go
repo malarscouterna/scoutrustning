@@ -851,9 +851,10 @@ func (h *BookingHandler) UpdateItemPickup(w http.ResponseWriter, r *http.Request
 	}
 
 	var req struct {
-		PickupStatus  string `json:"pickup_status"`
-		ArticleStatus string `json:"article_status"`
-		Comment       string `json:"comment"`
+		PickupStatus  string   `json:"pickup_status"`
+		ArticleStatus string   `json:"article_status"`
+		Comment       string   `json:"comment"`
+		ImageIds      []string `json:"image_ids"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		WriteError(w, http.StatusBadRequest, "invalid request body")
@@ -906,18 +907,18 @@ func (h *BookingHandler) UpdateItemPickup(w http.ResponseWriter, r *http.Request
 		if comment == "" {
 			comment = "Missing at pickup"
 		}
-		LogArticleEvent(r.Context(), h.Q, claims, item.ArticleID, "issue_reported", comment, map[string]string{
+		LogArticleEventWithImages(r.Context(), h.Q, claims, item.ArticleID, "issue_reported", comment, map[string]string{
 			"new_status": articleStatus, "reason": "pickup", "booking_id": formatUUID(bookingID),
-		})
+		}, req.ImageIds)
 	} else if req.PickupStatus == "picked_up" {
 		// If reporting a condition at pickup, update article status
 		if req.ArticleStatus != "" {
 			h.Q.UpdateArticleStatus(r.Context(), db.UpdateArticleStatusParams{
 				ID: item.ArticleID, GroupID: claims.GroupID, Status: req.ArticleStatus,
 			})
-			LogArticleEvent(r.Context(), h.Q, claims, item.ArticleID, "issue_reported", req.Comment, map[string]string{
+			LogArticleEventWithImages(r.Context(), h.Q, claims, item.ArticleID, "issue_reported", req.Comment, map[string]string{
 				"new_status": req.ArticleStatus, "booking_id": formatUUID(bookingID),
-			})
+			}, req.ImageIds)
 		}
 		LogArticleEvent(r.Context(), h.Q, claims, item.ArticleID, "picked_up", "Picked up", map[string]string{
 			"booking_id": formatUUID(bookingID),
@@ -1111,8 +1112,9 @@ func (h *BookingHandler) UpdateItemReturn(w http.ResponseWriter, r *http.Request
 
 	var req struct {
 		ReturnStatus       string  `json:"return_status"`
-		ExpectedReturnDate *string `json:"expected_return_date"`
-		Notes              string  `json:"notes"`
+		ExpectedReturnDate *string  `json:"expected_return_date"`
+		Notes              string   `json:"notes"`
+		ImageIds           []string `json:"image_ids"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		WriteError(w, http.StatusBadRequest, "invalid request body")
@@ -1162,25 +1164,25 @@ func (h *BookingHandler) UpdateItemReturn(w http.ResponseWriter, r *http.Request
 			ID: item.ArticleID, GroupID: claims.GroupID,
 			Status: "reported_usable",
 		})
-		LogArticleEvent(r.Context(), h.Q, claims, item.ArticleID, "issue_reported", req.Notes, map[string]string{
+		LogArticleEventWithImages(r.Context(), h.Q, claims, item.ArticleID, "issue_reported", req.Notes, map[string]string{
 			"new_status": "reported_usable", "booking_id": formatUUID(bookingID),
-		})
+		}, req.ImageIds)
 	case "reported_unusable":
 		h.Q.UpdateArticleStatus(r.Context(), db.UpdateArticleStatusParams{
 			ID: item.ArticleID, GroupID: claims.GroupID,
 			Status: "reported_unusable",
 		})
-		LogArticleEvent(r.Context(), h.Q, claims, item.ArticleID, "issue_reported", req.Notes, map[string]string{
+		LogArticleEventWithImages(r.Context(), h.Q, claims, item.ArticleID, "issue_reported", req.Notes, map[string]string{
 			"new_status": "reported_unusable", "booking_id": formatUUID(bookingID),
-		})
+		}, req.ImageIds)
 	case "lost":
 		h.Q.UpdateArticleStatus(r.Context(), db.UpdateArticleStatusParams{
 			ID: item.ArticleID, GroupID: claims.GroupID,
 			Status: "lost",
 		})
-		LogArticleEvent(r.Context(), h.Q, claims, item.ArticleID, "issue_reported", req.Notes, map[string]string{
+		LogArticleEventWithImages(r.Context(), h.Q, claims, item.ArticleID, "issue_reported", req.Notes, map[string]string{
 			"new_status": "lost", "reason": "lost", "booking_id": formatUUID(bookingID),
-		})
+		}, req.ImageIds)
 	}
 
 	WriteJSON(w, http.StatusOK, item)

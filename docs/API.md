@@ -126,10 +126,11 @@ Valid statuses: `ok`, `reported_usable`, `incoming`, `reported_unusable`, `under
 {
   "status": "under_repair",
   "comment": "Sent for repair",
-  "expected_available_date": "2026-07-01"
+  "expected_available_date": "2026-07-01",
+  "image_ids": ["uuid1"]
 }
 ```
-Required: `status`. `comment` required when reporting (reported_usable, reported_unusable, lost), optional for manager statuses. `expected_available_date` optional, only for incoming/under_repair.
+Required: `status`. `comment` required when reporting (reported_usable, reported_unusable, lost), optional for manager statuses. `expected_available_date` optional, only for incoming/under_repair. `image_ids` optional array of issue image UUIDs (from `POST /images/issue`), stored in event metadata.
 
 **Response** `200` (updated article) | `400` | `403` | `404`
 
@@ -148,6 +149,19 @@ Get the event history for an article. Returns logged events (status changes, iss
 ```
 
 Event types: `status_change`, `issue_reported`, `issue_resolved`, `count_changed`, `booked`, `picked_up`, `returned`, `note`.
+
+Events with attached images have `image_ids` (array of UUID strings) in the `metadata` object.
+
+### `POST /api/v0/articles/{id}/events`
+Add a note to an article's event history.
+
+**Body**
+```json
+{"message": "Checked the wiring", "image_ids": ["uuid1"]}
+```
+Required: `message`. `image_ids` optional array of issue image UUIDs.
+
+**Response** `204`
 
 ### `GET /api/v0/articles/{id}/group-events`
 Get the aggregated event history for all articles in a quantity tracked group (matched by commercial_name + location). Returns events from all articles in the group, ordered by most recent first.
@@ -406,9 +420,9 @@ Optionally report the article's condition at pickup via `article_status` and `co
 
 **Body**
 ```json
-{"pickup_status": "picked_up", "article_status": "reported_usable", "comment": "Burner is wobbly"}
+{"pickup_status": "picked_up", "article_status": "reported_usable", "comment": "Burner is wobbly", "image_ids": ["uuid"]}
 ```
-Valid `pickup_status` values: `picked_up`, `lost`, `""` (undo). `article_status` is optional: `reported_usable`, `reported_unusable`, `lost`.
+Valid `pickup_status` values: `picked_up`, `lost`, `""` (undo). `article_status` is optional: `reported_usable`, `reported_unusable`, `lost`. `image_ids` optional array of issue image UUIDs, stored in the article event metadata.
 
 **Response** `200` | `400` | `403` | `404`
 
@@ -443,10 +457,11 @@ Side effects — article status is orthogonal to booking state. Only explicit co
 {
   "return_status": "returned_ok",
   "expected_return_date": "2026-06-10",
-  "notes": "Optional, used as issue description for broken/lost"
+  "notes": "Optional, used as issue description for broken/lost",
+  "image_ids": ["uuid"]
 }
 ```
-Valid values: `returned_ok`, `delayed`, `reported_usable`, `reported_unusable`, `lost`, `""` (undo). `expected_return_date` required when status is `delayed`.
+Valid values: `returned_ok`, `delayed`, `reported_usable`, `reported_unusable`, `lost`, `""` (undo). `expected_return_date` required when status is `delayed`. `image_ids` optional array of issue image UUIDs, stored in the article event metadata for condition reports.
 
 **Response** `200` | `400` | `403` | `404`
 
