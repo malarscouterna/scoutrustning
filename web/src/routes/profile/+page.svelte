@@ -1,13 +1,13 @@
 <script lang="ts">
-	import { createApiClient, type Location, type Category, type GroupSettings } from '$lib/api/client';
+	import { createApiClient, type Location, type Category, type GroupSettings, type Team } from '$lib/api/client';
 	import { browser } from '$app/environment';
 	import CrudList from '$lib/components/CrudList.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
-	let user = $derived(data.user!);
+	let user = $derived(data.user);
 	const api = createApiClient();
-	let mgr = $derived(user.max_access === 'manager');
+	let mgr = $derived(user?.max_access === 'manager');
 
 	const accessLevelConfig: Record<string, { label: string; description: string }> = {
 		view: { label: 'Visa', description: 'Kan se utrustning och rapportera problem' },
@@ -16,17 +16,80 @@
 		manager: { label: 'Utrustningsansvarig', description: 'Full tillgång till inventarie, ärenden och godkännanden' }
 	};
 
+	import type { TeamMembership } from '$lib/user';
+
 	let teamsByAccess = $derived(
-		user.teams.reduce((acc: Record<string, typeof user.teams>, t) => {
+		(user?.teams ?? []).reduce((acc: Record<string, TeamMembership[]>, t) => {
 			(acc[t.access_level] ??= []).push(t);
 			return acc;
-		}, {} as Record<string, typeof user.teams>)
+		}, {} as Record<string, TeamMembership[]>)
 	);
 
 	let myImages = $state<{ id: string; file_id: string; title: string; description: string; format: string; shared: boolean; created_at: string; own_group_count: number; other_group_count: number }[]>([]);
 	let myImagesLoaded = $state(false);
 	let expandedImageId = $state<string | null>(null);
 	let expandedArticles = $state<{ commercial_name: string; location_name: string; article_id: string }[]>([]);
+
+	// Team management state
+	let allTeams = $state<Team[]>([]);
+	$effect(() => { allTeams = data.teams ?? []; });
+	const accessLevels = ['view', 'book', 'trusted', 'manager'] as const;
+	const accessLevelLabels: Record<string, string> = { view: 'Visa', book: 'Boka', trusted: 'Betrodd', manager: 'Ansvarig' };
+	const typeLabels: Record<string, string> = { troop: 'Avd.', role: 'Roll' };
+	let editingTeamId = $state<string | null>(null);
+	let editingTeamName = $state('');
+	let selectedTeamId = $state<string | null>(null);
+	let teamError = $state('');
+	let showAddTeam = $state(false);
+	let newTeam = $state({ name: '', type: 'troop', access_level: 'book', claim_scope: 'troop', claim_id: '' });
+
+	function teamsByLevel(level: string) {
+		return allTeams.filter(t => t.access_level === level).sort((a, b) => a.name.localeCompare(b.name));
+	}
+
+	async function changeTeamLevel(teamId: string, newLevel: string) {
+		teamError = '';
+		try {
+			const updated = await api.updateTeam(teamId, { access_level: newLevel });
+			allTeams = allTeams.map(t => t.id === teamId ? { ...t, ...updated } : t);
+		} catch (e: any) { teamError = e.message; }
+	}
+
+	async function renameTeam(teamId: string) {
+		if (!editingTeamName.trim()) return;
+		teamError = '';
+		try {
+			const updated = await api.updateTeam(teamId, { name: editingTeamName.trim() });
+			allTeams = allTeams.map(t => t.id === teamId ? { ...t, ...updated } : t);
+			editingTeamId = null;
+		} catch (e: any) { teamError = e.message; }
+	}
+
+	async function addTeam() {
+		if (!newTeam.name.trim() || !newTeam.claim_id.trim()) return;
+		teamError = '';
+		try {
+			const created = await api.createTeam({
+				name: newTeam.name.trim(),
+				type: newTeam.type,
+				access_level: newTeam.access_level,
+				claim_scope: newTeam.claim_scope,
+				claim_id: newTeam.claim_id.trim()
+			});
+			allTeams = [...allTeams, created];
+			newTeam = { name: '', type: 'troop', access_level: 'book', claim_scope: 'troop', claim_id: '' };
+			showAddTeam = false;
+		} catch (e: any) { teamError = e.message; }
+	}
+
+	async function deleteTeam(teamId: string, teamName: string) {
+		if (!confirm(`Ta bort ${teamName}? Användare med denna koppling får en ny avdelning vid nästa inloggning.`)) return;
+		teamError = '';
+		try {
+			await api.deleteTeam(teamId);
+			allTeams = allTeams.filter(t => t.id !== teamId);
+		} catch (e: any) { teamError = e.message; }
+	}
 
 	let editingMyImage = $state<typeof myImages[0] | null>(null);
 	let editMyTitle = $state('');
@@ -162,6 +225,58 @@
 	let settingsMessage = $state('');
 	let settingsError = $state('');
 
+	// Permission settings
+	const permissionConfig = [
+		{ key: 'image_upload_role', label: 'Ladda upp bilder', min: 'view' },
+		{ key: 'article_edit_role', label: 'Redigera artiklar', min: 'book' },
+		{ key: 'issue_resolve_role', label: 'Hantera ärenden', min: 'book' },
+		{ key: 'manager_notes_role', label: 'Se interna anteckningar', min: 'trusted' },
+	] as const;
+	const defaultAccessConfig = [
+		{ key: 'default_access_unknown', label: 'Okända användare' },
+		{ key: 'default_access_troop', label: 'Nya avdelningar' },
+		{ key: 'default_access_role', label: 'Nya roller' },
+	] as const;
+	let permForm = $state<Record<string, string>>({});
+	let permSaving = $state(false);
+	let permMessage = $state('');
+
+	$effect(() => {
+		if (data.groupSettings) {
+			const gs = data.groupSettings;
+			permForm = {
+				booking_role: gs.booking_role ?? 'book',
+				image_upload_role: gs.image_upload_role ?? 'book',
+				article_edit_role: gs.article_edit_role ?? 'manager',
+				issue_resolve_role: gs.issue_resolve_role ?? 'manager',
+				manager_notes_role: gs.manager_notes_role ?? 'manager',
+				default_access_unknown: gs.default_access_unknown ?? 'view',
+				default_access_troop: gs.default_access_troop ?? 'book',
+				default_access_role: gs.default_access_role ?? 'book',
+				default_approval_level: gs.default_approval_level ?? 'none',
+			};
+		}
+	});
+
+	async function savePermissions() {
+		permSaving = true;
+		permMessage = '';
+		try {
+			await api.updateGroupSettings(permForm as any);
+			permMessage = 'Sparat';
+			setTimeout(() => permMessage = '', 3000);
+		} catch (e: any) {
+			permMessage = 'Fel: ' + e.message;
+		}
+		permSaving = false;
+	}
+
+	function allowedLevels(min: string): string[] {
+		const all = ['view', 'book', 'trusted', 'manager'];
+		const idx = all.indexOf(min);
+		return idx >= 0 ? all.slice(idx) : all;
+	}
+
 	function flash(setter: (v: string) => void, msg: string) {
 		setter(msg);
 		setTimeout(() => setter(''), 4000);
@@ -209,7 +324,12 @@
 	}
 </script>
 
-<div class="max-w-2xl mx-auto px-4 py-8">
+{#if !user}
+	<div class="max-w-5xl mx-auto px-4 py-8">
+		<p class="text-neutral-500">Laddar...</p>
+	</div>
+{:else}
+<div class="max-w-5xl mx-auto px-4 py-8">
 	<h1 class="text-xl font-bold mb-1">{user.name}</h1>
 	<p class="text-sm text-neutral-500 mb-4">{user.email}</p>
 
@@ -229,33 +349,38 @@
 
 	<!-- Profile tab -->
 	{#if tab === 'profile'}
-		<h2 class="text-sm font-semibold text-neutral-600 uppercase tracking-wide mb-3">Behörigheter</h2>
+		<section class="mb-6 border rounded-lg p-4">
+			<h2 class="font-medium mb-3">Behörigheter</h2>
 
-		{#if user.teams.length === 0}
-			<p class="text-sm text-neutral-500">Inga avdelningar eller roller tilldelade.</p>
-		{:else}
-			<div class="space-y-4">
-				{#each Object.entries(teamsByAccess) as [level, teams]}
-					<div class="border rounded-lg p-4">
-						<div class="font-medium">{accessLevelConfig[level]?.label ?? level}</div>
-						<div class="text-sm text-neutral-500 mb-2">{accessLevelConfig[level]?.description ?? ''}</div>
-						<div class="flex flex-wrap gap-2">
-							{#each teams as team}
-								<span class="text-xs bg-neutral-100 text-neutral-700 px-2 py-1 rounded">
-									{team.team_name}
-									<span class="text-neutral-400">{team.team_type === 'troop' ? 'Avd.' : 'Roll'}</span>
-								</span>
-							{/each}
+			{#if user.teams.length === 0}
+				<p class="text-sm text-neutral-500">Inga avdelningar eller roller tilldelade.</p>
+			{:else}
+				<div class="space-y-3">
+					{#each Object.entries(teamsByAccess) as [level, teams]}
+						<div class="bg-neutral-50 rounded-lg px-4 py-3">
+							<div class="font-medium text-sm">{accessLevelConfig[level]?.label ?? level}</div>
+							<div class="text-xs text-neutral-500 mb-2">{accessLevelConfig[level]?.description ?? ''}</div>
+							<div class="flex flex-wrap gap-2">
+								{#each teams as team}
+									<span class="text-xs bg-white text-neutral-700 px-2 py-1 rounded shadow-sm">
+										{team.team_name}
+										<span class="text-neutral-400">{team.team_type === 'troop' ? 'Avd.' : 'Roll'}</span>
+									</span>
+								{/each}
+							</div>
 						</div>
-					</div>
-				{/each}
-			</div>
-		{/if}
+					{/each}
+				</div>
+			{/if}
+		</section>
 
-		<h2 class="text-sm font-semibold text-neutral-600 uppercase tracking-wide mt-8 mb-3">Mina inställningar</h2>
-		<p class="text-sm text-neutral-500">Personliga inställningar kommer i en framtida version.</p>
+		<section class="mb-6 border rounded-lg p-4">
+			<h2 class="font-medium mb-3">Mina inställningar</h2>
+			<p class="text-sm text-neutral-500">Personliga inställningar kommer i en framtida version.</p>
+		</section>
 
-		<h2 class="text-sm font-semibold text-neutral-600 uppercase tracking-wide mt-8 mb-3">Mina bilder</h2>
+		<section class="mb-6 border rounded-lg p-4">
+			<h2 class="font-medium mb-3">Mina bilder</h2>
 
 		{#if !myImagesLoaded}
 			<p class="text-sm text-neutral-400">Laddar...</p>
@@ -353,16 +478,196 @@
 				{/each}
 			</div>
 		{/if}
+		</section>
 
-		<form method="POST" action="/auth/signout" class="mt-8">
+		<form method="POST" action="/auth/signout" class="mt-4">
 			<button type="submit" class="text-sm text-red-600 hover:underline">Logga ut</button>
 		</form>
 
 	<!-- Group settings tab (manager only) -->
 	{:else if tab === 'group'}
 
+		<!-- Teams -->
+		<section class="mb-6 border rounded-lg p-4">
+			<h3 class="font-medium mb-1">Avdelningar och roller</h3>
+			<p class="text-xs text-neutral-500 mb-3">Avdelningar och roller skapas automatiskt när en användare loggar in med en okänd Scoutnet-koppling. Byt namn och ändra åtkomstnivå här.</p>
+			{#if teamError}
+				<div class="bg-red-50 border border-red-200 rounded p-2 mb-2 text-red-800 text-sm">{teamError}</div>
+			{/if}
+			<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+				{#each accessLevels as level}
+					{@const teams = teamsByLevel(level)}
+					<div class="border rounded-lg">
+						<div class="px-3 py-1.5 bg-neutral-50 rounded-t-lg border-b">
+							<span class="text-sm font-medium">{accessLevelLabels[level]}</span>
+							<span class="text-xs text-neutral-400 ml-1">({teams.length})</span>
+						</div>
+						<div class="p-1.5 space-y-0.5 min-h-[48px]">
+							{#each teams as team (team.id)}
+								<button
+									onclick={() => selectedTeamId = selectedTeamId === team.id ? null : team.id}
+									class="w-full text-left px-2 py-1 rounded text-sm flex items-center gap-1.5 hover:bg-neutral-50"
+									class:bg-blue-50={selectedTeamId === team.id}
+									class:ring-1={selectedTeamId === team.id}
+									class:ring-blue-300={selectedTeamId === team.id}
+								>
+									<span class="truncate flex-1">{team.name}</span>
+									<span class="text-[10px] text-neutral-400 shrink-0">{typeLabels[team.type] ?? team.type}</span>
+								</button>
+							{/each}
+							{#if teams.length === 0}
+								<p class="text-xs text-neutral-400 italic px-2 py-1">Inga</p>
+							{/if}
+						</div>
+					</div>
+				{/each}
+			</div>
+
+			<!-- Selected team controls -->
+			{#if selectedTeamId}
+				{@const team = allTeams.find(t => t.id === selectedTeamId)}
+				{#if team}
+					<div class="border rounded-lg p-3 mb-3 bg-blue-50/50 space-y-2">
+						<div class="flex flex-wrap items-center gap-2">
+							{#if editingTeamId === team.id}
+								<input
+									type="text"
+									bind:value={editingTeamName}
+									onkeydown={(e) => { if (e.key === 'Enter') renameTeam(team.id); if (e.key === 'Escape') editingTeamId = null; }}
+									class="border rounded px-2 py-1 text-sm flex-1 min-w-[150px]"
+								/>
+								<button onclick={() => renameTeam(team.id)} class="text-sm text-blue-700 underline">Spara</button>
+								<button onclick={() => editingTeamId = null} class="text-sm text-neutral-500 underline">Avbryt</button>
+							{:else}
+								<span class="font-medium text-sm">{team.name}</span>
+								<span class="text-xs text-neutral-400">{typeLabels[team.type]}</span>
+								{#if team.claim_mappings?.length > 0}
+									<span class="text-xs text-neutral-400">— {team.claim_mappings[0].claim_scope}:{team.claim_mappings[0].claim_id}</span>
+								{/if}
+							{/if}
+						</div>
+						{#if editingTeamId !== team.id}
+							<div class="flex flex-wrap items-center gap-2">
+								<label class="flex items-center gap-1.5 text-sm">
+									<span class="text-neutral-600">Åtkomstnivå:</span>
+									<select
+										value={team.access_level}
+										onchange={(e) => changeTeamLevel(team.id, e.currentTarget.value)}
+										class="border rounded px-2 py-1 text-sm"
+										aria-label="Ändra åtkomstnivå"
+									>
+										{#each accessLevels as l}
+											<option value={l}>{accessLevelLabels[l]}</option>
+										{/each}
+									</select>
+								</label>
+								<button onclick={() => { editingTeamId = team.id; editingTeamName = team.name; }} class="text-sm text-blue-700 underline">Byt namn</button>
+								<button onclick={() => deleteTeam(team.id, team.name)} class="text-sm text-red-600 underline">Ta bort</button>
+							</div>
+						{/if}
+					</div>
+				{/if}
+			{/if}
+
+			{#if showAddTeam}
+				<div class="border rounded-lg p-3 space-y-2 mb-2">
+					<div class="flex flex-wrap gap-2">
+						<label class="flex flex-col gap-0.5 flex-1 min-w-[150px]">
+							<span class="text-xs text-neutral-500">Namn</span>
+							<input type="text" bind:value={newTeam.name} placeholder="T.ex. Yggdrasil" class="border rounded px-2 py-1 text-sm" />
+						</label>
+						<label class="flex flex-col gap-0.5">
+							<span class="text-xs text-neutral-500">Typ</span>
+							<select bind:value={newTeam.type} class="border rounded px-2 py-1 text-sm">
+								<option value="troop">Avdelning</option>
+								<option value="role">Roll</option>
+							</select>
+						</label>
+						<label class="flex flex-col gap-0.5">
+							<span class="text-xs text-neutral-500">Åtkomstnivå</span>
+							<select bind:value={newTeam.access_level} class="border rounded px-2 py-1 text-sm">
+								{#each accessLevels as l}
+									<option value={l}>{accessLevelLabels[l]}</option>
+								{/each}
+							</select>
+						</label>
+					</div>
+					<div class="flex flex-wrap gap-2">
+						<label class="flex flex-col gap-0.5">
+							<span class="text-xs text-neutral-500">Scoutnet-id</span>
+							<select bind:value={newTeam.claim_scope} class="border rounded px-2 py-1 text-sm">
+								<option value="troop">Avdelning</option>
+								<option value="group">Kårroll</option>
+							</select>
+						</label>
+						<label class="flex flex-col gap-0.5 flex-1 min-w-[100px]">
+							<span class="text-xs text-neutral-500">{newTeam.claim_scope === 'troop' ? 'Avdelnings-ID' : 'Rollnamn'} <span class="text-neutral-400">(från Scoutnet)</span></span>
+							<input type="text" bind:value={newTeam.claim_id} required placeholder={newTeam.claim_scope === 'troop' ? 'T.ex. 17443' : 'T.ex. it_manager'} class="border rounded px-2 py-1 text-sm" />
+						</label>
+					</div>
+					<p class="text-xs text-neutral-400">Scoutnet-id hittas i organisationsinställningar i Scoutnet.</p>
+					<div class="flex gap-2">
+						<button onclick={addTeam} class="text-sm bg-blue-700 text-white px-3 py-1 rounded">Lägg till</button>
+						<button onclick={() => showAddTeam = false} class="text-sm text-neutral-500 underline">Avbryt</button>
+					</div>
+				</div>
+			{:else}
+				<button onclick={() => showAddTeam = true} class="text-sm text-blue-700 underline">+ Lägg till avdelning eller roll</button>
+			{/if}
+		</section>
+
+		<!-- Permissions -->
+		<section class="mb-6 border rounded-lg p-4">
+			<h3 class="font-medium mb-1">Behörigheter</h3>
+			<p class="text-xs text-neutral-500 mb-3">Vilken åtkomstnivå krävs för varje funktion. Godkänna bokningar och hantera inställningar kräver alltid Ansvarig.</p>
+			<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 mb-3">
+				{#each permissionConfig as perm}
+					<label class="flex items-center justify-between gap-2 text-sm">
+						<span>{perm.label}</span>
+						<select bind:value={permForm[perm.key]} class="border rounded px-2 py-1 text-sm w-32">
+							{#each allowedLevels(perm.min) as l}
+								<option value={l}>{accessLevelLabels[l]}</option>
+							{/each}
+						</select>
+					</label>
+				{/each}
+			</div>
+
+			<h4 class="text-sm font-medium mt-4 mb-2">Standardnivåer för nya team</h4>
+			<p class="text-xs text-neutral-500 mb-2">Nivå som tilldelas automatiskt skapade team vid första inloggning.</p>
+			<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 mb-3">
+				{#each defaultAccessConfig as cfg}
+					<label class="flex items-center justify-between gap-2 text-sm">
+						<span>{cfg.label}</span>
+						<select bind:value={permForm[cfg.key]} class="border rounded px-2 py-1 text-sm w-32">
+							{#each ['view', 'book', 'trusted', 'manager'] as l}
+								<option value={l}>{accessLevelLabels[l]}</option>
+							{/each}
+						</select>
+					</label>
+				{/each}
+				<label class="flex items-center justify-between gap-2 text-sm">
+					<span>Standard godkännandenivå</span>
+					<select bind:value={permForm['default_approval_level']} class="border rounded px-2 py-1 text-sm w-32">
+						<option value="none">Ingen</option>
+						<option value="low">Låg</option>
+						<option value="high">Hög</option>
+					</select>
+				</label>
+			</div>
+
+			<div class="flex items-center gap-3">
+				<button onclick={savePermissions} disabled={permSaving} class="text-sm bg-blue-700 text-white px-4 py-2 rounded disabled:opacity-50">
+					{permSaving ? 'Sparar...' : 'Spara behörigheter'}
+				</button>
+				{#if permMessage}
+					<span class="text-sm {permMessage.startsWith('Fel') ? 'text-red-600' : 'text-green-600'}">{permMessage}</span>
+				{/if}
+			</div>
+		</section>
+
 		<!-- Locations -->
-		<section class="mb-8">
+		<section class="mb-6 border rounded-lg p-4">
 			<h3 class="font-medium mb-2">Platser</h3>
 			<CrudList
 				bind:items={locations}
@@ -375,7 +680,7 @@
 		</section>
 
 		<!-- Categories -->
-		<section class="mb-8">
+		<section class="mb-6 border rounded-lg p-4">
 			<h3 class="font-medium mb-2">Kategorier</h3>
 			<CrudList
 				bind:items={categories}
@@ -388,10 +693,10 @@
 		</section>
 
 		<!-- CSV Import -->
-		<section class="mb-8">
+		<section class="mb-6 border rounded-lg p-4">
 			<h3 class="font-medium mb-2">Importera artiklar (CSV)</h3>
 			<div class="flex flex-wrap items-center gap-2 mb-2">
-				<input type="file" accept=".csv" onchange={handleFileSelect} class="text-sm" />
+				<input type="file" accept=".csv" onchange={handleFileSelect} class="text-sm file:mr-2 file:px-3 file:py-1 file:rounded file:border file:border-neutral-300 file:bg-white file:text-sm file:text-neutral-700 file:cursor-pointer hover:file:bg-neutral-50" />
 				<button onclick={runImport} disabled={!importFile || importLoading} class="text-sm bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50">
 					{importLoading ? 'Importerar...' : 'Importera'}
 				</button>
@@ -420,7 +725,7 @@
 		</section>
 
 		<!-- Notifications -->
-		<section class="mb-8">
+		<section class="mb-6 border rounded-lg p-4">
 			<h3 class="font-medium mb-2">Aviseringar</h3>
 			{#if settingsMessage}
 				<div class="bg-green-50 border border-green-200 rounded p-2 mb-2 text-green-800 text-sm">{settingsMessage}</div>
@@ -451,3 +756,4 @@
 		</section>
 	{/if}
 </div>
+{/if}

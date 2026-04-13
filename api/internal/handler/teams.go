@@ -126,6 +126,15 @@ func (h *TeamHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Protect last manager team from demotion
+	if existing.AccessLevel == "manager" && req.AccessLevel != "manager" {
+		count, err := h.Q.CountManagerTeams(r.Context(), claims.GroupID)
+		if err == nil && count <= 1 {
+			WriteError(w, http.StatusConflict, "cannot demote the last manager team")
+			return
+		}
+	}
+
 	team, err := h.Q.UpdateTeam(r.Context(), db.UpdateTeamParams{
 		ID: id, GroupID: claims.GroupID, Name: req.Name, Type: req.Type, AccessLevel: req.AccessLevel,
 	})
@@ -154,6 +163,20 @@ func (h *TeamHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if count > 0 {
 		WriteError(w, http.StatusConflict, "team has active bookings")
 		return
+	}
+
+	// Protect last manager team from deletion
+	team, err := h.Q.GetTeam(r.Context(), db.GetTeamParams{ID: id, GroupID: claims.GroupID})
+	if err != nil {
+		WriteError(w, http.StatusNotFound, "team not found")
+		return
+	}
+	if team.AccessLevel == "manager" {
+		mgrCount, err := h.Q.CountManagerTeams(r.Context(), claims.GroupID)
+		if err == nil && mgrCount <= 1 {
+			WriteError(w, http.StatusConflict, "cannot delete the last manager team")
+			return
+		}
 	}
 
 	if err := h.Q.DeleteTeam(r.Context(), db.DeleteTeamParams{ID: id, GroupID: claims.GroupID}); err != nil {

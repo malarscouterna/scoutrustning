@@ -117,6 +117,10 @@ type GroupSetting struct {
 	DefaultAccessTroop    string             `json:"default_access_troop"`
 	DefaultAccessRole     string             `json:"default_access_role"`
 	ImageUploadRole       string             `json:"image_upload_role"`
+	BookingRole           string             `json:"booking_role"`
+	ArticleEditRole       string             `json:"article_edit_role"`
+	IssueResolveRole      string             `json:"issue_resolve_role"`
+	ManagerNotesRole      string             `json:"manager_notes_role"`
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 }

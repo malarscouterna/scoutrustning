@@ -13,6 +13,13 @@ export interface User {
 	email: string;
 	teams: TeamMembership[];
 	max_access: 'view' | 'book' | 'trusted' | 'manager';
+	permissions?: {
+		image_upload: string;
+		booking: string;
+		article_edit: string;
+		issue_resolve: string;
+		manager_notes: string;
+	};
 }
 
 const accessOrder: Record<string, number> = {
@@ -31,7 +38,23 @@ export function isManager(user: User | null): boolean {
 }
 
 export function canBook(user: User | null): boolean {
-	return accessAtLeast(user?.max_access, 'book');
+	const required = user?.permissions?.booking ?? 'book';
+	return accessAtLeast(user?.max_access, required);
+}
+
+export function canEditArticles(user: User | null): boolean {
+	const required = user?.permissions?.article_edit ?? 'manager';
+	return accessAtLeast(user?.max_access, required);
+}
+
+export function canResolveIssues(user: User | null): boolean {
+	const required = user?.permissions?.issue_resolve ?? 'manager';
+	return accessAtLeast(user?.max_access, required);
+}
+
+export function canSeeManagerNotes(user: User | null): boolean {
+	const required = user?.permissions?.manager_notes ?? 'manager';
+	return accessAtLeast(user?.max_access, required);
 }
 
 // Backward compatibility shim — maps old role names to access checks.

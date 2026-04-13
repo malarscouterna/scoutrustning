@@ -49,7 +49,7 @@ const createGroupSettingsDefaults = `-- name: CreateGroupSettingsDefaults :one
 INSERT INTO group_settings (group_id)
 VALUES ($1)
 ON CONFLICT (group_id) DO NOTHING
-RETURNING group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, created_at, updated_at
+RETURNING group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at
 `
 
 func (q *Queries) CreateGroupSettingsDefaults(ctx context.Context, groupID string) (GroupSetting, error) {
@@ -65,6 +65,10 @@ func (q *Queries) CreateGroupSettingsDefaults(ctx context.Context, groupID strin
 		&i.DefaultAccessTroop,
 		&i.DefaultAccessRole,
 		&i.ImageUploadRole,
+		&i.BookingRole,
+		&i.ArticleEditRole,
+		&i.IssueResolveRole,
+		&i.ManagerNotesRole,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -72,7 +76,7 @@ func (q *Queries) CreateGroupSettingsDefaults(ctx context.Context, groupID strin
 }
 
 const getGroupSettings = `-- name: GetGroupSettings :one
-SELECT group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, created_at, updated_at FROM group_settings
+SELECT group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at FROM group_settings
 WHERE group_id = $1
 `
 
@@ -89,6 +93,10 @@ func (q *Queries) GetGroupSettings(ctx context.Context, groupID string) (GroupSe
 		&i.DefaultAccessTroop,
 		&i.DefaultAccessRole,
 		&i.ImageUploadRole,
+		&i.BookingRole,
+		&i.ArticleEditRole,
+		&i.IssueResolveRole,
+		&i.ManagerNotesRole,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -99,12 +107,14 @@ const upsertGroupSettings = `-- name: UpsertGroupSettings :one
 INSERT INTO group_settings (
     group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url,
     default_approval_level, default_access_unknown, default_access_troop,
-    default_access_role, image_upload_role
+    default_access_role, image_upload_role, booking_role, article_edit_role,
+    issue_resolve_role, manager_notes_role
 )
 VALUES (
     $1, $2, $3, $4,
     $5, $6, $7,
-    $8, $9
+    $8, $9, $10, $11,
+    $12, $13
 )
 ON CONFLICT (group_id) DO UPDATE SET
     notification_email_from = $2,
@@ -115,8 +125,12 @@ ON CONFLICT (group_id) DO UPDATE SET
     default_access_troop = $7,
     default_access_role = $8,
     image_upload_role = $9,
+    booking_role = $10,
+    article_edit_role = $11,
+    issue_resolve_role = $12,
+    manager_notes_role = $13,
     updated_at = now()
-RETURNING group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, created_at, updated_at
+RETURNING group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at
 `
 
 type UpsertGroupSettingsParams struct {
@@ -129,6 +143,10 @@ type UpsertGroupSettingsParams struct {
 	DefaultAccessTroop    string `json:"default_access_troop"`
 	DefaultAccessRole     string `json:"default_access_role"`
 	ImageUploadRole       string `json:"image_upload_role"`
+	BookingRole           string `json:"booking_role"`
+	ArticleEditRole       string `json:"article_edit_role"`
+	IssueResolveRole      string `json:"issue_resolve_role"`
+	ManagerNotesRole      string `json:"manager_notes_role"`
 }
 
 func (q *Queries) UpsertGroupSettings(ctx context.Context, arg UpsertGroupSettingsParams) (GroupSetting, error) {
@@ -142,6 +160,10 @@ func (q *Queries) UpsertGroupSettings(ctx context.Context, arg UpsertGroupSettin
 		arg.DefaultAccessTroop,
 		arg.DefaultAccessRole,
 		arg.ImageUploadRole,
+		arg.BookingRole,
+		arg.ArticleEditRole,
+		arg.IssueResolveRole,
+		arg.ManagerNotesRole,
 	)
 	var i GroupSetting
 	err := row.Scan(
@@ -154,6 +176,10 @@ func (q *Queries) UpsertGroupSettings(ctx context.Context, arg UpsertGroupSettin
 		&i.DefaultAccessTroop,
 		&i.DefaultAccessRole,
 		&i.ImageUploadRole,
+		&i.BookingRole,
+		&i.ArticleEditRole,
+		&i.IssueResolveRole,
+		&i.ManagerNotesRole,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

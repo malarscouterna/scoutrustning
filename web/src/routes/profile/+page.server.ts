@@ -9,9 +9,10 @@ export const load: PageServerLoad = async ({ fetch, parent }) => {
 	const api = createApiClient({ fetch });
 	const mgr = isManager(user);
 
-	const [locations, categories] = await Promise.all([
+	const [locations, categories, teams] = await Promise.all([
 		api.listLocations(),
-		api.listCategories()
+		api.listCategories(),
+		mgr ? api.listTeams() : Promise.resolve([])
 	]);
 
 	let groupSettings = null;
@@ -21,5 +22,5 @@ export const load: PageServerLoad = async ({ fetch, parent }) => {
 		} catch { /* defaults */ }
 	}
 
-	return { locations, categories, groupSettings };
+	return { locations, categories, teams, groupSettings };
 };

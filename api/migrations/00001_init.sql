@@ -216,13 +216,21 @@ CREATE TABLE group_settings (
     default_access_troop text NOT NULL DEFAULT 'book',
     default_access_role text NOT NULL DEFAULT 'book',
     image_upload_role text NOT NULL DEFAULT 'book',
+    booking_role text NOT NULL DEFAULT 'book',
+    article_edit_role text NOT NULL DEFAULT 'manager',
+    issue_resolve_role text NOT NULL DEFAULT 'manager',
+    manager_notes_role text NOT NULL DEFAULT 'manager',
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT group_settings_approval_check CHECK (default_approval_level IN ('none', 'low', 'high')),
     CONSTRAINT gs_access_unknown_check CHECK (default_access_unknown IN ('view', 'book', 'trusted', 'manager')),
     CONSTRAINT gs_access_troop_check CHECK (default_access_troop IN ('view', 'book', 'trusted', 'manager')),
     CONSTRAINT gs_access_role_check CHECK (default_access_role IN ('view', 'book', 'trusted', 'manager')),
-    CONSTRAINT gs_image_upload_role_check CHECK (image_upload_role IN ('view', 'book', 'trusted', 'manager'))
+    CONSTRAINT gs_image_upload_role_check CHECK (image_upload_role IN ('view', 'book', 'trusted', 'manager')),
+    CONSTRAINT gs_booking_role_check CHECK (booking_role IN ('book', 'trusted', 'manager')),
+    CONSTRAINT gs_article_edit_role_check CHECK (article_edit_role IN ('book', 'trusted', 'manager')),
+    CONSTRAINT gs_issue_resolve_role_check CHECK (issue_resolve_role IN ('book', 'trusted', 'manager')),
+    CONSTRAINT gs_manager_notes_role_check CHECK (manager_notes_role IN ('trusted', 'manager'))
 );
 
 -- Audit log

@@ -20,7 +20,8 @@ import (
 )
 
 type ArticleHandler struct {
-	Q *db.Queries
+	Q     *db.Queries
+	Perms *PermissionCache
 }
 
 func (h *ArticleHandler) Routes() chi.Router {
@@ -33,12 +34,13 @@ func (h *ArticleHandler) Routes() chi.Router {
 	r.Get("/{id}/group-events", h.ListGroupEvents)
 	r.Post("/{id}/events", h.AddNote)
 	r.Put("/{id}/status", h.UpdateStatus)
-	r.With(auth.RequireRole("equipment_manager")).Post("/", h.Create)
-	r.With(auth.RequireRole("equipment_manager")).Put("/{id}", h.Update)
-	r.With(auth.RequireRole("equipment_manager")).Delete("/{id}", h.Delete)
-	r.With(auth.RequireRole("equipment_manager")).Post("/import", h.Import)
-	r.With(auth.RequireRole("equipment_manager")).Put("/bulk", h.BulkUpdate)
-	r.With(auth.RequireRole("equipment_manager")).Post("/group-count", h.GroupCount)
+	editPerm := RequirePermission(h.Perms, func(p Permissions) string { return p.ArticleEdit })
+	r.With(editPerm).Post("/", h.Create)
+	r.With(editPerm).Put("/{id}", h.Update)
+	r.With(editPerm).Delete("/{id}", h.Delete)
+	r.With(editPerm).Post("/import", h.Import)
+	r.With(editPerm).Put("/bulk", h.BulkUpdate)
+	r.With(editPerm).Post("/group-count", h.GroupCount)
 	return r
 }
 
@@ -622,11 +624,14 @@ func (h *ArticleHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Anyone can report issues; other statuses require manager
+	// Anyone can report issues; resolving requires issue_resolve_role
 	userStatuses := map[string]bool{"reported_usable": true, "reported_unusable": true, "lost": true}
-	if !userStatuses[req.Status] && !claims.IsManager() {
-		WriteError(w, http.StatusForbidden, "forbidden")
-		return
+	if !userStatuses[req.Status] {
+		perms := h.Perms.Get(r, claims.GroupID)
+		if !auth.AccessAtLeast(claims.MaxAccess, perms.IssueResolve) {
+			WriteError(w, http.StatusForbidden, "forbidden")
+			return
+		}
 	}
 
 	// Reporting requires a comment

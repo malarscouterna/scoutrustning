@@ -29,6 +29,18 @@ func (q *Queries) CountActiveBookingsForTeam(ctx context.Context, arg CountActiv
 	return count, err
 }
 
+const countManagerTeams = `-- name: CountManagerTeams :one
+SELECT count(*) FROM teams
+WHERE group_id = $1 AND access_level = 'manager'
+`
+
+func (q *Queries) CountManagerTeams(ctx context.Context, groupID string) (int64, error) {
+	row := q.db.QueryRow(ctx, countManagerTeams, groupID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createTeam = `-- name: CreateTeam :one
 INSERT INTO teams (group_id, name, type, access_level)
 VALUES ($1, $2, $3, $4)
