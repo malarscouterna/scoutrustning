@@ -34,7 +34,7 @@ docs/*.xlsx - *.csv
 Thumbs.db
 
 # Images volume (local dev)
-images/
+/data/images/
 
 # Test
 coverage/
