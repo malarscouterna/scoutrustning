@@ -223,3 +223,44 @@ To reset the demo data (or re-seed after a schema change):
 ```
 
 The seed script clears existing data before importing. It requires `DEV_MODE=true` on the API (dev and demo modes). In production (`DEV_MODE=false`), the seed script will refuse to run.
+
+## License
+
+Copyright © 2025 Teo Elmfeldt (<teo.elmfeldt@malarscouterna.se>)
+
+This project is licensed under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).
+
+The AGPL was chosen as a starting point to ensure all derivatives remain open source, including modifications deployed as network services. In the future there might be reason to relicense under a more permissive open-source license as the project matures. Starting with AGPL preserves that option — going the other direction (permissive → copyleft) is much harder once external contributions exist.
+
+## Contributing
+
+### Developer Certificate of Origin (DCO)
+
+All contributions must be signed off under the [Developer Certificate of Origin](DCO) (DCO v1.1). This certifies that you have the right to submit the contribution under the project's license.
+
+Add a sign-off line to every commit:
+
+```
+Signed-off-by: Your Name <your.email@example.com>
+```
+
+Git can do this automatically:
+
+```bash
+git commit -s -m "feat: add new feature"
+```
+
+Pull requests with unsigned commits will not be accepted.
+
+### AI-assisted contributions
+
+Contributors are welcome to use AI tools (code assistants, generators, etc.) when writing contributions. You are responsible for ensuring that any code you submit — regardless of what tools were used to produce it — is something you have the right to contribute under the DCO.
+
+### How to contribute
+
+1. Fork the repository and create a branch from `main`.
+2. Make your changes. Follow the conventions in the existing codebase.
+3. Sign off all commits (`git commit -s`).
+4. Open a pull request with a clear description of what and why.
+
+For bug reports and feature requests, open an issue first.
