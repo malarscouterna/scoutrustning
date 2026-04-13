@@ -157,6 +157,7 @@ type ProductImage struct {
 	Shared      bool               `json:"shared"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	Attribution string             `json:"attribution"`
+	IsReference bool               `json:"is_reference"`
 }
 
 type Unit struct {

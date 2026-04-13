@@ -108,12 +108,12 @@
 	let reportedMessage = $state('');
 	let latestComments = $state<Map<string, string>>(new Map());
 
-	let showDescriptionFor = $state<Set<string>>(new Set());
+	let expandedDescriptions = $state<Set<string>>(new Set());
 
-	function toggleDescription(key: string) {
-		const next = new Set(showDescriptionFor);
+	function toggleDescriptionExpand(key: string) {
+		const next = new Set(expandedDescriptions);
 		if (next.has(key)) next.delete(key); else next.add(key);
-		showDescriptionFor = next;
+		expandedDescriptions = next;
 	}
 
 	const api = createApiClient();
@@ -496,14 +496,7 @@
 						{/if}
 						{#if group.individuallyTracked}
 							{#if hasTextInfo}
-								<div class="mb-2">
-									<button onclick={() => toggleDescription(group.key)} class="text-xs text-neutral-500 hover:text-neutral-700">
-										{showDescriptionFor.has(group.key) ? 'Dölj info ▲' : 'Visa info ▼'}
-									</button>
-								</div>
-							{/if}
-							{#if showDescriptionFor.has(group.key)}
-								{@render textInfoBlock(rep)}
+								{@render inlineTextInfo(rep, group.key)}
 							{/if}
 							<div class="divide-y divide-neutral-200 text-sm">
 								{#each sortArticles(group.articles) as article}
@@ -574,14 +567,9 @@
 									{#if isManager}
 										<a href="/articles/{group.representativeId}/edit?group=true" class="inline-flex items-center gap-1 text-xs text-neutral-600 border border-neutral-200 bg-neutral-50 rounded px-2 py-1 hover:bg-neutral-100">Redigera ›</a>
 									{/if}
-									{#if hasTextInfo}
-										<button onclick={() => toggleDescription(group.key)} class="text-xs text-neutral-500 hover:text-neutral-700">
-											{showDescriptionFor.has(group.key) ? 'Dölj info ▲' : 'Visa info ▼'}
-										</button>
-									{/if}
 								</div>
-								{#if showDescriptionFor.has(group.key)}
-									{@render textInfoBlock(rep)}
+								{#if hasTextInfo}
+									{@render inlineTextInfo(rep, group.key)}
 								{/if}
 								{#each rows as row}
 									{@const comment = row.articleIds.map(id => latestComments.get(id)).find(c => c)}
@@ -632,6 +620,29 @@
 		{/each}
 	</div>
 </div>
+
+{#snippet inlineTextInfo(a: Article, key: string)}
+	{@const isExpanded = expandedDescriptions.has(key)}
+	<div class="mb-2 space-y-1 text-xs text-neutral-600">
+		{#if a.description}
+			<button type="button" onclick={() => toggleDescriptionExpand(key)} class="text-left cursor-pointer max-w-full">
+				<p class:line-clamp-2={!isExpanded}>{a.description}</p>
+			</button>
+		{/if}
+		{#if a.instructions}
+			<button type="button" onclick={() => toggleDescriptionExpand(key)} class="text-left cursor-pointer max-w-full">
+				<span class="font-medium text-neutral-500">Instruktioner:</span>
+				<p class="mt-0.5" class:line-clamp-2={!isExpanded}>{a.instructions}</p>
+			</button>
+		{/if}
+		{#if isManager && a.manager_notes}
+			<div class="bg-amber-50 border border-amber-200 rounded p-2">
+				<span class="font-medium text-amber-700">Intern anteckning:</span>
+				<p class="mt-0.5 text-amber-900" class:line-clamp-2={!isExpanded}>{a.manager_notes}</p>
+			</div>
+		{/if}
+	</div>
+{/snippet}
 
 {#snippet textInfoBlock(a: Article)}
 	<div class="mb-2 space-y-2 text-xs text-neutral-600">

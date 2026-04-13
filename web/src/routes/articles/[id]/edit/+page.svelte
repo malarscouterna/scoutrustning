@@ -5,6 +5,7 @@
 	import { statusLabels, statusColors } from '$lib/labels';
 	import ArticleForm from '$lib/components/ArticleForm.svelte';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
+	import ImageUpload from '$lib/components/ImageUpload.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -67,12 +68,24 @@
 		Redigera {isGroupEdit ? data.article.commercial_name || data.article.common_name : data.article.common_name}
 	</h1>
 
-	{#if imageIds.length > 0}
+	{#if data.article.commercial_name && data.article.location_id}
 		<div class="mb-4">
-			<ImageViewer {imageIds} alt={data.article.commercial_name || data.article.common_name} commercialName={data.article.commercial_name} locationId={data.article.location_id} showMeta userId={user?.member_id ?? ''} isManager={true} editMode
-				onDelete={(_, newIds) => { imageIds = newIds; }}
-				onReorder={async (newIds) => { try { const result = await api.reorderProductImages(data.article.commercial_name, data.article.location_id, newIds); imageIds = result.image_ids; } catch { /* ignore */ } }}
-			/>
+			{#if imageIds.length > 0}
+				<ImageViewer {imageIds} alt={data.article.commercial_name || data.article.common_name} commercialName={data.article.commercial_name} locationId={data.article.location_id} showMeta userId={user?.member_id ?? ''} isManager={true} editMode
+					onDelete={(_, newIds) => { imageIds = newIds; }}
+					onReorder={async (newIds) => { try { const result = await api.reorderProductImages(data.article.commercial_name, data.article.location_id, newIds); imageIds = result.image_ids; } catch { /* ignore */ } }}
+				/>
+			{/if}
+			<div class:mt-2={imageIds.length > 0}>
+				<ImageUpload
+					commercialName={data.article.commercial_name}
+					locationId={data.article.location_id}
+					{imageIds}
+					userName={user?.name ?? ''}
+					userGroup={user?.group_name ?? ''}
+					onUpdate={(ids) => imageIds = ids}
+				/>
+			</div>
 		</div>
 	{/if}
 

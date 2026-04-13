@@ -1,16 +1,25 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
 	import { createApiClient, type SharedImage } from '$lib/api/client';
 
 	interface Props {
 		commercialName: string;
 		locationId: string;
 		imageIndex: number;
+		existingFileIds?: string[];
 		onComplete: (result: { image_ids: string[] }) => void;
 		onCancel: () => void;
 	}
 
-	let { commercialName, locationId, imageIndex, onComplete, onCancel }: Props = $props();
+	let { commercialName, locationId, imageIndex, existingFileIds = [], onComplete, onCancel }: Props = $props();
 	const api = createApiClient();
+
+	const formatDimensions: Record<string, { w: number; h: number }> = {
+		landscape: { w: 2560, h: 1920 },
+		portrait:  { w: 1920, h: 2560 },
+		square:    { w: 2048, h: 2048 },
+	};
 
 	let search = $state('');
 	let images = $state<SharedImage[]>([]);
@@ -23,7 +32,10 @@
 	let description = $state('');
 	let adding = $state(false);
 	let error = $state('');
-	let expandedId = $state<string | null>(null);
+
+	// PhotoSwipe
+	let galleryEl = $state<HTMLElement | null>(null);
+	let lightbox: any = null;
 	// Initial load
 	loadImages('');
 
@@ -47,6 +59,8 @@
 		const cn = commercialName.toLowerCase();
 		return img.title.toLowerCase().includes(cn) || img.description.toLowerCase().includes(cn);
 	}
+
+	let existingSet = $derived(new Set(existingFileIds));
 
 	let sortedImages = $derived(
 		[...images].sort((a, b) => {
@@ -76,6 +90,50 @@
 			adding = false;
 		}
 	}
+
+	function openFullscreen(img: SharedImage) {
+		if (!browser) return;
+		import('photoswipe').then(pswpModule => {
+			import('photoswipe/style.css');
+			const dims = formatDimensions[img.format] ?? { w: 1920, h: 1440 };
+			const pswp = new pswpModule.default({
+				dataSource: [{ src: `/api/v0/images/${img.file_id}.webp`, width: dims.w, height: dims.h }],
+				index: 0,
+				padding: { top: 20, bottom: 40, left: 0, right: 0 },
+			});
+			pswp.init();
+		});
+	}
+
+	onMount(() => {
+		if (!browser) return;
+		initLightbox();
+		return () => { lightbox?.destroy(); lightbox = null; };
+	});
+
+	async function initLightbox() {
+		// Wait for galleryEl to be available
+		await new Promise(r => setTimeout(r, 50));
+		if (!galleryEl) return;
+		const { default: PhotoSwipeLightbox } = await import('photoswipe/lightbox');
+		await import('photoswipe/style.css');
+		const lb = new PhotoSwipeLightbox({
+			gallery: galleryEl,
+			children: 'a.pswp-link',
+			pswpModule: () => import('photoswipe'),
+			padding: { top: 20, bottom: 40, left: 0, right: 0 },
+		});
+		lb.init();
+		lightbox = lb;
+	}
+
+	// Re-init lightbox when images change
+	$effect(() => {
+		if (images.length > 0 && galleryEl && !selected) {
+			lightbox?.destroy();
+			initLightbox();
+		}
+	});
 </script>
 
 <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -88,7 +146,9 @@
 			</div>
 			<div class="p-4 space-y-4 overflow-y-auto">
 				<div class="bg-neutral-100 rounded p-2 flex justify-center">
-					<img src="/api/v0/images/{selected.file_id}_thumb.webp" alt={selected.title} class="max-h-48 rounded object-contain" />
+					<button type="button" onclick={() => openFullscreen(selected!)} class="cursor-zoom-in">
+						<img src="/api/v0/images/{selected.file_id}.webp" alt={selected.title} class="max-h-64 rounded object-contain" />
+					</button>
 				</div>
 
 				{#if selected.attribution}
@@ -138,38 +198,42 @@
 				{:else if sortedImages.length === 0}
 					<p class="text-sm text-neutral-400 text-center py-8">Inga bilder hittades</p>
 				{:else}
-					<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+					<div bind:this={galleryEl} class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
 						{#each sortedImages as img}
-							{@const expanded = expandedId === img.id}
-							<div class="border rounded overflow-hidden hover:border-blue-400 hover:shadow transition-colors">
-								<button
-									type="button"
-									onclick={() => selectImage(img)}
-									class="w-full text-left"
-								>
-									<div class="bg-neutral-100 flex justify-center p-1">
+							{@const dims = formatDimensions[img.format] ?? { w: 1920, h: 1440 }}
+							{@const alreadyAdded = existingSet.has(img.file_id)}
+							<div class="border rounded overflow-hidden transition-colors" class:hover:border-blue-400={!alreadyAdded} class:hover:shadow={!alreadyAdded} class:opacity-40={alreadyAdded}>
+								<div class="bg-neutral-100 flex justify-center p-1">
+									<a
+										href="/api/v0/images/{img.file_id}.webp"
+										data-pswp-width={dims.w}
+										data-pswp-height={dims.h}
+										class="pswp-link block cursor-zoom-in"
+									>
 										<img src="/api/v0/images/{img.file_id}_thumb.webp" alt={img.title} class="h-32 sm:h-40 md:h-44 object-contain" loading="lazy" />
-									</div>
-								</button>
+									</a>
+								</div>
 								<div class="p-2 space-y-0.5">
-									<div class="flex items-start gap-1">
-										<span class="text-xs font-medium line-clamp-1 flex-1">{img.title}</span>
+									<div class="flex flex-wrap items-center gap-1">
+										<span class="text-xs font-medium flex-1">{img.title}</span>
 										{#if isMatch(img)}
 											<span class="shrink-0 text-[10px] bg-green-100 text-green-700 px-1 rounded">Match</span>
+										{/if}
+										{#if alreadyAdded}
+											<span class="shrink-0 text-[10px] text-neutral-400 ml-auto">Redan tillagd</span>
+										{:else}
+											<button
+												type="button"
+												onclick={() => selectImage(img)}
+												class="shrink-0 text-xs text-blue-700 border border-blue-200 bg-blue-50 rounded px-2 py-0.5 hover:bg-blue-100 ml-auto"
+											>Välj</button>
 										{/if}
 									</div>
 									{#if img.attribution}
 										<p class="text-[10px] text-neutral-400 line-clamp-1">{img.attribution}</p>
 									{/if}
 									{#if img.description}
-										<button
-											type="button"
-											onclick={() => expandedId = expanded ? null : img.id}
-											class="text-[10px] text-blue-600 hover:text-blue-800"
-										>{expanded ? 'Dölj ▲' : 'Detaljer ▼'}</button>
-									{/if}
-									{#if expanded}
-										<p class="text-[11px] text-neutral-500">{img.description}</p>
+										<p class="text-[10px] text-neutral-500 line-clamp-2">{img.description}</p>
 									{/if}
 								</div>
 							</div>

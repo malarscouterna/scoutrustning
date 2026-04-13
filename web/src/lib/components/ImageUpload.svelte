@@ -64,6 +64,7 @@
 		{commercialName}
 		{locationId}
 		imageIndex={imageIds.length + 1}
+		existingFileIds={imageIds}
 		onComplete={handleBrowseComplete}
 		onCancel={() => showBrowser = false}
 	/>

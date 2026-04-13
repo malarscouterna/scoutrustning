@@ -467,6 +467,11 @@ services:
 | Source (square) | 2048×2048 | WebP q85 | 400KB–1MB |
 | Thumbnail | 400px height | WebP q75 | 25–50KB |
 
+Issue images (Step 7, not yet implemented) will use smaller dimensions for error reporting:
+- Source: 1920px longest edge, WebP quality 80
+- JPEG download: quality 80
+- A "Ladda ner som JPEG" button will be shown for issue images only (not product images)
+
 At ~200 unique product types per group: ~200MB source + ~6MB thumbnails per group. Well within Docker volume limits.
 
 ## Security considerations
@@ -574,8 +579,18 @@ At ~200 unique product types per group: ~200MB source + ~6MB thumbnails per grou
 
 ### Bugs / improvements
 
-- [ ] "Mina bilder" on profile page shows "Inte kopplad till någon artikel" for all images despite being linked — article link query/frontend logic broken
-- [ ] Profile page: move "Mina inställningar" above "Mina bilder" since the images section can grow large
+- [x] "Mina bilder" on profile page shows "Inte kopplad till någon artikel" for all images despite being linked - fixed: `ListArticlesUsingImage` query needed `::text` cast on `jsonb_build_array` parameter
+- [x] Profile page: move "Mina inställningar" above "Mina bilder" since the images section can grow large
+- [x] Shared image browser and "Mina bilder" showed duplicate rows for images added via "Bläddra" - fixed: added `is_reference` column to `product_images` (migration 00016), filter references out of browse/my-images queries
+- [x] Browse page: description/instructions shown immediately on expansion (line-clamp-2, tap to expand) instead of behind a toggle
+- [x] Edit article page: upload/browse buttons moved next to images for clarity
+- [x] Shared image browser: fullscreen support on thumbnails (PhotoSwipe), larger preview on confirm phase
+- [x] Profile "Mina bilder": fullscreen support on thumbnails
+- [x] Shared image browser: already-added images shown dimmed with "Redan tillagd" label
+
+### Future improvements
+
+- [ ] Shared image browser: filter by category
 
 ### Step 7: Image attachment on article events
 
