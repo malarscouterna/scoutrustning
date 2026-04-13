@@ -220,3 +220,11 @@ Articles would get an `article_group_id` FK instead of duplicating shared fields
 
 **Current approach**: `product_images` uses the composite key `(group_id, commercial_name, location_id)` — designed to be easily re-keyed to `article_group_id` later without structural changes. The table has its own UUID PK so all references (frontend, other tables) use the UUID and survive the re-keying. Migration path: add `article_group_id` column, backfill from composite key match, drop the three columns.
 
+
+## Front page redesign
+
+The front page (/) needs to look better and be clearer about what the user can do. Key change: a clearly visible "Boka" button so new users immediately see how to start a booking. Consider showing a summary of upcoming bookings, recent activity, or quick links to common actions.
+
+## Group settings on tab bar
+
+The group settings page has too many fields to fit comfortably. Consider a compact layout where the most important fields are always visible on the tab bar area, with a "Fler inställningar" expander for the rest. Needs design thinking about which fields are most-used (locations, categories) vs rarely changed (SMTP key, webhook URL, image upload role). Possibly a two-column layout on wider screens with sections collapsed by default on mobile.

@@ -1,6 +1,6 @@
 -- name: InsertProductImage :one
-INSERT INTO product_images (id, file_id, group_id, uploaded_by, title, description, format, shared, attribution)
-VALUES (@id, @file_id, @group_id, @uploaded_by, @title, @description, @format, @shared, @attribution)
+INSERT INTO product_images (id, file_id, group_id, uploaded_by, title, description, format, shared, attribution, is_reference)
+VALUES (@id, @file_id, @group_id, @uploaded_by, @title, @description, @format, @shared, @attribution, @is_reference)
 RETURNING *;
 
 -- name: GetProductImage :one
@@ -20,17 +20,17 @@ WHERE pi.file_id = ANY(@ids::uuid[])
 ORDER BY array_position(@ids::uuid[], pi.file_id);
 
 -- name: ListSharedImages :many
--- Returns one image per file_id: shared by any group plus own group's images.
--- Uses DISTINCT ON to deduplicate, preferring the current group's row.
-SELECT DISTINCT ON (pi.file_id) pi.*, u.name AS uploaded_by_name, g.name AS uploaded_by_group
+-- Returns original uploads (not references) that are shared or from the current group.
+SELECT pi.*, u.name AS uploaded_by_name, g.name AS uploaded_by_group
 FROM product_images pi
 JOIN users u ON pi.uploaded_by = u.id
 JOIN groups g ON pi.group_id = g.id
-WHERE (pi.shared = true OR pi.group_id = @group_id)
+WHERE pi.is_reference = false
+    AND (pi.shared = true OR pi.group_id = @group_id)
     AND (sqlc.narg('search')::text IS NULL
         OR pi.title ILIKE '%' || sqlc.narg('search') || '%'
         OR pi.description ILIKE '%' || sqlc.narg('search') || '%')
-ORDER BY pi.file_id, (pi.group_id = @group_id) DESC, pi.created_at DESC;
+ORDER BY pi.created_at DESC;
 
 -- name: DeleteProductImage :exec
 DELETE FROM product_images WHERE id = @id AND group_id = @group_id;
@@ -46,14 +46,14 @@ RETURNING *;
 SELECT COUNT(*) FROM product_images WHERE file_id = @file_id;
 
 -- name: ListProductImagesByUploader :many
--- Returns all images uploaded by a specific user with usage counts.
+-- Returns original uploads (not references) by a specific user with usage counts.
 SELECT pi.*, u.name AS uploaded_by_name, g.name AS uploaded_by_group,
     (SELECT COUNT(*) FROM product_images p2 WHERE p2.file_id = pi.file_id AND p2.group_id = pi.group_id) AS own_group_count,
     (SELECT COUNT(*) FROM product_images p3 WHERE p3.file_id = pi.file_id AND p3.group_id != pi.group_id) AS other_group_count
 FROM product_images pi
 JOIN users u ON pi.uploaded_by = u.id
 JOIN groups g ON pi.group_id = g.id
-WHERE pi.uploaded_by = @user_id AND pi.group_id = @group_id
+WHERE pi.uploaded_by = @user_id AND pi.group_id = @group_id AND pi.is_reference = false
 ORDER BY pi.created_at DESC;
 
 -- name: ListArticlesUsingImage :many
@@ -63,7 +63,7 @@ SELECT a.id, a.commercial_name, a.common_name, a.individually_tracked,
 FROM articles a
 JOIN locations l ON a.location_id = l.id
 WHERE a.group_id = @group_id
-    AND a.image_ids @> jsonb_build_array(@image_id_str)
+    AND a.image_ids @> jsonb_build_array(@image_id_str::text)
 ORDER BY a.commercial_name, a.common_name;
 
 -- name: GetImageUploadRole :one

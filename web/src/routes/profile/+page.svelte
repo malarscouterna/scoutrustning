@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { createApiClient, type Location, type Category, type GroupSettings } from '$lib/api/client';
+	import { browser } from '$app/environment';
 	import CrudList from '$lib/components/CrudList.svelte';
 	import type { PageData } from './$types';
 
@@ -82,6 +83,25 @@
 		} catch {
 			expandedArticles = [];
 		}
+	}
+
+	function openFullscreen(img: { file_id: string; format: string }) {
+		if (!browser) return;
+		const dims: Record<string, { w: number; h: number }> = {
+			landscape: { w: 2560, h: 1920 },
+			portrait:  { w: 1920, h: 2560 },
+			square:    { w: 2048, h: 2048 },
+		};
+		const d = dims[img.format] ?? { w: 1920, h: 1440 };
+		import('photoswipe').then(pswpModule => {
+			import('photoswipe/style.css');
+			const pswp = new pswpModule.default({
+				dataSource: [{ src: `/api/v0/images/${img.file_id}.webp`, width: d.w, height: d.h }],
+				index: 0,
+				padding: { top: 20, bottom: 40, left: 0, right: 0 },
+			});
+			pswp.init();
+		});
 	}
 
 	async function deleteMyImage(img: typeof myImages[0]) {
@@ -230,6 +250,9 @@
 			</div>
 		{/if}
 
+		<h2 class="text-sm font-semibold text-neutral-600 uppercase tracking-wide mt-8 mb-3">Mina inställningar</h2>
+		<p class="text-sm text-neutral-500">Personliga inställningar kommer i en framtida version.</p>
+
 		<h2 class="text-sm font-semibold text-neutral-600 uppercase tracking-wide mt-8 mb-3">Mina bilder</h2>
 
 		{#if !myImagesLoaded}
@@ -273,21 +296,25 @@
 			<div class="flex flex-wrap gap-3">
 				{#each myImages as img}
 					<div class="border rounded overflow-hidden w-[calc(33.333%-0.5rem)]">
-						<img
-							src="/api/v0/images/{img.file_id}_thumb.webp"
-							alt={img.title || 'Bild'}
-							class="w-full h-[160px] rounded-t object-contain bg-neutral-50"
-							loading="lazy"
-						/>
+						<button type="button" onclick={() => openFullscreen(img)} class="w-full cursor-zoom-in">
+							<img
+								src="/api/v0/images/{img.file_id}_thumb.webp"
+								alt={img.title || 'Bild'}
+								class="w-full h-[160px] rounded-t object-contain bg-neutral-50"
+								loading="lazy"
+							/>
+						</button>
 						<div class="px-2 py-1.5">
 							<p class="text-xs font-medium truncate">{img.title || 'Utan titel'}</p>
 							{#if img.shared}
 								<span class="text-[10px] bg-blue-100 text-blue-700 px-1 rounded">Delad</span>
 							{/if}
-							<button type="button" onclick={() => toggleImageDetail(img)} class="text-[10px] text-blue-700 hover:underline mt-1">
-								{expandedImageId === img.id ? 'Dölj detaljer' : 'Detaljer'}
-							</button>
-							<button type="button" onclick={() => startEditMyImage(img)} class="text-[10px] text-blue-700 hover:underline mt-1 ml-2">Redigera</button>
+							<div class="flex gap-1.5 mt-1">
+								<button type="button" onclick={() => toggleImageDetail(img)} class="text-[11px] text-blue-700 border border-blue-200 bg-blue-50 rounded px-1.5 py-0.5 hover:bg-blue-100">
+									{expandedImageId === img.id ? 'Dölj' : 'Detaljer'}
+								</button>
+								<button type="button" onclick={() => startEditMyImage(img)} class="text-[11px] text-blue-700 border border-blue-200 bg-blue-50 rounded px-1.5 py-0.5 hover:bg-blue-100">Redigera</button>
+							</div>
 						</div>
 
 						{#if expandedImageId === img.id}
@@ -324,9 +351,6 @@
 				{/each}
 			</div>
 		{/if}
-
-		<h2 class="text-sm font-semibold text-neutral-600 uppercase tracking-wide mt-8 mb-3">Mina inställningar</h2>
-		<p class="text-sm text-neutral-500">Personliga inställningar kommer i en framtida version.</p>
 
 		<form method="POST" action="/auth/signout" class="mt-8">
 			<button type="submit" class="text-sm text-red-600 hover:underline">Logga ut</button>

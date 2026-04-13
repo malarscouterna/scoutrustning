@@ -1,6 +1,5 @@
 <script lang="ts">
 	import type { Location, Category } from '$lib/api/client';
-	import ImageUpload from './ImageUpload.svelte';
 
 	interface Props {
 		locations: Location[];
@@ -221,16 +220,6 @@
 					<span class="text-sm text-neutral-600 block mb-1">Interna anteckningar (bara synligt för utrustningsansvariga)</span>
 					<textarea bind:value={form.manager_notes} rows="2" placeholder="Interna noteringar..." class="border rounded px-2 py-1.5 text-sm w-full bg-amber-50"></textarea>
 				</label>
-				{#if mode === 'edit' && form.commercial_name && form.location_id}
-					<ImageUpload
-						commercialName={form.commercial_name}
-						locationId={form.location_id}
-						{imageIds}
-						{userName}
-						{userGroup}
-						onUpdate={(ids) => imageIds = ids}
-					/>
-				{/if}
 			{/if}
 		</div>
 
@@ -356,16 +345,6 @@
 					<span class="text-sm text-neutral-600 block mb-1">Interna anteckningar (bara synligt för utrustningsansvariga)</span>
 					<textarea bind:value={form.manager_notes} rows="2" placeholder="Interna noteringar..." class="border rounded px-2 py-1.5 text-sm w-full bg-amber-50"></textarea>
 				</label>
-				{#if mode === 'edit' && form.commercial_name && form.location_id}
-					<ImageUpload
-						commercialName={form.commercial_name}
-						locationId={form.location_id}
-						{imageIds}
-						{userName}
-						{userGroup}
-						onUpdate={(ids) => imageIds = ids}
-					/>
-				{/if}
 			{/if}
 		</div>
 	{:else}
