@@ -126,6 +126,14 @@ export interface GroupSettings {
 	smtp_key_masked: string;
 	gchat_webhook_url: string;
 	default_approval_level: string;
+	default_access_unknown: string;
+	default_access_troop: string;
+	default_access_role: string;
+	image_upload_role: string;
+	booking_role: string;
+	article_edit_role: string;
+	issue_resolve_role: string;
+	manager_notes_role: string;
 }
 
 export interface SharedImage {
@@ -237,6 +245,12 @@ export function createApiClient(opts: FetchOptions = {}) {
 		updateItemReturn: (bookingId: string, itemId: string, data: { return_status: string; expected_return_date?: string; notes?: string }) =>
 			requestMut<BookingItem>(`/bookings/${bookingId}/items/${itemId}/return`, 'PUT', data, opts),
 		listTeams: () => request<Team[]>('/teams', opts),
+		createTeam: (data: { name: string; type: string; access_level?: string; claim_scope?: string; claim_id?: string }) =>
+			requestMut<Team>('/teams', 'POST', data, opts),
+		updateTeam: (id: string, data: { name?: string; type?: string; access_level?: string }) =>
+			requestMut<Team>(`/teams/${id}`, 'PUT', data, opts),
+		deleteTeam: (id: string) =>
+			requestMut<void>(`/teams/${id}`, 'DELETE', undefined, opts),
 
 		// Approval
 		approveBooking: (id: string, message?: string) =>

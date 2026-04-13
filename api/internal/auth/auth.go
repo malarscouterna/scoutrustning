@@ -281,6 +281,14 @@ func Middleware(cfg MiddlewareConfig) func(http.Handler) http.Handler {
 				} else {
 					teams = resolved
 				}
+
+				// Auto-create teams for unrecognized claims
+				autoCreated, err := cfg.Resolver.AutoCreateTeams(r.Context(), groupID, oidcClaims)
+				if err != nil {
+					slog.Warn("failed to auto-create teams", "error", err)
+				} else {
+					teams = append(teams, autoCreated...)
+				}
 			}
 
 			for _, t := range teams {

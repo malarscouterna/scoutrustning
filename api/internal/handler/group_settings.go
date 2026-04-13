@@ -12,7 +12,8 @@ import (
 )
 
 type GroupSettingsHandler struct {
-	Q *db.Queries
+	Q     *db.Queries
+	Perms *PermissionCache
 }
 
 func (h *GroupSettingsHandler) Routes() chi.Router {
@@ -33,6 +34,10 @@ type groupSettingsResponse struct {
 	DefaultAccessTroop    string `json:"default_access_troop"`
 	DefaultAccessRole     string `json:"default_access_role"`
 	ImageUploadRole       string `json:"image_upload_role"`
+	BookingRole           string `json:"booking_role"`
+	ArticleEditRole       string `json:"article_edit_role"`
+	IssueResolveRole      string `json:"issue_resolve_role"`
+	ManagerNotesRole      string `json:"manager_notes_role"`
 }
 
 func (h *GroupSettingsHandler) Get(w http.ResponseWriter, r *http.Request) {
@@ -47,16 +52,15 @@ func (h *GroupSettingsHandler) Get(w http.ResponseWriter, r *http.Request) {
 			DefaultAccessTroop:   "book",
 			DefaultAccessRole:    "book",
 			ImageUploadRole:      "book",
+			BookingRole:          "book",
+			ArticleEditRole:      "manager",
+			IssueResolveRole:     "manager",
+			ManagerNotesRole:     "manager",
 		})
 		return
 	}
 
-	resp := groupSettingsResponse{
-		NotificationEmailFrom: settings.NotificationEmailFrom,
-		GchatWebhookURL:       settings.GchatWebhookUrl,
-		DefaultApprovalLevel:  settings.DefaultApprovalLevel,
-		ImageUploadRole:       settings.ImageUploadRole,
-	}
+	resp := settingsToResponse(settings)
 
 	if len(settings.SmtpKeyEncrypted) > 0 {
 		resp.SmtpKeySet = true
@@ -74,7 +78,14 @@ type groupSettingsRequest struct {
 	SmtpKey               *string `json:"smtp_key"`
 	GchatWebhookURL       string  `json:"gchat_webhook_url"`
 	DefaultApprovalLevel  string  `json:"default_approval_level"`
+	DefaultAccessUnknown  string  `json:"default_access_unknown"`
+	DefaultAccessTroop    string  `json:"default_access_troop"`
+	DefaultAccessRole     string  `json:"default_access_role"`
 	ImageUploadRole       string  `json:"image_upload_role"`
+	BookingRole           string  `json:"booking_role"`
+	ArticleEditRole       string  `json:"article_edit_role"`
+	IssueResolveRole      string  `json:"issue_resolve_role"`
+	ManagerNotesRole      string  `json:"manager_notes_role"`
 }
 
 func (h *GroupSettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
@@ -105,6 +116,39 @@ func (h *GroupSettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate access defaults
+	defaultAccessUnknown := req.DefaultAccessUnknown
+	if defaultAccessUnknown == "" { defaultAccessUnknown = "view" }
+	defaultAccessTroop := req.DefaultAccessTroop
+	if defaultAccessTroop == "" { defaultAccessTroop = "book" }
+	defaultAccessRole := req.DefaultAccessRole
+	if defaultAccessRole == "" { defaultAccessRole = "book" }
+	if !validAccessLevel(defaultAccessUnknown) || !validAccessLevel(defaultAccessTroop) || !validAccessLevel(defaultAccessRole) {
+		WriteError(w, http.StatusBadRequest, "invalid default_access level")
+		return
+	}
+
+	// Validate configurable permission levels with minimum bounds
+	permFields := map[string]*string{
+		"booking_role":       &req.BookingRole,
+		"article_edit_role":  &req.ArticleEditRole,
+		"issue_resolve_role": &req.IssueResolveRole,
+		"manager_notes_role": &req.ManagerNotesRole,
+	}
+	permDefaults := map[string]string{
+		"booking_role": "book", "article_edit_role": "manager",
+		"issue_resolve_role": "manager", "manager_notes_role": "manager",
+	}
+	for key, val := range permFields {
+		if *val == "" {
+			*val = permDefaults[key]
+		}
+		if !ValidatePermissionLevel(key, *val) {
+			WriteError(w, http.StatusBadRequest, "invalid "+key)
+			return
+		}
+	}
+
 	// Handle SMTP key: nil = don't change, empty string = clear, non-empty = encrypt and store
 	var smtpKeyEncrypted []byte
 	if req.SmtpKey != nil {
@@ -131,23 +175,23 @@ func (h *GroupSettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		SmtpKeyEncrypted:      smtpKeyEncrypted,
 		GchatWebhookUrl:       req.GchatWebhookURL,
 		DefaultApprovalLevel:  approvalLevel,
+		DefaultAccessUnknown:  defaultAccessUnknown,
+		DefaultAccessTroop:    defaultAccessTroop,
+		DefaultAccessRole:     defaultAccessRole,
 		ImageUploadRole:       imageUploadRole,
+		BookingRole:           req.BookingRole,
+		ArticleEditRole:       req.ArticleEditRole,
+		IssueResolveRole:      req.IssueResolveRole,
+		ManagerNotesRole:      req.ManagerNotesRole,
 	})
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, "failed to save settings")
 		return
 	}
 
-	resp := groupSettingsResponse{
-		NotificationEmailFrom: settings.NotificationEmailFrom,
-		GchatWebhookURL:       settings.GchatWebhookUrl,
-		DefaultApprovalLevel:  settings.DefaultApprovalLevel,
-		DefaultAccessUnknown:  settings.DefaultAccessUnknown,
-		DefaultAccessTroop:    settings.DefaultAccessTroop,
-		DefaultAccessRole:     settings.DefaultAccessRole,
-		ImageUploadRole:       settings.ImageUploadRole,
-		SmtpKeySet:            len(settings.SmtpKeyEncrypted) > 0,
-	}
+	h.Perms.Invalidate(claims.GroupID)
+
+	resp := settingsToResponse(settings)
 	if len(settings.SmtpKeyEncrypted) > 0 {
 		decrypted, err := crypto.Decrypt(settings.SmtpKeyEncrypted)
 		if err == nil {
@@ -156,4 +200,28 @@ func (h *GroupSettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	WriteJSON(w, http.StatusOK, resp)
+}
+
+func settingsToResponse(s db.GroupSetting) groupSettingsResponse {
+	resp := groupSettingsResponse{
+		NotificationEmailFrom: s.NotificationEmailFrom,
+		GchatWebhookURL:       s.GchatWebhookUrl,
+		DefaultApprovalLevel:  s.DefaultApprovalLevel,
+		DefaultAccessUnknown:  s.DefaultAccessUnknown,
+		DefaultAccessTroop:    s.DefaultAccessTroop,
+		DefaultAccessRole:     s.DefaultAccessRole,
+		ImageUploadRole:       s.ImageUploadRole,
+		BookingRole:           s.BookingRole,
+		ArticleEditRole:       s.ArticleEditRole,
+		IssueResolveRole:      s.IssueResolveRole,
+		ManagerNotesRole:      s.ManagerNotesRole,
+		SmtpKeySet:            len(s.SmtpKeyEncrypted) > 0,
+	}
+	if len(s.SmtpKeyEncrypted) > 0 {
+		decrypted, err := crypto.Decrypt(s.SmtpKeyEncrypted)
+		if err == nil {
+			resp.SmtpKeyMasked = crypto.MaskKey(string(decrypted))
+		}
+	}
+	return resp
 }

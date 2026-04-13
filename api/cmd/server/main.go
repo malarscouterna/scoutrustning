@@ -77,6 +77,8 @@ func main() {
 		}))
 		r.Use(handler.UpsertUserMiddleware(queries))
 
+		permCache := handler.NewPermissionCache(queries)
+
 		// User info (returns resolved claims)
 		r.Get("/me", func(w http.ResponseWriter, r *http.Request) {
 			claims, ok := auth.ClaimsFromContext(r.Context())
@@ -84,11 +86,12 @@ func main() {
 				handler.WriteError(w, http.StatusUnauthorized, "unauthorized")
 				return
 			}
-			// Get group name
+			// Get group name and permissions
 			groupName := ""
 			if g, err := queries.GetGroup(r.Context(), claims.GroupID); err == nil {
 				groupName = g.Name
 			}
+			perms := permCache.Get(r, claims.GroupID)
 			handler.WriteJSON(w, http.StatusOK, map[string]any{
 				"member_id":  claims.MemberID,
 				"group_id":   claims.GroupID,
@@ -97,15 +100,22 @@ func main() {
 				"email":      claims.Email,
 				"teams":      claims.Teams,
 				"max_access": claims.MaxAccess,
+				"permissions": map[string]string{
+					"image_upload":  perms.ImageUpload,
+					"booking":       perms.Booking,
+					"article_edit":  perms.ArticleEdit,
+					"issue_resolve": perms.IssueResolve,
+					"manager_notes": perms.ManagerNotes,
+				},
 			})
 		})
 
-		articles := &handler.ArticleHandler{Q: queries}
+		articles := &handler.ArticleHandler{Q: queries, Perms: permCache}
 		locations := &handler.LocationHandler{Q: queries}
 		categories := &handler.CategoryHandler{Q: queries}
 		bookings := &handler.BookingHandler{Q: queries}
 		teams := &handler.TeamHandler{Q: queries}
-		groupSettings := &handler.GroupSettingsHandler{Q: queries}
+		groupSettings := &handler.GroupSettingsHandler{Q: queries, Perms: permCache}
 		imageHandler := &images.Handler{Q: queries, ImageDir: imageDir}
 
 		r.Mount("/articles", articles.Routes())

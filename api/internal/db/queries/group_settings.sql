@@ -6,12 +6,14 @@ WHERE group_id = @group_id;
 INSERT INTO group_settings (
     group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url,
     default_approval_level, default_access_unknown, default_access_troop,
-    default_access_role, image_upload_role
+    default_access_role, image_upload_role, booking_role, article_edit_role,
+    issue_resolve_role, manager_notes_role
 )
 VALUES (
     @group_id, @notification_email_from, @smtp_key_encrypted, @gchat_webhook_url,
     @default_approval_level, @default_access_unknown, @default_access_troop,
-    @default_access_role, @image_upload_role
+    @default_access_role, @image_upload_role, @booking_role, @article_edit_role,
+    @issue_resolve_role, @manager_notes_role
 )
 ON CONFLICT (group_id) DO UPDATE SET
     notification_email_from = @notification_email_from,
@@ -22,6 +24,10 @@ ON CONFLICT (group_id) DO UPDATE SET
     default_access_troop = @default_access_troop,
     default_access_role = @default_access_role,
     image_upload_role = @image_upload_role,
+    booking_role = @booking_role,
+    article_edit_role = @article_edit_role,
+    issue_resolve_role = @issue_resolve_role,
+    manager_notes_role = @manager_notes_role,
     updated_at = now()
 RETURNING *;
 

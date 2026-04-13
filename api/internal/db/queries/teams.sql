@@ -40,6 +40,10 @@ SELECT count(*) FROM bookings
 WHERE used_by_team_id = @team_id AND group_id = @group_id
 AND status NOT IN ('returned', 'cancelled');
 
+-- name: CountManagerTeams :one
+SELECT count(*) FROM teams
+WHERE group_id = @group_id AND access_level = 'manager';
+
 -- name: ListTeamsByNames :many
 SELECT * FROM teams
 WHERE group_id = @group_id AND name = ANY(@names::text[]);
