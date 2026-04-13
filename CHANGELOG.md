@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/malarscouterna/ms-utrustning/compare/v0.5.0...v0.5.1) (2026-04-13)
+
+
+### Bug Fixes
+
+* add images package to git (was excluded by overly broad .gitignore) ([6884ce0](https://github.com/malarscouterna/ms-utrustning/commit/6884ce001c0f80a1851fc90ec6e5afd78e65a03c))
+
 ## [0.5.0](https://github.com/malarscouterna/ms-utrustning/compare/v0.4.1...v0.5.0) (2026-04-13)
 
 
