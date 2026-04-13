@@ -24,7 +24,7 @@ export interface Article {
 	current_booking_id: string | null;
 	current_booking_status: string | null;
 	current_booking_end_date: string | null;
-	current_booking_unit_name: string | null;
+	current_booking_team_name: string | null;
 }
 
 export interface Location {
@@ -40,19 +40,21 @@ export interface Category {
 	sort_order: number;
 }
 
-export interface Unit {
+export interface Team {
 	id: string;
 	name: string;
 	type: string;
+	access_level: string;
+	claim_mappings: { claim_scope: string; claim_id: string }[];
 }
 
 export interface Booking {
 	id: string;
 	created_by: string;
-	used_by_unit_id: string | null;
+	used_by_team_id: string | null;
 	used_by_external: string | null;
 	used_by_external_contact: string | null;
-	unit_name: string | null;
+	team_name: string | null;
 	status: string;
 	start_date: string;
 	end_date: string;
@@ -178,6 +180,7 @@ async function requestMut<T>(path: string, method: string, body: unknown, opts: 
 
 export function createApiClient(opts: FetchOptions = {}) {
 	return {
+		getMe: () => request<{ member_id: string; group_id: string; group_name: string; name: string; email: string; teams: { team_id: string; team_name: string; team_type: string; access_level: string }[]; max_access: string }>('/me', opts),
 		listArticles: (params?: { search?: string; category_id?: string; location_id?: string; status?: string; mine?: boolean; with_availability?: boolean; date?: string }) => {
 			const query = new URLSearchParams();
 			if (params?.search) query.set('search', params.search);
@@ -199,7 +202,7 @@ export function createApiClient(opts: FetchOptions = {}) {
 			if (params?.bookable_only === false) query.set('bookable_only', 'false');
 			return request<AvailabilityGroup[]>(`/articles/availability?${query}`, opts);
 		},
-		createBooking: (data: { start_date: string; end_date: string; notes?: string; used_by_unit_id?: string; used_by_external?: string }) =>
+		createBooking: (data: { start_date: string; end_date: string; notes?: string; used_by_team_id?: string; used_by_external?: string }) =>
 			requestMut<Booking>('/bookings', 'POST', data, opts),
 		listBookings: () => request<Booking[]>('/bookings', opts),
 		getBooking: (id: string) => request<{ booking: Booking; items: BookingItem[] }>(`/bookings/${id}`, opts),
@@ -233,7 +236,7 @@ export function createApiClient(opts: FetchOptions = {}) {
 			requestMut<Booking>(`/bookings/${id}/return`, 'POST', {}, opts),
 		updateItemReturn: (bookingId: string, itemId: string, data: { return_status: string; expected_return_date?: string; notes?: string }) =>
 			requestMut<BookingItem>(`/bookings/${bookingId}/items/${itemId}/return`, 'PUT', data, opts),
-		listUnits: () => request<Unit[]>('/units', opts),
+		listTeams: () => request<Team[]>('/teams', opts),
 
 		// Approval
 		approveBooking: (id: string, message?: string) =>
@@ -285,7 +288,7 @@ export function createApiClient(opts: FetchOptions = {}) {
 
 		// Bulk operations
 		bulkUpdateArticles: (data: { article_ids: string[]; status?: string; location_id?: string; approval_level?: string; comment?: string }) =>
-			requestMut<{ updated: number; conflicts: Array<{ article_id: string; article_name: string; booking_id: string; booking_dates: string; booking_unit: string }> }>('/articles/bulk', 'PUT', data, opts),
+			requestMut<{ updated: number; conflicts: Array<{ article_id: string; article_name: string; booking_id: string; booking_dates: string; booking_team: string }> }>('/articles/bulk', 'PUT', data, opts),
 		updateGroupCount: (data: { commercial_name: string; location_id: string; new_count: number }) =>
 			requestMut<{ count: number }>('/articles/group-count', 'POST', data, opts),
 

@@ -6,17 +6,34 @@
 	import BookingItemsList from '$lib/components/BookingItemsList.svelte';
 	import type { PageData } from './$types';
 
+	const accessLabels: Record<string, string> = {
+		view: 'Visa',
+		book: 'Boka',
+		trusted: 'Betrodd',
+		manager: 'Ansvarig'
+	};
+
 	let { data }: { data: PageData } = $props();
 
 	const api = createApiClient();
 
 	// Filter units/projects to those the user is a member of (managers see all)
 	let isManager = $derived(hasRole($page.data.user, 'equipment_manager'));
-	let userUnits = $derived(
-		isManager
-			? data.units
-			: data.units.filter(u => ($page.data.user?.units ?? []).includes(u.name))
-	);
+	let myTeamSet = $derived(new Set(($page.data.user?.teams ?? []).map((t: { team_name: string }) => t.team_name)));
+	let userTeams = $derived.by(() => {
+		const all = isManager ? data.teams : data.teams.filter(u => myTeamSet.has(u.name));
+		// Sort: my troops first, then my roles, then other troops, then other roles
+		return [...all].sort((a, b) => {
+			const aIsMine = myTeamSet.has(a.name) ? 0 : 2;
+			const bIsMine = myTeamSet.has(b.name) ? 0 : 2;
+			const aType = a.type === 'troop' ? 0 : 1;
+			const bType = b.type === 'troop' ? 0 : 1;
+			const aKey = aIsMine + aType;
+			const bKey = bIsMine + bType;
+			if (aKey !== bKey) return aKey - bKey;
+			return a.name.localeCompare(b.name);
+		});
+	});
 
 	let isEdit = $derived(!!data.existing);
 
@@ -24,11 +41,21 @@
 	let endDate = $state('');
 	let notes = $state('');
 	let defaultUnit = $derived.by(() => {
-		const myUnitNames = new Set($page.data.user?.units ?? []);
-		const match = data.units.find(u => myUnitNames.has(u.name));
-		return match?.id ?? '';
+		// Pick first troop, then first role, then empty (personal)
+		const myTeams = data.teams.filter(u => myTeamSet.has(u.name));
+		const troop = myTeams.find(u => u.type === 'troop');
+		if (troop) return troop.id;
+		const role = myTeams.find(u => u.type === 'role');
+		if (role) return role.id;
+		return '';
 	});
 	let selectedUnit = $state('');
+	// Resolve the access level of the currently selected team (for approval badge display)
+	let selectedTeamAccess = $derived.by(() => {
+		if (!selectedUnit) return 'book'; // personal booking
+		const team = data.teams.find(t => t.id === selectedUnit);
+		return team?.access_level ?? 'book';
+	});
 	let unitInitialized = $state(false);
 	let bookingId = $state<string | null>(null);
 	let cartItems = $state<BookingItem[]>([]);
@@ -43,7 +70,7 @@
 			startDate = data.existing.booking.start_date;
 			endDate = data.existing.booking.end_date;
 			notes = data.existing.booking.notes;
-			selectedUnit = data.existing.booking.used_by_unit_id ?? '';
+			selectedUnit = data.existing.booking.used_by_team_id ?? '';
 			unitInitialized = true;
 			bookingId = data.existing.booking.id;
 			cartItems = data.existing.items;
@@ -79,7 +106,7 @@
 					start_date: startDate,
 					end_date: endDate,
 					notes,
-					used_by_unit_id: selectedUnit || undefined
+					used_by_team_id: selectedUnit || undefined
 				});
 				bookingId = booking.id;
 			}
@@ -98,7 +125,7 @@
 				start_date: startDate,
 				end_date: endDate,
 				notes,
-				used_by_unit_id: selectedUnit || null
+				used_by_team_id: selectedUnit || ''
 			});
 			showMessage('Ändringar sparade');
 		} catch (e: any) {
@@ -131,6 +158,13 @@
 		if (!bookingId) return;
 		error = '';
 		try {
+			// Save current details (team, dates, notes) before submitting
+			await api.updateBooking(bookingId, {
+				start_date: startDate,
+				end_date: endDate,
+				notes,
+				used_by_team_id: selectedUnit || ''
+			});
 			const booking = await api.submitBooking(bookingId);
 			submitted = true;
 			message = booking.status === 'confirmed' ? 'Bokning bekräftad!' : 'Bokning inskickad!';
@@ -187,10 +221,19 @@
 			<label class="flex flex-col gap-1 col-span-2">
 				<span class="text-sm">Bokas för</span>
 				<select bind:value={selectedUnit} class="border rounded px-3 py-2">
-					<option value="">Personlig bokning</option>
-					{#each userUnits as unit}
-						<option value={unit.id}>{unit.name}{unit.type === 'project' ? ' (projekt)' : ''}</option>
+					{#each userTeams.filter(u => myTeamSet.has(u.name)) as unit}
+						<option value={unit.id}>{unit.name} ({accessLabels[unit.access_level] ?? unit.access_level})</option>
 					{/each}
+					<option value="">Personlig bokning</option>
+					{#if isManager}
+						{@const otherTeams = userTeams.filter(u => !myTeamSet.has(u.name))}
+						{#if otherTeams.length > 0}
+							<option disabled>───</option>
+							{#each otherTeams as unit}
+								<option value={unit.id}>{unit.name} ({accessLabels[unit.access_level] ?? unit.access_level})</option>
+							{/each}
+						{/if}
+					{/if}
 				</select>
 			</label>
 		</div>
@@ -217,6 +260,8 @@
 						categories={data.categories}
 						locations={data.locations}
 						{cartItems}
+						teamAccessLevel={selectedTeamAccess}
+						userIsManager={isManager}
 						onItemsChanged={refreshCart}
 					/>
 				{/if}

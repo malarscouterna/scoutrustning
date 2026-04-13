@@ -63,7 +63,7 @@ WHERE id = @id AND group_id = @group_id;
 
 -- name: ListArticlesByUserBookings :many
 -- Returns articles with given statuses that are linked to the user's bookings
--- (created by user or assigned to one of their units), or where the user
+-- (created by user or assigned to one of their teams), or where the user
 -- reported an issue (is an actor on an article event).
 SELECT a.*,
     l.name AS location_name,
@@ -78,8 +78,8 @@ WHERE a.group_id = @group_id
             SELECT bi.article_id FROM booking_items bi
             JOIN bookings b ON bi.booking_id = b.id
             WHERE b.group_id = @group_id
-                AND (b.created_by = @user_id OR b.used_by_unit_id = ANY(
-                    SELECT un.id FROM units un WHERE un.group_id = @group_id AND un.name = ANY(@unit_names::text[])
+                AND (b.created_by = @user_id OR b.used_by_team_id = ANY(
+                    SELECT tm.id FROM teams tm WHERE tm.group_id = @group_id AND tm.name = ANY(@team_names::text[])
                 ))
         )
         OR a.id IN (
@@ -97,12 +97,12 @@ SELECT a.*,
     cur_booking.id AS current_booking_id,
     COALESCE(cur_booking.status, '') AS current_booking_status,
     cur_booking.end_date AS current_booking_end_date,
-    cur_unit.name AS current_booking_unit_name
+    cur_team.name AS current_booking_team_name
 FROM articles a
 JOIN locations l ON a.location_id = l.id
 JOIN categories c ON a.category_id = c.id
 LEFT JOIN LATERAL (
-    SELECT b.id, b.status, b.end_date, b.used_by_unit_id
+    SELECT b.id, b.status, b.end_date, b.used_by_team_id
     FROM booking_items bi
     JOIN bookings b ON bi.booking_id = b.id
     WHERE bi.article_id = a.id
@@ -114,7 +114,7 @@ LEFT JOIN LATERAL (
     ORDER BY b.start_date
     LIMIT 1
 ) cur_booking ON true
-LEFT JOIN units cur_unit ON cur_booking.used_by_unit_id = cur_unit.id
+LEFT JOIN teams cur_team ON cur_booking.used_by_team_id = cur_team.id
 WHERE a.group_id = @group_id
     AND (sqlc.narg('category_id')::uuid IS NULL OR a.category_id = sqlc.narg('category_id'))
     AND (sqlc.narg('location_id')::uuid IS NULL OR a.location_id = sqlc.narg('location_id'))
@@ -152,11 +152,11 @@ WHERE id = ANY(@ids::uuid[]) AND group_id = @group_id;
 SELECT DISTINCT a.id AS article_id, a.common_name AS article_name,
     b.id AS booking_id,
     b.start_date AS booking_start_date, b.end_date AS booking_end_date,
-    COALESCE(u.name, b.used_by_external, '') AS booking_unit
+    COALESCE(t.name, b.used_by_external, '') AS booking_team
 FROM articles a
 JOIN booking_items bi ON bi.article_id = a.id
 JOIN bookings b ON bi.booking_id = b.id
-LEFT JOIN units u ON b.used_by_unit_id = u.id
+LEFT JOIN teams t ON b.used_by_team_id = t.id
 WHERE a.id = ANY(@ids::uuid[]) AND a.group_id = @group_id
     AND b.status IN ('confirmed', 'approved', 'picked_up')
     AND (bi.return_status IS NULL OR bi.return_status IN ('pending', 'delayed'));

@@ -1,40 +1,40 @@
 -- name: CreateBooking :one
 INSERT INTO bookings (
-    group_id, created_by, used_by_unit_id, used_by_external,
+    group_id, created_by, used_by_team_id, used_by_external,
     used_by_external_contact, status, start_date, end_date, notes
 ) VALUES (
-    @group_id, @created_by, @used_by_unit_id, @used_by_external,
+    @group_id, @created_by, @used_by_team_id, @used_by_external,
     @used_by_external_contact, 'draft', @start_date, @end_date, @notes
 )
 RETURNING *;
 
 -- name: GetBooking :one
-SELECT b.*, u.name AS unit_name
+SELECT b.*, t.name AS team_name
 FROM bookings b
-LEFT JOIN units u ON b.used_by_unit_id = u.id
+LEFT JOIN teams t ON b.used_by_team_id = t.id
 WHERE b.id = @id AND b.group_id = @group_id;
 
 -- name: ListBookingsByUser :many
-SELECT b.*, u.name AS unit_name
+SELECT b.*, t.name AS team_name
 FROM bookings b
-LEFT JOIN units u ON b.used_by_unit_id = u.id
+LEFT JOIN teams t ON b.used_by_team_id = t.id
 WHERE b.group_id = @group_id
-    AND (b.created_by = @user_id OR b.used_by_unit_id = ANY(
-        SELECT un.id FROM units un WHERE un.group_id = @group_id AND un.name = ANY(@unit_names::text[])
+    AND (b.created_by = @user_id OR b.used_by_team_id = ANY(
+        SELECT tm.id FROM teams tm WHERE tm.group_id = @group_id AND tm.name = ANY(@team_names::text[])
     ))
 ORDER BY b.created_at DESC;
 
 -- name: ListAllBookings :many
-SELECT b.*, u.name AS unit_name
+SELECT b.*, t.name AS team_name
 FROM bookings b
-LEFT JOIN units u ON b.used_by_unit_id = u.id
+LEFT JOIN teams t ON b.used_by_team_id = t.id
 WHERE b.group_id = @group_id
 ORDER BY b.created_at DESC;
 
 -- name: ListBookingsByStatus :many
-SELECT b.*, u.name AS unit_name
+SELECT b.*, t.name AS team_name
 FROM bookings b
-LEFT JOIN units u ON b.used_by_unit_id = u.id
+LEFT JOIN teams t ON b.used_by_team_id = t.id
 WHERE b.group_id = @group_id AND b.status = @status
 ORDER BY b.start_date;
 
@@ -47,7 +47,7 @@ RETURNING *;
 UPDATE bookings SET
     start_date = @start_date,
     end_date = @end_date,
-    used_by_unit_id = @used_by_unit_id,
+    used_by_team_id = @used_by_team_id,
     used_by_external = @used_by_external,
     used_by_external_contact = @used_by_external_contact,
     notes = @notes,
@@ -55,8 +55,8 @@ UPDATE bookings SET
 WHERE id = @id AND group_id = @group_id
 RETURNING *;
 
--- name: GetUnitByID :one
-SELECT * FROM units
+-- name: GetTeamByID :one
+SELECT * FROM teams
 WHERE id = @id AND group_id = @group_id;
 
 -- name: AvailableArticlesExcludingBooking :many
@@ -184,8 +184,8 @@ ORDER BY be.created_at ASC;
 DELETE FROM bookings
 WHERE id = @id AND group_id = @group_id AND status = 'draft';
 
--- name: ListUnits :many
-SELECT * FROM units
+-- name: ListBookingTeams :many
+SELECT id, group_id, name, type, access_level FROM teams
 WHERE group_id = @group_id
 ORDER BY type, name;
 

@@ -19,18 +19,18 @@ type Article struct {
 	LocationID            pgtype.UUID        `json:"location_id"`
 	Status                string             `json:"status"`
 	IndividuallyTracked   bool               `json:"individually_tracked"`
+	ApprovalLevel         string             `json:"approval_level"`
+	ImageIds              json.RawMessage    `json:"image_ids"`
 	Description           string             `json:"description"`
 	Instructions          string             `json:"instructions"`
+	ManagerNotes          string             `json:"manager_notes"`
 	PurchaseDate          pgtype.Date        `json:"purchase_date"`
 	PurchasePrice         pgtype.Numeric     `json:"purchase_price"`
 	Place                 string             `json:"place"`
+	ExpectedAvailableDate pgtype.Date        `json:"expected_available_date"`
+	ImportBatchID         pgtype.UUID        `json:"import_batch_id"`
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
-	ExpectedAvailableDate pgtype.Date        `json:"expected_available_date"`
-	ApprovalLevel         string             `json:"approval_level"`
-	ImportBatchID         pgtype.UUID        `json:"import_batch_id"`
-	ManagerNotes          string             `json:"manager_notes"`
-	ImageIds              json.RawMessage    `json:"image_ids"`
 }
 
 type ArticleEvent struct {
@@ -59,16 +59,16 @@ type Booking struct {
 	ID                    pgtype.UUID        `json:"id"`
 	GroupID               string             `json:"group_id"`
 	CreatedBy             string             `json:"created_by"`
-	UsedByUnitID          pgtype.UUID        `json:"used_by_unit_id"`
+	UsedByTeamID          pgtype.UUID        `json:"used_by_team_id"`
 	UsedByExternal        pgtype.Text        `json:"used_by_external"`
 	UsedByExternalContact pgtype.Text        `json:"used_by_external_contact"`
 	Status                string             `json:"status"`
 	StartDate             pgtype.Date        `json:"start_date"`
 	EndDate               pgtype.Date        `json:"end_date"`
 	Notes                 string             `json:"notes"`
+	PrePickupStatus       pgtype.Text        `json:"pre_pickup_status"`
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
-	PrePickupStatus       pgtype.Text        `json:"pre_pickup_status"`
 }
 
 type BookingEvent struct {
@@ -113,9 +113,12 @@ type GroupSetting struct {
 	SmtpKeyEncrypted      []byte             `json:"smtp_key_encrypted"`
 	GchatWebhookUrl       string             `json:"gchat_webhook_url"`
 	DefaultApprovalLevel  string             `json:"default_approval_level"`
+	DefaultAccessUnknown  string             `json:"default_access_unknown"`
+	DefaultAccessTroop    string             `json:"default_access_troop"`
+	DefaultAccessRole     string             `json:"default_access_role"`
+	ImageUploadRole       string             `json:"image_upload_role"`
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
-	ImageUploadRole       string             `json:"image_upload_role"`
 }
 
 type Location struct {
@@ -153,20 +156,30 @@ type ProductImage struct {
 	UploadedBy  string             `json:"uploaded_by"`
 	Title       string             `json:"title"`
 	Description string             `json:"description"`
+	Attribution string             `json:"attribution"`
 	Format      string             `json:"format"`
 	Shared      bool               `json:"shared"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	Attribution string             `json:"attribution"`
 	IsReference bool               `json:"is_reference"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
-type Unit struct {
+type Team struct {
 	ID              pgtype.UUID        `json:"id"`
 	GroupID         string             `json:"group_id"`
 	Name            string             `json:"name"`
+	Type            string             `json:"type"`
+	AccessLevel     string             `json:"access_level"`
 	GchatWebhookUrl pgtype.Text        `json:"gchat_webhook_url"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-	Type            string             `json:"type"`
+}
+
+type TeamClaimMapping struct {
+	ID         pgtype.UUID        `json:"id"`
+	GroupID    string             `json:"group_id"`
+	TeamID     pgtype.UUID        `json:"team_id"`
+	ClaimScope string             `json:"claim_scope"`
+	ClaimID    string             `json:"claim_id"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
 
 type User struct {
@@ -176,6 +189,7 @@ type User struct {
 	Email               string             `json:"email"`
 	NotificationChannel string             `json:"notification_channel"`
 	GchatWebhookUrl     pgtype.Text        `json:"gchat_webhook_url"`
+	ActiveGroupID       pgtype.Text        `json:"active_group_id"`
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 }

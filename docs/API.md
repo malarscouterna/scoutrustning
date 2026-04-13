@@ -38,7 +38,7 @@ When `with_availability=true`, each article includes:
 - `current_booking_id` — UUID of the active booking (confirmed/approved/picked_up) overlapping the date, or null
 - `current_booking_status` — booking status (`confirmed`, `approved`, `picked_up`), or empty
 - `current_booking_end_date` — when the booking ends, or null
-- `current_booking_unit_name` — name of the unit/project using it, or null
+- `current_booking_team_name` — name of the team using it, or null
 
 Article `approval_level` values:
 - `none` — freely bookable
@@ -184,7 +184,7 @@ At least one of `status` or `location_id` required.
       "article_name": "Sibley 3",
       "booking_id": "uuid",
       "booking_dates": "2026-06-05 — 2026-06-08",
-      "booking_unit": "Yggdrasil"
+      "booking_team": "Yggdrasil"
     }
   ]
 }
@@ -227,19 +227,19 @@ List individual available articles for a date range. Used for swap selection dur
 ## Bookings
 
 ### `GET /api/v0/bookings`
-List bookings visible to the current user. Leaders see their own bookings + bookings for their units/projects. Equipment managers see all bookings in the group.
+List bookings visible to the current user. Leaders see their own bookings + bookings for their teams. Equipment managers see all bookings in the group.
 
 **Response** `200`
 
 ### `POST /api/v0/bookings`
-Create a draft booking. When `used_by_unit_id` is set, the user must be a member of that unit or project (name must appear in their token claims). Equipment managers are exempt from this check.
+Create a draft booking. When `used_by_team_id` is set, the user must be a member of that team (name must appear in their token claims). Equipment managers are exempt from this check.
 
 **Body**
 ```json
 {
   "start_date": "2026-06-01",
   "end_date": "2026-06-05",
-  "used_by_unit_id": "uuid or null",
+  "used_by_team_id": "uuid or null",
   "used_by_external": "string or null",
   "used_by_external_contact": "string or null",
   "notes": ""
@@ -247,7 +247,7 @@ Create a draft booking. When `used_by_unit_id` is set, the user must be a member
 ```
 Required: `start_date`, `end_date`.
 
-**Response** `201` | `400` | `403` (not a member of the unit/project)
+**Response** `201` | `400` | `403` (not a member of the team)
 
 ### `GET /api/v0/bookings/{id}`
 Get booking with its items (including article details).
@@ -263,7 +263,7 @@ Get booking with its items (including article details).
 ```
 
 ### `PUT /api/v0/bookings/{id}`
-Update a booking. Allowed on draft, submitted, approved, confirmed, and picked_up bookings. Access: creator, unit leaders, or equipment manager.
+Update a booking. Allowed on draft, submitted, approved, confirmed, and picked_up bookings. Access: creator, team members, or equipment manager.
 
 All fields are optional — only provided fields are updated. If dates change, all existing items are re-validated against availability.
 
@@ -272,7 +272,7 @@ All fields are optional — only provided fields are updated. If dates change, a
 {
   "start_date": "2026-06-02",
   "end_date": "2026-06-06",
-  "used_by_unit_id": "uuid or null",
+  "used_by_team_id": "uuid or null",
   "used_by_external": "string or null",
   "used_by_external_contact": "string or null",
   "notes": "Updated notes"
@@ -282,7 +282,7 @@ All fields are optional — only provided fields are updated. If dates change, a
 **Response** `200` | `400` | `403` | `404` | `409` (items not available for new dates)
 
 ### `POST /api/v0/bookings/{id}/items`
-Add articles to a booking by commercial_name and quantity. Eagerly assigns specific available articles. Allowed on editable bookings (not returned/cancelled). Access: creator, unit leaders, or equipment manager.
+Add articles to a booking by commercial_name and quantity. Eagerly assigns specific available articles. Allowed on editable bookings (not returned/cancelled). Access: creator, team members, or equipment manager.
 
 **Body**
 ```json
@@ -293,7 +293,7 @@ Add articles to a booking by commercial_name and quantity. Eagerly assigns speci
 **Response** `201` | `400` | `404` | `409` (not enough available)
 
 ### `DELETE /api/v0/bookings/{id}/items/{itemId}`
-Remove an item from an editable booking. Access: creator, unit leaders, or equipment manager.
+Remove an item from an editable booking. Access: creator, team members, or equipment manager.
 
 **Response** `204` | `400` | `403` | `404`
 
@@ -378,7 +378,7 @@ Cancel a booking. Drafts are deleted entirely (returns 204). Other bookings tran
 **Response** `200` | `204` | `400` | `403` | `404`
 
 ### `POST /api/v0/bookings/{id}/copy`
-Create a new draft booking with the same unit, notes, and items as the source. Dates are set to today + 7 days as placeholders. Items that no longer exist are silently skipped.
+Create a new draft booking with the same team, notes, and items as the source. Dates are set to today + 7 days as placeholders. Items that no longer exist are silently skipped.
 
 **Response** `201`
 ```json
@@ -390,12 +390,12 @@ Create a new draft booking with the same unit, notes, and items as the source. D
 ```
 
 ### `POST /api/v0/bookings/{id}/pickup`
-Transition a confirmed or approved booking to `picked_up`. Saves the current status (`confirmed` or `approved`) as `pre_pickup_status` so it can be restored if all pickups are undone. Access: creator, unit leaders, or equipment manager.
+Transition a confirmed or approved booking to `picked_up`. Saves the current status (`confirmed` or `approved`) as `pre_pickup_status` so it can be restored if all pickups are undone. Access: creator, team members, or equipment manager.
 
 **Response** `200` | `400` | `403` | `404`
 
 ### `PUT /api/v0/bookings/{id}/items/{itemId}/pickup`
-Set the pickup status for a single booking item. Booking must be in `picked_up` status. Access: creator, unit/project members, or equipment manager. Logs a `picked_up` article event with the acting user.
+Set the pickup status for a single booking item. Booking must be in `picked_up` status. Access: creator, team members, or equipment manager. Logs a `picked_up` article event with the acting user.
 
 Sending an empty string clears the pickup status (undo). If all items in the booking have their pickup status cleared, the booking automatically reverts to its pre-pickup status (`confirmed` or `approved`).
 
@@ -413,7 +413,7 @@ Valid `pickup_status` values: `picked_up`, `lost`, `""` (undo). `article_status`
 **Response** `200` | `400` | `403` | `404`
 
 ### `POST /api/v0/bookings/{id}/items/{itemId}/swap`
-Replace the article on a booking item during pickup. The new article must be available for the booking's date range. Sets pickup_status to `swapped`. Booking must be in `picked_up` status. Access: creator, unit/project members, or equipment manager. Logs a `picked_up` article event for the new article.
+Replace the article on a booking item during pickup. The new article must be available for the booking's date range. Sets pickup_status to `swapped`. Booking must be in `picked_up` status. Access: creator, team members, or equipment manager. Logs a `picked_up` article event for the new article.
 
 **Body**
 ```json
@@ -423,12 +423,12 @@ Replace the article on a booking item during pickup. The new article must be ava
 **Response** `200` | `400` | `403` | `404` | `409` (article not available)
 
 ### `POST /api/v0/bookings/{id}/return`
-Transition a picked_up booking to `returned`. All items must have a final return status (not null, not delayed). Access: creator, unit leaders, or equipment manager.
+Transition a picked_up booking to `returned`. All items must have a final return status (not null, not delayed). Access: creator, team members, or equipment manager.
 
 **Response** `200` | `400` | `403` | `404`
 
 ### `PUT /api/v0/bookings/{id}/items/{itemId}/return`
-Set the return status for a single booking item. Booking must be in `picked_up` status. Access: creator, unit leaders, or equipment manager.
+Set the return status for a single booking item. Booking must be in `picked_up` status. Access: creator, team members, or equipment manager.
 
 Side effects — article status is orthogonal to booking state. Only explicit condition reports change the article:
 - `returned_ok` — no change to article status (condition preserved), logs `returned` event
@@ -452,28 +452,45 @@ Valid values: `returned_ok`, `delayed`, `reported_usable`, `reported_unusable`, 
 
 ---
 
-## Units & Projects
+## Teams
 
-Units (e.g. "Yggdrasil") and projects (e.g. "Valborg 2026") are both stored in the `units` table, distinguished by a `type` field. Both can be assigned to bookings via `used_by_unit_id`. Membership comes from OIDC token claims.
+Teams represent troops ("Avdelning") and roles ("Roll") — the organizational groups that bookings are made for. Each team has a configurable access level (view, book, trusted, manager). Membership comes from OIDC token claims, mapped via `team_claim_mappings`.
 
-### `GET /api/v0/units`
-List all units and projects for the group, ordered by type then name.
+### `GET /api/v0/teams`
+List all teams for the group, ordered by name. Includes claim mappings per team.
 
 **Response** `200`
 ```json
 [
-  {"id": "uuid", "name": "Yggdrasil", "type": "unit", ...},
-  {"id": "uuid", "name": "Valborg 2026", "type": "project", ...}
+  {"id": "uuid", "name": "Yggdrasil", "type": "troop", "access_level": "book", "claim_mappings": [{"claim_scope": "troop", "claim_id": "17443"}], ...},
+  {"id": "uuid", "name": "IT-gruppen", "type": "role", "access_level": "manager", "claim_mappings": [{"claim_scope": "group", "claim_id": "it_manager"}], ...}
 ]
 ```
 
-### 🔒 `POST /api/v0/units`
+### 🔒 `POST /api/v0/teams`
+Create a team with optional claim mapping.
 ```json
-{"name": "Yggdrasil", "type": "unit"}
+{"name": "Yggdrasil", "type": "troop", "access_level": "book", "claim_scope": "troop", "claim_id": "17443"}
 ```
-`type` defaults to `unit`. Valid values: `unit`, `project`.
+`type` defaults to `troop`. Valid values: `troop`, `role`.
+`access_level` defaults to `book`. Valid values: `view`, `book`, `trusted`, `manager`.
+`claim_scope` and `claim_id` are optional — creates a claim mapping if both provided.
 
 **Response** `201` | `400` | `403`
+
+### 🔒 `PUT /api/v0/teams/{id}`
+Update a team's name, type, or access level.
+```json
+{"name": "Yggdrasil", "type": "troop", "access_level": "trusted"}
+```
+All fields optional — only provided fields are updated.
+
+**Response** `200` | `400` | `403` | `404`
+
+### 🔒 `DELETE /api/v0/teams/{id}`
+Delete a team. Blocked if the team has active bookings (409).
+
+**Response** `204` | `403` | `404` | `409`
 
 ---
 
@@ -638,7 +655,11 @@ Returns group settings. SMTP key is returned masked.
   "smtp_key_set": true,
   "smtp_key_masked": "sk-...7f2a",
   "gchat_webhook_url": "https://chat.googleapis.com/...",
-  "default_approval_level": "none"
+  "default_approval_level": "none",
+  "default_access_unknown": "view",
+  "default_access_troop": "book",
+  "default_access_role": "book",
+  "image_upload_role": "book"
 }
 ```
 
@@ -648,7 +669,11 @@ Returns group settings. SMTP key is returned masked.
   "notification_email_from": "utrustning@example.com",
   "smtp_key": "sk-new-key",
   "gchat_webhook_url": "https://chat.googleapis.com/...",
-  "default_approval_level": "none"
+  "default_approval_level": "none",
+  "default_access_unknown": "view",
+  "default_access_troop": "book",
+  "default_access_role": "book",
+  "image_upload_role": "book"
 }
 ```
 `smtp_key`: `null` = keep existing, `""` = clear, non-empty = encrypt and store.
@@ -677,12 +702,12 @@ Notable error keys:
 In production: `Authorization: Bearer <jwt>` header with a valid Keycloak token.
 
 In dev mode (`DEV_MODE=true`): `X-Dev-Role-Override: <persona>` header. Available personas:
-- `manager-equipment` — equipment_manager, unit Utrustningsgruppen
-- `project-unit-leader` — project_leader, units Valborgskömmittén + Yggdrasil
-- `project-leader` — project_leader, unit Valborgskömmittén
-- `leader-unit-it` — equipment_manager, units IT-gruppen + Yggdrasil
-- `leader-yggdrasil` — leader, unit Yggdrasil
-- `leader-flaskpost` — leader, unit Flaskpostorné
-- `other-kar-leader` — leader in group 999 (Testkåren), unit Avdelning 1, for multi-tenancy testing
+- `manager-equipment` — manager access via Utrustningsgruppen
+- `project-unit-leader` — trusted access via Valborgskommittén + book via Yggdrasil
+- `project-leader` — trusted access via Valborgskommittén
+- `leader-team-it` — manager access via IT-gruppen + book via Yggdrasil
+- `leader-yggdrasil` — book access via Yggdrasil
+- `leader-flaskpost` — book access via Flaskpostorné
+- `other-kar-leader` — book access in group 999 (Testkåren), team Avdelning 1, for multi-tenancy testing
 
 Also in dev mode: `X-Dev-Claims: <json>` header with a JSON-encoded claims object for testing arbitrary claim combinations (used by integration tests).

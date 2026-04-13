@@ -2,59 +2,59 @@
   "personas": {
     "manager-equipment": {
       "member_id": "3000002",
-      "group_id": "766",
       "name": "Gillis Utrustning",
       "email": "gillis@example.com",
-      "roles": ["equipment_manager"],
-      "units": ["Utrustningsgruppen"]
+      "groups": {
+        "766": ["Utrustningsgruppen"]
+      }
     },
     "project-unit-leader": {
       "member_id": "3000003",
-      "group_id": "766",
       "name": "Julia Valborg-Yggdrasil",
       "email": "julia@example.com",
-      "roles": ["project_leader"],
-      "units": ["Valborgskommittén", "Yggdrasil"]
+      "groups": {
+        "766": ["Valborgskommittén", "Yggdrasil"]
+      }
     },
     "project-leader": {
       "member_id": "3000007",
-      "group_id": "766",
       "name": "Lovisa Valborg",
       "email": "lovisa@example.com",
-      "roles": ["project_leader"],
-      "units": ["Valborgskommittén"]
+      "groups": {
+        "766": ["Valborgskommittén"]
+      }
     },
-    "leader-unit-it": {
+    "leader-team-it": {
       "member_id": "3000004",
-      "group_id": "766",
       "name": "Teo IT-Yggdrasil",
       "email": "teo@example.com",
-      "roles": ["equipment_manager"],
-      "units": ["IT-gruppen", "Yggdrasil"]
+      "groups": {
+        "766": ["IT-gruppen", "Yggdrasil"]
+      }
     },
     "leader-yggdrasil": {
       "member_id": "3000005",
-      "group_id": "766",
       "name": "Hanna Yggdrasil",
       "email": "hanna@example.com",
-      "roles": ["leader"],
-      "units": ["Yggdrasil"]
+      "groups": {
+        "766": ["Yggdrasil"]
+      }
     },
     "leader-flaskpost": {
       "member_id": "3000006",
-      "group_id": "766",
       "name": "Fredrik Flaskpost",
       "email": "fredrik@example.com",
-      "roles": ["leader"],
-      "units": ["Flaskpostorné"]
+      "groups": {
+        "766": ["Flaskpostorné"]
+      }
     },
     "other-kar-leader": {
       "member_id": "4000001",
-      "group_id": "999",
       "name": "Linn Annan-Kår",
       "email": "linn@other.example.com",
-      "roles": ["leader"],
-      "units": ["Avdelning 1"]
+      "groups": {
+        "999": ["Avdelning 1"]
+      }
     }
   }
 }

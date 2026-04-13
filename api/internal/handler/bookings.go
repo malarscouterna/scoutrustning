@@ -45,12 +45,12 @@ func (h *BookingHandler) Routes() chi.Router {
 // bookingAccess holds the fields needed for access checking.
 type bookingAccess struct {
 	CreatedBy    string
-	UsedByUnitID pgtype.UUID
+	UsedByTeamID pgtype.UUID
 	Status       string
 }
 
 func accessFromGetBookingRow(b db.GetBookingRow) bookingAccess {
-	return bookingAccess{CreatedBy: b.CreatedBy, UsedByUnitID: b.UsedByUnitID, Status: b.Status}
+	return bookingAccess{CreatedBy: b.CreatedBy, UsedByTeamID: b.UsedByTeamID, Status: b.Status}
 }
 
 // canAccessBooking checks if the user can view/modify this booking.
@@ -58,16 +58,16 @@ func (h *BookingHandler) canAccessBooking(ctx context.Context, claims auth.Claim
 	if claims.MemberID == b.CreatedBy {
 		return true
 	}
-	if claims.HasRole("equipment_manager") {
+	if claims.IsManager() {
 		return true
 	}
-	if b.UsedByUnitID.Valid {
-		unit, err := h.Q.GetUnitByID(ctx, db.GetUnitByIDParams{
-			ID: b.UsedByUnitID, GroupID: claims.GroupID,
+	if b.UsedByTeamID.Valid {
+		team, err := h.Q.GetTeamByID(ctx, db.GetTeamByIDParams{
+			ID: b.UsedByTeamID, GroupID: claims.GroupID,
 		})
 		if err == nil {
-			for _, u := range claims.Units {
-				if u == unit.Name {
+			for _, t := range claims.Teams {
+				if t.TeamName == team.Name {
 					return true
 				}
 			}
@@ -87,7 +87,7 @@ func (h *BookingHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		StartDate             string  `json:"start_date"`
 		EndDate               string  `json:"end_date"`
-		UsedByUnitID          *string `json:"used_by_unit_id"`
+		UsedByTeamID          *string `json:"used_by_team_id"`
 		UsedByExternal        *string `json:"used_by_external"`
 		UsedByExternalContact *string `json:"used_by_external_contact"`
 		Notes                 string  `json:"notes"`
@@ -119,31 +119,31 @@ func (h *BookingHandler) Create(w http.ResponseWriter, r *http.Request) {
 		EndDate:   pgtype.Date{Time: endDate, Valid: true},
 		Notes:     req.Notes,
 	}
-	if req.UsedByUnitID != nil {
-		id, err := parseUUID(*req.UsedByUnitID)
+	if req.UsedByTeamID != nil {
+		id, err := parseUUID(*req.UsedByTeamID)
 		if err != nil {
-			WriteError(w, http.StatusBadRequest, "invalid used_by_unit_id")
+			WriteError(w, http.StatusBadRequest, "invalid used_by_team_id")
 			return
 		}
-		if !claims.HasRole("equipment_manager") {
-			unit, err := h.Q.GetUnitByID(r.Context(), db.GetUnitByIDParams{ID: id, GroupID: claims.GroupID})
+		if !claims.IsManager() {
+			team, err := h.Q.GetTeamByID(r.Context(), db.GetTeamByIDParams{ID: id, GroupID: claims.GroupID})
 			if err != nil {
-				WriteError(w, http.StatusBadRequest, "unit not found")
+				WriteError(w, http.StatusBadRequest, "team not found")
 				return
 			}
 			allowed := false
-			for _, u := range claims.Units {
-				if u == unit.Name {
+			for _, t := range claims.Teams {
+				if t.TeamName == team.Name {
 					allowed = true
 					break
 				}
 			}
 			if !allowed {
-				WriteError(w, http.StatusForbidden, "you are not a member of this unit or project")
+				WriteError(w, http.StatusForbidden, "you are not a member of this team")
 				return
 			}
 		}
-		params.UsedByUnitID = id
+		params.UsedByTeamID = id
 	}
 	if req.UsedByExternal != nil {
 		params.UsedByExternal = pgtype.Text{String: *req.UsedByExternal, Valid: true}
@@ -195,7 +195,7 @@ func (h *BookingHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Status filter (e.g. ?status=submitted for approval queue)
 	statusFilter := r.URL.Query().Get("status")
 
-	if statusFilter != "" && claims.HasRole("equipment_manager") {
+	if statusFilter != "" && claims.IsManager() {
 		bookings, err := h.Q.ListBookingsByStatus(r.Context(), db.ListBookingsByStatusParams{
 			GroupID: claims.GroupID, Status: statusFilter,
 		})
@@ -208,7 +208,7 @@ func (h *BookingHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if claims.HasRole("equipment_manager") {
+	if claims.IsManager() {
 		bookings, err := h.Q.ListAllBookings(r.Context(), claims.GroupID)
 		if err != nil {
 			slog.Error("failed to list bookings", "error", err)
@@ -222,7 +222,7 @@ func (h *BookingHandler) List(w http.ResponseWriter, r *http.Request) {
 	bookings, err := h.Q.ListBookingsByUser(r.Context(), db.ListBookingsByUserParams{
 		GroupID:   claims.GroupID,
 		UserID:    claims.MemberID,
-		UnitNames: claims.Units,
+		TeamNames: claims.TeamNames(),
 	})
 	if err != nil {
 		slog.Error("failed to list bookings", "error", err)
@@ -257,7 +257,7 @@ func (h *BookingHandler) Update(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		StartDate             *string `json:"start_date"`
 		EndDate               *string `json:"end_date"`
-		UsedByUnitID          *string `json:"used_by_unit_id"`
+		UsedByTeamID          *string `json:"used_by_team_id"`
 		UsedByExternal        *string `json:"used_by_external"`
 		UsedByExternalContact *string `json:"used_by_external_contact"`
 		Notes                 *string `json:"notes"`
@@ -272,7 +272,7 @@ func (h *BookingHandler) Update(w http.ResponseWriter, r *http.Request) {
 		GroupID:               claims.GroupID,
 		StartDate:             booking.StartDate,
 		EndDate:               booking.EndDate,
-		UsedByUnitID:          booking.UsedByUnitID,
+		UsedByTeamID:          booking.UsedByTeamID,
 		UsedByExternal:        booking.UsedByExternal,
 		UsedByExternalContact: booking.UsedByExternalContact,
 		Notes:                 booking.Notes,
@@ -301,13 +301,18 @@ func (h *BookingHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if req.Notes != nil {
 		params.Notes = *req.Notes
 	}
-	if req.UsedByUnitID != nil {
-		id, err := parseUUID(*req.UsedByUnitID)
-		if err != nil {
-			WriteError(w, http.StatusBadRequest, "invalid used_by_unit_id")
-			return
+	if req.UsedByTeamID != nil {
+		if *req.UsedByTeamID == "" {
+			// Clear team (personal booking)
+			params.UsedByTeamID = pgtype.UUID{}
+		} else {
+			id, err := parseUUID(*req.UsedByTeamID)
+			if err != nil {
+				WriteError(w, http.StatusBadRequest, "invalid used_by_team_id")
+				return
+			}
+			params.UsedByTeamID = id
 		}
-		params.UsedByUnitID = id
 	}
 	if req.UsedByExternal != nil {
 		params.UsedByExternal = pgtype.Text{String: *req.UsedByExternal, Valid: true}
@@ -360,6 +365,37 @@ func (h *BookingHandler) Update(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusInternalServerError, "failed to update booking")
 		return
 	}
+
+	// If team changed on a confirmed booking, re-evaluate approval
+	teamChanged := params.UsedByTeamID != booking.UsedByTeamID
+	if teamChanged && updated.Status != "draft" && updated.Status != "returned" && updated.Status != "cancelled" {
+		maxLevel, err := h.Q.BookingMaxApprovalLevel(r.Context(), db.BookingMaxApprovalLevelParams{
+			BookingID: bookingID, GroupID: claims.GroupID,
+		})
+		if err == nil {
+			teamAccess := resolveBookingAccess(claims, updated.UsedByTeamID)
+			needs := needsApprovalForLevel(maxLevel.(string), teamAccess)
+
+			if needs && (updated.Status == "confirmed" || updated.Status == "approved") {
+				// Downgrade: new team needs approval
+				updated, _ = h.Q.UpdateBookingStatus(r.Context(), db.UpdateBookingStatusParams{
+					ID: bookingID, GroupID: claims.GroupID, Status: "submitted",
+				})
+				h.Q.CreateBookingEvent(r.Context(), db.CreateBookingEventParams{
+					GroupID: claims.GroupID, BookingID: bookingID,
+					ActorID: claims.MemberID, EventType: "submitted",
+					Message:  "Bokning behöver godkännande efter byte av avdelning",
+					Metadata: []byte("{}"),
+				})
+			} else if !needs && updated.Status == "submitted" {
+				// Upgrade: new team doesn't need approval
+				updated, _ = h.Q.UpdateBookingStatus(r.Context(), db.UpdateBookingStatusParams{
+					ID: bookingID, GroupID: claims.GroupID, Status: "confirmed",
+				})
+			}
+		}
+	}
+
 	WriteJSON(w, http.StatusOK, updated)
 }
 
@@ -451,18 +487,8 @@ func (h *BookingHandler) AddItems(w http.ResponseWriter, r *http.Request) {
 			BookingID: bookingID, GroupID: claims.GroupID,
 		})
 		if err == nil && maxLevel != "none" {
-			needsApproval := false
-			switch maxLevel {
-			case "high":
-				if !claims.HasRole("equipment_manager") {
-					needsApproval = true
-				}
-			case "low":
-				if !claims.HasRole("project_leader") && !claims.HasRole("equipment_manager") {
-					needsApproval = true
-				}
-			}
-			if needsApproval {
+			teamAccess := resolveBookingAccess(claims, booking.UsedByTeamID)
+			if needsApprovalForLevel(maxLevel.(string), teamAccess) {
 				h.Q.UpdateBookingStatus(r.Context(), db.UpdateBookingStatusParams{
 					ID: bookingID, GroupID: claims.GroupID, Status: "submitted",
 				})
@@ -557,16 +583,8 @@ func (h *BookingHandler) Submit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		switch maxLevel {
-		case "high":
-			if !claims.HasRole("equipment_manager") {
-				needsApproval = true
-			}
-		case "low":
-			if !claims.HasRole("project_leader") && !claims.HasRole("equipment_manager") {
-				needsApproval = true
-			}
-		}
+		teamAccess := resolveBookingAccess(claims, booking.UsedByTeamID)
+		needsApproval = needsApprovalForLevel(maxLevel.(string), teamAccess)
 	}
 
 	newStatus := "confirmed"
@@ -1198,7 +1216,7 @@ func (h *BookingHandler) Copy(w http.ResponseWriter, r *http.Request) {
 	newBooking, err := h.Q.CreateBooking(r.Context(), db.CreateBookingParams{
 		GroupID:               claims.GroupID,
 		CreatedBy:             claims.MemberID,
-		UsedByUnitID:          source.UsedByUnitID,
+		UsedByTeamID:          source.UsedByTeamID,
 		UsedByExternal:        source.UsedByExternal,
 		UsedByExternalContact: source.UsedByExternalContact,
 		StartDate:             pgtype.Date{Time: now, Valid: true},
@@ -1228,4 +1246,28 @@ func (h *BookingHandler) Copy(w http.ResponseWriter, r *http.Request) {
 		"items_copied": copied,
 		"items_total":  len(sourceItems),
 	})
+}
+
+// resolveBookingAccess returns the effective access level for a booking.
+// If the booking has a team, returns the user's access for that team.
+// Personal bookings (no team) always use "book" level.
+func resolveBookingAccess(claims auth.Claims, usedByTeamID pgtype.UUID) string {
+	if usedByTeamID.Valid {
+		return claims.AccessForTeam(usedByTeamID.String())
+	}
+	return auth.AccessBook
+}
+
+// needsApprovalForLevel applies the approval matrix:
+//   - none: never needs approval
+//   - low: needs approval unless teamAccess >= trusted
+//   - high: always needs approval (even for managers)
+func needsApprovalForLevel(articleLevel, teamAccess string) bool {
+	switch articleLevel {
+	case "high":
+		return true
+	case "low":
+		return !auth.AccessAtLeast(teamAccess, auth.AccessTrusted)
+	}
+	return false
 }

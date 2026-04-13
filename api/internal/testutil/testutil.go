@@ -105,14 +105,14 @@ func SetupTestEnv(t *testing.T) *TestEnv {
 
 	ctx := context.Background()
 	_, err := shared.pool.Exec(ctx,
-		`TRUNCATE groups, users, units, categories, locations, articles,
+		`TRUNCATE groups, users, teams, team_claim_mappings, categories, locations, articles,
 		 article_events, booking_events, bookings, booking_items, packages, package_items,
-		 audit_log, group_settings CASCADE`)
+		 audit_log, group_settings, product_images CASCADE`)
 	if err != nil {
 		t.Fatalf("failed to truncate tables: %v", err)
 	}
 
-	// Re-insert seed data from migrations
+	// Re-insert seed data
 	_, err = shared.pool.Exec(ctx, `
 		INSERT INTO groups (id, name) VALUES ('766', 'Mälarscouterna'), ('999', 'Testkåren');
 		INSERT INTO locations (group_id, name, sort_order) VALUES
@@ -121,6 +121,18 @@ func SetupTestEnv(t *testing.T) *TestEnv {
 			('766', 'Verkstan', 7), ('999', 'Förrådet', 1);
 		INSERT INTO categories (group_id, name, sort_order) VALUES
 			('766', 'Övrigt', 1), ('999', 'Övrigt', 1);
+		INSERT INTO group_settings (group_id) VALUES ('766'), ('999');
+
+		-- Teams with access levels
+		INSERT INTO teams (group_id, name, type, access_level) VALUES
+			('766', 'Yggdrasil', 'troop', 'book'),
+			('766', 'Spindlarna', 'troop', 'book'),
+			('766', 'Flaskpostorné', 'troop', 'book'),
+			('766', 'Valborgskommittén', 'role', 'trusted'),
+			('766', 'Utrustningsgruppen', 'role', 'manager'),
+			('766', 'IT-gruppen', 'role', 'manager'),
+			('766', 'Läger', 'role', 'trusted'),
+			('999', 'Avdelning 1', 'troop', 'book');
 	`)
 	if err != nil {
 		t.Fatalf("failed to re-seed tables: %v", err)
@@ -154,6 +166,7 @@ func (e *TestEnv) MountV1(fn func(r chi.Router)) {
 		r.Use(auth.Middleware(auth.MiddlewareConfig{
 			DevMode:      true,
 			PersonasPath: e.personasPath,
+			Resolver:     &handler.DBTeamResolver{Q: e.Queries},
 		}))
 		r.Use(handler.UpsertUserMiddleware(e.Queries))
 		fn(r)

@@ -1,19 +1,20 @@
 <script lang="ts">
 	import type { User } from '$lib/user';
 
+	const accessLabels: Record<string, string> = {
+		view: 'Visa',
+		book: 'Boka',
+		trusted: 'Betrodd',
+		manager: 'Ansvarig'
+	};
+
 	let {
 		personas,
 		currentPersona,
 		user
-	}: { personas: Record<string, User>; currentPersona: string | null; user: User | null } = $props();
+	}: { personas: Record<string, any>; currentPersona: string | null; user: User | null } = $props();
 
 	let open = $state(false);
-
-	const roleLabels: Record<string, string> = {
-		leader: 'Ledare',
-		project_leader: 'Projektledare',
-		equipment_manager: 'Utrustningsansvarig'
-	};
 
 	async function switchPersona(key: string | null) {
 		await fetch('/dev/persona', {
@@ -22,7 +23,6 @@
 			body: JSON.stringify({ persona: key })
 		});
 		if (key === null) {
-			// Go to login page which auto-redirects to Keycloak
 			window.location.href = '/login';
 		} else {
 			window.location.reload();
@@ -35,6 +35,15 @@
 			? (user?.name ?? 'ScoutID')
 			: (personas[currentPersona!]?.name ?? currentPersona)
 	);
+
+	function personaTeamSummary(persona: any): string {
+		if (!persona.groups) return '';
+		const names: string[] = [];
+		for (const teamNames of Object.values(persona.groups) as string[][]) {
+			names.push(...teamNames);
+		}
+		return names.join(', ') || 'Inga team';
+	}
 </script>
 
 <div class="fixed top-2 right-4 sm:bottom-4 sm:top-auto z-50 flex flex-col sm:flex-col-reverse sm:items-end">
@@ -54,9 +63,9 @@
 						<div class="font-medium text-xs">🔑 ScoutID-inloggning</div>
 						{#if isScoutID && user}
 							<div class="text-xs text-green-700">
-								{user.name} · {user.roles.map((r) => roleLabels[r] ?? r).join(', ')}
-								{#if user.units.length > 0}
-									· {user.units.join(', ')}
+								{user.name} · {accessLabels[user.max_access] ?? user.max_access}
+								{#if user.teams.length > 0}
+									· {user.teams.map(t => t.team_name).join(', ')}
 								{/if}
 							</div>
 						{:else}
@@ -77,10 +86,7 @@
 						<div>
 							<div class="font-medium text-xs">{persona.name}</div>
 							<div class="text-xs text-neutral-500">
-								{persona.roles.map((r) => roleLabels[r] ?? r).join(', ')}
-								{#if persona.units.length > 0}
-									· {persona.units.join(', ')}
-								{/if}
+								{personaTeamSummary(persona)}
 							</div>
 						</div>
 						{#if key === currentPersona}

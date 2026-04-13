@@ -3,7 +3,8 @@
 	import BookingItemsList from '$lib/components/BookingItemsList.svelte';
 	import PickupChecklist from '$lib/components/PickupChecklist.svelte';
 	import ReturnChecklist from '$lib/components/ReturnChecklist.svelte';
-	import type { PageData } from './$types';
+	import { isManager as checkManager } from '$lib/user';
+import type { PageData } from './$types';
 	import { page } from '$app/stores';
 	import { onDestroy } from 'svelte';
 
@@ -166,7 +167,7 @@
 	let approvalMessage = $state('');
 	let submitMessage = $state('');
 	let forceApproval = $state(false);
-	let isManager = $derived(data.user?.roles.includes('equipment_manager') ?? false);
+	let isManager = $derived(checkManager(data.user));
 	let bookingEvents = $state<BookingEvent[]>([]);
 
 	async function loadEvents() {
@@ -249,8 +250,8 @@
 			<p class="text-neutral-600 mb-2">{booking.notes}</p>
 		{/if}
 		<p class="text-sm text-neutral-500 mb-3">
-			{#if booking.unit_name}
-				För: <span class="font-medium text-blue-700">{booking.unit_name}</span>
+			{#if booking.team_name}
+				För: <span class="font-medium text-blue-700">{booking.team_name}</span>
 			{:else if booking.used_by_external}
 				För: {booking.used_by_external}
 			{:else}

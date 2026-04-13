@@ -15,18 +15,18 @@ import (
 	"github.com/malarscouterna/ms-utrustning/api/internal/testutil"
 )
 
-func TestUnits_CRUD(t *testing.T) {
+func TestTeams_CRUD(t *testing.T) {
 	env := testutil.SetupTestEnv(t)
 	env.V1(func(r chi.Router) {
-		r.Mount("/units", (&handler.UnitHandler{Q: env.Queries}).Routes())
+		r.Mount("/teams", (&handler.TeamHandler{Q: env.Queries}).Routes())
 	})
 
 	manager := env.ClientAs("manager-equipment")
 	leader := env.ClientAs("leader-yggdrasil")
 
-	t.Run("manager can create unit", func(t *testing.T) {
-		b, _ := json.Marshal(map[string]any{"name": "Yggdrasil"})
-		resp, err := manager.Post("/api/v0/units", bytes.NewReader(b))
+	t.Run("manager can create team", func(t *testing.T) {
+		b, _ := json.Marshal(map[string]any{"name": "Nytt lag", "type": "troop", "access_level": "trusted"})
+		resp, err := manager.Post("/api/v0/teams", bytes.NewReader(b))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -37,16 +37,19 @@ func TestUnits_CRUD(t *testing.T) {
 			t.Fatalf("expected 201, got %d: %s", resp.StatusCode, body)
 		}
 
-		var unit map[string]any
-		json.NewDecoder(resp.Body).Decode(&unit)
-		if unit["name"] != "Yggdrasil" {
-			t.Errorf("expected Yggdrasil, got %v", unit["name"])
+		var team map[string]any
+		json.NewDecoder(resp.Body).Decode(&team)
+		if team["name"] != "Nytt lag" {
+			t.Errorf("expected Nytt lag, got %v", team["name"])
+		}
+		if team["access_level"] != "trusted" {
+			t.Errorf("expected trusted, got %v", team["access_level"])
 		}
 	})
 
-	t.Run("leader cannot create unit", func(t *testing.T) {
+	t.Run("leader cannot create team", func(t *testing.T) {
 		b, _ := json.Marshal(map[string]any{"name": "Nope"})
-		resp, err := leader.Post("/api/v0/units", bytes.NewReader(b))
+		resp, err := leader.Post("/api/v0/teams", bytes.NewReader(b))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -57,8 +60,8 @@ func TestUnits_CRUD(t *testing.T) {
 		}
 	})
 
-	t.Run("all users can list units", func(t *testing.T) {
-		resp, err := leader.Get("/api/v0/units")
+	t.Run("all users can list teams", func(t *testing.T) {
+		resp, err := leader.Get("/api/v0/teams")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -68,10 +71,11 @@ func TestUnits_CRUD(t *testing.T) {
 			t.Fatalf("expected 200, got %d", resp.StatusCode)
 		}
 
-		var units []map[string]any
-		json.NewDecoder(resp.Body).Decode(&units)
-		if len(units) != 1 {
-			t.Fatalf("expected 1 unit, got %d", len(units))
+		var teams []map[string]any
+		json.NewDecoder(resp.Body).Decode(&teams)
+		// Seed creates 7 teams for group 766, plus the one we just created
+		if len(teams) < 7 {
+			t.Fatalf("expected at least 7 teams, got %d", len(teams))
 		}
 	})
 }

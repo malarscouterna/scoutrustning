@@ -9,10 +9,12 @@
 		categories: Category[];
 		locations: Location[];
 		cartItems: BookingItem[];
+		teamAccessLevel: string;
+		userIsManager: boolean;
 		onItemsChanged: () => void;
 	}
 
-	let { bookingId, startDate, endDate, categories, locations, cartItems, onItemsChanged }: Props = $props();
+	let { bookingId, startDate, endDate, categories, locations, cartItems, teamAccessLevel, userIsManager, onItemsChanged }: Props = $props();
 
 	const api = createApiClient();
 
@@ -33,18 +35,39 @@
 	let selectedCategory = $state('');
 	let selectedLocation = $state('');
 	let searchQuery = $state('');
-	let showRestricted = $state(false);
+	let showAll = $state(false);
+
+	// Managers default to showing all
+	$effect(() => {
+		if (userIsManager) showAll = true;
+	});
 	let quantities = $state<Record<string, number>>({});
 	let error = $state('');
 	let expandedDetails = $state<string | null>(null);
 	let expandedInfo = $state<Set<string>>(new Set());
 	let detailArticles = $state<Map<string, { articles: any[]; comments: Map<string, string> }>>(new Map());
 
-	let filteredAvailability = $derived(
-		searchQuery
-			? stableAvailability.filter(g => g.commercial_name.toLowerCase().includes(searchQuery.toLowerCase()))
-			: stableAvailability
-	);
+	// Filter availability based on team access level:
+	// Default: show items bookable without approval + with availability > 0
+	// Show all: show everything including approval-required and fully booked
+	let filteredAvailability = $derived.by(() => {
+		let items = stableAvailability;
+		if (searchQuery) {
+			items = items.filter(g => g.commercial_name.toLowerCase().includes(searchQuery.toLowerCase()));
+		}
+		if (!showAll) {
+			items = items.filter(g => {
+				// Hide fully booked
+				const booked = bookedCounts.get(g.commercial_name + '||' + g.location_name) ?? 0;
+				if (g.available_count <= 0 && booked <= 0) return false;
+				// Hide items that need approval for this team
+				if (g.approval_level === 'high') return false;
+				if (g.approval_level === 'low' && (teamAccessLevel === 'view' || teamAccessLevel === 'book')) return false;
+				return true;
+			});
+		}
+		return items;
+	});
 
 	// Load on mount
 	loadAvailability();
@@ -86,7 +109,7 @@
 			const fresh = await api.checkAvailability(startDate, endDate, {
 				category_id: selectedCategory || undefined,
 				location_id: selectedLocation || undefined,
-				bookable_only: !showRestricted
+				bookable_only: false
 			});
 			if (stableAvailability.length === 0) {
 				stableAvailability = fresh;
@@ -159,8 +182,8 @@
 		{/each}
 	</select>
 	<label class="flex items-center gap-1.5 text-sm">
-		<input type="checkbox" bind:checked={showRestricted} onchange={onFilterChange} />
-		Visa även låst utrustning
+		<input type="checkbox" bind:checked={showAll} />
+		Visa all utrustning
 	</label>
 </div>
 
@@ -177,10 +200,14 @@
 					<span class="font-medium">{group.commercial_name}</span>
 					{#if expandable}<span class="text-xs text-neutral-400 ml-1">{infoExpanded ? '▲' : '▼'}</span>{/if}
 					<span class="text-xs text-neutral-500 ml-2">{group.category_name} · {group.location_name}</span>
-					{#if group.approval_level === 'low'}
-						<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded ml-1">Kräver godkännande</span>
-					{:else if group.approval_level === 'high'}
-						<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded ml-1">Kräver särskilt godkännande</span>
+					{#if group.approval_level === 'high'}
+						<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded ml-1">Kräver godkännande</span>
+					{:else if group.approval_level === 'low'}
+						{#if teamAccessLevel === 'view' || teamAccessLevel === 'book'}
+							<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded ml-1">Kräver godkännande</span>
+						{:else}
+							<span class="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded ml-1">Förgodkänd</span>
+						{/if}
 					{/if}
 				</button>
 				<div class="flex items-center gap-2">

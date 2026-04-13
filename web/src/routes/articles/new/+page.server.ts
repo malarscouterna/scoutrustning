@@ -1,10 +1,11 @@
+import { isManager } from '$lib/user';
 import { createApiClient } from '$lib/api/client';
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ fetch, parent, url }) => {
 	const { user } = await parent();
-	if (!user?.roles.includes('equipment_manager')) throw redirect(302, '/browse');
+	if (!isManager(user)) throw redirect(302, '/browse');
 
 	const api = createApiClient({ fetch });
 	const [locations, categories] = await Promise.all([

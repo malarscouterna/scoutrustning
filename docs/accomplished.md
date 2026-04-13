@@ -8,6 +8,28 @@ Newest first.
 
 ---
 
+## 2026-04-12 (in progress)
+
+### Access levels — schema and CLI foundation
+
+First step of the access levels migration. See [access-levels.md](access-levels.md) for the full design doc.
+
+**Migration consolidation**: All 16 existing migrations consolidated into a single `00001_init.sql`. Old migrations moved to `migrations/old/`. No seed data in migration — moved to `init-group` CLI.
+
+**`units` → `teams` rename**: Table renamed from `units` to `teams`, `unit_claim_mappings` to `team_claim_mappings`, `used_by_unit_id` to `used_by_team_id`. Type values changed from `unit`/`project` to `troop`/`role`.
+
+**New columns**: `teams.access_level` (view/book/trusted/manager), `group_settings.default_access_unknown/troop/role`, `group_settings.image_upload_role` now uses access levels instead of role names, `users.active_group_id` (for future multi-group support).
+
+**`init-group` CLI**: Subcommand of the API binary (`/app/server init-group --group-id 766 --group-name "Mälarscouterna" --manager-claim "group:766:it_manager" --team-name "IT-gruppen"`). Creates group, group_settings, default category, manager team, and claim mapping. Idempotent.
+
+**Teams API**: Route changed from `/api/v0/units` to `/api/v0/teams`. Create accepts `access_level`, `claim_scope`, `claim_id`. New update and delete endpoints. List includes claim mappings per team.
+
+**`role-mapping.json` removal started**: Auth middleware no longer loads role-mapping.json. JWT claim parsing stubbed pending step 3 (auth refactor). Dev persona path unchanged.
+
+Remaining steps: auth refactor (Claims struct with TeamMembership), booking approval refactor, dev personas + seed script, frontend, tests.
+
+---
+
 ## 2026-04-09
 
 ### Inventory management foundation (Phase 2 Step 2a+2b)

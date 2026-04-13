@@ -630,3 +630,6 @@ Any action that creates an article event supports optional image attachment. Com
 - [ ] Update `ArticleEventHistory` to display inline thumbnails for events with `image_ids`
 - [ ] Update issues page to show thumbnail indicator
 - [ ] Integration test: report issue with images, verify event metadata, verify images served
+
+**file path**
+The images volume should be separated into issues and article images. In those folders we should group by group_id so each group's images are easily available. If we use groupid/articles or articles/groupid is up for discussion.

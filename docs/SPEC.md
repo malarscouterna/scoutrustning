@@ -373,16 +373,19 @@ All tables have `group_id` (text, FK → groups). Omitted below for brevity.
 |---|---|---|
 | id | uuid | PK |
 | name | text | e.g. "Yggdrasil", unique per group + type |
-| type | text | `unit` or `project`, default `unit` |
-| gchat_webhook_url | text | Nullable, for unit notifications |
+| type | text | `troop` or `role` |
+| access_level | text | `view`, `book`, `trusted`, `manager` — default `book` |
+| gchat_webhook_url | text | Nullable, for team notifications |
 | created_at | timestamptz | |
+
+**Note**: Table is named `teams` in the database. The `type` column distinguishes troops (from `troop:*` OIDC claims) from roles (from `group:*` claims). Access level is configurable per team by equipment managers. See [access-levels.md](access-levels.md).
 
 ### bookings
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
 | created_by | text | FK → users |
-| used_by_unit_id | uuid | Nullable, FK → units |
+| used_by_team_id | uuid | Nullable, FK → teams |
 | used_by_external | text | Nullable, free text for external borrowers |
 | used_by_external_contact | text | Nullable |
 | status | text | draft, submitted, approved, rejected, confirmed, picked_up, returned, cancelled |

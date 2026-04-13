@@ -45,8 +45,34 @@ func (q *Queries) CountArticlesForLocation(ctx context.Context, arg CountArticle
 	return count, err
 }
 
+const createGroupSettingsDefaults = `-- name: CreateGroupSettingsDefaults :one
+INSERT INTO group_settings (group_id)
+VALUES ($1)
+ON CONFLICT (group_id) DO NOTHING
+RETURNING group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, created_at, updated_at
+`
+
+func (q *Queries) CreateGroupSettingsDefaults(ctx context.Context, groupID string) (GroupSetting, error) {
+	row := q.db.QueryRow(ctx, createGroupSettingsDefaults, groupID)
+	var i GroupSetting
+	err := row.Scan(
+		&i.GroupID,
+		&i.NotificationEmailFrom,
+		&i.SmtpKeyEncrypted,
+		&i.GchatWebhookUrl,
+		&i.DefaultApprovalLevel,
+		&i.DefaultAccessUnknown,
+		&i.DefaultAccessTroop,
+		&i.DefaultAccessRole,
+		&i.ImageUploadRole,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getGroupSettings = `-- name: GetGroupSettings :one
-SELECT group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url, default_approval_level, created_at, updated_at, image_upload_role FROM group_settings
+SELECT group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, created_at, updated_at FROM group_settings
 WHERE group_id = $1
 `
 
@@ -59,24 +85,38 @@ func (q *Queries) GetGroupSettings(ctx context.Context, groupID string) (GroupSe
 		&i.SmtpKeyEncrypted,
 		&i.GchatWebhookUrl,
 		&i.DefaultApprovalLevel,
+		&i.DefaultAccessUnknown,
+		&i.DefaultAccessTroop,
+		&i.DefaultAccessRole,
+		&i.ImageUploadRole,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.ImageUploadRole,
 	)
 	return i, err
 }
 
 const upsertGroupSettings = `-- name: UpsertGroupSettings :one
-INSERT INTO group_settings (group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url, default_approval_level, image_upload_role)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO group_settings (
+    group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url,
+    default_approval_level, default_access_unknown, default_access_troop,
+    default_access_role, image_upload_role
+)
+VALUES (
+    $1, $2, $3, $4,
+    $5, $6, $7,
+    $8, $9
+)
 ON CONFLICT (group_id) DO UPDATE SET
     notification_email_from = $2,
     smtp_key_encrypted = $3,
     gchat_webhook_url = $4,
     default_approval_level = $5,
-    image_upload_role = $6,
+    default_access_unknown = $6,
+    default_access_troop = $7,
+    default_access_role = $8,
+    image_upload_role = $9,
     updated_at = now()
-RETURNING group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url, default_approval_level, created_at, updated_at, image_upload_role
+RETURNING group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, created_at, updated_at
 `
 
 type UpsertGroupSettingsParams struct {
@@ -85,6 +125,9 @@ type UpsertGroupSettingsParams struct {
 	SmtpKeyEncrypted      []byte `json:"smtp_key_encrypted"`
 	GchatWebhookUrl       string `json:"gchat_webhook_url"`
 	DefaultApprovalLevel  string `json:"default_approval_level"`
+	DefaultAccessUnknown  string `json:"default_access_unknown"`
+	DefaultAccessTroop    string `json:"default_access_troop"`
+	DefaultAccessRole     string `json:"default_access_role"`
 	ImageUploadRole       string `json:"image_upload_role"`
 }
 
@@ -95,6 +138,9 @@ func (q *Queries) UpsertGroupSettings(ctx context.Context, arg UpsertGroupSettin
 		arg.SmtpKeyEncrypted,
 		arg.GchatWebhookUrl,
 		arg.DefaultApprovalLevel,
+		arg.DefaultAccessUnknown,
+		arg.DefaultAccessTroop,
+		arg.DefaultAccessRole,
 		arg.ImageUploadRole,
 	)
 	var i GroupSetting
@@ -104,9 +150,12 @@ func (q *Queries) UpsertGroupSettings(ctx context.Context, arg UpsertGroupSettin
 		&i.SmtpKeyEncrypted,
 		&i.GchatWebhookUrl,
 		&i.DefaultApprovalLevel,
+		&i.DefaultAccessUnknown,
+		&i.DefaultAccessTroop,
+		&i.DefaultAccessRole,
+		&i.ImageUploadRole,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.ImageUploadRole,
 	)
 	return i, err
 }
