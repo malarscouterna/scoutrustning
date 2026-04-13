@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.5.0](https://github.com/malarscouterna/ms-utrustning/compare/v0.4.1...v0.5.0) (2026-04-13)
+
+
+### ⚠ BREAKING CHANGES
+
+* units table renamed to teams, role-mapping.json replaced by DB-driven team_claim_mappings, API route /units → /teams, used_by_unit_id → used_by_team_id.
+
+### Features
+
+* **api:** image upload, processing, and serving infrastructure ([b98ddad](https://github.com/malarscouterna/ms-utrustning/commit/b98ddad3c634466201c066d6cec4138a26beadf4))
+* image attachment on article events ([e0391ea](https://github.com/malarscouterna/ms-utrustning/commit/e0391ea1761adafb0951a646a7e2b5103bffa264))
+* manager settings UI, configurable permissions, auto-create teams from OIDC ([34cfe15](https://github.com/malarscouterna/ms-utrustning/commit/34cfe159013ef8ec825e63e4ee195105d04b06d1))
+* multi-image support with upload UI and PhotoSwipe gallery ([c5bb17e](https://github.com/malarscouterna/ms-utrustning/commit/c5bb17e64fe20f768f416d115415aa9783034377))
+* product_images table, crop UI, attribution, upload permissions ([a78d610](https://github.com/malarscouterna/ms-utrustning/commit/a78d61090cc398c4b75a408fdfb04bcdd43084ba))
+* replace role-based access with per-team access levels ([7de78ef](https://github.com/malarscouterna/ms-utrustning/commit/7de78efb562bf259259d38a016fa0f67cb138a62))
+* **web:** display product images in browse and article detail ([5ce9162](https://github.com/malarscouterna/ms-utrustning/commit/5ce9162f08136b363c9a7295075654bb271ab268))
+* **web:** shared image browser, metadata editing, and display improvements ([022c692](https://github.com/malarscouterna/ms-utrustning/commit/022c692c3127c076afe6837e9a74b83895d2301f))
+* **web:** show images and descriptions across all booking views ([1b2d84b](https://github.com/malarscouterna/ms-utrustning/commit/1b2d84ba51e95316b40cee00c3f52ef52b916818))
+
+
+### Bug Fixes
+
+* **images:** deduplicate shared images, fix article links, improve UX ([54d9b7a](https://github.com/malarscouterna/ms-utrustning/commit/54d9b7a1e9b151fbced038444c57e2b4ec95e29e))
+
+
+### Performance Improvements
+
+* **api:** increase image quality and resolution ([a507ced](https://github.com/malarscouterna/ms-utrustning/commit/a507ced41b63cf4d19b99b037fede90af45a7ead))
+
 ## [0.4.1](https://github.com/malarscouterna/ms-utrustning/compare/v0.4.0...v0.4.1) (2026-04-10)
 
 
