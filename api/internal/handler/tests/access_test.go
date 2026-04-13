@@ -16,7 +16,7 @@ import (
 
 func mountAll(env *testutil.TestEnv) {
 	env.V1(func(r chi.Router) {
-		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries}).Routes())
+		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
 		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries}).Routes())
@@ -45,12 +45,12 @@ func createArticle(t *testing.T, client *testutil.TestClient, name, catID, locID
 	return article["id"].(string)
 }
 
-// createBookingWithUnit creates a draft booking for a unit and returns the booking ID.
-func createBookingWithUnit(t *testing.T, client *testutil.TestClient, unitID string) string {
+// createBookingWithTeam creates a draft booking for a unit and returns the booking ID.
+func createBookingWithTeam(t *testing.T, client *testutil.TestClient, teamID string) string {
 	t.Helper()
 	body := map[string]any{
 		"start_date": "2026-06-01", "end_date": "2026-06-05",
-		"used_by_team_id": unitID,
+		"used_by_team_id": teamID,
 	}
 	b, _ := json.Marshal(body)
 	resp, err := client.Post("/api/v0/bookings", bytes.NewReader(b))
@@ -67,8 +67,8 @@ func createBookingWithUnit(t *testing.T, client *testutil.TestClient, unitID str
 	return booking["id"].(string)
 }
 
-// getUnitID returns the unit ID for a given unit name.
-func getUnitID(t *testing.T, client *testutil.TestClient, name string) string {
+// getTeamID returns the team ID for a given team name.
+func getTeamID(t *testing.T, client *testutil.TestClient, name string) string {
 	t.Helper()
 	resp, _ := client.Get("/api/v0/teams")
 	defer resp.Body.Close()
@@ -79,7 +79,7 @@ func getUnitID(t *testing.T, client *testutil.TestClient, name string) string {
 			return u["id"].(string)
 		}
 	}
-	t.Fatalf("unit %q not found", name)
+	t.Fatalf("team %q not found", name)
 	return ""
 }
 
@@ -97,9 +97,9 @@ func seedIDs(t *testing.T, client *testutil.TestClient) (locID, catID string) {
 	return locs[0]["id"].(string), cats[0]["id"].(string)
 }
 
-// TestAccess_UnitBookingVisibility verifies that unit-scoped bookings are visible
+// TestAccess_TeamBookingVisibility verifies that team-scoped bookings are visible
 // to unit members but not to leaders of other units.
-func TestAccess_UnitBookingVisibility(t *testing.T) {
+func TestAccess_TeamBookingVisibility(t *testing.T) {
 	env := testutil.SetupTestEnv(t)
 	mountAll(env)
 
@@ -108,12 +108,12 @@ func TestAccess_UnitBookingVisibility(t *testing.T) {
 	leaderSpi := env.ClientAs("leader-flaskpost")
 
 	// Teams are seeded by SetupTestEnv
-	yggID := getUnitID(t, leaderYgg, "Yggdrasil")
+	yggID := getTeamID(t, leaderYgg, "Yggdrasil")
 
 	// Yggdrasil leader creates a unit booking
-	bookingID := createBookingWithUnit(t, leaderYgg, yggID)
+	bookingID := createBookingWithTeam(t, leaderYgg, yggID)
 
-	t.Run("creator sees own unit booking in list", func(t *testing.T) {
+	t.Run("creator sees own team booking in list", func(t *testing.T) {
 		resp, _ := leaderYgg.Get("/api/v0/bookings")
 		defer resp.Body.Close()
 		var bookings []map[string]any
@@ -130,7 +130,7 @@ func TestAccess_UnitBookingVisibility(t *testing.T) {
 		}
 	})
 
-	t.Run("other unit leader cannot see booking in list", func(t *testing.T) {
+	t.Run("other team leader cannot see booking in list", func(t *testing.T) {
 		resp, _ := leaderSpi.Get("/api/v0/bookings")
 		defer resp.Body.Close()
 		var bookings []map[string]any
@@ -143,7 +143,7 @@ func TestAccess_UnitBookingVisibility(t *testing.T) {
 		}
 	})
 
-	t.Run("other unit leader cannot modify booking", func(t *testing.T) {
+	t.Run("other team leader cannot modify booking", func(t *testing.T) {
 		b, _ := json.Marshal(map[string]any{"notes": "hacked"})
 		resp, _ := leaderSpi.Put("/api/v0/bookings/"+bookingID, bytes.NewReader(b))
 		defer resp.Body.Close()
@@ -377,9 +377,9 @@ func TestMultiTenancy_GroupIsolation(t *testing.T) {
 	})
 }
 
-// TestAccess_UnitMembershipOnBooking verifies that leaders can only book for
+// TestAccess_TeamMembershipOnBooking verifies that leaders can only book for
 // their own units, project leaders for their projects, and managers for anything.
-func TestAccess_UnitMembershipOnBooking(t *testing.T) {
+func TestAccess_TeamMembershipOnBooking(t *testing.T) {
 	env := testutil.SetupTestEnv(t)
 	mountAll(env)
 
@@ -389,11 +389,11 @@ func TestAccess_UnitMembershipOnBooking(t *testing.T) {
 	projectLeader := env.ClientAs("project-leader")
 
 	// Teams are seeded by SetupTestEnv
-	yggID := getUnitID(t, leaderYgg, "Yggdrasil")
-	spiID := getUnitID(t, leaderSpi, "Spindlarna")
-	valborgID := getUnitID(t, projectLeader, "Valborgskommittén")
+	yggID := getTeamID(t, leaderYgg, "Yggdrasil")
+	spiID := getTeamID(t, leaderSpi, "Spindlarna")
+	valborgID := getTeamID(t, projectLeader, "Valborgskommittén")
 
-	t.Run("leader can book for own unit", func(t *testing.T) {
+	t.Run("leader can book for own team", func(t *testing.T) {
 		b, _ := json.Marshal(map[string]any{
 			"start_date": "2026-06-01", "end_date": "2026-06-05",
 			"used_by_team_id": yggID,
@@ -406,7 +406,7 @@ func TestAccess_UnitMembershipOnBooking(t *testing.T) {
 		}
 	})
 
-	t.Run("leader cannot book for other unit", func(t *testing.T) {
+	t.Run("leader cannot book for other team", func(t *testing.T) {
 		b, _ := json.Marshal(map[string]any{
 			"start_date": "2026-06-01", "end_date": "2026-06-05",
 			"used_by_team_id": spiID,
@@ -418,7 +418,7 @@ func TestAccess_UnitMembershipOnBooking(t *testing.T) {
 		}
 	})
 
-	t.Run("project leader can book for own project", func(t *testing.T) {
+	t.Run("trusted user can book for own role team", func(t *testing.T) {
 		b, _ := json.Marshal(map[string]any{
 			"start_date": "2026-06-01", "end_date": "2026-06-05",
 			"used_by_team_id": valborgID,
@@ -431,7 +431,7 @@ func TestAccess_UnitMembershipOnBooking(t *testing.T) {
 		}
 	})
 
-	t.Run("project leader cannot book for a unit", func(t *testing.T) {
+	t.Run("trusted user cannot book for a troop", func(t *testing.T) {
 		b, _ := json.Marshal(map[string]any{
 			"start_date": "2026-06-01", "end_date": "2026-06-05",
 			"used_by_team_id": yggID,
@@ -443,7 +443,7 @@ func TestAccess_UnitMembershipOnBooking(t *testing.T) {
 		}
 	})
 
-	t.Run("manager can book for any unit or project", func(t *testing.T) {
+	t.Run("manager can book for any team", func(t *testing.T) {
 		for _, id := range []string{yggID, spiID, valborgID} {
 			b, _ := json.Marshal(map[string]any{
 				"start_date": "2026-07-01", "end_date": "2026-07-05",
@@ -464,7 +464,7 @@ func TestAccess_UnitMembershipOnBooking(t *testing.T) {
 func TestAccess_PickupEventLogging(t *testing.T) {
 	env := testutil.SetupTestEnv(t)
 	env.V1(func(r chi.Router) {
-		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries}).Routes())
+		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
 		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries}).Routes())

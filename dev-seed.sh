@@ -11,6 +11,12 @@ HEADER="X-Dev-Role-Override: manager-equipment"
 LEADER="X-Dev-Role-Override: leader-yggdrasil"
 CSV="${1:-docs/import-example.csv}"
 
+# Group IDs (Scoutnet org IDs, e.g. 766 for Mälarscouterna)
+GROUP_ID="766"
+GROUP_NAME="Mälarscouterna"
+TEST_GROUP_ID="999"
+TEST_GROUP_NAME="Testkåren"
+
 echo "Waiting for API..."
 until curl -sf "$API/api/health" > /dev/null 2>&1; do
   sleep 1
@@ -43,13 +49,13 @@ echo "Bootstrapping groups..."
 # In dev mode (air), binary is at ./tmp/server; in production, /bin/server
 SERVER_BIN=$(docker compose exec -T api sh -c 'test -f ./tmp/server && echo ./tmp/server || echo /bin/server')
 docker compose exec -T api $SERVER_BIN init-group \
-  --group-id 766 --group-name "Mälarscouterna" \
-  --manager-claim "group:766:material_responsible" --team-name "Utrustningsgruppen" \
+  --group-id $GROUP_ID --group-name "$GROUP_NAME" \
+  --manager-claim "group:$GROUP_ID:material_responsible" --team-name "Utrustningsgruppen" \
   --seed-locations
 
 docker compose exec -T api $SERVER_BIN init-group \
-  --group-id 999 --group-name "Testkåren" \
-  --manager-claim "group:999:admin" --team-name "Admin"
+  --group-id $TEST_GROUP_ID --group-name "$TEST_GROUP_NAME" \
+  --manager-claim "group:$TEST_GROUP_ID:admin" --team-name "Admin"
 
 # Check that the API is in dev mode (X-Dev-Role-Override must work)
 HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v0/locations" -H "$HEADER")
@@ -84,7 +90,7 @@ done
 # Test group team
 curl -sf -X POST "$API/api/v0/teams" \
   -H "X-Dev-Role-Override: other-kar-leader" -H "Content-Type: application/json" \
-  -d '{"name":"Avdelning 1","type":"troop","access_level":"book","claim_scope":"troop","claim_id":"99901"}' > /dev/null && echo "  Created: Avdelning 1 (book, group 999)" || echo "  Exists: Avdelning 1"
+  -d '{"name":"Avdelning 1","type":"troop","access_level":"book","claim_scope":"troop","claim_id":"99901"}' > /dev/null && echo "  Created: Avdelning 1 (book, test group)" || echo "  Exists: Avdelning 1"
 
 # Report issues on some quantity-tracked articles to demo status mix
 echo ""

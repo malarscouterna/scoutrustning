@@ -27,11 +27,13 @@ func TestImageUpload(t *testing.T) {
 	env := testutil.SetupTestEnv(t)
 	imageDir := t.TempDir()
 
+	perms := handler.NewPermissionCache(env.Queries)
+
 	env.V1(func(r chi.Router) {
-		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries}).Routes())
+		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries, Perms: perms}).Routes())
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
-		r.Mount("/group-settings", (&handler.GroupSettingsHandler{Q: env.Queries}).Routes())
+		r.Mount("/group-settings", (&handler.GroupSettingsHandler{Q: env.Queries, Perms: perms}).Routes())
 		r.Mount("/images", (&images.Handler{Q: env.Queries, ImageDir: imageDir}).Routes())
 	})
 
@@ -112,9 +114,9 @@ func TestImageUpload(t *testing.T) {
 	})
 
 	t.Run("restrict upload to manager only", func(t *testing.T) {
-		// Set image_upload_role to equipment_manager
+		// Set image_upload_role to manager
 		settingsBody, _ := json.Marshal(map[string]any{
-			"image_upload_role":      "equipment_manager",
+			"image_upload_role":      "manager",
 			"default_approval_level": "none",
 		})
 		resp, _ := manager.Put("/api/v0/group-settings", bytes.NewReader(settingsBody))
@@ -131,7 +133,7 @@ func TestImageUpload(t *testing.T) {
 
 		// Reset to default
 		settingsBody, _ = json.Marshal(map[string]any{
-			"image_upload_role":      "leader",
+			"image_upload_role":      "book",
 			"default_approval_level": "none",
 		})
 		resp, _ = manager.Put("/api/v0/group-settings", bytes.NewReader(settingsBody))
@@ -494,6 +496,245 @@ func TestImageUpload(t *testing.T) {
 		if resp.StatusCode != http.StatusBadRequest {
 			t.Errorf("expected 400, got %d", resp.StatusCode)
 		}
+	})
+
+	// Get a Sibley article ID for event tests
+	resp, _ = manager.Get("/api/v0/articles")
+	var allArticles []map[string]any
+	json.NewDecoder(resp.Body).Decode(&allArticles)
+	resp.Body.Close()
+	var sibleyID string
+	for _, a := range allArticles {
+		if a["commercial_name"] == "Sibley" {
+			sibleyID = a["id"].(string)
+			break
+		}
+	}
+	if sibleyID == "" {
+		t.Fatal("no Sibley article found")
+	}
+
+	t.Run("report issue with images", func(t *testing.T) {
+		// Upload two issue images
+		body1, ct1 := buildIssueMultipartUpload(t, testJPEG)
+		req1, _ := http.NewRequest("POST", leader.BaseURL()+"/api/v0/images/issue", body1)
+		req1.Header.Set("Content-Type", ct1)
+		req1.Header.Set("X-Dev-Role-Override", "leader-yggdrasil")
+		resp1, _ := http.DefaultClient.Do(req1)
+		var img1 map[string]string
+		json.NewDecoder(resp1.Body).Decode(&img1)
+		resp1.Body.Close()
+
+		body2, ct2 := buildIssueMultipartUpload(t, testJPEG)
+		req2, _ := http.NewRequest("POST", leader.BaseURL()+"/api/v0/images/issue", body2)
+		req2.Header.Set("Content-Type", ct2)
+		req2.Header.Set("X-Dev-Role-Override", "leader-yggdrasil")
+		resp2, _ := http.DefaultClient.Do(req2)
+		var img2 map[string]string
+		json.NewDecoder(resp2.Body).Decode(&img2)
+		resp2.Body.Close()
+
+		// Report issue with image_ids
+		statusBody, _ := json.Marshal(map[string]any{
+			"status":    "reported_usable",
+			"comment":   "Torn fabric",
+			"image_ids": []string{img1["image_id"], img2["image_id"]},
+		})
+		resp, _ := leader.Put("/api/v0/articles/"+sibleyID+"/status", bytes.NewReader(statusBody))
+		if resp.StatusCode != http.StatusOK {
+			respBody, _ := io.ReadAll(resp.Body)
+			t.Fatalf("expected 200, got %d: %s", resp.StatusCode, respBody)
+		}
+		resp.Body.Close()
+
+		// Verify event has image_ids in metadata
+		resp, _ = leader.Get("/api/v0/articles/" + sibleyID + "/events")
+		var evResult struct {
+			Events []struct {
+				EventType string         `json:"event_type"`
+				Metadata  map[string]any `json:"metadata"`
+			} `json:"events"`
+		}
+		json.NewDecoder(resp.Body).Decode(&evResult)
+		resp.Body.Close()
+
+		found := false
+		for _, ev := range evResult.Events {
+			if ev.EventType == "issue_reported" {
+				ids, ok := ev.Metadata["image_ids"].([]any)
+				if !ok || len(ids) != 2 {
+					t.Errorf("expected 2 image_ids, got %v", ev.Metadata["image_ids"])
+				}
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Error("issue_reported event not found")
+		}
+
+		// Verify images are servable
+		resp, _ = leader.Get("/api/v0/images/" + img1["image_id"] + ".webp")
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("expected 200 serving issue image, got %d", resp.StatusCode)
+		}
+		resp.Body.Close()
+		resp, _ = leader.Get("/api/v0/images/" + img1["image_id"] + "_thumb.webp")
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("expected 200 serving issue thumbnail, got %d", resp.StatusCode)
+		}
+		resp.Body.Close()
+	})
+
+	t.Run("add note with image", func(t *testing.T) {
+		body, ct := buildIssueMultipartUpload(t, testJPEG)
+		req, _ := http.NewRequest("POST", leader.BaseURL()+"/api/v0/images/issue", body)
+		req.Header.Set("Content-Type", ct)
+		req.Header.Set("X-Dev-Role-Override", "leader-yggdrasil")
+		resp, _ := http.DefaultClient.Do(req)
+		var img map[string]string
+		json.NewDecoder(resp.Body).Decode(&img)
+		resp.Body.Close()
+
+		noteBody, _ := json.Marshal(map[string]any{
+			"message":   "Close-up of the tear",
+			"image_ids": []string{img["image_id"]},
+		})
+		resp, _ = leader.Post("/api/v0/articles/"+sibleyID+"/events", bytes.NewReader(noteBody))
+		if resp.StatusCode != http.StatusNoContent {
+			respBody, _ := io.ReadAll(resp.Body)
+			t.Fatalf("expected 204, got %d: %s", resp.StatusCode, respBody)
+		}
+		resp.Body.Close()
+
+		// Verify note event has image_ids
+		resp, _ = leader.Get("/api/v0/articles/" + sibleyID + "/events?limit=1")
+		var evResult struct {
+			Events []struct {
+				EventType   string         `json:"event_type"`
+				Description string         `json:"description"`
+				Metadata    map[string]any `json:"metadata"`
+			} `json:"events"`
+		}
+		json.NewDecoder(resp.Body).Decode(&evResult)
+		resp.Body.Close()
+
+		if len(evResult.Events) == 0 {
+			t.Fatal("no events returned")
+		}
+		ev := evResult.Events[0]
+		if ev.EventType != "note" {
+			t.Errorf("expected note event, got %s", ev.EventType)
+		}
+		if ev.Description != "Close-up of the tear" {
+			t.Errorf("expected description, got %s", ev.Description)
+		}
+		ids, ok := ev.Metadata["image_ids"].([]any)
+		if !ok || len(ids) != 1 {
+			t.Errorf("expected 1 image_id in note metadata, got %v", ev.Metadata["image_ids"])
+		}
+	})
+
+	t.Run("note without images has no image_ids in metadata", func(t *testing.T) {
+		noteBody, _ := json.Marshal(map[string]any{"message": "Just a text note"})
+		resp, _ := leader.Post("/api/v0/articles/"+sibleyID+"/events", bytes.NewReader(noteBody))
+		resp.Body.Close()
+
+		resp, _ = leader.Get("/api/v0/articles/" + sibleyID + "/events?limit=1")
+		var evResult struct {
+			Events []struct {
+				Metadata map[string]any `json:"metadata"`
+			} `json:"events"`
+		}
+		json.NewDecoder(resp.Body).Decode(&evResult)
+		resp.Body.Close()
+
+		if len(evResult.Events) == 0 {
+			t.Fatal("no events")
+		}
+		if evResult.Events[0].Metadata["image_ids"] != nil {
+			t.Errorf("expected no image_ids in plain note, got %v", evResult.Events[0].Metadata["image_ids"])
+		}
+	})
+
+	// --- Shared image: from-shared + file reference counting ---
+
+	// Find the shared image uploaded earlier ("Sibley framifrån")
+	var sharedImageID, sharedFileID string
+	t.Run("add shared image to different article group", func(t *testing.T) {
+		// Browse shared to find the image
+		resp, _ := manager.Get("/api/v0/images/shared?search=framifr%C3%A5n")
+		var shared []map[string]any
+		json.NewDecoder(resp.Body).Decode(&shared)
+		resp.Body.Close()
+		if len(shared) == 0 {
+			t.Fatal("no shared images found")
+		}
+		sharedImageID = shared[0]["id"].(string)
+		sharedFileID = shared[0]["file_id"].(string)
+
+		// Create a different article group to add the shared image to
+		b, _ := json.Marshal(map[string]any{
+			"commercial_name": "Tarp", "common_name": "Tarp 1",
+			"category_id": catID, "location_id": locID, "individually_tracked": true,
+		})
+		resp, _ = manager.Post("/api/v0/articles", bytes.NewReader(b))
+		resp.Body.Close()
+
+		// Add shared image to Tarp
+		b, _ = json.Marshal(map[string]any{
+			"source_image_id":  sharedImageID,
+			"commercial_name":  "Tarp",
+			"location_id":      locID,
+			"title":            "Tarp 1",
+			"description":      "Reused from Sibley",
+		})
+		resp, _ = manager.Post("/api/v0/images/product/from-shared", bytes.NewReader(b))
+		if resp.StatusCode != http.StatusOK {
+			respBody, _ := io.ReadAll(resp.Body)
+			t.Fatalf("expected 200, got %d: %s", resp.StatusCode, respBody)
+		}
+		var result map[string]any
+		json.NewDecoder(resp.Body).Decode(&result)
+		resp.Body.Close()
+
+		// New row should reference the same file_id
+		img := result["image"].(map[string]any)
+		if img["file_id"] != sharedFileID {
+			t.Errorf("expected same file_id %s, got %s", sharedFileID, img["file_id"])
+		}
+		// Should be a different row ID
+		if img["id"] == sharedImageID {
+			t.Error("expected different row ID from source")
+		}
+
+		// Tarp should have the image in its image_ids
+		ids := result["image_ids"].([]any)
+		if len(ids) != 1 {
+			t.Errorf("expected 1 image_id on Tarp, got %d", len(ids))
+		}
+	})
+
+	t.Run("delete original keeps files when referenced", func(t *testing.T) {
+		if sharedImageID == "" {
+			t.Skip("shared image not set up")
+		}
+		// Delete the original shared image from Sibley
+		req, _ := http.NewRequest("DELETE",
+			manager.BaseURL()+"/api/v0/images/product/"+sharedImageID+"?commercial_name=Sibley&location_id="+locID, nil)
+		req.Header.Set("X-Dev-Role-Override", "manager-equipment")
+		resp, _ := http.DefaultClient.Do(req)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusNoContent {
+			t.Fatalf("expected 204, got %d", resp.StatusCode)
+		}
+
+		// Files should still exist because Tarp references the same file_id
+		resp, _ = manager.Get("/api/v0/images/" + sharedFileID + ".webp")
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("expected file still served (referenced by Tarp), got %d", resp.StatusCode)
+		}
+		resp.Body.Close()
 	})
 }
 

@@ -92,8 +92,10 @@ Vid utlämning ser du exakt vilka artiklar du tilldelats. Om något inte stämme
 Vissa artiklar kräver godkännande från utrustningsansvarig innan bokningen bekräftas. Det finns tre nivåer:
 
 - **Fritt bokbar**: bokningen bekräftas direkt.
-- **Låg nivå**: projektledare får automatiskt godkännande. Vanliga ledare behöver godkännande från utrustningsansvarig.
-- **Hög nivå**: alla utom utrustningsansvariga behöver godkännande.
+- **Låg nivå**: betrodda avdelningar/roller får automatiskt godkännande. Övriga behöver godkännande från utrustningsansvarig.
+- **Hög nivå**: alla behöver godkännande, även utrustningsansvariga.
+
+Vilken nivå din avdelning har bestäms av utrustningsansvarig i inställningarna.
 
 Om *någon* artikel i din bokning kräver godkännande, väntar hela bokningen. Du ser statusen på bokningssidan.
 

@@ -55,7 +55,15 @@ export const load: LayoutServerLoad = async ({ cookies, locals, url, fetch: skFe
 		const personas = loadPersonas();
 
 		if (personaCookie && personas[personaCookie]) {
-			// Persona selected — fetch resolved user from API
+			if (DEMO_MODE) {
+				// Demo: persona cookie only valid with an OIDC session
+				const session = await locals.auth?.() as any;
+				if (!session?.accessToken) {
+					cookies.delete(PERSONA_COOKIE, { path: '/' });
+					return { user: null, dev: null, demo: true, oidcName: null };
+				}
+			}
+			// Persona selected - fetch resolved user from API
 			const user = await fetchMe(skFetch);
 			return {
 				user,
@@ -81,7 +89,7 @@ export const load: LayoutServerLoad = async ({ cookies, locals, url, fetch: skFe
 		}
 
 		if (DEMO_MODE) {
-			return { user: null, dev: { personas, currentPersona: null }, demo: true, oidcName: null };
+			return { user: null, dev: null, demo: true, oidcName: null };
 		}
 
 		// Dev fallback to default persona — set cookie so hooks proxy sends it

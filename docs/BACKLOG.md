@@ -1,6 +1,6 @@
 # Backlog
 
-Deferred work items — things to grab when there's time, smaller tasks set aside during major work. When an item is completed, move it to [accomplished.md](accomplished.md).
+Deferred work items - things to grab when there's time, smaller tasks set aside during major work. When an item is completed, move it to [accomplished.md](accomplished.md).
 
 ## ~~Admin UI for group/role management~~ → Access levels
 
@@ -19,7 +19,7 @@ When changing dates on a booking, the API validates that all existing items are 
 
 Copying a booking needs availability checking against the new dates. Ties into the package/kit feature (Phase 4) since both involve populating a booking from a template. The API endpoint (`POST /api/v0/bookings/{id}/copy`) exists but the UI is deferred.
 
-## Booking editing — change tracking via booking_events
+## Booking editing - change tracking via booking_events
 
 The `booking_events` table supports mutation tracking event types (`items_changed`, `dates_changed`, `details_changed`) with a `metadata` jsonb column. Currently only approval-flow events and `note` events are logged. Next steps:
 
@@ -31,9 +31,9 @@ The `booking_events` table supports mutation tracking event types (`items_change
 
 ## Stale drafts with items
 
-Empty draft cleanup is implemented (48h). Stale drafts *with* items need notifications before deletion — users should be warned before their booking is removed.
+Empty draft cleanup is implemented (48h). Stale drafts *with* items need notifications before deletion - users should be warned before their booking is removed.
 
-## Quantity-tracked items — manager UI
+## Quantity-tracked items - manager UI
 
 **Partially built in Phase 2 Step 2c** (see [inventory-management.md](inventory-management.md)).
 
@@ -64,7 +64,7 @@ When copying a booking, items that aren't available for the new dates should be 
 
 No optimistic locking. Booking detail polls every 10s during active statuses. Consider `updated_at` checks on writes if conflicts become a real problem.
 
-## Pickup — report missing items
+## Pickup - report missing items
 
 When confirming pickup of quantity-tracked items with a count lower than booked, prompt the user to report missing items. Currently the shortfall is silently marked as `not_available`.
 
@@ -72,7 +72,7 @@ When confirming pickup of quantity-tracked items with a count lower than booked,
 
 Managers should be able to swap articles on `confirmed`/`approved` bookings, not just during pickup (`picked_up` status). Use cases: unexpected unavailability, delayed returns from other bookings, inventory rebalancing. When an article is given a new status, managers should be informed about potential unavailability issues.
 
-## Delayed return — conflict resolution
+## Delayed return - conflict resolution
 
 When a delayed article overlaps with another booking:
 - Auto-swap for a free equivalent if possible
@@ -82,28 +82,28 @@ Currently shows a warning but doesn't resolve the conflict.
 
 ## Date validation and overdue handling
 
-- Overdue bookings (`end_date` in past, still `picked_up`) — visual warning, manager notification
-- Delayed return date in the past — validate or warn
-- Booking start date in the past — allow for retroactive bookings?
+- Overdue bookings (`end_date` in past, still `picked_up`) - visual warning, manager notification
+- Delayed return date in the past - validate or warn
+- Booking start date in the past - allow for retroactive bookings?
 - Overdue reminder schedule (daily? configurable?)
 
-## Quantity-tracked items — return flow
+## Quantity-tracked items - return flow
 
 Grouped return UI for quantity-tracked items: one row per product group with count inputs instead of individual rows with identical names.
 
-## Issue reporting — booking context in event history
+## Issue reporting - booking context in event history
 
 Link article events to booking IDs when they originate from a booking flow. Show context like "Rapporterad vid återlämning av bokning #X".
 
-## Ärenden — per-user filtering
+## Ärenden - per-user filtering
 
 Filter issues page to only show articles the user personally reported. Requires a query parameter (e.g. `reported_by=me`) filtering on article events.
 
-## Pickup state — partial indication
+## Pickup state - partial indication
 
 When some but not all items are picked up, visually indicate partial pickup. A "done with pickup" button to confirm even if not all items were collected.
 
-## Pickup state — adding items after full pickup
+## Pickup state - adding items after full pickup
 
 If new items are added to a fully picked-up booking, revert to partial pickup state.
 
@@ -111,35 +111,35 @@ If new items are added to a fully picked-up booking, revert to partial pickup st
 
 Only allow pickup on or after the booking's start date. Browse/inventory should distinguish "reserved for today but not yet picked up" from "currently checked out".
 
-## Browse page — date picker for time-travel view
+## Browse page - date picker for time-travel view
 
 Add a date picker to view inventory state at any date. The API already supports a `date` param.
 
-## Seed script — date sprawl
+## Seed script - date sprawl
 
 Backdate article events in the seed script for realistic history spread. No API changes needed.
 
-## Booking flow — date change with items in cart
+## Booking flow - date change with items in cart
 
-When dates change on a booking with items, re-validate all items against the new range. Currently the API returns 409 for conflicts but the UI doesn't handle it gracefully. The date fields should be locked once items are added to the cart — changing dates could invalidate the entire cart (articles no longer available). To change dates, the user should remove all items first, or the UI should show which items conflict and offer to remove them. Until this is built, date inputs are disabled after the first item is added.
+When dates change on a booking with items, re-validate all items against the new range. Currently the API returns 409 for conflicts but the UI doesn't handle it gracefully. The date fields should be locked once items are added to the cart - changing dates could invalidate the entire cart (articles no longer available). To change dates, the user should remove all items first, or the UI should show which items conflict and offer to remove them. Until this is built, date inputs are disabled after the first item is added.
 
-## Quantity-tracked items — batch issue reporting
+## Quantity-tracked items - batch issue reporting
 
 On the article detail page for quantity tracked groups, allow reporting issues for multiple items at once (e.g. "3 LED lamps broken"). Currently reports go to the representative article only. Needs a count input on the report form that creates events on N articles in the group. Similar UX to the return flow's per-item status.
 
 ## Shared visual identity for interactive elements
 
 Audit and standardize the visual language for interactive elements across the app:
-- **Navigation links** (opens a new page): pill-button with › chevron. Blue for primary (article name, "Visa artikelsida"), neutral for secondary ("Redigera"). Currently used on browse and article detail pages — verify consistency everywhere.
+- **Navigation links** (opens a new page): pill-button with › chevron. Blue for primary (article name, "Visa artikelsida"), neutral for secondary ("Redigera"). Currently used on browse and article detail pages - verify consistency everywhere.
 - **In-page actions** (toggles something on the current page): underline text. Blue for primary ("Rapportera"), neutral for secondary ("Historik", "Avbryt").
-- **Manager-only elements**: how to visually distinguish manager controls from user controls? Currently relies on conditional rendering only — no visual indicator that something is a manager feature.
+- **Manager-only elements**: how to visually distinguish manager controls from user controls? Currently relies on conditional rendering only - no visual indicator that something is a manager feature.
 - **Bulk vs individual actions**: bulk toolbar vs per-item links. Need clear visual distinction when manager mode is fully wired.
 - **Destructive actions**: red underline text ("Ta bort artikel permanent"). Consistent?
 - **Primary action buttons**: filled blue ("Spara", "Skapa artikel"). Consistent sizing and placement?
 
 Extract shared button/link component or at least document the pattern in coding-conventions.md.
 
-## Article comments — delete own recent comments
+## Article comments - delete own recent comments
 
 After adding a comment on the article detail page, the user should be able to delete it (at least for a short time, e.g. within 5 minutes or until someone else adds an event). Needs a `DELETE /articles/{id}/events/{event_id}` endpoint with ownership + time check.
 
@@ -147,7 +147,7 @@ After adding a comment on the article detail page, the user should be able to de
 
 On the article edit page, managers should be able to manage the article's event history: edit descriptions, delete erroneous events, add backdated notes. This is an admin tool for correcting mistakes, not a user-facing feature.
 
-## Quantity-tracked items — per-item editing on count increase
+## Quantity-tracked items - per-item editing on count increase
 
 When increasing count on a quantity tracked group, new articles get default per-item fields (status: ok, no purchase date/price). The expandable per-physical-item list on the group edit page should allow inline editing of these fields (purchase_date, purchase_price, status) per item. Could also support setting defaults for new items (e.g. "all new items purchased today at X kr").
 
@@ -155,18 +155,18 @@ When increasing count on a quantity tracked group, new articles get default per-
 
 **Superseded by the access levels feature** (see [access-levels.md](access-levels.md)). The four access levels (view, book, trusted, manager) cover this and more. Per-team configuration replaces the hardcoded three tiers.
 
-## Quantity-tracked items — smarter count decrease on edit page
+## Quantity-tracked items - smarter count decrease on edit page
 
-When decreasing count on the group edit page, the system currently archives the newest non-booked articles. This is too blunt — the manager may want to archive a specific article (e.g. the broken one, not the newest one). The per-physical-item list on the edit page should allow the manager to select which specific articles to archive when decreasing count, rather than auto-selecting. Could be checkboxes on the item list with an "Arkivera markerade" action.
+When decreasing count on the group edit page, the system currently archives the newest non-booked articles. This is too blunt - the manager may want to archive a specific article (e.g. the broken one, not the newest one). The per-physical-item list on the edit page should allow the manager to select which specific articles to archive when decreasing count, rather than auto-selecting. Could be checkboxes on the item list with an "Arkivera markerade" action.
 
 ## Duplicate article name checking on create
 
-When creating articles, there's no check for duplicate `common_name` within the group. Creating two "Sibley 1" articles would cause confusion. The API should check for existing articles with the same `common_name + group_id` and return a warning (not a hard block — the manager may intentionally want duplicates across locations). The frontend should show the warning and let the manager confirm.
+When creating articles, there's no check for duplicate `common_name` within the group. Creating two "Sibley 1" articles would cause confusion. The API should check for existing articles with the same `common_name + group_id` and return a warning (not a hard block - the manager may intentionally want duplicates across locations). The frontend should show the warning and let the manager confirm.
 
 
 ## Article groups normalization
 
-The concept of a "product group" (articles sharing `commercial_name + location_id`) is implicit today — enforced by convention and propagation logic. Several features depend on this grouping:
+The concept of a "product group" (articles sharing `commercial_name + location_id`) is implicit today - enforced by convention and propagation logic. Several features depend on this grouping:
 
 - Shared fields (description, instructions, manager_notes, category_id) propagated on save
 - Product images (per group)
@@ -197,10 +197,10 @@ Articles would get an `article_group_id` FK instead of duplicating shared fields
 
 **Cost**: large refactor touching most article queries and handlers. Migration must create groups from existing articles and backfill FKs.
 
-**Current approach**: `product_images` uses the composite key `(group_id, commercial_name, location_id)` — designed to be easily re-keyed to `article_group_id` later without structural changes. The table has its own UUID PK so all references (frontend, other tables) use the UUID and survive the re-keying. Migration path: add `article_group_id` column, backfill from composite key match, drop the three columns.
+**Current approach**: `product_images` uses the composite key `(group_id, commercial_name, location_id)` - designed to be easily re-keyed to `article_group_id` later without structural changes. The table has its own UUID PK so all references (frontend, other tables) use the UUID and survive the re-keying. Migration path: add `article_group_id` column, backfill from composite key match, drop the three columns.
 
 
-## ~~Availability filter — access-level-aware "show locked items"~~ → Done
+## ~~Availability filter - access-level-aware "show locked items"~~ → Done
 
 Implemented in the access levels feature. Approval badges on the availability picker now reflect the selected team's access level: `low`-approval items show "Kräver godkännande" only for `view`/`book` teams (trusted+ auto-confirms). `high` always shows the badge. Badges update reactively when the team picker changes.
 
@@ -212,6 +212,6 @@ The front page (/) needs to look better and be clearer about what the user can d
 
 The group settings page has too many fields to fit comfortably. Consider a compact layout where the most important fields are always visible on the tab bar area, with a "Fler inställningar" expander for the rest. Needs design thinking about which fields are most-used (locations, categories) vs rarely changed (SMTP key, webhook URL, image upload role). Possibly a two-column layout on wider screens with sections collapsed by default on mobile.
 
-## Quantity-tracked items — issue reporting during pickup
+## Quantity-tracked items - issue reporting during pickup
 
-Allow reporting issues on quantity-tracked items during the pickup flow. The report should be orthogonal to pickup — reporting a broken item doesn't reduce the pickup count (the user grabs a different physical unit instead). Implementation started (state + handler in PickupChecklist, button removed) but deferred because the interaction model needs more thought: should the report target a specific physical article? How does it interact with the pickup count confirmation? The dead code (`startGroupReport`, `confirmGroupReport`, `reportingGroupKey`) is still in PickupChecklist.svelte.
+Allow reporting issues on quantity-tracked items during the pickup flow. The report should be orthogonal to pickup - reporting a broken item doesn't reduce the pickup count (the user grabs a different physical unit instead). Implementation started (state + handler in PickupChecklist, button removed) but deferred because the interaction model needs more thought: should the report target a specific physical article? How does it interact with the pickup count confirmation? The dead code (`startGroupReport`, `confirmGroupReport`, `reportingGroupKey`) is still in PickupChecklist.svelte.

@@ -76,6 +76,7 @@ High — follow these unless they conflict with an explicit user instruction.
 - API is versioned as `v0` (pre-release). Breaking changes don't require version bumps.
 - The Go API is language-agnostic: returns data as stored, uses error keys (not human-readable messages) so the frontend can translate them.
 - Code, comments, API field names, and documentation are always in English.
+- Use ` - ` instead of em-dashes (—) in documentation and comments. Replace em-dashes when editing a file.
 - UI strings are in Swedish (hardcoded, known debt — i18n system not yet set up).
 - Never hardcode credentials or secrets. Use environment variables.
 - Never log tokens, passwords, or PII beyond what's needed for debugging.

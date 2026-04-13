@@ -63,7 +63,20 @@ const appHandle: Handle = async ({ event, resolve }) => {
 	if (DEV_MODE) {
 		personaKey = event.cookies.get(PERSONA_COOKIE);
 		if (personaKey) {
-			authMode = 'persona';
+			if (DEMO_MODE) {
+				// Demo: persona cookie only valid with an OIDC session
+				accessToken = await getAccessToken(event);
+				if (accessToken) {
+					authMode = 'persona';
+				} else {
+					// Stale persona cookie without OIDC - clear it and redirect to login
+					event.cookies.delete(PERSONA_COOKIE, { path: '/' });
+					const callbackUrl = event.url.pathname + event.url.search;
+					throw redirect(302, `/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+				}
+			} else {
+				authMode = 'persona';
+			}
 		} else {
 			accessToken = await getAccessToken(event);
 			if (accessToken) {

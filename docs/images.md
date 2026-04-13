@@ -6,10 +6,10 @@ Design doc for image upload, processing, storage, and display. Covers both produ
 
 Two types of images:
 
-1. **Product images** — per product type + location (`commercial_name + location_id`). All articles of the same type at the same location share images. Client-side crop enforced (cropperjs) with selectable format: landscape (4:3), portrait (3:4), or square (1:1). Images can be shared with other scout groups.
-2. **Issue report images** — attached to article events when reporting issues. Any user uploads. No crop requirement.
+1. **Product images** - per product type + location (`commercial_name + location_id`). All articles of the same type at the same location share images. Client-side crop enforced (cropperjs) with selectable format: landscape (4:3), portrait (3:4), or square (1:1). Images can be shared with other scout groups.
+2. **Issue report images** - attached to article events when reporting issues. Any user uploads. No crop requirement.
 
-**Important**: Images are compressed for web display. Originals are not saved on the server — only the processed WebP variants are stored. The UI makes this clear during upload.
+**Important**: Images are compressed for web display. Originals are not saved on the server - only the processed WebP variants are stored. The UI makes this clear during upload.
 
 ## Architecture
 
@@ -21,7 +21,7 @@ Browser → cropperjs (crop) → SvelteKit proxy → Go API → process (govips)
 - Upload: `POST /api/v0/images/product` and `POST /api/v0/images/issue`
 - Serve: `GET /api/v0/images/{uuid}.webp` and `GET /api/v0/images/{uuid}_thumb.webp`
 - Storage: Docker volume mounted at `/data/images` in the API container
-- Processing: govips (libvips CGO wrapper) — handles JPEG, PNG, HEIC input; outputs WebP
+- Processing: govips (libvips CGO wrapper) - handles JPEG, PNG, HEIC input; outputs WebP
 
 ## Storage model
 
@@ -54,17 +54,17 @@ product_images (
 | Full name + group | "Anna Svensson, Mälarscouterna" |
 | Custom free text | "Foto: Scouternas Folkhögskola" |
 
-The API stores and returns only the final string — the mode is a UI-only concept.
+The API stores and returns only the final string - the mode is a UI-only concept.
 
 ### Article references
 
 `articles.image_ids` (jsonb array of UUID strings) references `product_images.id`. All articles sharing `commercial_name + location_id` store the same array. This is the existing model from migration 00013.
 
-When a product image is added to an article group, the `product_images` record stores the canonical title and description set by the uploader. The `image_ids` array on articles just references these — no per-article override of metadata. When browsing shared images and adding one to a different article, the title is set to match the new article's name, and the description is pre-populated from the original but editable before saving. This creates a new `product_images` row referencing the same files on disk — see "Shared images" below.
+When a product image is added to an article group, the `product_images` record stores the canonical title and description set by the uploader. The `image_ids` array on articles just references these - no per-article override of metadata. When browsing shared images and adding one to a different article, the title is set to match the new article's name, and the description is pre-populated from the original but editable before saving. This creates a new `product_images` row referencing the same files on disk - see "Shared images" below.
 
 ### Issue report images
 
-`article_events.metadata` jsonb field. The `image_id` key stores the UUID. Events of type `issue_reported` can have an attached image. Issue images don't use the `product_images` table — they're standalone files on disk.
+`article_events.metadata` jsonb field. The `image_id` key stores the UUID. Events of type `issue_reported` can have an attached image. Issue images don't use the `product_images` table - they're standalone files on disk.
 
 ### Why a table instead of jsonb metadata
 
@@ -79,8 +79,8 @@ A table is the right fit. The `image_ids` jsonb array on articles stays as the l
 
 When group B adds a shared image from group A to one of their articles:
 - A **new `product_images` row** is created in group B's scope, with a new title (matching group B's article name) and description (pre-populated from group A's original, editable)
-- The new row stores the **same `file_id`** as the original — both point to the same files on disk
-- The new row has its own `shared` flag (defaults to false — group B can choose to share it further)
+- The new row stores the **same `file_id`** as the original - both point to the same files on disk
+- The new row has its own `shared` flag (defaults to false - group B can choose to share it further)
 
 **Deletion**: If group A deletes the original image, the files are removed from disk only if no other `product_images` rows reference the same `file_id`. If other rows exist, only the DB row is deleted. If the files are gone, the serve endpoint returns 404 and the frontend shows a placeholder.
 
@@ -126,17 +126,17 @@ Product image uploads use [cropperjs](https://github.com/fengyuanchen/cropperjs)
 4. On confirm, the cropped image is sent to the server as a blob
 5. Server validates the ratio (within tolerance) and processes normally
 
-The format switcher determines both aspect ratio and orientation in one choice — no separate toggles. This ensures consistent layouts across the app and gives users control over framing. The server still does the final resize/encode — cropperjs just handles the crop selection.
+The format switcher determines both aspect ratio and orientation in one choice - no separate toggles. This ensures consistent layouts across the app and gives users control over framing. The server still does the final resize/encode - cropperjs just handles the crop selection.
 
-For issue report images, no crop UI — images upload as-is.
+For issue report images, no crop UI - images upload as-is.
 
 ## Upload UX
 
 ### Product image upload
 
 On the article edit page, images are shown in a horizontal scrollable row with titles. Two buttons:
-- **Ladda upp** — opens file picker → cropperjs crop UI → upload
-- **Bläddra** — opens shared image browser (see below)
+- **Ladda upp** - opens file picker → cropperjs crop UI → upload
+- **Bläddra** - opens shared image browser (see below)
 
 On upload:
 - **Title**: auto-set to `{commercial_name} {index}` (e.g. "Sibley 3" for the third image). Editable.
@@ -158,9 +158,9 @@ Who can upload product images is controlled by a group setting: `image_upload_ro
 | `project_leader` | Project leaders + managers | Projektledare och utrustningsansvariga |
 | `equipment_manager` | Managers only | Bara utrustningsansvariga |
 
-Default: `leader` — any user who can book can also upload images. View-only users (authenticated but no leader role) can browse images but not upload.
+Default: `leader` - any user who can book can also upload images. View-only users (authenticated but no leader role) can browse images but not upload.
 
-The column is `image_upload_role` on `group_settings` (not `_level` — this is a role threshold, not an approval level). This avoids conflating with the article `approval_level` system (`none`/`low`/`high`) which describes how much approval an article requires, not who can perform an action.
+The column is `image_upload_role` on `group_settings` (not `_level` - this is a role threshold, not an approval level). This avoids conflating with the article `approval_level` system (`none`/`low`/`high`) which describes how much approval an article requires, not who can perform an action.
 
 The setting appears on the group settings page ("Gruppinställningar") as a select: "Vem kan ladda upp bilder?" with options matching the Swedish labels above.
 
@@ -187,19 +187,19 @@ Simple file picker, no crop, no metadata. Returns UUID for attachment to article
 
 ### Browse page (all users)
 
-When expanding an article group, images show immediately (no button press needed). Thumbnails at 225px height (phones) / 300px height (tablets+). Description shown below each thumbnail, **2 lines max** via CSS `line-clamp-2` — consistent across screen sizes regardless of text length. Tap thumbnail → fullscreen (PhotoSwipe) showing title + full description.
+When expanding an article group, images show immediately (no button press needed). Thumbnails at 225px height (phones) / 300px height (tablets+). Description shown below each thumbnail, **2 lines max** via CSS `line-clamp-2` - consistent across screen sizes regardless of text length. Tap thumbnail → fullscreen (PhotoSwipe) showing title + full description.
 
-**Not shown in manage mode** — managers see the edit controls instead.
+**Not shown in manage mode** - managers see the edit controls instead.
 
 ### Article detail page
 
 Thumbnails shown at same size as browse. Horizontal scroll if multiple. Title shown below each. Tap → fullscreen with title + description.
 
-Users with upload permission see an upload button here (not just on the edit page). They can add images but **cannot delete other users' images or reorder** — only their own images can be deleted. Managers can delete any image and reorder.
+Users with upload permission see an upload button here (not just on the edit page). They can add images but **cannot delete other users' images or reorder** - only their own images can be deleted. Managers can delete any image and reorder.
 
 ### Article edit page (manager)
 
-Images in a horizontal scrollable row. Each shows thumbnail + title. Delete button (×) on each — removes from this article group, does not delete the `product_images` row or files (other groups may reference it). Two action buttons: "Ladda upp" and "Bläddra".
+Images in a horizontal scrollable row. Each shows thumbnail + title. Delete button (×) on each - removes from this article group, does not delete the `product_images` row or files (other groups may reference it). Two action buttons: "Ladda upp" and "Bläddra".
 
 ### Booking detail / pickup / return
 
@@ -344,7 +344,7 @@ GET /api/v0/images/{uuid}.webp        → source (2560px)
 GET /api/v0/images/{uuid}_thumb.webp  → thumbnail (400px height)
 ```
 
-Returns `image/webp` with `Cache-Control: public, max-age=31536000, immutable` (images are content-addressed by UUID — new upload = new UUID).
+Returns `image/webp` with `Cache-Control: public, max-age=31536000, immutable` (images are content-addressed by UUID - new upload = new UUID).
 
 Optional `?format=jpeg` converts on the fly to JPEG (quality 85) for download. The UI offers a "Ladda ner" link using this.
 
@@ -482,7 +482,7 @@ At ~200 unique product types per group: ~200MB source + ~6MB thumbnails per grou
 - Images served with immutable cache headers (UUID-based, no guessing)
 - Auth required for all image endpoints (via existing middleware)
 - Product upload restricted by `image_upload_role` group setting
-- No directory traversal — UUID is validated, path is constructed server-side
+- No directory traversal - UUID is validated, path is constructed server-side
 
 ## Decisions and trade-offs
 
@@ -497,7 +497,7 @@ At ~200 unique product types per group: ~200MB source + ~6MB thumbnails per grou
 | Two variants only | Source + thumbnail covers all current UI needs. Add more sizes if needed later. |
 | Orphan cleanup deferred | Uploaded-but-unreferenced issue images are rare and small. Background cleanup can be added later. |
 | WebP storage + JPEG download | Store WebP (3x smaller), serve WebP by default, offer JPEG on-demand for download. Conversion is fast and downloads are infrequent. |
-| Shared images referenced, not copied | Simpler than reference counting. If original is deleted, dependents get 404 — acceptable trade-off for a convenience feature. |
+| Shared images referenced, not copied | Simpler than reference counting. If original is deleted, dependents get 404 - acceptable trade-off for a convenience feature. |
 
 ## Implementation steps
 
@@ -564,15 +564,15 @@ At ~200 unique product types per group: ~200MB source + ~6MB thumbnails per grou
 - [x] Availability picker: expandable info block with images, description, instructions per product group
 - [x] API: `AvailableArticles` and `ListBookingItems` queries return `image_ids`, `description`, `instructions`
 - [x] Handle broken references (404 from deleted shared images) with placeholder
-- [x] Image description preview (2 lines, `line-clamp-2`) below thumbnails everywhere — tap to expand fully
-- [x] Removed `showDescription` prop — description always shown when metadata exists
+- [x] Image description preview (2 lines, `line-clamp-2`) below thumbnails everywhere - tap to expand fully
+- [x] Removed `showDescription` prop - description always shown when metadata exists
 
 ### Step 6: Article edit page image management ✅
 
 - [x] Horizontal scrollable row of thumbnails on edit page (ImageViewer with showMeta)
 - [x] "Ladda upp" button → ImageUploadDialog
 - [x] "Bläddra" button → SharedImageBrowser with potential match indicator
-- [x] Edit image metadata (title, description, attribution, shared) — full-width inline form, permission-aware (manager: any, user: own)
+- [x] Edit image metadata (title, description, attribution, shared) - full-width inline form, permission-aware (manager: any, user: own)
 - [x] Edit from article detail page and profile "Mina bilder"
 - [x] Delete button per image (removes from article group, checks file reference count)
 - [x] Reorder via move buttons (chevron ‹ › buttons per image)
@@ -592,7 +592,7 @@ At ~200 unique product types per group: ~200MB source + ~6MB thumbnails per grou
 
 - [ ] Shared image browser: filter by category
 
-### Step 7: Image attachment on article events
+### Step 7: Image attachment on article events ✅
 
 Any action that creates an article event supports optional image attachment. Compact UI: small thumbnail row with inline SVG `add_a_photo` icon (Material Symbols, no font dependency) next to the text input. Users can attach multiple images or ignore entirely.
 
@@ -606,9 +606,9 @@ Any action that creates an article event supports optional image attachment. Com
 - Article comment/note input (article detail page)
 
 **API changes**:
-- `POST /articles/{id}/status` — add optional `image_ids` string array, store in event `metadata` jsonb
-- `POST /articles/{id}/events` — add optional `image_ids` string array, store in event `metadata` jsonb
-- Pickup/return handlers that create article events (reported_usable/reported_unusable/lost) — add optional `image_ids` to request body, pass through to `LogArticleEvent` metadata
+- `POST /articles/{id}/status` - add optional `image_ids` string array, store in event `metadata` jsonb
+- `POST /articles/{id}/events` - add optional `image_ids` string array, store in event `metadata` jsonb
+- Pickup/return handlers that create article events (reported_usable/reported_unusable/lost) - add optional `image_ids` to request body, pass through to `LogArticleEvent` metadata
 
 **Display**:
 - `ArticleEventHistory` component: events with `image_ids` in metadata show inline thumbnails (small, horizontal row). Tap thumbnail → PhotoSwipe fullscreen.
@@ -617,9 +617,9 @@ Any action that creates an article event supports optional image attachment. Com
 **Implementation details**:
 - Inline SVG for `add_a_photo` icon (Material Symbols path data, no font/CDN dependency)
 - Extract a shared `ImageAttachInput.svelte` component: `+` icon button, file input (hidden), upload on select, thumbnail row with `×` remove per image, exposes `imageIds` bindable
-- No crop dialog — issue/comment images upload as-is via existing `POST /images/issue`
+- No crop dialog - issue/comment images upload as-is via existing `POST /images/issue`
 - Multiple images per event: `metadata.image_ids` is a JSON array of UUID strings
-- No new database table — images are standalone files on disk, referenced by UUID in event metadata
+- No new database table - images are standalone files on disk, referenced by UUID in event metadata
 
 **Steps**:
 - [x] Create `ImageAttachInput.svelte` component (icon button + upload + thumbnail row with PhotoSwipe)
@@ -630,7 +630,7 @@ Any action that creates an article event supports optional image attachment. Com
 - [x] Update `ArticleEventHistory` to display inline thumbnails for events with `image_ids`
 - [x] Update issues page to show inline thumbnails in event history
 - [x] Seed script uploads issue images and attaches to Sibley 2, Tältlampa LED, and Stormkök reports
-- [ ] Integration test: report issue with images, verify event metadata, verify images served
+- [x] Integration test: report issue with images, verify event metadata, verify images served
 
 **file path**
-All images (product and issue) are stored in a single flat directory (`/data/images`). UUIDs ensure no collisions. Subdirectory separation by group/type was considered but deferred — the per-serve directory scan cost wasn't worth the organizational benefit. Can revisit if there's an operational need (backup, cleanup).
+All images (product and issue) are stored in a single flat directory (`/data/images`). UUIDs ensure no collisions. Subdirectory separation by group/type was considered but deferred - the per-serve directory scan cost wasn't worth the organizational benefit. Can revisit if there's an operational need (backup, cleanup).
