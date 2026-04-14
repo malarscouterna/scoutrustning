@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { User } from '$lib/user';
+	import { cart } from '$lib/stores/cart.svelte';
 
 	const accessLabels: Record<string, string> = {
 		view: 'Visa',
@@ -17,6 +18,7 @@
 	let open = $state(false);
 
 	async function switchPersona(key: string | null) {
+		cart.clear();
 		await fetch('/dev/persona', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
@@ -46,7 +48,7 @@
 	}
 </script>
 
-<div class="fixed top-2 right-4 sm:bottom-4 sm:top-auto z-50 flex flex-col sm:flex-col-reverse sm:items-end">
+<div class="fixed top-14 right-4 z-50 flex flex-col items-end">
 	{#if open}
 		<div class="bg-white border border-neutral-300 rounded-lg shadow-lg w-72 mt-2 sm:mt-0 sm:mb-2 max-h-[70vh] overflow-y-auto">
 			<div class="px-3 py-2 border-b bg-neutral-50 rounded-t-lg flex items-center justify-between">

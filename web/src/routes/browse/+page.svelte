@@ -1,9 +1,10 @@
 <script lang="ts">
 	import type { PageData } from './$types';
-	import { createApiClient, type Article } from '$lib/api/client';
+	import { createApiClient, type Article, type AvailabilityGroup } from '$lib/api/client';
 	import { statusLabels } from '$lib/labels';
 	import { hasRole } from '$lib/user';
 	import { page } from '$app/stores';
+	import { cart } from '$lib/stores/cart.svelte';
 	import ReportIssueForm from '$lib/components/ReportIssueForm.svelte';
 	import ArticleEventHistory from '$lib/components/ArticleEventHistory.svelte';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
@@ -117,6 +118,104 @@
 	}
 
 	const api = createApiClient();
+
+	// Cart mode
+	let cartBookingDates = $state<{ start: string; end: string; teamName: string | null } | null>(null);
+	let availabilityMap = $state<Map<string, number>>(new Map());
+	let cartCountMap = $state<Map<string, number>>(new Map()); // items already in cart per group
+	let addingToCart = $state<string | null>(null);
+
+	async function refreshCartMode(start: string, end: string) {
+		const [avail, { items }] = await Promise.all([
+			api.checkAvailability(start, end),
+			api.getBooking(cart.id!)
+		]);
+		const aMap = new Map<string, number>();
+		for (const g of avail) {
+			aMap.set(`${g.commercial_name}||${g.location_name}`, g.available_count);
+		}
+		availabilityMap = aMap;
+		const cMap = new Map<string, number>();
+		for (const item of items) {
+			const key = `${item.commercial_name}||${item.location_name}`;
+			cMap.set(key, (cMap.get(key) ?? 0) + 1);
+		}
+		cartCountMap = cMap;
+	}
+
+	$effect(() => {
+		if (!cart.active || !cart.id) {
+			cartBookingDates = null;
+			availabilityMap = new Map();
+			cartCountMap = new Map();
+			return;
+		}
+		const id = cart.id;
+		api.getBooking(id).then(({ booking, items }) => {
+			cartBookingDates = { start: booking.start_date, end: booking.end_date, teamName: booking.team_name };
+			const cMap = new Map<string, number>();
+			for (const item of items) {
+				const key = `${item.commercial_name}||${item.location_name}`;
+				cMap.set(key, (cMap.get(key) ?? 0) + 1);
+			}
+			cartCountMap = cMap;
+			return api.checkAvailability(booking.start_date, booking.end_date);
+		}).then((groups: AvailabilityGroup[]) => {
+			const map = new Map<string, number>();
+			for (const g of groups) {
+				map.set(`${g.commercial_name}||${g.location_name}`, g.available_count);
+			}
+			availabilityMap = map;
+		}).catch(() => {
+			cartBookingDates = null;
+			availabilityMap = new Map();
+			cartCountMap = new Map();
+		});
+	});
+
+	async function addToCart(commercialName: string, locationName: string, groupKey: string) {
+		if (!cart.id || !cartBookingDates) return;
+		addingToCart = groupKey;
+		try {
+			await api.addBookingItems(cart.id, commercialName, 1, locationName);
+			await refreshCartMode(cartBookingDates.start, cartBookingDates.end);
+			cart.refresh(); // Notify FloatingCart to reload
+		} catch {
+			// FloatingCart shows error state
+		}
+		addingToCart = null;
+	}
+
+	let removingFromCart = $state<string | null>(null);
+
+	async function removeFromCart(commercialName: string, locationName: string, groupKey: string) {
+		if (!cart.id || !cartBookingDates) return;
+		removingFromCart = groupKey;
+		try {
+			// Get current booking to find items to remove
+			const { items } = await api.getBooking(cart.id);
+			const itemsInGroup = items.filter(
+				item => item.commercial_name === commercialName && item.location_name === locationName
+			);
+			if (itemsInGroup.length > 0) {
+				// Sort by status to remove low-priority items first (reported_usable > under_repair > incoming > ok)
+				const statusPriority: Record<string, number> = {
+					'reported_usable': 0,
+					'under_repair': 1,
+					'incoming': 2,
+					'ok': 3
+				};
+				itemsInGroup.sort((a, b) => (statusPriority[a.article_status] ?? 4) - (statusPriority[b.article_status] ?? 4));
+				// Remove the first one in priority order (lowest priority)
+				await api.removeBookingItem(cart.id, itemsInGroup[0].id);
+				await refreshCartMode(cartBookingDates.start, cartBookingDates.end);
+				cart.refresh(); // Notify FloatingCart to reload
+			}
+		} catch {
+			// Error handled by API client
+		}
+		removingFromCart = null;
+	}
 
 	const statusOrder = ['ok', 'reported_usable', 'incoming', 'reported_unusable', 'under_repair', 'lost', 'archived'] as const;
 
@@ -339,6 +438,15 @@
 </script>
 
 <div class="max-w-4xl mx-auto p-4">
+	{#if cart.active && cartBookingDates}
+		<div class="flex items-center gap-2 mb-4 px-3 py-2 bg-blue-50 border border-blue-200 rounded text-sm">
+			<a href="/book?id={cart.id}" class="flex-1 text-blue-800 font-medium hover:underline">
+				Bokar {cartBookingDates.start} - {cartBookingDates.end}{cartBookingDates.teamName ? ` · ${cartBookingDates.teamName}` : ''}
+			</a>
+			<button onclick={() => cart.clear()} class="text-blue-600 hover:text-blue-800 text-lg leading-none" aria-label="Avaktivera bokning">×</button>
+		</div>
+	{/if}
+
 	<h1 class="text-heading-sm font-bold mb-4">Utrustning</h1>
 
 	<div class="flex flex-wrap gap-2 mb-4">
@@ -463,27 +571,77 @@
 			{@const expanded = expandedGroups.has(group.key)}
 			{@const availableCount = group.articles.filter(isAvailable).length}
 			<div class="border rounded">
-				<button
-					onclick={() => toggleGroup(group.key)}
-					class="w-full flex flex-wrap items-center justify-between gap-1 px-4 py-3 hover:bg-neutral-50 text-left"
-				>
-					<div class="flex items-center gap-2 min-w-0">
-						{#if managerMode}
-							<input type="checkbox" checked={isGroupSelected(group)} onclick={(e) => { e.stopPropagation(); toggleSelectGroup(group); }} class="shrink-0" />
-						{/if}
-						<span class="font-medium">{group.commercialName}</span>
-						<span class="text-sm text-neutral-500 ml-2">{group.categoryName}</span>
-					</div>
-					<div class="flex items-center gap-2 text-sm text-neutral-600">
-						<span>{group.locationName}</span>
-						{#if group.individuallyTracked}
-							<span class="bg-blue-600 text-white px-2 py-0.5 rounded">{availableCount}/{group.nonArchivedCount} st</span>
+				<div class="flex items-stretch">
+					<button
+						onclick={() => toggleGroup(group.key)}
+						class="flex-1 flex flex-wrap items-center justify-between gap-1 px-4 py-3 hover:bg-neutral-50 text-left min-w-0"
+					>
+						<div class="flex items-center gap-2 min-w-0">
+							{#if managerMode}
+								<input type="checkbox" checked={isGroupSelected(group)} onclick={(e) => { e.stopPropagation(); toggleSelectGroup(group); }} class="shrink-0" />
+							{/if}
+							<span class="font-medium">{group.commercialName}</span>
+							<span class="text-sm text-neutral-500 ml-2">{group.categoryName}</span>
+						</div>
+						<div class="flex items-center gap-2 text-sm text-neutral-600">
+							<span>{group.locationName}</span>
+							{#if cart.active}
+								{@const cartAvail = availabilityMap.get(group.key) ?? 0}
+								{@const inCart = cartCountMap.get(group.key) ?? 0}
+								{#if inCart > 0}
+									<span class="px-2 py-0.5 rounded bg-green-100 text-green-800 text-xs font-medium">{inCart} i bokning</span>
+								{/if}
+								<span class="px-2 py-0.5 rounded {cartAvail > 0 ? 'bg-blue-600 text-white' : 'bg-neutral-200 text-neutral-500'}">{cartAvail} kvar</span>
+							{:else if group.individuallyTracked}
+								<span class="bg-blue-600 text-white px-2 py-0.5 rounded">{availableCount}/{group.nonArchivedCount} st</span>
+							{:else}
+								<span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded">×{availableCount}/{group.nonArchivedCount}</span>
+							{/if}
+							<span class="text-xs">{expanded ? '▲' : '▼'}</span>
+						</div>
+					</button>
+					{#if cart.active}
+						{@const cartAvail = availabilityMap.get(group.key) ?? 0}
+						{@const inCart = cartCountMap.get(group.key) ?? 0}
+						{@const isAdding = addingToCart === group.key}
+						{@const isRemoving = removingFromCart === group.key}
+
+						{#if inCart > 0}
+							<!-- Show minus/count/plus when item is in cart -->
+							<div class="border-l px-2 flex items-center gap-1 shrink-0">
+								<button
+									onclick={() => removeFromCart(group.commercialName, group.locationName, group.key)}
+									disabled={isRemoving}
+									class="w-7 h-7 rounded border text-center text-sm font-bold hover:bg-neutral-50 disabled:cursor-not-allowed"
+									aria-label="Ta bort från bokning"
+								>
+									{isRemoving ? '...' : '−'}
+								</button>
+								<span class="w-6 text-center text-sm font-medium">{inCart}</span>
+								<button
+									onclick={() => addToCart(group.commercialName, group.locationName, group.key)}
+									disabled={cartAvail === 0 || isAdding}
+									class="w-7 h-7 rounded border text-center text-sm font-bold {cartAvail > 0 ? 'hover:bg-neutral-50' : 'text-neutral-300 disabled:cursor-not-allowed'}"
+									aria-label="Lägg till i bokning"
+								>
+									{isAdding ? '...' : '+'}
+								</button>
+							</div>
 						{:else}
-							<span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded">×{availableCount}/{group.nonArchivedCount}</span>
+							<!-- Show just the plus button when item not in cart -->
+							<button
+								onclick={() => addToCart(group.commercialName, group.locationName, group.key)}
+								disabled={cartAvail === 0 || isAdding}
+								class="border-l px-4 flex items-center justify-center text-sm font-bold shrink-0 transition-colors
+									{cartAvail > 0 ? 'text-blue-700 hover:bg-blue-50' : 'text-neutral-300'}
+									disabled:cursor-not-allowed"
+								aria-label="Lägg till i bokning"
+							>
+								{isAdding ? '...' : '+'}
+							</button>
 						{/if}
-						<span class="text-xs">{expanded ? '▲' : '▼'}</span>
-					</div>
-				</button>
+					{/if}
+				</div>
 				{#if expanded}
 					{@const rep = group.articles[0]}
 					{@const hasImage = rep.image_ids?.length > 0}
@@ -562,12 +720,6 @@
 						{:else}
 							{@const rows = groupByState(group.articles)}
 							<div class="space-y-1 py-1 text-sm">
-								<div class="flex flex-wrap items-center gap-2">
-									<a href="/articles/{group.representativeId}" class="inline-flex items-center gap-1 text-xs text-blue-700 border border-blue-200 bg-blue-50 rounded px-2 py-1 hover:bg-blue-100">Visa artikelsida ›</a>
-									{#if isManager}
-										<a href="/articles/{group.representativeId}/edit?group=true" class="inline-flex items-center gap-1 text-xs text-neutral-600 border border-neutral-200 bg-neutral-50 rounded px-2 py-1 hover:bg-neutral-100">Redigera ›</a>
-									{/if}
-								</div>
 								{#if hasTextInfo}
 									{@render inlineTextInfo(rep, group.key)}
 								{/if}
@@ -612,6 +764,12 @@
 										</div>
 									</div>
 								{/each}
+								<div class="flex flex-wrap items-center gap-2 pt-1">
+									<a href="/articles/{group.representativeId}" class="inline-flex items-center gap-1 text-xs text-blue-700 border border-blue-200 bg-blue-50 rounded px-2 py-1 hover:bg-blue-100">Visa artikelsida ›</a>
+									{#if isManager}
+										<a href="/articles/{group.representativeId}/edit?group=true" class="inline-flex items-center gap-1 text-xs text-neutral-600 border border-neutral-200 bg-neutral-50 rounded px-2 py-1 hover:bg-neutral-100">Redigera ›</a>
+									{/if}
+								</div>
 							</div>
 						{/if}
 					</div>

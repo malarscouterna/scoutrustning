@@ -11,6 +11,12 @@ Remaining from the original item:
 - Admin interface for access levels → being built as kanban UI on settings page
 - Replace "project" concept → done, replaced with `role` team type
 
+## Report issue - standalone entry point
+
+Currently issues can only be reported from within the article detail page (`/articles/[id]`). A "Rapportera problem" button should be accessible from the browse page group row and/or from the navigation, so users can report issues without having to first navigate into a specific article. Requires a dedicated `/report` page or a modal that takes an article lookup (search by common_name) and routes into the existing ReportIssueForm component.
+
+Also: ability to add another user (manager or trusted) to an issue by mentioning them in a comment, so they get notified when action is needed.
+
 ## Date change conflict UX
 
 When changing dates on a booking, the API validates that all existing items are available for the new range and returns 409 with the conflicting article name. Currently the UI just shows a red error. Better UX: highlight which items conflict and let the user remove them before retrying the date change.

@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { createApiClient, type ArticleEvent } from '$lib/api/client';
 	import { statusLabels, statusColors, approvalLabels, eventTypeLabels, eventTypeColors } from '$lib/labels';
-	import { hasRole } from '$lib/user';
+	import { hasRole, canBook } from '$lib/user';
 	import { page } from '$app/stores';
+	import { cart } from '$lib/stores/cart.svelte';
 	import ReportIssueForm from '$lib/components/ReportIssueForm.svelte';
 	import ArticleEventHistory from '$lib/components/ArticleEventHistory.svelte';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
@@ -28,6 +29,22 @@
 
 	let reporting = $state(false);
 	let message = $state('');
+	let addingToCart = $state(false);
+	let canBookArticles = $derived(canBook($page.data.user));
+
+	async function addToCart() {
+		if (!cart.id) return;
+		addingToCart = true;
+		try {
+			await api.addBookingItems(cart.id, article.commercial_name, 1, article.location_name);
+			message = 'Tillagd i bokning!';
+			cart.refresh(); // Notify FloatingCart to reload
+			setTimeout(() => message = '', 3000);
+		} catch {
+			// FloatingCart will show state
+		}
+		addingToCart = false;
+	}
 
 	// Group status summary for quantity tracked
 	let statusSummary = $derived.by(() => {
@@ -148,6 +165,19 @@
 
 <div class="max-w-2xl mx-auto p-4">
 	<a href="/browse" class="text-sm text-blue-700 underline">← Utrustning</a>
+
+	{#if cart.active && canBookArticles}
+		<div class="mt-3">
+			<scout-button
+				type="button"
+				variant="primary"
+				disabled={addingToCart ? true : undefined}
+				onclick={addToCart}
+			>
+				{addingToCart ? '...' : 'Lägg till i bokning'}
+			</scout-button>
+		</div>
+	{/if}
 
 	{#if message}
 		<div class="bg-green-50 border border-green-200 rounded p-3 mt-4 text-green-800 text-sm">{message}</div>
