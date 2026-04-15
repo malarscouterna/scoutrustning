@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/malarscouterna/ms-utrustning/compare/v0.6.0...v0.6.1) (2026-04-15)
+
+
+### Bug Fixes
+
+* **web:** load scout web components from static instead of bundled import ([a49ce3c](https://github.com/malarscouterna/ms-utrustning/commit/a49ce3cca786a99f87a51637c7f7cdd954d2cb86))
+
 ## [0.6.0](https://github.com/malarscouterna/ms-utrustning/compare/v0.5.1...v0.6.0) (2026-04-15)
 
 
