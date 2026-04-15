@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.3](https://github.com/malarscouterna/ms-utrustning/compare/v0.6.2...v0.6.3) (2026-04-15)
+
+
+### Bug Fixes
+
+* **web:** browse UX polish, sticky layout, camping cart icon ([65f0866](https://github.com/malarscouterna/ms-utrustning/commit/65f08667ee951a24cdb1ac3797e70e8a9f713a39))
+
 ## [0.6.2](https://github.com/malarscouterna/ms-utrustning/compare/v0.6.1...v0.6.2) (2026-04-15)
 
 
