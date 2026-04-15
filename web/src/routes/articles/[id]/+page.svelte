@@ -164,8 +164,6 @@
 </script>
 
 <div class="max-w-2xl mx-auto p-4">
-	<a href="/browse" class="text-sm text-blue-700 underline">← Utrustning</a>
-
 	{#if cart.active && canBookArticles}
 		<div class="mt-3">
 			<scout-button

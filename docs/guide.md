@@ -2,11 +2,19 @@
 
 Välkommen till ms-utrustning, bokningssystemet för Mälarscouternas utrustning. Här kan du bläddra bland tält, kök, verktyg och annan utrustning, boka det du behöver, och hantera utlämning och återlämning.
 
+## Navigering
+
+Längst upp på alla sidor finns en menyrad med logotypen till vänster och länkarna **Hem** och **Bokningar** till höger.
+
+- **Hem** - startsidan med dina bokningar, ärenden och genvägar till vanliga åtgärder.
+- **Bokningar** - din bokningslista med alla aktiva och avslutade bokningar.
+
 ---
 
 ## Innehåll
 
 - [Del 1: För dig som bokar](#del-1-för-dig-som-bokar)
+  - [Startsidan](#startsidan)
   - [Bläddra utrustning](#bläddra-utrustning)
   - [Bilder](#bilder)
   - [Boka utrustning](#boka-utrustning)
@@ -24,6 +32,19 @@ Välkommen till ms-utrustning, bokningssystemet för Mälarscouternas utrustning
 ---
 
 ## Del 1: För dig som bokar
+
+### Startsidan
+
+Startsidan visar en översikt av dina bokningar och ärenden. Härifrån kan du:
+
+- Klicka **Boka utrustning** för att starta en ny bokning.
+- Klicka **Visa utrustning** för att bläddra bland allt som finns.
+- Klicka **Inställningar** för att hantera din profil och, om du är utrustningsansvarig, gruppinställningar.
+- Klicka **Användarguide** för att öppna den här guiden.
+
+Dina aktiva bokningar visas direkt på startsidan, sorterade efter status. Utkast (ej skickade bokningar) visas överst - klicka på ett utkast för att aktivera det och fortsätta lägga till utrustning.
+
+Om du är utrustningsansvarig ser du också bokningar som väntar på godkännande, och en lista över aktuella ärenden.
 
 ### Bläddra utrustning
 
@@ -55,20 +76,21 @@ På din **profilsida** under "Mina bilder" ser du alla bilder du laddat upp. Dä
 
 ### Boka utrustning
 
-1. Gå till **Boka** i menyn.
-2. Välj start- och slutdatum för din bokning.
-3. Välj vem bokningen gäller: din avdelning, ett projekt, eller en personlig bokning.
-4. Klicka **Lägg till utrustning** för att se vad som är ledigt under dina datum.
-5. Lägg till det du behöver. Du väljer produkttyp och antal, systemet tilldelar specifika artiklar åt dig.
-6. När du är nöjd, klicka **Skicka bokning**.
+1. Klicka **Boka utrustning** på startsidan.
+2. Välj start- och slutdatum, vem bokningen gäller (din avdelning eller personlig), och lägg till en anteckning om du vill.
+3. Klicka **Skapa bokning** - bokningen sparas som ett utkast och du skickas vidare till utrustningssidan.
+4. Du ser nu vad som finns ledigt under dina datum. Lägg till utrustning med **+**-knappen bredvid varje grupp.
+5. Varukorgsikonen (shopping bag-symbol) längst ner till höger visar hur många artiklar du lagt till. Tryck på den för att se innehållet, justera antal, eller skicka direkt.
+6. När du är nöjd, klicka **Skicka** i varukorgen, eller gå till **Visa bokning** för att granska allt innan du skickar.
 
 **Bra att veta:**
 
-- Bokningen förväljer din första avdelning. Du kan ändra till en annan avdelning, ett projekt, eller personlig bokning, även efter att bokningen är skapad.
-- Du kan bara boka för avdelningar och projekt du tillhör. Utrustningsansvariga kan boka för alla.
-- Datum går inte att ändra efter att du lagt till artiklar. Avbryt och börja om om du behöver andra datum.
-- Du kan lägga till en anteckning (t.ex. "Hajk med Yggdrasil") så det blir lättare att hitta bokningen sen.
-- Samma produkttyp i olika förråd visas separat i tillgänglighetslistan. Tänk på att välja rätt förråd om det spelar roll var du hämtar.
+- Bokningen sparas som ett utkast medan du lägger till utrustning. Du kan lämna och komma tillbaka - utkastet finns kvar på startsidan.
+- Du kan ha flera utkast igång samtidigt. Startsidan visar alla - klicka på ett för att aktivera det och fortsätta bygga.
+- Bokningen förväljer din första avdelning. Du kan ändra till en annan avdelning eller personlig bokning, även efter att bokningen är skapad.
+- Du kan bara boka för avdelningar du tillhör. Utrustningsansvariga kan boka för alla.
+- Samma produkttyp i olika förråd visas separat. Tänk på att välja rätt förråd om det spelar roll var du hämtar.
+- Om en artikel kräver godkännande visas ett märke (gult eller rött) i utrustningslistan. Se avsnittet Godkännande nedan.
 
 ### Hur tilldelning fungerar
 
@@ -147,7 +169,7 @@ Som utrustningsansvarig har du tillgång till allt ovan, plus extra funktioner f
 
 ### Godkänna bokningar
 
-Under **Bokningar** ser du en flik för bokningar som väntar på godkännande (med en räknare). Klicka på en bokning för att se detaljerna.
+Bokningar som väntar på godkännande visas direkt på **startsidan** (om det finns några). Du ser dem också under **Bokningar** med ett filter för "Väntar på godkännande". Klicka på en bokning för att se detaljerna.
 
 - **Godkänn**: bokningen bekräftas och bokaren meddelas.
 - **Neka**: bokningen går tillbaka till utkast. Skriv gärna en kommentar så bokaren vet varför.

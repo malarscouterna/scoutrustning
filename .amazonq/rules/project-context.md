@@ -40,11 +40,14 @@ ms-utrustning/
 │   ├── src/
 │   │   ├── lib/
 │   │   │   ├── api/client.ts       # Typed API client
-│   │   │   ├── components/         # Shared Svelte components
-│   │   │   └── user.ts             # User type + role helpers
+│   │   │   ├── components/         # Shared Svelte components (BookingCard, IssueCard, FloatingCart, ...)
+│   │   │   ├── stores/cart.svelte  # Active booking cart store (localStorage key active-booking-id)
+│   │   │   └── user.ts             # User type + role helpers (accessAtLeast, isManager, canBook, ...)
 │   │   ├── routes/
 │   │   │   ├── +layout.server.ts   # Provides user + dev persona data
-│   │   │   └── +layout.svelte      # Nav, role-based UI, dev persona switcher
+│   │   │   ├── +layout.svelte      # Sticky top bar (logo + Hem/Bokningar links), FloatingCart, DevPersonaSwitcher
+│   │   │   ├── +page.svelte        # Dashboard: CTAs, bookings sections, issues sections, footer
+│   │   │   └── +page.server.ts     # Dashboard data (bookings, issues, pending approval count)
 │   │   ├── hooks.server.ts         # API proxy, auth header injection
 │   │   └── app.html
 │   ├── static/

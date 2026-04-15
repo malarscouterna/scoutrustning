@@ -238,7 +238,7 @@ After implementation, update these docs:
 2. **DevPersonaSwitcher position**: currently bottom-right, overlaps FAB. Move to top-right or bottom-left.
 
 
-## Current feedback
+## Feedback
 
 All items below resolved unless marked **OPEN**.
 
@@ -261,3 +261,21 @@ All items below resolved unless marked **OPEN**.
 | 15 | Cart badge doesn't update until cart is opened | Done - added refresh signal to cart store, FloatingCart listens and reloads. All add/remove operations trigger refresh. |
 | 16 | Missing minus button in /browse when item is in cart | Done - inline [−] count [+] controls shown when item in cart, single [+] when not |
 | 17 | Item removal priority: keep ok items as long as possible | Done - removal prioritizes: reported_usable > under_repair > incoming > ok |
+| 18 | Articles with approval_level low/high showing as unavailable (count 0) in browse cart mode | Done - availability endpoint was defaulting bookable_only=true, filtering out non-none approval articles; flipped default to false |
+
+## Feedback final touches
+
+| # | Description | Status |
+|---|---|---|
+| 1 | Button to create a booking from the Bookings view | Done - "Ny bokning" button in bookings page header |
+| 2 | Standardize nav: Hem/Bokningar always top-right; removed per-page back arrow | Done - layout always shows Hem and Bokningar links; removed redundant "Tillbaka" from booking detail |
+| 3 | Approval level badges in browse (none=none, low=amber, high=red); trusted+ sees "Förgodkänd" on low | Done - badge on group row; label is context-aware: uses cart team's access level when cart is active, falls back to user max_access; colors hardcoded as inline styles (Tailwind purge workaround, see backlog); sorting by approval level is backlog |
+| 4 | Bokningar page: show all bookings sorted by status then start date | **OPEN** - not yet implemented |
+| 5 | Browse expand reorder: image, then counts, then text descriptions | Done - text descriptions now rendered after article list/state rows |
+| 6 | Issue links for non-ok items in browse; article page shows sibling items | **OPEN** - rethinking issue reporting flow together with user |
+
+## Known issues
+
+| # | Description |
+|---|---|
+| 1 | Smoke test: `Profile (view-only)` returns 500. Not yet root-caused - view-only persona has no teams and max_access=view. May be pre-existing. |

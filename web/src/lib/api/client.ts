@@ -207,7 +207,7 @@ export function createApiClient(opts: FetchOptions = {}) {
 			const query = new URLSearchParams({ start_date: startDate, end_date: endDate });
 			if (params?.category_id) query.set('category_id', params.category_id);
 			if (params?.location_id) query.set('location_id', params.location_id);
-			if (params?.bookable_only === false) query.set('bookable_only', 'false');
+			if (params?.bookable_only === true) query.set('bookable_only', 'true');
 			return request<AvailabilityGroup[]>(`/articles/availability?${query}`, opts);
 		},
 		createBooking: (data: { start_date: string; end_date: string; notes?: string; used_by_team_id?: string; used_by_external?: string }) =>

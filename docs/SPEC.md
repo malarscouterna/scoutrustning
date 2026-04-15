@@ -250,6 +250,8 @@ Issue report images are separate - attached to article events, documenting speci
 6. If approval needed → wait for equipment manager
 7. Receive confirmation (email or Google Chat)
 
+**UPDATE**: The booking flow now uses a cart-based approach. From the dashboard, click "Boka utrustning" to create a draft booking (set dates, team, notes). The draft is stored server-side; localStorage tracks which draft is the "active" cart. Browse then shows availability for the cart's date range, with inline +/- controls per group. A floating cart (FAB, bottom-right) provides a compact view of cart contents and a direct "Skicka" action. Full cart management is at `/book?id={id}`. Multiple drafts can exist; tapping one on the dashboard activates it. Submitting or cancelling clears the active cart. See [ux-revamp.md](ux-revamp.md).
+
 ### Leader: Pick up equipment
 
 Any leader with access to the booking (creator, or unit member if unit booking) can do pickup.

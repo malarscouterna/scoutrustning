@@ -8,6 +8,41 @@ Newest first.
 
 ---
 
+## 2026-04-13
+
+### UX revamp - dashboard, floating cart, and real-time item management
+
+See [ux-revamp.md](ux-revamp.md) for the full design doc.
+
+**Dashboard** (`/`): Replaced the tab-based landing page with a full dashboard. Four CTA buttons (Boka, Visa utrustning, Inställningar, Användarguide). Two-column layout (md+) with bookings on the left and issues on the right. Draft bookings activate the cart when tapped. Sections: draft bookings, pending approvals (manager), active bookings, expandable "Visa avslutade", issues I reported, active issues (manager), expandable resolved issues. Footer with group name, user name, and logout.
+
+**Floating cart** (`FloatingCart.svelte`): FAB bottom-right, visible when a draft booking is active in localStorage. Expands into a panel showing items grouped by location, with inline -/count/+ controls and × to remove. "Visa bokning" and "Skicka" actions. Badge shows item count with pop/bump animation. Cart state in `$lib/stores/cart.svelte` with localStorage key `active-booking-id`. Refresh signal so all add/remove operations update the badge live.
+
+**Navigation**: Replaced tab/bottom-bar navigation with a minimal sticky top bar: logo (→ /) + "Hem" and "Bokningar" links, visible on all pages. No bottom bar.
+
+**Browse page - cart mode**: When a cart is active, browse switches data source to `checkAvailability(startDate, endDate)` and shows "X kvar" counts. Inline -/count/+ controls per group. Cart mode banner below top bar. Deactivating cart reverts to normal mode without losing the draft.
+
+**Book page**: Cart management page at `/book?id={id}`. Editable dates, team, notes. Item list grouped by location with -/count/+ controls. "Lägg till utrustning" → `/browse`, "Skicka bokning", "Avbryt bokning".
+
+**Article detail - add to cart**: "Lägg till i bokning" button when a cart is active.
+
+**Item removal priority**: When removing from cart, prioritizes removing reported_usable > under_repair > incoming > ok, keeping best items as long as possible.
+
+**Feedback fixes** (post-launch):
+- Submitted bookings excluded from "Aktiva" section (were duplicated in both pending and active)
+- +/- controls in booking view
+- Badge counter: red, larger, CSS pop/bump animation
+- Back navigation: replaced `history.back()` with named destination links
+- Issues page: two sections (Mina ärenden / Ovriga ärenden), "Visa avslutade" toggle
+- Cart persists cleared on persona switch
+- Item names in floating cart linked to article page
+- Items grouped by location in cart and booking view, sorted by category then name
+- Approval level badges on browse group rows (none: no badge, low: amber with role-aware label, high: red)
+- Browse expansion reordered: image - counts/state rows - text descriptions
+- Persistent nav links: "Hem" and "Bokningar" on all pages, replaced per-page back arrow
+
+---
+
 ## 2026-04-12 (in progress)
 
 ### Access levels — schema and CLI foundation

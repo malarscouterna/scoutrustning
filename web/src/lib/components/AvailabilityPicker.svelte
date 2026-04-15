@@ -109,7 +109,6 @@
 			const fresh = await api.checkAvailability(startDate, endDate, {
 				category_id: selectedCategory || undefined,
 				location_id: selectedLocation || undefined,
-				bookable_only: false
 			});
 			if (stableAvailability.length === 0) {
 				stableAvailability = fresh;

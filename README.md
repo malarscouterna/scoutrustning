@@ -7,9 +7,12 @@ See [docs/SPEC.md](docs/SPEC.md) for the full specification and [docs/API.md](do
 ## Status
 
 Pre-release (`v0`). Breaking changes expected. Currently implements:
+- Dashboard landing page with booking and issue overview, quick action CTAs
+- Floating cart (FAB): active booking accessible from any page, inline +/- controls, direct submit
 - Article inventory with CSV import (including approval level per article)
-- Article browsing with category/location/search filters
-- Booking flow: create, add items, submit, cancel, copy
+- Article browsing with category/location/search filters, cart-aware availability mode
+- Approval level badges on browse groups (none/low/high with role-aware labels)
+- Booking flow: create draft, browse and add items via cart, submit, cancel, copy
 - Three-level approval: none (free), low (trusted teams auto-approve), high (always needs manager approval)
 - Approval conversation thread with booking events (submit/reject/resubmit/approve with messages)
 - Force-approval option for users who want manager review on freely bookable items

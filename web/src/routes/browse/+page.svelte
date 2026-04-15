@@ -2,7 +2,7 @@
 	import type { PageData } from './$types';
 	import { createApiClient, type Article, type AvailabilityGroup } from '$lib/api/client';
 	import { statusLabels } from '$lib/labels';
-	import { hasRole } from '$lib/user';
+	import { hasRole, accessAtLeast } from '$lib/user';
 	import { page } from '$app/stores';
 	import { cart } from '$lib/stores/cart.svelte';
 	import ReportIssueForm from '$lib/components/ReportIssueForm.svelte';
@@ -12,6 +12,24 @@
 	let { data }: { data: PageData } = $props();
 
 	let isManager = $derived(hasRole($page.data.user, 'equipment_manager'));
+
+	// Access level for approval badge: use the active cart's team level when known,
+	// otherwise fall back to the user's max_access.
+	let cartTeamAccess = $derived.by((): string | null => {
+		if (!cart.active || !cartBookingDates?.teamName) return null;
+		const team = $page.data.user?.teams.find(t => t.team_name === cartBookingDates!.teamName);
+		return team?.access_level ?? null;
+	});
+	let isTrusted = $derived(accessAtLeast(cartTeamAccess ?? $page.data.user?.max_access, 'trusted'));
+
+	function approvalBadge(level: string): { label: string; variant: 'low-pre' | 'low' | 'high' } | null {
+		if (level === 'none') return null;
+		if (level === 'low') return isTrusted
+			? { label: 'Förgodkänd', variant: 'low-pre' }
+			: { label: 'Kräver godkännande', variant: 'low' };
+		if (level === 'high') return { label: 'Kräver godkännande', variant: 'high' };
+		return null;
+	}
 	let managerMode = $state(false);
 	let selectedArticles = $state<Set<string>>(new Set());
 	let selectedGroups = $state<Set<string>>(new Set());
@@ -585,6 +603,15 @@
 						</div>
 						<div class="flex items-center gap-2 text-sm text-neutral-600">
 							<span>{group.locationName}</span>
+							{#each [approvalBadge(group.articles[0]?.approval_level ?? 'none')] as badge}
+								{#if badge?.variant === 'low-pre'}
+									<span class="px-1.5 py-0.5 rounded text-xs" style="background:#fffbeb;color:#b45309;border:1px solid #fde68a">{badge.label}</span>
+								{:else if badge?.variant === 'low'}
+									<span class="px-1.5 py-0.5 rounded text-xs" style="background:#fef3c7;color:#92400e">{badge.label}</span>
+								{:else if badge?.variant === 'high'}
+									<span class="px-1.5 py-0.5 rounded text-xs" style="background:#fee2e2;color:#b91c1c">{badge.label}</span>
+								{/if}
+							{/each}
 							{#if cart.active}
 								{@const cartAvail = availabilityMap.get(group.key) ?? 0}
 								{@const inCart = cartCountMap.get(group.key) ?? 0}
@@ -653,9 +680,6 @@
 							</div>
 						{/if}
 						{#if group.individuallyTracked}
-							{#if hasTextInfo}
-								{@render inlineTextInfo(rep, group.key)}
-							{/if}
 							<div class="divide-y divide-neutral-200 text-sm">
 								{#each sortArticles(group.articles) as article}
 									<div class="py-2">
@@ -717,12 +741,12 @@
 									{/if}
 								{/each}
 							</div>
+							{#if hasTextInfo}
+								{@render inlineTextInfo(rep, group.key)}
+							{/if}
 						{:else}
 							{@const rows = groupByState(group.articles)}
 							<div class="space-y-1 py-1 text-sm">
-								{#if hasTextInfo}
-									{@render inlineTextInfo(rep, group.key)}
-								{/if}
 								{#each rows as row}
 									{@const comment = row.articleIds.map(id => latestComments.get(id)).find(c => c)}
 									{@const representativeId = row.articleIds[0]}
@@ -771,6 +795,9 @@
 									{/if}
 								</div>
 							</div>
+							{#if hasTextInfo}
+								{@render inlineTextInfo(rep, group.key)}
+							{/if}
 						{/if}
 					</div>
 				{/if}

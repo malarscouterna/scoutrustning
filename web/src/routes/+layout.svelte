@@ -6,18 +6,18 @@
 
 	let { children, data } = $props();
 
-	let isHome = $derived($page.url.pathname === '/');
+	interface Section { label: string; href: string }
 
-	let backHref = $derived.by(() => {
+	let section = $derived.by((): Section | null => {
 		const path = $page.url.pathname;
-		if (path.startsWith('/articles/')) return '/browse';
-		return '/';
+		if (path.startsWith('/bookings') || path.startsWith('/book')) return { label: 'Bokningar', href: '/bookings' };
+		if (path.startsWith('/issues')) return { label: 'Ärenden', href: '/issues' };
+		if (path.startsWith('/browse') || path.startsWith('/articles')) return { label: 'Utrustning', href: '/browse' };
+		return null;
 	});
-	let backLabel = $derived.by(() => {
-		const path = $page.url.pathname;
-		if (path.startsWith('/articles/')) return 'Utrustning';
-		return 'Hem';
-	});
+
+	// True when we're on the section's own index page (the breadcrumb leaf, not a sub-page)
+	let onSectionRoot = $derived(section !== null && $page.url.pathname === section.href);
 </script>
 
 {#if data.demo}
@@ -42,12 +42,17 @@
 			<a href="/">
 				<img src="/PNG Utrustningsgruppen - Logotyp.png" alt="Hem" class="w-10 h-10 object-contain" />
 			</a>
-			{#if !isHome}
-				<a href={backHref} class="flex items-center gap-1 text-sm text-neutral-600 hover:text-neutral-900">
-					<span class="material-symbols-outlined" style="font-size:20px">arrow_back</span>
-					{backLabel}
-				</a>
-			{/if}
+			<div class="flex items-center gap-1 text-sm text-neutral-500" aria-label="Brödsmulor">
+				<a href="/" class="hover:text-neutral-900 {$page.url.pathname === '/' ? 'font-medium text-neutral-900' : ''}">Hem</a>
+				{#if section}
+					<span class="select-none">/</span>
+					{#if onSectionRoot}
+						<span class="font-medium text-neutral-900">{section.label}</span>
+					{:else}
+						<a href={section.href} class="hover:text-neutral-900">{section.label}</a>
+					{/if}
+				{/if}
+			</div>
 		</div>
 	</nav>
 {/if}

@@ -227,8 +227,6 @@ import type { PageData } from './$types';
 </script>
 
 <div class="max-w-4xl mx-auto p-4">
-	<a href="/bookings" class="text-sm text-blue-700 underline">← Tillbaka</a>
-
 	{#if message}
 		<div class="bg-green-50 border border-green-200 rounded p-3 mt-4 text-green-800 text-sm">{message}</div>
 	{/if}

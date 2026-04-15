@@ -63,7 +63,6 @@
 </script>
 
 <div class="max-w-2xl mx-auto p-4">
-	<a href="/browse" class="text-sm text-blue-700 underline">← Utrustning</a>
 	<h1 class="text-heading-sm font-bold mt-2 mb-4">
 		Redigera {isGroupEdit ? data.article.commercial_name || data.article.common_name : data.article.common_name}
 	</h1>

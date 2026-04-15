@@ -385,7 +385,7 @@ func (h *ArticleHandler) Availability(w http.ResponseWriter, r *http.Request) {
 	// Optional filters
 	categoryFilter := r.URL.Query().Get("category_id")
 	locationFilter := r.URL.Query().Get("location_id")
-	bookableOnly := r.URL.Query().Get("bookable_only") != "false" // default true
+	bookableOnly := r.URL.Query().Get("bookable_only") == "true" // default false
 
 	// Group by commercial_name + location
 	type availGroup struct {

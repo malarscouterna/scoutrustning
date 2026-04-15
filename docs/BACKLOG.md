@@ -2,6 +2,10 @@
 
 Deferred work items - things to grab when there's time, smaller tasks set aside during major work. When an item is completed, move it to [accomplished.md](accomplished.md).
 
+## Tailwind theme integration - dynamic class support
+
+Several badge/status colors are currently hardcoded as inline styles because Tailwind v4 + `@scouterna/tailwind-theme` only includes classes that appear as static strings at build time. Dynamic class composition (e.g. `class={badgeCls}`) gets purged. Affected: approval level badges in browse. Fix: either safelist the relevant color classes in the Tailwind config, or investigate whether the `@scouterna/tailwind-theme` package exposes CSS custom properties that can be used for inline color values instead.
+
 ## ~~Admin UI for group/role management~~ → Access levels
 
 **Superseded by the access levels feature** (see [access-levels.md](access-levels.md)). The static `role-mapping.json` is being replaced by DB-driven `team_claim_mappings` + per-team access levels. The `init-group` CLI bootstraps groups, and managers configure teams/access via the settings UI.
@@ -210,9 +214,17 @@ Articles would get an `article_group_id` FK instead of duplicating shared fields
 
 Implemented in the access levels feature. Approval badges on the availability picker now reflect the selected team's access level: `low`-approval items show "Kräver godkännande" only for `view`/`book` teams (trusted+ auto-confirms). `high` always shows the badge. Badges update reactively when the team picker changes.
 
-## Front page redesign
+## Browse - sort and filter by approval level
 
-The front page (/) needs to look better and be clearer about what the user can do. Key change: a clearly visible "Boka" button so new users immediately see how to start a booking. Consider showing a summary of upcoming bookings, recent activity, or quick links to common actions.
+Add a visible sort/filter for approval level in the browse view. The default view should surface items the current user is pre-approved for first (none for book+, none+low for trusted+), then low-approval items, then high-approval items. Requires knowing the user's effective access level and sorting server-side or client-side. Currently approval level is shown as a badge per group row (no/amber/red). Proper sorting and filtering is the next step.
+
+## Bokningar page - sort by status then start date
+
+Bookings list should be sorted: submitted first, then approved/confirmed, then picked_up, then draft, then returned/rejected/cancelled. Within each status group, sort ascending by start_date. Currently the list is unsorted (server return order).
+
+## Issue reporting - rethink and browser entry points
+
+Issue reporting needs a rethought UX. Key open questions: (1) How to surface a link to the issue page for non-ok items in browse - both individually tracked (each article has a link) and quantity tracked (currently only representative article linked). (2) The article detail page should list sibling items in the same group, including items at different locations, so users can navigate to the specific article they want to report on. (3) Should there be a direct "Rapportera problem" entry point from the browse group row without having to expand first? See ux-revamp.md feedback #6.
 
 ## Group settings on tab bar
 
