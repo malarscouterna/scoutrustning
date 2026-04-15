@@ -119,7 +119,9 @@ export const load: LayoutServerLoad = async ({ cookies, locals, url, fetch: skFe
 
 function extractNameFromToken(token: string): string | null {
 	try {
-		const payload = JSON.parse(atob(token.split('.')[1]));
+		const payload = JSON.parse(
+			new TextDecoder().decode(Uint8Array.from(atob(token.split('.')[1]), c => c.charCodeAt(0)))
+		);
 		return payload.name || null;
 	} catch {
 		return null;
