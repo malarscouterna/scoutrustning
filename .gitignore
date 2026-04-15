@@ -8,6 +8,7 @@ api/role-mapping.json
 web/node_modules/
 web/.svelte-kit/
 web/build/
+web/static/ui-webc/
 web/dev-personas.json
 web/role-mapping.json
 web/guide.md

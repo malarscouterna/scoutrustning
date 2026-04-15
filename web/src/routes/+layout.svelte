@@ -1,13 +1,8 @@
 <script lang="ts">
 	import '../app.css';
-	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
 	import DevPersonaSwitcher from '$lib/components/DevPersonaSwitcher.svelte';
 	import FloatingCart from '$lib/components/FloatingCart.svelte';
-
-	if (browser) {
-		import('@scouterna/ui-webc/loader').then(({ defineCustomElements }) => defineCustomElements());
-	}
 
 	let { children, data } = $props();
 
