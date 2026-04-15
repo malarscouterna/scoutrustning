@@ -42,15 +42,20 @@
 			<a href="/">
 				<img src="/PNG Utrustningsgruppen - Logotyp.png" alt="Hem" class="w-10 h-10 object-contain" />
 			</a>
-			<div class="flex items-center gap-1 text-sm text-neutral-500" aria-label="Brödsmulor">
-				<a href="/" class="hover:text-neutral-900 {$page.url.pathname === '/' ? 'font-medium text-neutral-900' : ''}">Hem</a>
-				{#if section}
-					<span class="select-none">/</span>
-					{#if onSectionRoot}
-						<span class="font-medium text-neutral-900">{section.label}</span>
-					{:else}
-						<a href={section.href} class="hover:text-neutral-900">{section.label}</a>
+			<div class="flex items-center gap-3">
+				<div class="flex items-center gap-1 text-sm text-neutral-500" aria-label="Brödsmulor">
+					<a href="/" class="hover:text-neutral-900 {$page.url.pathname === '/' ? 'font-medium text-neutral-900' : ''}">Hem</a>
+					{#if section}
+						<span class="select-none">/</span>
+						{#if onSectionRoot}
+							<span class="font-medium text-neutral-900">{section.label}</span>
+						{:else}
+							<a href={section.href} class="hover:text-neutral-900">{section.label}</a>
+						{/if}
 					{/if}
+				</div>
+				{#if data.dev && data.user}
+					<DevPersonaSwitcher personas={data.dev.personas} currentPersona={data.dev.currentPersona} user={data.user} />
 				{/if}
 			</div>
 		</div>
@@ -67,6 +72,3 @@
 	<FloatingCart />
 {/if}
 
-{#if data.dev}
-	<DevPersonaSwitcher personas={data.dev.personas} currentPersona={data.dev.currentPersona} user={data.user} />
-{/if}

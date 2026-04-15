@@ -279,9 +279,9 @@
 				md:w-auto md:h-auto md:rounded-full md:px-5 md:py-3"
 			aria-label="Min bokning"
 		>
-			<span class="material-symbols-outlined" style="font-size:22px">shopping_bag</span>
+			<span class="material-symbols-outlined" style="font-size:22px">camping</span>
 			<span class="hidden md:inline text-sm font-medium whitespace-nowrap">
-				Min bokning{itemCount > 0 ? ` (${itemCount})` : ''}
+				Min bokning
 			</span>
 			{#if itemCount > 0}
 				<span

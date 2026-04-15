@@ -2,7 +2,7 @@
 	import type { PageData } from './$types';
 	import { createApiClient, type Article, type AvailabilityGroup } from '$lib/api/client';
 	import { statusLabels } from '$lib/labels';
-	import { hasRole, accessAtLeast } from '$lib/user';
+	import { hasRole, accessAtLeast, canBook } from '$lib/user';
 	import { page } from '$app/stores';
 	import { cart } from '$lib/stores/cart.svelte';
 	import ReportIssueForm from '$lib/components/ReportIssueForm.svelte';
@@ -12,6 +12,7 @@
 	let { data }: { data: PageData } = $props();
 
 	let isManager = $derived(hasRole($page.data.user, 'equipment_manager'));
+	let showBook = $derived(canBook($page.data.user));
 
 	// Access level for approval badge: use the active cart's team level when known,
 	// otherwise fall back to the user's max_access.
@@ -455,17 +456,22 @@
 	}
 </script>
 
-<div class="max-w-4xl mx-auto p-4">
-	{#if cart.active && cartBookingDates}
-		<div class="flex items-center gap-2 mb-4 px-3 py-2 bg-blue-50 border border-blue-200 rounded text-sm">
-			<a href="/book?id={cart.id}" class="flex-1 text-blue-800 font-medium hover:underline">
-				Bokar {cartBookingDates.start} - {cartBookingDates.end}{cartBookingDates.teamName ? ` · ${cartBookingDates.teamName}` : ''}
-			</a>
-			<button onclick={() => cart.clear()} class="text-blue-600 hover:text-blue-800 text-lg leading-none" aria-label="Avaktivera bokning">×</button>
-		</div>
-	{/if}
+{#if cart.active && cartBookingDates}
+	<div class="sticky top-14 z-10 flex items-center gap-2 px-4 py-2 bg-blue-50 border-b border-blue-200 text-sm">
+		<a href="/book?id={cart.id}" class="flex-1 text-blue-800 font-medium hover:underline">
+			Bokar {cartBookingDates.start} - {cartBookingDates.end}{cartBookingDates.teamName ? ` · ${cartBookingDates.teamName}` : ''}
+		</a>
+		<button onclick={() => cart.clear()} class="text-blue-600 hover:text-blue-800 text-lg leading-none" aria-label="Avaktivera bokning">×</button>
+	</div>
+{/if}
 
-	<h1 class="text-heading-sm font-bold mb-4">Utrustning</h1>
+<div class="max-w-4xl mx-auto p-4">
+	<div class="flex items-center justify-between mb-4">
+		<h1 class="text-heading-sm font-bold">Utrustning</h1>
+		{#if !cart.active && showBook}
+			<scout-button type="link" href="/book" variant="primary">Boka utrustning</scout-button>
+		{/if}
+	</div>
 
 	<div class="flex flex-wrap gap-2 mb-4">
 		<input
@@ -601,7 +607,7 @@
 							<span class="font-medium">{group.commercialName}</span>
 							<span class="text-sm text-neutral-500 ml-2">{group.categoryName}</span>
 						</div>
-						<div class="flex items-center gap-2 text-sm text-neutral-600">
+						<div class="flex flex-wrap items-center gap-2 text-sm text-neutral-600">
 							<span>{group.locationName}</span>
 							{#each [approvalBadge(group.articles[0]?.approval_level ?? 'none')] as badge}
 								{#if badge?.variant === 'low-pre'}
@@ -614,10 +620,6 @@
 							{/each}
 							{#if cart.active}
 								{@const cartAvail = availabilityMap.get(group.key) ?? 0}
-								{@const inCart = cartCountMap.get(group.key) ?? 0}
-								{#if inCart > 0}
-									<span class="px-2 py-0.5 rounded bg-green-100 text-green-800 text-xs font-medium">{inCart} i bokning</span>
-								{/if}
 								<span class="px-2 py-0.5 rounded {cartAvail > 0 ? 'bg-blue-600 text-white' : 'bg-neutral-200 text-neutral-500'}">{cartAvail} kvar</span>
 							{:else if group.individuallyTracked}
 								<span class="bg-blue-600 text-white px-2 py-0.5 rounded">{availableCount}/{group.nonArchivedCount} st</span>

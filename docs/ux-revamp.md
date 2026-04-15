@@ -256,7 +256,7 @@ All items below resolved unless marked **OPEN**.
 | 10 | Item names in floating cart should be links to article | Done - linked via article_id |
 | 11 | Sort by location in floating cart and booking view; location as section header; show category in cart | Done - both FloatingCart and BookingItemsList grouped by location, sorted by category then name |
 | 12 | No "Lägg till en till" text, just +/-; quantity-tracked items grouped by status | Done - compact controls + status grouping for non-individually-tracked items |
-| 13 | Persona switcher collides with back button | Done - moved to top-14 (below nav bar) |
+| 13 | Persona switcher collides with back button | Done - moved into nav bar, right side alongside breadcrumbs (inline, no fixed positioning) |
 | 14 | Issues overview: show date issue was reported and date of last update | **OPEN** - needs backend: Article response lacks issue lifecycle timestamps. Requires adding issue_reported_at and last_event_at to the API. |
 | 15 | Cart badge doesn't update until cart is opened | Done - added refresh signal to cart store, FloatingCart listens and reloads. All add/remove operations trigger refresh. |
 | 16 | Missing minus button in /browse when item is in cart | Done - inline [−] count [+] controls shown when item in cart, single [+] when not |
@@ -273,6 +273,7 @@ All items below resolved unless marked **OPEN**.
 | 4 | Bokningar page: show all bookings sorted by status then start date | **OPEN** - not yet implemented |
 | 5 | Browse expand reorder: image, then counts, then text descriptions | Done - text descriptions now rendered after article list/state rows |
 | 6 | Issue links for non-ok items in browse; article page shows sibling items | **OPEN** - rethinking issue reporting flow together with user |
+| 7 | "Boka utrustning" CTA on browse page; cart banner sticky when scrolling | Done - CTA inline with h1 header (hidden when cart active); cart banner is sticky top-0 full-width, replaces CTA when cart active |
 
 ## Known issues
 

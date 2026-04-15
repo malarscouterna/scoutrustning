@@ -48,9 +48,9 @@
 	}
 </script>
 
-<div class="fixed top-14 right-4 z-50 flex flex-col items-end">
+<div class="relative">
 	{#if open}
-		<div class="bg-white border border-neutral-300 rounded-lg shadow-lg w-72 mt-2 sm:mt-0 sm:mb-2 max-h-[70vh] overflow-y-auto">
+		<div class="absolute right-0 top-full mt-2 bg-white border border-neutral-300 rounded-lg shadow-lg w-72 max-h-[70vh] overflow-y-auto z-50">
 			<div class="px-3 py-2 border-b bg-neutral-50 rounded-t-lg flex items-center justify-between">
 				<span class="text-xs font-medium text-neutral-600">Dev persona</span>
 				<button onclick={() => (open = false)} class="text-neutral-400 hover:text-neutral-600 text-sm">✕</button>
