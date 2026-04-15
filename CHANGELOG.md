@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.0](https://github.com/malarscouterna/ms-utrustning/compare/v0.5.1...v0.6.0) (2026-04-15)
+
+
+### Features
+
+* **web:** ux revamp - dashboard, floating cart, and real-time item management ([72178bc](https://github.com/malarscouterna/ms-utrustning/commit/72178bc791899ec9b68c01820348968b77962ad5))
+
+
+### Bug Fixes
+
+* **web:** decode jwt token payload as utf-8 instead of latin-1 ([cce71c0](https://github.com/malarscouterna/ms-utrustning/commit/cce71c05379347b9ee3670d891e0f02f09df54ff))
+
 ## [0.5.1](https://github.com/malarscouterna/ms-utrustning/compare/v0.5.0...v0.5.1) (2026-04-13)
 
 
