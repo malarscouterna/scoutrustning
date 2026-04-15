@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.2](https://github.com/malarscouterna/ms-utrustning/compare/v0.6.1...v0.6.2) (2026-04-15)
+
+
+### Bug Fixes
+
+* **web:** context-aware nav breadcrumb, approval badges, and availability fix ([fdd236f](https://github.com/malarscouterna/ms-utrustning/commit/fdd236fd96ff917111730a6c8687d6f85b6864b2))
+
 ## [0.6.1](https://github.com/malarscouterna/ms-utrustning/compare/v0.6.0...v0.6.1) (2026-04-15)
 
 
