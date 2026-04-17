@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.5](https://github.com/malarscouterna/ms-utrustning/compare/v0.6.4...v0.6.5) (2026-04-17)
+
+
+### Bug Fixes
+
+* **web:** add Secure attribute when deleting __Secure- prefixed Auth.js cookies ([3b36547](https://github.com/malarscouterna/ms-utrustning/commit/3b365472baa183d3aec2d71210e5c247524e19c3))
+
 ## [0.6.4](https://github.com/malarscouterna/ms-utrustning/compare/v0.6.3...v0.6.4) (2026-04-17)
 
 
