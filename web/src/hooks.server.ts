@@ -23,8 +23,8 @@ function isTokenExpired(token: string): boolean {
 }
 
 function clearAuthCookies(event: any): void {
-	event.cookies.delete('__Secure-authjs.session-token', { path: '/' });
-	event.cookies.delete('__Secure-authjs.callback-url', { path: '/' });
+	event.cookies.delete('__Secure-authjs.session-token', { path: '/', secure: true });
+	event.cookies.delete('__Secure-authjs.callback-url', { path: '/', secure: true });
 	event.cookies.delete('authjs.session-token', { path: '/' });
 }
 
