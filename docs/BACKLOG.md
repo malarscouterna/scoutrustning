@@ -2,6 +2,10 @@
 
 Deferred work items - things to grab when there's time, smaller tasks set aside during major work. When an item is completed, move it to [accomplished.md](accomplished.md).
 
+## Auth redirect loop - remove debug logging
+
+`hooks.server.ts` logs `[auth] redirect to login` and `[auth] stale session cookie detected` on every unauthenticated request. Once the fix has been confirmed stable in production, remove these `console.log` calls or gate them behind a `DEBUG_AUTH` env flag.
+
 ## Tailwind theme integration - dynamic class support
 
 Several badge/status colors are currently hardcoded as inline styles because Tailwind v4 + `@scouterna/tailwind-theme` only includes classes that appear as static strings at build time. Dynamic class composition (e.g. `class={badgeCls}`) gets purged. Affected: approval level badges in browse. Fix: either safelist the relevant color classes in the Tailwind config, or investigate whether the `@scouterna/tailwind-theme` package exposes CSS custom properties that can be used for inline color values instead.

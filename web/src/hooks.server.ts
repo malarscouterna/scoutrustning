@@ -22,11 +22,6 @@ function isTokenExpired(token: string): boolean {
 	}
 }
 
-function clearAuthCookies(event: any): void {
-	event.cookies.delete('__Secure-authjs.session-token', { path: '/', secure: true });
-	event.cookies.delete('__Secure-authjs.callback-url', { path: '/', secure: true });
-	event.cookies.delete('authjs.session-token', { path: '/' });
-}
 
 async function getAccessToken(event: any): Promise<string | null> {
 	try {
@@ -77,7 +72,6 @@ const appHandle: Handle = async ({ event, resolve }) => {
 				} else {
 					// Stale persona cookie without OIDC - clear it and redirect to login
 					event.cookies.delete(PERSONA_COOKIE, { path: '/' });
-					clearAuthCookies(event);
 					const callbackUrl = event.url.pathname + event.url.search;
 					throw redirect(302, `/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
 				}
@@ -104,10 +98,7 @@ const appHandle: Handle = async ({ event, resolve }) => {
 		if (accessToken) {
 			authMode = 'oidc';
 		} else {
-			// Production: redirect to Keycloak via Auth.js
-			// Clear any stale Auth.js cookies before redirecting to prevent redirect loops
-			// caused by an unreadable session cookie interfering with authHandle.
-			clearAuthCookies(event);
+			// Production: redirect to login — stale cookie cleanup handled by the outer wrapper
 			const callbackUrl = event.url.pathname + event.url.search;
 			throw redirect(302, `/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
 		}
@@ -152,6 +143,44 @@ const appHandle: Handle = async ({ event, resolve }) => {
 
 const hasOIDC = !!(process.env.AUTH_KEYCLOAK_ID && process.env.AUTH_KEYCLOAK_SECRET && process.env.AUTH_KEYCLOAK_ISSUER);
 
-export const handle: Handle = hasOIDC
-	? sequence(authHandle, appHandle)
-	: appHandle;
+const innerHandle: Handle = hasOIDC ? sequence(authHandle, appHandle) : appHandle;
+
+// Outer wrapper: post-processes all responses, including thrown redirects.
+// throw redirect() propagates as a JS exception and bypasses normal response
+// processing — we catch it here so we can inspect and modify the response.
+// If a redirect to /login happens while the browser still holds a stale
+// Auth.js session cookie, we append deletion headers to break the loop.
+export const handle: Handle = async ({ event, resolve }) => {
+	let response: Response;
+	try {
+		response = await innerHandle({ event, resolve });
+	} catch (thrown: unknown) {
+		// SvelteKit's redirect() throws a Redirect object with status + location.
+		// Convert it to a real Response so we can post-process it below.
+		if (thrown && typeof thrown === 'object' && 'status' in thrown && 'location' in thrown) {
+			const r = thrown as { status: number; location: string };
+			response = new Response(null, { status: r.status, headers: { Location: r.location } });
+		} else {
+			throw thrown;
+		}
+	}
+
+	const requestCookies = event.request.headers.get('cookie') ?? '';
+	const location = response.headers.get('location') ?? '';
+	const redirectingToLogin = response.status >= 300 && response.status < 400 && location.includes('/login');
+
+	if (redirectingToLogin) {
+		const hasSessionCookie = requestCookies.includes('authjs.session-token');
+		console.log(`[auth] redirect to login — session cookie present: ${hasSessionCookie}, path: ${event.url.pathname}`);
+		if (hasSessionCookie) {
+			console.log('[auth] stale session cookie detected — clearing');
+			const headers = new Headers(response.headers);
+			headers.append('Set-Cookie', '__Secure-authjs.session-token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax; Secure');
+			headers.append('Set-Cookie', '__Secure-authjs.callback-url=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax; Secure');
+			headers.append('Set-Cookie', 'authjs.session-token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax');
+			return new Response(null, { status: response.status, headers });
+		}
+	}
+
+	return response;
+};
