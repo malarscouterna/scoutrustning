@@ -32,7 +32,7 @@
 	</div>
 
 	<div class="grid md:grid-cols-2 gap-6">
-		<section>
+		<section class="min-w-0">
 			<div class="flex items-center justify-between mb-3">
 				<h2 class="font-bold text-lg">Bokningar</h2>
 				<a href="/bookings" class="text-sm text-blue-700 hover:underline">Visa alla →</a>
@@ -82,7 +82,7 @@
 			{/if}
 		</section>
 
-		<section>
+		<section class="min-w-0">
 			<div class="flex items-center justify-between mb-3">
 				<h2 class="font-bold text-lg">Ärenden</h2>
 				<a href="/issues" class="text-sm text-blue-700 hover:underline">Visa alla →</a>
@@ -112,11 +112,4 @@
 		</section>
 	</div>
 
-	{#if data.user}
-		<footer class="mt-8 pt-4 border-t text-sm text-neutral-500">
-			{data.user.group_name} · {data.user.name}
-			<span class="mx-2">·</span>
-			<a href="/auth/signout" class="underline">Logga ut</a>
-		</footer>
-	{/if}
 </div>
