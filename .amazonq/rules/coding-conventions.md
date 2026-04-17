@@ -29,6 +29,8 @@ High — follow these unless they conflict with an explicit user instruction.
 - API calls go through a typed client in `src/lib/api/`.
 - Server-side load functions fetch data; forms use SvelteKit form actions or fetch to the Go API.
 - Mobile-first responsive design. Test layouts at 375px width.
+- Material Symbols icons are self-hosted as `web/static/material-symbols-outlined.woff2` (a small subset, ~2KB). To add a new icon: fetch the Google Fonts CSS with the updated icon_names list using a Chrome user-agent to get woff2 format, extract the font URL, and download it to replace the file. Example: `curl -s "https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&icon_names=icon1,icon2" -H "User-Agent: Mozilla/5.0 ... Chrome/120..."` then download the woff2 URL from the CSS response. Keep icon_names sorted alphabetically.
+- Do not use `overflow-x: hidden` on `html` or `body` - it creates a scroll container that breaks `position: sticky` throughout the app. Use `overflow-x: clip` instead.
 - Never distort images. Lock height and let width follow the image's natural aspect ratio. Use `object-contain` (not `object-cover` or forced aspect ratios) when the image format varies.
 - Extract shared UI patterns into reusable components in `src/lib/components/`. If the same UI appears in two or more pages, extract it.
 - No page or component should ever reference personas, cookies, or auth headers directly. Consume `data.user` from the layout and call `createApiClient()` without auth options.

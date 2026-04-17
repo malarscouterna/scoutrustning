@@ -273,7 +273,12 @@ All items below resolved unless marked **OPEN**.
 | 4 | Bokningar page: show all bookings sorted by status then start date | **OPEN** - not yet implemented |
 | 5 | Browse expand reorder: image, then counts, then text descriptions | Done - text descriptions now rendered after article list/state rows |
 | 6 | Issue links for non-ok items in browse; article page shows sibling items | **OPEN** - rethinking issue reporting flow together with user |
-| 7 | "Boka utrustning" CTA on browse page; cart banner sticky when scrolling | Done - CTA inline with h1 header (hidden when cart active); cart banner is sticky top-0 full-width, replaces CTA when cart active |
+| 7 | "Boka utrustning" CTA on browse page; cart banner sticky when scrolling | Done - CTA inline with h1 header (hidden when cart active); cart banner is sticky top-14 full-width (below nav), replaces CTA when cart active |
+| 8 | Approval badge and availability counts overflow on mobile | Done - added flex-wrap to group info row; removed redundant "X i bokning" badge (count visible in inline controls) |
+| 9 | DevPersonaSwitcher overlaps nav/demo overlay on mobile | Done - moved into sticky nav bar, right side alongside breadcrumbs; removed fixed positioning |
+| 10 | position: sticky broken throughout app | Done - overflow-x: hidden on html/body creates a scroll container that breaks sticky; changed to overflow-x: clip |
+| 11 | FloatingCart FAB icon should indicate scout equipment | Done - replaced shopping_bag with camping tent icon; updated self-hosted woff2 subset |
+| 12 | FAB shows redundant item count in label on desktop | Done - removed "(N)" from "Min bokning" label; badge already shows the count |
 
 ## Known issues
 
