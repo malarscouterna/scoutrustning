@@ -125,6 +125,43 @@ type GroupSetting struct {
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 }
 
+type IssueArticle struct {
+	IssueID   pgtype.UUID `json:"issue_id"`
+	ArticleID pgtype.UUID `json:"article_id"`
+	GroupID   string      `json:"group_id"`
+}
+
+type IssueAssignee struct {
+	IssueID    pgtype.UUID        `json:"issue_id"`
+	UserID     string             `json:"user_id"`
+	GroupID    string             `json:"group_id"`
+	AssignedAt pgtype.Timestamptz `json:"assigned_at"`
+}
+
+type IssueEvent struct {
+	ID          pgtype.UUID        `json:"id"`
+	IssueID     pgtype.UUID        `json:"issue_id"`
+	GroupID     string             `json:"group_id"`
+	ActorID     string             `json:"actor_id"`
+	EventType   string             `json:"event_type"`
+	Description string             `json:"description"`
+	Metadata    json.RawMessage    `json:"metadata"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
+type IssueReport struct {
+	ID          pgtype.UUID        `json:"id"`
+	GroupID     string             `json:"group_id"`
+	Title       string             `json:"title"`
+	Description string             `json:"description"`
+	Severity    string             `json:"severity"`
+	Status      string             `json:"status"`
+	ReporterID  string             `json:"reporter_id"`
+	BookingID   pgtype.UUID        `json:"booking_id"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Location struct {
 	ID        pgtype.UUID        `json:"id"`
 	GroupID   string             `json:"group_id"`

@@ -35,6 +35,7 @@ func TestImageUpload(t *testing.T) {
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
 		r.Mount("/group-settings", (&handler.GroupSettingsHandler{Q: env.Queries, Perms: perms}).Routes())
 		r.Mount("/images", (&images.Handler{Q: env.Queries, ImageDir: imageDir}).Routes())
+		r.Mount("/issues", (&handler.IssueHandler{Q: env.Queries, Perms: perms}).Routes())
 	})
 
 	manager := env.ClientAs("manager-equipment")
@@ -534,43 +535,45 @@ func TestImageUpload(t *testing.T) {
 		json.NewDecoder(resp2.Body).Decode(&img2)
 		resp2.Body.Close()
 
-		// Report issue with image_ids
-		statusBody, _ := json.Marshal(map[string]any{
-			"status":    "reported_usable",
-			"comment":   "Torn fabric",
-			"image_ids": []string{img1["image_id"], img2["image_id"]},
+		// Create issue with image_ids
+		issueBody, _ := json.Marshal(map[string]any{
+			"article_id":  sibleyID,
+			"severity":    "usable",
+			"description": "Torn fabric",
+			"image_ids":   []string{img1["image_id"], img2["image_id"]},
 		})
-		resp, _ := leader.Put("/api/v0/articles/"+sibleyID+"/status", bytes.NewReader(statusBody))
-		if resp.StatusCode != http.StatusOK {
+		resp, _ := leader.Post("/api/v0/issues", bytes.NewReader(issueBody))
+		if resp.StatusCode != http.StatusCreated {
 			respBody, _ := io.ReadAll(resp.Body)
-			t.Fatalf("expected 200, got %d: %s", resp.StatusCode, respBody)
+			t.Fatalf("expected 201, got %d: %s", resp.StatusCode, respBody)
 		}
+		var issue map[string]any
+		json.NewDecoder(resp.Body).Decode(&issue)
 		resp.Body.Close()
 
-		// Verify event has image_ids in metadata
-		resp, _ = leader.Get("/api/v0/articles/" + sibleyID + "/events")
-		var evResult struct {
-			Events []struct {
-				EventType string         `json:"event_type"`
-				Metadata  map[string]any `json:"metadata"`
-			} `json:"events"`
-		}
-		json.NewDecoder(resp.Body).Decode(&evResult)
+		// Verify creation event has image_ids in metadata
+		issueID := issue["id"].(string)
+		resp, _ = leader.Get("/api/v0/issues/" + issueID)
+		var detail map[string]any
+		json.NewDecoder(resp.Body).Decode(&detail)
 		resp.Body.Close()
 
+		events := detail["events"].([]any)
 		found := false
-		for _, ev := range evResult.Events {
-			if ev.EventType == "issue_reported" {
-				ids, ok := ev.Metadata["image_ids"].([]any)
+		for _, ev := range events {
+			e := ev.(map[string]any)
+			if e["event_type"] == "comment" {
+				meta := e["metadata"].(map[string]any)
+				ids, ok := meta["image_ids"].([]any)
 				if !ok || len(ids) != 2 {
-					t.Errorf("expected 2 image_ids, got %v", ev.Metadata["image_ids"])
+					t.Errorf("expected 2 image_ids in creation event, got %v", meta["image_ids"])
 				}
 				found = true
 				break
 			}
 		}
 		if !found {
-			t.Error("issue_reported event not found")
+			t.Error("creation event not found in issue events")
 		}
 
 		// Verify images are servable

@@ -851,34 +851,18 @@ func (h *BookingHandler) UpdateItemPickup(w http.ResponseWriter, r *http.Request
 	}
 
 	var req struct {
-		PickupStatus  string   `json:"pickup_status"`
-		ArticleStatus string   `json:"article_status"`
-		Comment       string   `json:"comment"`
-		ImageIds      []string `json:"image_ids"`
+		PickupStatus string `json:"pickup_status"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	switch req.PickupStatus {
-	case "picked_up", "lost", "":
+	case "picked_up", "":
 		// "" clears the status (undo)
 	default:
-		WriteError(w, http.StatusBadRequest, "pickup_status must be picked_up, lost, or empty")
+		WriteError(w, http.StatusBadRequest, "pickup_status must be picked_up or empty")
 		return
-	}
-
-	// Validate article_status if provided
-	if req.ArticleStatus != "" {
-		validReportStatuses := map[string]bool{"reported_usable": true, "reported_unusable": true, "lost": true}
-		if !validReportStatuses[req.ArticleStatus] {
-			WriteError(w, http.StatusBadRequest, "article_status must be reported_usable, reported_unusable, or lost")
-			return
-		}
-		if req.Comment == "" {
-			WriteError(w, http.StatusBadRequest, "comment required when reporting article condition")
-			return
-		}
 	}
 
 	var pickupStatus pgtype.Text
@@ -895,42 +879,11 @@ func (h *BookingHandler) UpdateItemPickup(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if req.PickupStatus == "lost" {
-		articleStatus := "lost"
-		if req.ArticleStatus != "" {
-			articleStatus = req.ArticleStatus
-		}
-		h.Q.UpdateArticleStatus(r.Context(), db.UpdateArticleStatusParams{
-			ID: item.ArticleID, GroupID: claims.GroupID, Status: articleStatus,
-		})
-		comment := req.Comment
-		if comment == "" {
-			comment = "Missing at pickup"
-		}
-		LogArticleEventWithImages(r.Context(), h.Q, claims, item.ArticleID, "issue_reported", comment, map[string]string{
-			"new_status": articleStatus, "reason": "pickup", "booking_id": formatUUID(bookingID),
-		}, req.ImageIds)
-	} else if req.PickupStatus == "picked_up" {
-		// If reporting a condition at pickup, update article status
-		if req.ArticleStatus != "" {
-			h.Q.UpdateArticleStatus(r.Context(), db.UpdateArticleStatusParams{
-				ID: item.ArticleID, GroupID: claims.GroupID, Status: req.ArticleStatus,
-			})
-			LogArticleEventWithImages(r.Context(), h.Q, claims, item.ArticleID, "issue_reported", req.Comment, map[string]string{
-				"new_status": req.ArticleStatus, "booking_id": formatUUID(bookingID),
-			}, req.ImageIds)
-		}
+	if req.PickupStatus == "picked_up" {
 		LogArticleEvent(r.Context(), h.Q, claims, item.ArticleID, "picked_up", "Picked up", map[string]string{
 			"booking_id": formatUUID(bookingID),
 		})
 	} else if req.PickupStatus == "" {
-		// Undo: if the article was set to lost by this pickup, restore to ok
-		art, err := h.Q.GetArticle(r.Context(), db.GetArticleParams{ID: item.ArticleID, GroupID: claims.GroupID})
-		if err == nil && art.Status == "lost" {
-			h.Q.UpdateArticleStatus(r.Context(), db.UpdateArticleStatusParams{
-				ID: item.ArticleID, GroupID: claims.GroupID, Status: "ok",
-			})
-		}
 		// If all pickups are now undone, revert booking to pre-pickup status
 		nonePickedUp, err := h.Q.NoItemsPickedUp(r.Context(), db.NoItemsPickedUpParams{
 			BookingID: bookingID, GroupID: claims.GroupID,
@@ -1075,7 +1028,8 @@ func (h *BookingHandler) Return(w http.ResponseWriter, r *http.Request) {
 }
 
 // UpdateItemReturn sets the return status for a single booking item.
-// Side effects: broken/lost creates an issue report and updates article status.
+// reported_usable, reported_unusable, missing: caller is responsible for creating an issue
+// via POST /issues with the booking_id. This endpoint no longer sets article status directly.
 func (h *BookingHandler) UpdateItemReturn(w http.ResponseWriter, r *http.Request) {
 	claims, _ := auth.ClaimsFromContext(r.Context())
 	bookingID, err := parseUUID(chi.URLParam(r, "id"))
@@ -1121,9 +1075,9 @@ func (h *BookingHandler) UpdateItemReturn(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	validStatuses := map[string]bool{"returned_ok": true, "delayed": true, "reported_usable": true, "reported_unusable": true, "lost": true, "": true}
+	validStatuses := map[string]bool{"returned_ok": true, "delayed": true, "reported_usable": true, "reported_unusable": true, "missing": true, "": true}
 	if !validStatuses[req.ReturnStatus] {
-		WriteError(w, http.StatusBadRequest, "return_status must be returned_ok, delayed, reported_usable, reported_unusable, lost, or empty")
+		WriteError(w, http.StatusBadRequest, "return_status must be returned_ok, delayed, reported_usable, reported_unusable, missing, or empty")
 		return
 	}
 
@@ -1146,12 +1100,12 @@ func (h *BookingHandler) UpdateItemReturn(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Side effects: only condition-changing return statuses update the article
+	// Log return events. reported_usable/reported_unusable/missing: caller creates issue via POST /issues.
+	// Article status is derived from issue entities, not set directly here.
 	switch req.ReturnStatus {
 	case "":
-		// Undo — no-op on article status (orthogonal)
+		// Undo — no-op
 	case "returned_ok":
-		// No-op on article status — condition is orthogonal to booking state
 		LogArticleEvent(r.Context(), h.Q, claims, item.ArticleID, "returned", "Returned OK", map[string]string{
 			"booking_id": formatUUID(bookingID),
 		})
@@ -1159,30 +1113,8 @@ func (h *BookingHandler) UpdateItemReturn(w http.ResponseWriter, r *http.Request
 		LogArticleEvent(r.Context(), h.Q, claims, item.ArticleID, "returned", "Delayed return", map[string]string{
 			"return_status": "delayed", "booking_id": formatUUID(bookingID),
 		})
-	case "reported_usable":
-		h.Q.UpdateArticleStatus(r.Context(), db.UpdateArticleStatusParams{
-			ID: item.ArticleID, GroupID: claims.GroupID,
-			Status: "reported_usable",
-		})
-		LogArticleEventWithImages(r.Context(), h.Q, claims, item.ArticleID, "issue_reported", req.Notes, map[string]string{
-			"new_status": "reported_usable", "booking_id": formatUUID(bookingID),
-		}, req.ImageIds)
-	case "reported_unusable":
-		h.Q.UpdateArticleStatus(r.Context(), db.UpdateArticleStatusParams{
-			ID: item.ArticleID, GroupID: claims.GroupID,
-			Status: "reported_unusable",
-		})
-		LogArticleEventWithImages(r.Context(), h.Q, claims, item.ArticleID, "issue_reported", req.Notes, map[string]string{
-			"new_status": "reported_unusable", "booking_id": formatUUID(bookingID),
-		}, req.ImageIds)
-	case "lost":
-		h.Q.UpdateArticleStatus(r.Context(), db.UpdateArticleStatusParams{
-			ID: item.ArticleID, GroupID: claims.GroupID,
-			Status: "lost",
-		})
-		LogArticleEventWithImages(r.Context(), h.Q, claims, item.ArticleID, "issue_reported", req.Notes, map[string]string{
-			"new_status": "lost", "reason": "lost", "booking_id": formatUUID(bookingID),
-		}, req.ImageIds)
+	case "reported_usable", "reported_unusable", "missing":
+		// No article status side effect — caller creates issue via POST /issues
 	}
 
 	WriteJSON(w, http.StatusOK, item)

@@ -167,7 +167,8 @@ func TestPickupFlow_TransitionAndChecklist(t *testing.T) {
 		}
 	})
 
-	t.Run("mark item as lost", func(t *testing.T) {
+	t.Run("lost pickup_status is rejected", func(t *testing.T) {
+		// 'lost' was removed from pickup_status in the issues revamp migration
 		b, _ := json.Marshal(map[string]any{"pickup_status": "lost"})
 		resp, err := leader.Put("/api/v0/bookings/"+bookingID+"/items/"+itemIDs[1]+"/pickup", bytes.NewReader(b))
 		if err != nil {
@@ -175,15 +176,9 @@ func TestPickupFlow_TransitionAndChecklist(t *testing.T) {
 		}
 		defer resp.Body.Close()
 
-		if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode != http.StatusBadRequest {
 			body, _ := io.ReadAll(resp.Body)
-			t.Fatalf("expected 200, got %d: %s", resp.StatusCode, body)
-		}
-
-		var item map[string]any
-		json.NewDecoder(resp.Body).Decode(&item)
-		if item["pickup_status"] != "lost" {
-			t.Errorf("expected lost, got %v", item["pickup_status"])
+			t.Fatalf("expected 400, got %d: %s", resp.StatusCode, body)
 		}
 	})
 
@@ -208,15 +203,17 @@ func TestPickupFlow_TransitionAndChecklist(t *testing.T) {
 		json.NewDecoder(resp.Body).Decode(&result)
 		items := result["items"].([]any)
 
-		statuses := map[string]bool{}
-		for _, item := range items {
-			ps := item.(map[string]any)["pickup_status"]
-			if ps != nil {
-				statuses[ps.(string)] = true
-			}
+		statuses := map[string]any{}
+		for _, rawItem := range items {
+			item := rawItem.(map[string]any)
+			statuses[item["id"].(string)] = item["pickup_status"]
 		}
-		if !statuses["picked_up"] || !statuses["lost"] {
-			t.Errorf("expected both pickup statuses, got %v", statuses)
+		// itemIDs[0] was marked picked_up; itemIDs[1] had 'lost' rejected so remains null
+		if statuses[itemIDs[0]] != "picked_up" {
+			t.Errorf("expected itemIDs[0] picked_up, got %v", statuses[itemIDs[0]])
+		}
+		if statuses[itemIDs[1]] != nil {
+			t.Errorf("expected itemIDs[1] null pickup_status, got %v", statuses[itemIDs[1]])
 		}
 	})
 }
@@ -320,11 +317,11 @@ func TestPickupFlow_UndoPickupStatus(t *testing.T) {
 	})
 
 	t.Run("item can be re-marked after re-entering pickup", func(t *testing.T) {
-		// Re-transition to picked_up
+		// Re-transition to picked_up state after all pickups were undone
 		resp, _ := leader.Post("/api/v0/bookings/"+bookingID+"/pickup", nil)
 		resp.Body.Close()
 
-		b, _ := json.Marshal(map[string]any{"pickup_status": "lost"})
+		b, _ := json.Marshal(map[string]any{"pickup_status": "picked_up"})
 		resp, err := leader.Put("/api/v0/bookings/"+bookingID+"/items/"+itemIDs[0]+"/pickup", bytes.NewReader(b))
 		if err != nil {
 			t.Fatal(err)
@@ -338,8 +335,8 @@ func TestPickupFlow_UndoPickupStatus(t *testing.T) {
 
 		var item map[string]any
 		json.NewDecoder(resp.Body).Decode(&item)
-		if item["pickup_status"] != "lost" {
-			t.Errorf("expected lost, got %v", item["pickup_status"])
+		if item["pickup_status"] != "picked_up" {
+			t.Errorf("expected picked_up, got %v", item["pickup_status"])
 		}
 	})
 }

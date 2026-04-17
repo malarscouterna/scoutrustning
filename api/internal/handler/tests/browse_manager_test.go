@@ -21,6 +21,7 @@ func TestBrowseManagerMode(t *testing.T) {
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
 		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries}).Routes())
+		r.Mount("/issues", (&handler.IssueHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 	})
 
 	manager := env.ClientAs("manager-equipment")
@@ -320,14 +321,23 @@ func TestBrowseManagerMode(t *testing.T) {
 		defer manager.Delete("/api/v0/articles/" + id1)
 		defer manager.Delete("/api/v0/articles/" + id2)
 
-		// Report issue on id1
-		b, _ := json.Marshal(map[string]any{"status": "reported_usable", "comment": "Wobbly"})
-		resp, _ := manager.Put("/api/v0/articles/"+id1+"/status", bytes.NewReader(b))
+		// Report issue on id1 via issues endpoint
+		b, _ := json.Marshal(map[string]any{"article_id": id1, "severity": "usable", "description": "Wobbly"})
+		resp, _ := manager.Post("/api/v0/issues", bytes.NewReader(b))
 		resp.Body.Close()
 
-		// Report issue on id2
-		b, _ = json.Marshal(map[string]any{"status": "reported_unusable", "comment": "Broken"})
-		resp, _ = manager.Put("/api/v0/articles/"+id2+"/status", bytes.NewReader(b))
+		// Report issue on id2 via issues endpoint
+		b, _ = json.Marshal(map[string]any{"article_id": id2, "severity": "unusable", "description": "Broken"})
+		resp, _ = manager.Post("/api/v0/issues", bytes.NewReader(b))
+		resp.Body.Close()
+
+		// Add an article_event directly to generate group-level history
+		b, _ = json.Marshal(map[string]any{"message": "Checked storage"})
+		resp, _ = manager.Post("/api/v0/articles/"+id1+"/events", bytes.NewReader(b))
+		resp.Body.Close()
+
+		b, _ = json.Marshal(map[string]any{"message": "Also checked"})
+		resp, _ = manager.Post("/api/v0/articles/"+id2+"/events", bytes.NewReader(b))
 		resp.Body.Close()
 
 		// Group events should include both
@@ -394,7 +404,7 @@ func TestBrowseManagerMode(t *testing.T) {
 		}
 
 		// Verify: list articles and count matching ones
-		resp, _ = manager.Get("/api/v0/articles?search=EditCountTest&status=ok,reported_usable,incoming,reported_unusable,under_repair,lost")
+		resp, _ = manager.Get("/api/v0/articles?search=EditCountTest&status=ok,reported_usable,incoming,reported_unusable,under_repair")
 		var articles []map[string]any
 		json.NewDecoder(resp.Body).Decode(&articles)
 		resp.Body.Close()
