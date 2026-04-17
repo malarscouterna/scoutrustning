@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.6](https://github.com/malarscouterna/ms-utrustning/compare/v0.6.5...v0.6.6) (2026-04-17)
+
+
+### Bug Fixes
+
+* **web:** clear stale Auth.js cookies on login redirect to break redirect loop ([9c06dc4](https://github.com/malarscouterna/ms-utrustning/commit/9c06dc4017635872deed0f651b4f22e0319f0150))
+
 ## [0.6.5](https://github.com/malarscouterna/ms-utrustning/compare/v0.6.4...v0.6.5) (2026-04-17)
 
 
