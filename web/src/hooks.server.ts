@@ -22,6 +22,12 @@ function isTokenExpired(token: string): boolean {
 	}
 }
 
+function clearAuthCookies(event: any): void {
+	event.cookies.delete('__Secure-authjs.session-token', { path: '/' });
+	event.cookies.delete('__Secure-authjs.callback-url', { path: '/' });
+	event.cookies.delete('authjs.session-token', { path: '/' });
+}
+
 async function getAccessToken(event: any): Promise<string | null> {
 	try {
 		const session = await event.locals.auth?.();
@@ -71,6 +77,7 @@ const appHandle: Handle = async ({ event, resolve }) => {
 				} else {
 					// Stale persona cookie without OIDC - clear it and redirect to login
 					event.cookies.delete(PERSONA_COOKIE, { path: '/' });
+					clearAuthCookies(event);
 					const callbackUrl = event.url.pathname + event.url.search;
 					throw redirect(302, `/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
 				}
@@ -98,10 +105,9 @@ const appHandle: Handle = async ({ event, resolve }) => {
 			authMode = 'oidc';
 		} else {
 			// Production: redirect to Keycloak via Auth.js
-			// Auth.js handles /auth/signin as a GET — shows provider list
-			// With only one provider, user clicks once. We can't skip it from server-side.
-			// But we CAN use the CSRF-protected POST endpoint by redirecting to a
-			// small interstitial that auto-submits. Simpler: just use /auth/signin.
+			// Clear any stale Auth.js cookies before redirecting to prevent redirect loops
+			// caused by an unreadable session cookie interfering with authHandle.
+			clearAuthCookies(event);
 			const callbackUrl = event.url.pathname + event.url.search;
 			throw redirect(302, `/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
 		}
