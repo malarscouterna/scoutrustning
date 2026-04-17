@@ -33,7 +33,7 @@ CREATE TABLE issue_reports (
     group_id    text NOT NULL REFERENCES groups(id),
     title       text NOT NULL,
     description text NOT NULL,
-    severity    text NOT NULL CHECK (severity IN ('usable', 'unusable')),
+    severity    text NOT NULL CHECK (severity IN ('usable', 'unusable', 'missing')),
     status      text NOT NULL DEFAULT 'open'
                   CHECK (status IN ('open', 'in_progress', 'resolved', 'archived')),
     reporter_id text NOT NULL REFERENCES users(id),
@@ -51,11 +51,12 @@ CREATE TABLE issue_reports (
 | `resolved` | Problem fixed, articles back to OK |
 | `archived` | Issue closed without resolution (e.g. article retired) |
 
-`severity` maps directly to the old article status flags:
-| Severity | Old article status |
+`severity` maps directly to article status:
+| Severity | Article status |
 |---|---|
 | `usable` | `reported_usable` |
 | `unusable` | `reported_unusable` |
+| `missing` | `reported_missing` |
 
 ### New table: `issue_articles`
 
@@ -107,16 +108,19 @@ CREATE TABLE issue_events (
 | Open issues on the article | Derived status |
 |---|---|
 | None | `ok` (or whatever it was before any issue) |
-| At least one `unusable` | `reported_unusable` |
+| At least one `missing` | `reported_missing` |
+| At least one `unusable` (no `missing`) | `reported_unusable` |
 | Only `usable` | `reported_usable` |
 
+Severity priority for derivation: `missing` = `unusable` > `usable` > `ok`. Both `missing` and `unusable` block booking; they are peers at the highest severity level. If an article has both open `missing` and `unusable` issues, `reported_missing` takes precedence (arbitrary tiebreak - can be revisited).
+
 Rules:
-- When a new issue is created for an article: set article status to `reported_{severity}` if it is worse than the current status (unusable > usable > ok).
+- When a new issue is created for an article: set article status to `reported_{severity}` if it is worse than the current status (missing = unusable > usable > ok).
 - When an issue is resolved or archived: re-derive from remaining open issues; if none remain, restore to `ok`.
 - When an article is archived (`articles.status = 'archived'`): set all open issues on that article to `archived`.
 - An issue that spans multiple articles updates all of them.
 
-The existing `PUT /api/v0/articles/{id}/status` endpoint is kept for internal and manager-only use cases (`under_repair`, `incoming`, `archived`, `lost`) that are not tied to issue entities.
+The existing `PUT /api/v0/articles/{id}/status` endpoint is kept for internal and manager-only use cases (`under_repair`, `incoming`, `archived`) that are not tied to issue entities. The `lost` article status is removed - articles confirmed gone should be set to `archived`.
 
 ---
 
@@ -129,22 +133,19 @@ The existing `PUT /api/v0/articles/{id}/status` endpoint is kept for internal an
 ```
 Ärenden
 ─────────────────────────────────────────
-  [Rapportera ett problem ›]             ← primary CTA → /issues/new
+  [Felanmälan ›]             ← primary CTA → /issues/new
 ─────────────────────────────────────────
   Trasig tältpinne · Sibley 6p           ← /issues/[id]
   Ej användbar · rapporterat 12 apr, uppdaterat idag ›
 
   Spricka i kastrull · Stormkök          ← /issues/[id]
   Användbar · rapporterat 3 apr ›
-
-  [Visa avslutade ▼]
 ─────────────────────────────────────────
   [Visa alla ärenden ›]                  → /issues
 ```
 
 **"Mina ärenden"** (non-manager): issues the user reported or is assigned to, open only. Badge shows count of open "mine" issues.
 **"Aktiva ärenden"** (manager): 5 most recent open/in_progress issues across the group. Two badges: count of "mine" (assigned/reported) + total open count (like pending approvals). Highlighted if total > 0.
-**"Visa avslutade"**: expandable, lazy-loaded, shows resolved/archived issues.
 
 Both views show: issue title, severity label, article name(s), created date, last-updated date.
 
@@ -173,7 +174,7 @@ Mina ärenden
 
 **Issue card** - same component for dashboard and list:
 - Title
-- Severity badge ("Användbar" / "Ej användbar"), amber/red
+- Severity badge ("Användbar" / "Ej användbar" / "Saknas"), amber/red/red
 - Article name(s), linked to `/articles/[id]`
 - Reporter name
 - Dates: "Rapporterat 12 apr · Uppdaterat idag"
@@ -197,6 +198,9 @@ Utrustning
 Allvarlighetsgrad
   ( ) Användbar - kan fortfarande användas
   (•) Ej användbar - kan inte användas
+  ( ) Saknas - finns inte där den ska finnas
+
+Severity values: `usable`, `unusable`, `missing`
 
 Beskrivning *
   [textarea - required]
@@ -280,6 +284,7 @@ Rapportera problem med [Article Name]
 Allvarlighetsgrad
   ( ) Användbar
   (•) Ej användbar
+  ( ) Saknas
 
 Beskrivning *
   [textarea]
@@ -296,7 +301,7 @@ Bilder (valfritt)
 3. Toast appears: "Problem rapporterat. [Visa ärende →]" linking to `/issues/[id]`.
 4. Article status updates reactively (derived from new open issue).
 
-**Booking return flow:** selecting `reported_usable` or `reported_unusable` as the return status opens the sheet pre-filled with that severity. The user completes the description and submits. The booking item return and the issue creation happen as two separate API calls; the return call no longer sets article status directly (status derives from the issue instead).
+**Booking return flow:** selecting `reported_usable`, `reported_unusable`, or `missing` as the return status opens the sheet pre-filled with that severity. The `lost` booking item return status is removed - a missing item is reported as a `missing` severity issue instead. The booking item return and the issue creation happen as two separate API calls; the return call no longer sets article status directly (status derives from the issue instead).
 
 **No navigation away.** The user stays on their current page throughout.
 
@@ -321,8 +326,8 @@ Bilder (valfritt)
 
 | Endpoint | Change |
 |---|---|
-| `PUT /api/v0/articles/{id}/status` | Restricted to manager-only status transitions not tied to issues: `under_repair`, `incoming`, `archived`, `lost`. Reporting (`reported_*`) is no longer done via this endpoint. |
-| `PUT /api/v0/bookings/{id}/items/{itemId}/return` | When return status is `reported_usable` or `reported_unusable`, no longer sets article status directly - caller is expected to create an issue via `POST /api/v0/issues` and pass the `booking_id`. Article status derives from the issue. |
+| `PUT /api/v0/articles/{id}/status` | Restricted to manager-only status transitions not tied to issues: `under_repair`, `incoming`, `archived`. The `lost` status is removed - use `archived` instead. Reporting (`reported_*`) is no longer done via this endpoint. |
+| `PUT /api/v0/bookings/{id}/items/{itemId}/return` | When return status is `reported_usable`, `reported_unusable`, or `missing`, no longer sets article status directly - caller is expected to create an issue via `POST /api/v0/issues` and pass the `booking_id`. Article status derives from the issue. The `lost` return status is removed. |
 
 ### Response shape - issue detail
 
@@ -362,8 +367,10 @@ Bilder (valfritt)
 
 This revamp intentionally breaks backwards compatibility. The system is pre-release (`/api/v0`), so no migration shims are needed.
 
-- **`PUT /articles/{id}/status` for reported statuses is removed.** The endpoint remains for manager-only transitions (`under_repair`, `incoming`, `archived`, `lost`). Any client calling it with `reported_usable` or `reported_unusable` gets a 400.
+- **`PUT /articles/{id}/status` for reported statuses is removed.** The endpoint remains for manager-only transitions (`under_repair`, `incoming`, `archived`). Any client calling it with `reported_usable`, `reported_unusable`, or `missing` gets a 400. The `lost` article status is removed entirely - use `archived` for confirmed-gone articles.
+- **`lost` booking item return status is removed.** Clients sending `lost` as a return status get a 400. Use `missing` severity when creating an issue for an item that cannot be found.
 - **Existing `article_events` rows** (type `issue_reported`, `issue_resolved`) are not migrated to `issue_events`. They remain readable as historical context on `/articles/[id]` event history.
+- **`lost` article status removed**: the value is dropped from the article status CHECK constraint. No data migration - pre-release.
 - **Articles currently in `reported_usable`/`reported_unusable` status**: no back-fill. Their status stays as-is. Managers resolve them via the issues page as before; once resolved the status derives from issue entities going forward. The new `/issues` list shows only `issue_reports` rows - old reported articles appear only on `/articles/[id]` history until manually resolved.
 - `issues-and-events.md` is superseded by this document. Add a redirect notice to that file.
 
@@ -417,18 +424,20 @@ This revamp intentionally breaks backwards compatibility. The system is pre-rele
 
 ## Implementation order
 
-1. DB migration: `issue_reports`, `issue_articles`, `issue_assignees`, `issue_events`
-2. sqlc queries + regenerate
-3. Issue handlers: create, list, get, update status, add comment, manage assignees/articles
-4. API tests: create/list/detail/resolve/comment flows, access control
-5. `/issues/new` page + server action
-6. `/issues/[id]` detail page
-7. Rebuild `/issues` list page from issue entities
-8. `ReportIssueSheet` component
-9. Wire sheet into browse, article detail, booking return
-10. Dashboard: CTA + issue cards with dates
-11. Article status derivation: update on issue create/resolve/archive
-12. Smoke test additions, svelte-check
+1. ✅ DB migration: `issue_reports`, `issue_articles`, `issue_assignees`, `issue_events` — `api/migrations/00002_issue_reports.sql`. Also removes `lost` from `articles.status`, adds `reported_missing`; removes `lost` from `booking_items.pickup_status`; replaces `lost` with `missing` in `booking_items.return_status`.
+2. ✅ sqlc queries + regenerated — `api/internal/db/queries/issues.sql`
+3. ✅ Issue handlers — `api/internal/handler/issues.go`. All endpoints implemented. Article status derivation runs on issue create/resolve/archive.
+4. ✅ `PUT /articles/{id}/status` restricted to manager-only non-reported statuses (`ok`, `incoming`, `under_repair`, `archived`). `lost` removed. `reported_*` now only set via issue entities.
+5. ✅ Booking return handler updated: `lost` removed, `missing` added, `reported_*` return statuses no longer set article status directly (caller creates issue via POST /issues).
+6. ✅ `IssueHandler` mounted in `main.go` at `/api/v0/issues`.
+7. ✅ API tests fully updated. `issues_test.go` rewritten. `access_test.go`, `browse_manager_test.go`, `images_test.go` updated. `pickup_test.go`: removed `lost` pickup_status sub-tests, replaced with `lost_pickup_status_is_rejected` (expects 400) and updated assertions. `view_only_test.go`: `can_report_issue` now uses `POST /api/v0/issues` with issues route mounted. `UpdateItemPickup` handler cleaned up — removed stale `article_status`/`lost` logic (pickup-time issue reporting now done via `POST /api/v0/issues`). All tests pass.
+8. ⬜ `/issues/new` page + server action
+9. ⬜ `/issues/[id]` detail page
+10. ⬜ Rebuild `/issues` list page from issue entities
+11. ⬜ `ReportIssueSheet` component
+12. ⬜ Wire sheet into browse, article detail, booking return
+13. ⬜ Dashboard: CTA + issue cards with dates
+14. ⬜ Smoke test additions, svelte-check
 
 ---
 

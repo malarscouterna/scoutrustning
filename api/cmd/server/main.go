@@ -116,6 +116,7 @@ func main() {
 		bookings := &handler.BookingHandler{Q: queries}
 		teams := &handler.TeamHandler{Q: queries}
 		groupSettings := &handler.GroupSettingsHandler{Q: queries, Perms: permCache}
+		issueHandler := &handler.IssueHandler{Q: queries, Perms: permCache}
 		imageHandler := &images.Handler{Q: queries, ImageDir: imageDir}
 
 		r.Mount("/articles", articles.Routes())
@@ -124,6 +125,7 @@ func main() {
 		r.Mount("/bookings", bookings.Routes())
 		r.Mount("/teams", teams.Routes())
 		r.Mount("/group-settings", groupSettings.Routes())
+		r.Mount("/issues", issueHandler.Routes())
 		r.Mount("/images", imageHandler.Routes())
 	})
 

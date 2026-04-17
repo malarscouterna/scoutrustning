@@ -590,9 +590,10 @@ func (h *ArticleHandler) AddNote(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// UpdateStatus changes article status with an optional comment.
-// Any user can set reported statuses (reported_usable, reported_unusable, lost).
-// Manager-only statuses (ok, under_repair, archived, etc.) require equipment_manager role.
+// UpdateStatus changes article status. All status transitions are manager-only.
+// Valid statuses: ok, incoming, under_repair, archived.
+// Reported statuses (reported_usable, reported_unusable, reported_missing) are set
+// via issue entity creation (POST /issues), not this endpoint.
 func (h *ArticleHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	claims, _ := auth.ClaimsFromContext(r.Context())
 	id, err := parseUUID(chi.URLParam(r, "id"))
@@ -602,10 +603,9 @@ func (h *ArticleHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Status                string   `json:"status"`
-		Comment               string   `json:"comment"`
-		ExpectedAvailableDate *string  `json:"expected_available_date"`
-		ImageIds              []string `json:"image_ids"`
+		Status                string  `json:"status"`
+		Comment               string  `json:"comment"`
+		ExpectedAvailableDate *string `json:"expected_available_date"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		WriteError(w, http.StatusBadRequest, "invalid request body")
@@ -617,27 +617,16 @@ func (h *ArticleHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	validStatuses := map[string]bool{
-		"ok": true, "reported_usable": true, "incoming": true,
-		"reported_unusable": true, "under_repair": true, "lost": true, "archived": true,
+		"ok": true, "incoming": true, "under_repair": true, "archived": true,
 	}
 	if !validStatuses[req.Status] {
 		WriteError(w, http.StatusBadRequest, "invalid status")
 		return
 	}
 
-	// Anyone can report issues; resolving requires issue_resolve_role
-	userStatuses := map[string]bool{"reported_usable": true, "reported_unusable": true, "lost": true}
-	if !userStatuses[req.Status] {
-		perms := h.Perms.Get(r, claims.GroupID)
-		if !auth.AccessAtLeast(claims.MaxAccess, perms.IssueResolve) {
-			WriteError(w, http.StatusForbidden, "forbidden")
-			return
-		}
-	}
-
-	// Reporting requires a comment
-	if userStatuses[req.Status] && req.Comment == "" {
-		WriteError(w, http.StatusBadRequest, "comment required when reporting an issue")
+	perms := h.Perms.Get(r, claims.GroupID)
+	if !auth.AccessAtLeast(claims.MaxAccess, perms.IssueResolve) {
+		WriteError(w, http.StatusForbidden, "forbidden")
 		return
 	}
 
@@ -671,17 +660,10 @@ func (h *ArticleHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	eventType := "status_change"
-	if userStatuses[req.Status] {
-		eventType = "issue_reported"
-	} else if req.Status == "ok" && article.Status != "ok" {
-		eventType = "issue_resolved"
-	}
-
-	LogArticleEventWithImages(r.Context(), h.Q, claims, id, eventType, req.Comment, map[string]string{
+	LogArticleEvent(r.Context(), h.Q, claims, id, "status_change", req.Comment, map[string]string{
 		"old_status": article.Status,
 		"new_status": req.Status,
-	}, req.ImageIds)
+	})
 
 	WriteJSON(w, http.StatusOK, updated)
 }

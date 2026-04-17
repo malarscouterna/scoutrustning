@@ -20,7 +20,25 @@ func mountArticleStatusRoutes(env *testutil.TestEnv) {
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
 		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries}).Routes())
+		r.Mount("/issues", (&handler.IssueHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 	})
+}
+
+// createReportedUsableArticle creates an article with a reported_usable issue open on it.
+func createReportedUsableArticle(t *testing.T, env *testutil.TestEnv, name string) string {
+	t.Helper()
+	manager := env.ClientAs("manager-equipment")
+	leader := env.ClientAs("leader-yggdrasil")
+
+	articleID := createTestArticle(t, manager, name)
+	b, _ := json.Marshal(map[string]any{
+		"article_id":  articleID,
+		"severity":    "usable",
+		"description": "Minor scratch",
+	})
+	resp, _ := leader.Post("/api/v0/issues", bytes.NewReader(b))
+	resp.Body.Close()
+	return articleID
 }
 
 func TestAvailability_IncomingArticles(t *testing.T) {
@@ -253,19 +271,13 @@ func TestReturnFlow_ReturnOkPreservesCondition(t *testing.T) {
 	env := testutil.SetupTestEnv(t)
 	mountArticleStatusRoutes(env)
 
-	manager := env.ClientAs("manager-equipment")
 	leader := env.ClientAs("leader-yggdrasil")
 
-	// Create article, report it as usable, then book and return it OK
-	articleID := createTestArticle(t, manager, "OrthoReturn")
-
-	// Report as usable
-	b, _ := json.Marshal(map[string]any{"status": "reported_usable", "comment": "Minor scratch"})
-	resp, _ := leader.Put("/api/v0/articles/"+articleID+"/status", bytes.NewReader(b))
-	resp.Body.Close()
+	// Create article with an open issue (reported_usable)
+	articleID := createReportedUsableArticle(t, env, "OrthoReturn")
 
 	// Verify it's reported_usable
-	resp, _ = leader.Get("/api/v0/articles/" + articleID)
+	resp, _ := leader.Get("/api/v0/articles/" + articleID)
 	var art map[string]any
 	json.NewDecoder(resp.Body).Decode(&art)
 	resp.Body.Close()
@@ -276,7 +288,7 @@ func TestReturnFlow_ReturnOkPreservesCondition(t *testing.T) {
 	// Book it, pick up, return OK
 	bookingID, itemIDs, _ := setupReturnEnvWithArticle(t, env, articleID)
 
-	b, _ = json.Marshal(map[string]any{"return_status": "returned_ok"})
+	b, _ := json.Marshal(map[string]any{"return_status": "returned_ok"})
 	resp, _ = leader.Put("/api/v0/bookings/"+bookingID+"/items/"+itemIDs[0]+"/return", bytes.NewReader(b))
 	resp.Body.Close()
 
@@ -344,19 +356,15 @@ func TestPickupFlow_UndoPreservesCondition(t *testing.T) {
 	env := testutil.SetupTestEnv(t)
 	mountArticleStatusRoutes(env)
 
-	manager := env.ClientAs("manager-equipment")
 	leader := env.ClientAs("leader-yggdrasil")
 
-	// Create article with reported_usable status
-	articleID := createTestArticle(t, manager, "UndoPickup")
-	b, _ := json.Marshal(map[string]any{"status": "reported_usable", "comment": "Scratched"})
-	resp, _ := leader.Put("/api/v0/articles/"+articleID+"/status", bytes.NewReader(b))
-	resp.Body.Close()
+	// Create article with reported_usable via issue
+	articleID := createReportedUsableArticle(t, env, "UndoPickup")
 
 	// Create booking spanning today, submit, pickup
 	now := time.Now()
-	b, _ = json.Marshal(map[string]any{"start_date": now.Format("2006-01-02"), "end_date": now.AddDate(0, 0, 5).Format("2006-01-02")})
-	resp, _ = leader.Post("/api/v0/bookings", bytes.NewReader(b))
+	b, _ := json.Marshal(map[string]any{"start_date": now.Format("2006-01-02"), "end_date": now.AddDate(0, 0, 5).Format("2006-01-02")})
+	resp, _ := leader.Post("/api/v0/bookings", bytes.NewReader(b))
 	var booking map[string]any
 	json.NewDecoder(resp.Body).Decode(&booking)
 	resp.Body.Close()

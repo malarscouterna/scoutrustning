@@ -21,6 +21,7 @@ func mountAll(env *testutil.TestEnv) {
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
 		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries}).Routes())
 		r.Mount("/teams", (&handler.TeamHandler{Q: env.Queries}).Routes())
+		r.Mount("/issues", (&handler.IssueHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 	})
 }
 
@@ -260,8 +261,8 @@ func TestAccess_RoleEnforcementAllEndpoints(t *testing.T) {
 	}
 }
 
-// TestAccess_ArticleStatusRoles verifies that leaders can report issues but
-// cannot set manager-only statuses.
+// TestAccess_ArticleStatusRoles verifies that leaders can create issues but
+// cannot set manager-only article statuses.
 func TestAccess_ArticleStatusRoles(t *testing.T) {
 	env := testutil.SetupTestEnv(t)
 	mountAll(env)
@@ -272,17 +273,21 @@ func TestAccess_ArticleStatusRoles(t *testing.T) {
 	locID, catID := seedIDs(t, manager)
 	articleID := createArticle(t, manager, "StatusRoleTest", catID, locID)
 
-	t.Run("leader can report issue", func(t *testing.T) {
-		b, _ := json.Marshal(map[string]any{"status": "reported_usable", "comment": "Torn fabric"})
-		resp, _ := leader.Put("/api/v0/articles/"+articleID+"/status", bytes.NewReader(b))
+	t.Run("leader can create issue", func(t *testing.T) {
+		b, _ := json.Marshal(map[string]any{
+			"article_id":  articleID,
+			"severity":    "usable",
+			"description": "Torn fabric",
+		})
+		resp, _ := leader.Post("/api/v0/issues", bytes.NewReader(b))
 		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode != http.StatusCreated {
 			body, _ := io.ReadAll(resp.Body)
-			t.Fatalf("expected 200, got %d: %s", resp.StatusCode, body)
+			t.Fatalf("expected 201, got %d: %s", resp.StatusCode, body)
 		}
 	})
 
-	t.Run("leader cannot set manager status", func(t *testing.T) {
+	t.Run("leader cannot set manager-only article status", func(t *testing.T) {
 		for _, status := range []string{"ok", "under_repair", "archived"} {
 			b, _ := json.Marshal(map[string]any{"status": status})
 			resp, _ := leader.Put("/api/v0/articles/"+articleID+"/status", bytes.NewReader(b))
@@ -293,7 +298,7 @@ func TestAccess_ArticleStatusRoles(t *testing.T) {
 		}
 	})
 
-	t.Run("manager can set any status", func(t *testing.T) {
+	t.Run("manager can set article status", func(t *testing.T) {
 		b, _ := json.Marshal(map[string]any{"status": "under_repair", "comment": "Fixing it"})
 		resp, _ := manager.Put("/api/v0/articles/"+articleID+"/status", bytes.NewReader(b))
 		defer resp.Body.Close()

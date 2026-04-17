@@ -236,14 +236,14 @@ func TestReturnFlow_DelayedBlocksAvailability(t *testing.T) {
 	})
 }
 
-func TestReturnFlow_BrokenCreatesIssue(t *testing.T) {
+func TestReturnFlow_BrokenReturn(t *testing.T) {
 	env := testutil.SetupTestEnv(t)
 	mountReturnRoutes(env)
 
 	leader := env.ClientAs("leader-yggdrasil")
-	bookingID, itemIDs, _ := setupReturnEnv(t, env, 2, 2)
+	bookingID, itemIDs, articleIDs := setupReturnEnv(t, env, 2, 2)
 
-	t.Run("return as reported_unusable creates issue", func(t *testing.T) {
+	t.Run("return as reported_unusable records status on item", func(t *testing.T) {
 		b, _ := json.Marshal(map[string]any{
 			"return_status": "reported_unusable",
 			"notes":         "Tent pole snapped",
@@ -259,29 +259,27 @@ func TestReturnFlow_BrokenCreatesIssue(t *testing.T) {
 			t.Fatalf("expected 200, got %d: %s", resp.StatusCode, body)
 		}
 
-		// Verify article status changed
-		item := itemIDs[0]
-		_ = item
-		// Check via article list that the article is now reported_unusable
-		resp2, _ := leader.Get("/api/v0/articles?status=reported_unusable")
-		defer resp2.Body.Close()
-		var articles []map[string]any
-		json.NewDecoder(resp2.Body).Decode(&articles)
-
-		found := false
-		for _, a := range articles {
-			if a["commercial_name"] == "ReturnTest" {
-				found = true
-			}
-		}
-		if !found {
-			t.Error("expected reported_unusable article to have status reported_unusable")
+		var item map[string]any
+		json.NewDecoder(resp.Body).Decode(&item)
+		if item["return_status"] != "reported_unusable" {
+			t.Errorf("expected return_status reported_unusable, got %v", item["return_status"])
 		}
 	})
 
-	t.Run("return as lost sets article to lost status", func(t *testing.T) {
+	t.Run("article status unchanged until issue created", func(t *testing.T) {
+		resp, _ := leader.Get("/api/v0/articles/" + articleIDs[0])
+		defer resp.Body.Close()
+		var article map[string]any
+		json.NewDecoder(resp.Body).Decode(&article)
+		// Article status should still be ok — caller creates issue separately
+		if article["status"] != "ok" {
+			t.Errorf("expected ok (issue not yet created), got %v", article["status"])
+		}
+	})
+
+	t.Run("return as missing records status on item", func(t *testing.T) {
 		b, _ := json.Marshal(map[string]any{
-			"return_status": "lost",
+			"return_status": "missing",
 			"notes":         "Cannot find it",
 		})
 		resp, err := leader.Put("/api/v0/bookings/"+bookingID+"/items/"+itemIDs[1]+"/return", bytes.NewReader(b))
@@ -295,20 +293,23 @@ func TestReturnFlow_BrokenCreatesIssue(t *testing.T) {
 			t.Fatalf("expected 200, got %d: %s", resp.StatusCode, body)
 		}
 
-		// Check article is lost
-		resp2, _ := leader.Get("/api/v0/articles?status=lost")
-		defer resp2.Body.Close()
-		var articles []map[string]any
-		json.NewDecoder(resp2.Body).Decode(&articles)
-
-		found := false
-		for _, a := range articles {
-			if a["commercial_name"] == "ReturnTest" {
-				found = true
-			}
+		var item map[string]any
+		json.NewDecoder(resp.Body).Decode(&item)
+		if item["return_status"] != "missing" {
+			t.Errorf("expected return_status missing, got %v", item["return_status"])
 		}
-		if !found {
-			t.Error("expected lost article to have status lost")
+	})
+
+	t.Run("lost return status no longer accepted", func(t *testing.T) {
+		b, _ := json.Marshal(map[string]any{"return_status": "lost"})
+		resp, err := leader.Put("/api/v0/bookings/"+bookingID+"/items/"+itemIDs[0]+"/return", bytes.NewReader(b))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("expected 400 for removed lost status, got %d", resp.StatusCode)
 		}
 	})
 }

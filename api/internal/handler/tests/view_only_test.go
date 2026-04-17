@@ -3,6 +3,7 @@ package tests
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"testing"
 
@@ -21,6 +22,7 @@ func TestAccess_ViewOnlyRestrictions(t *testing.T) {
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
 		r.Mount("/teams", (&handler.TeamHandler{Q: env.Queries}).Routes())
 		r.Mount("/group-settings", (&handler.GroupSettingsHandler{Q: env.Queries, Perms: perms}).Routes())
+		r.Mount("/issues", (&handler.IssueHandler{Q: env.Queries, Perms: perms}).Routes())
 	})
 
 	viewer := env.ClientAs("view-only")
@@ -82,10 +84,15 @@ func TestAccess_ViewOnlyRestrictions(t *testing.T) {
 	})
 
 	t.Run("can report issue", func(t *testing.T) {
-		b, _ := json.Marshal(map[string]any{"status": "reported_usable", "comment": "Looks worn"})
-		resp, _ := viewer.Put("/api/v0/articles/"+articleID+"/status", bytes.NewReader(b))
-		if resp.StatusCode != http.StatusOK {
-			t.Errorf("expected 200, got %d", resp.StatusCode)
+		b, _ := json.Marshal(map[string]any{
+			"article_id":  articleID,
+			"severity":    "usable",
+			"description": "Looks worn",
+		})
+		resp, _ := viewer.Post("/api/v0/issues", bytes.NewReader(b))
+		if resp.StatusCode != http.StatusCreated {
+			body, _ := io.ReadAll(resp.Body)
+			t.Errorf("expected 201, got %d: %s", resp.StatusCode, body)
 		}
 		resp.Body.Close()
 	})

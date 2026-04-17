@@ -1,0 +1,598 @@
+package handler
+
+import (
+	"encoding/json"
+	"log/slog"
+	"net/http"
+	"strings"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+
+	"github.com/malarscouterna/ms-utrustning/api/internal/auth"
+	"github.com/malarscouterna/ms-utrustning/api/internal/db"
+)
+
+type IssueHandler struct {
+	Q     *db.Queries
+	Perms *PermissionCache
+}
+
+func (h *IssueHandler) Routes() chi.Router {
+	r := chi.NewRouter()
+	r.Get("/", h.List)
+	r.Post("/", h.Create)
+	r.Get("/{id}", h.Get)
+	r.Put("/{id}", h.Update)
+	r.Post("/{id}/comments", h.AddComment)
+	r.Put("/{id}/assignees", h.ReplaceAssignees)
+	r.Post("/{id}/articles", h.AddArticle)
+	r.Delete("/{id}/articles/{articleId}", h.RemoveArticle)
+	return r
+}
+
+func (h *IssueHandler) List(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+
+	var statuses []string
+	if v := r.URL.Query().Get("status"); v != "" {
+		statuses = strings.Split(v, ",")
+	}
+	mine := r.URL.Query().Get("mine") == "true"
+	var articleID pgtype.UUID
+	if v := r.URL.Query().Get("article_id"); v != "" {
+		id, err := parseUUID(v)
+		if err != nil {
+			WriteError(w, http.StatusBadRequest, "invalid article_id")
+			return
+		}
+		articleID = id
+	}
+
+	issues, err := h.Q.ListIssues(r.Context(), db.ListIssuesParams{
+		GroupID:   claims.GroupID,
+		Statuses:  statuses,
+		Mine:      mine,
+		UserID:    claims.MemberID,
+		ArticleID: articleID,
+	})
+	if err != nil {
+		slog.Error("failed to list issues", "error", err)
+		WriteError(w, http.StatusInternalServerError, "failed to list issues")
+		return
+	}
+
+	type issueWithArticles struct {
+		db.ListIssuesRow
+		Articles []db.ListIssueArticlesRow `json:"articles"`
+	}
+
+	result := make([]issueWithArticles, 0, len(issues))
+	for _, issue := range issues {
+		articles, _ := h.Q.ListIssueArticles(r.Context(), db.ListIssueArticlesParams{
+			IssueID: issue.ID, GroupID: claims.GroupID,
+		})
+		if articles == nil {
+			articles = []db.ListIssueArticlesRow{}
+		}
+		result = append(result, issueWithArticles{issue, articles})
+	}
+
+	WriteJSON(w, http.StatusOK, result)
+}
+
+func (h *IssueHandler) Create(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+
+	var req struct {
+		ArticleID   string   `json:"article_id"`
+		Severity    string   `json:"severity"`
+		Description string   `json:"description"`
+		BookingID   *string  `json:"booking_id"`
+		ImageIds    []string `json:"image_ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.ArticleID == "" {
+		WriteError(w, http.StatusBadRequest, "article_id required")
+		return
+	}
+	validSeverities := map[string]bool{"usable": true, "unusable": true, "missing": true}
+	if !validSeverities[req.Severity] {
+		WriteError(w, http.StatusBadRequest, "severity must be usable, unusable, or missing")
+		return
+	}
+	if req.Description == "" {
+		WriteError(w, http.StatusBadRequest, "description required")
+		return
+	}
+
+	articleID, err := parseUUID(req.ArticleID)
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid article_id")
+		return
+	}
+
+	article, err := h.Q.GetArticle(r.Context(), db.GetArticleParams{ID: articleID, GroupID: claims.GroupID})
+	if err != nil {
+		WriteError(w, http.StatusNotFound, "article not found")
+		return
+	}
+
+	// Auto-generate title: "Article name - Severity label"
+	severityLabel := map[string]string{
+		"usable":   "Användbar",
+		"unusable": "Ej användbar",
+		"missing":  "Saknas",
+	}
+	name := article.CommercialName
+	if name == "" {
+		name = article.CommonName
+	}
+	title := name + " - " + severityLabel[req.Severity]
+
+	var bookingID pgtype.UUID
+	if req.BookingID != nil && *req.BookingID != "" {
+		bookingID, err = parseUUID(*req.BookingID)
+		if err != nil {
+			WriteError(w, http.StatusBadRequest, "invalid booking_id")
+			return
+		}
+	}
+
+	issue, err := h.Q.CreateIssue(r.Context(), db.CreateIssueParams{
+		GroupID:     claims.GroupID,
+		Title:       title,
+		Description: req.Description,
+		Severity:    req.Severity,
+		ReporterID:  claims.MemberID,
+		BookingID:   bookingID,
+	})
+	if err != nil {
+		slog.Error("failed to create issue", "error", err)
+		WriteError(w, http.StatusInternalServerError, "failed to create issue")
+		return
+	}
+
+	if err := h.Q.AddIssueArticle(r.Context(), db.AddIssueArticleParams{
+		IssueID:   issue.ID,
+		ArticleID: articleID,
+		GroupID:   claims.GroupID,
+	}); err != nil {
+		slog.Error("failed to link issue article", "error", err)
+		WriteError(w, http.StatusInternalServerError, "failed to create issue")
+		return
+	}
+
+	// Log creation event
+	meta, _ := json.Marshal(map[string]any{
+		"severity":   req.Severity,
+		"image_ids":  req.ImageIds,
+		"article_id": req.ArticleID,
+	})
+	h.Q.CreateIssueEvent(r.Context(), db.CreateIssueEventParams{
+		IssueID:     issue.ID,
+		GroupID:     claims.GroupID,
+		ActorID:     claims.MemberID,
+		EventType:   "comment",
+		Description: req.Description,
+		Metadata:    meta,
+	})
+
+	// Update article status based on this new issue
+	h.deriveAndApplyArticleStatus(r, claims, articleID, article.Status, req.Severity)
+
+	// Touch updated_at on the issue
+	h.Q.UpdateIssue(r.Context(), db.UpdateIssueParams{
+		ID:      issue.ID,
+		GroupID: claims.GroupID,
+	})
+
+	issueDetail, _ := h.buildIssueDetail(r, claims, issue.ID)
+	WriteJSON(w, http.StatusCreated, issueDetail)
+}
+
+func (h *IssueHandler) Get(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	detail, err := h.buildIssueDetail(r, claims, id)
+	if err != nil {
+		WriteError(w, http.StatusNotFound, "issue not found")
+		return
+	}
+	WriteJSON(w, http.StatusOK, detail)
+}
+
+func (h *IssueHandler) Update(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	var req struct {
+		Title       *string `json:"title"`
+		Description *string `json:"description"`
+		Status      *string `json:"status"`
+		Comment     string  `json:"comment"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	// Status changes require issue_resolve_role
+	if req.Status != nil {
+		perms := h.Perms.Get(r, claims.GroupID)
+		if !auth.AccessAtLeast(claims.MaxAccess, perms.IssueResolve) {
+			WriteError(w, http.StatusForbidden, "forbidden")
+			return
+		}
+		validStatuses := map[string]bool{"open": true, "in_progress": true, "resolved": true, "archived": true}
+		if !validStatuses[*req.Status] {
+			WriteError(w, http.StatusBadRequest, "invalid status")
+			return
+		}
+	}
+
+	existing, err := h.Q.GetIssue(r.Context(), db.GetIssueParams{ID: id, GroupID: claims.GroupID})
+	if err != nil {
+		WriteError(w, http.StatusNotFound, "issue not found")
+		return
+	}
+
+	params := db.UpdateIssueParams{ID: id, GroupID: claims.GroupID}
+	if req.Title != nil {
+		params.Title = pgtype.Text{String: *req.Title, Valid: true}
+	}
+	if req.Description != nil {
+		params.Description = pgtype.Text{String: *req.Description, Valid: true}
+	}
+	if req.Status != nil {
+		params.Status = pgtype.Text{String: *req.Status, Valid: true}
+	}
+
+	if _, err := h.Q.UpdateIssue(r.Context(), params); err != nil {
+		slog.Error("failed to update issue", "error", err)
+		WriteError(w, http.StatusInternalServerError, "failed to update issue")
+		return
+	}
+
+	// Log status change event if status changed
+	if req.Status != nil && *req.Status != existing.Status {
+		meta, _ := json.Marshal(map[string]string{
+			"old_status": existing.Status,
+			"new_status": *req.Status,
+		})
+		h.Q.CreateIssueEvent(r.Context(), db.CreateIssueEventParams{
+			IssueID:     id,
+			GroupID:     claims.GroupID,
+			ActorID:     claims.MemberID,
+			EventType:   "status_change",
+			Description: req.Comment,
+			Metadata:    meta,
+		})
+
+		// Re-derive article statuses if resolved or archived
+		if *req.Status == "resolved" || *req.Status == "archived" {
+			articles, _ := h.Q.ListOpenIssueArticles(r.Context(), db.ListOpenIssueArticlesParams{
+				IssueID: id, GroupID: claims.GroupID,
+			})
+			for _, artID := range articles {
+				h.reapplyDerivedStatus(r, claims, artID)
+			}
+		}
+	}
+
+	detail, _ := h.buildIssueDetail(r, claims, id)
+	WriteJSON(w, http.StatusOK, detail)
+}
+
+func (h *IssueHandler) AddComment(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	var req struct {
+		Comment  string   `json:"comment"`
+		ImageIds []string `json:"image_ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Comment == "" {
+		WriteError(w, http.StatusBadRequest, "comment required")
+		return
+	}
+
+	if _, err := h.Q.GetIssue(r.Context(), db.GetIssueParams{ID: id, GroupID: claims.GroupID}); err != nil {
+		WriteError(w, http.StatusNotFound, "issue not found")
+		return
+	}
+
+	meta, _ := json.Marshal(map[string]any{"image_ids": req.ImageIds})
+	event, err := h.Q.CreateIssueEvent(r.Context(), db.CreateIssueEventParams{
+		IssueID:     id,
+		GroupID:     claims.GroupID,
+		ActorID:     claims.MemberID,
+		EventType:   "comment",
+		Description: req.Comment,
+		Metadata:    meta,
+	})
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to add comment")
+		return
+	}
+
+	// Touch updated_at
+	h.Q.UpdateIssue(r.Context(), db.UpdateIssueParams{ID: id, GroupID: claims.GroupID})
+
+	WriteJSON(w, http.StatusCreated, event)
+}
+
+func (h *IssueHandler) ReplaceAssignees(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	perms := h.Perms.Get(r, claims.GroupID)
+	if !auth.AccessAtLeast(claims.MaxAccess, perms.IssueResolve) {
+		WriteError(w, http.StatusForbidden, "forbidden")
+		return
+	}
+
+	var req struct {
+		UserIDs []string `json:"user_ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if _, err := h.Q.GetIssue(r.Context(), db.GetIssueParams{ID: id, GroupID: claims.GroupID}); err != nil {
+		WriteError(w, http.StatusNotFound, "issue not found")
+		return
+	}
+
+	if err := h.Q.ReplaceIssueAssignees(r.Context(), db.ReplaceIssueAssigneesParams{
+		IssueID: id, GroupID: claims.GroupID,
+	}); err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to update assignees")
+		return
+	}
+
+	for _, userID := range req.UserIDs {
+		h.Q.AddIssueAssignee(r.Context(), db.AddIssueAssigneeParams{
+			IssueID: id, UserID: userID, GroupID: claims.GroupID,
+		})
+	}
+
+	// Log assignment event
+	meta, _ := json.Marshal(map[string]any{"user_ids": req.UserIDs})
+	h.Q.CreateIssueEvent(r.Context(), db.CreateIssueEventParams{
+		IssueID:   id,
+		GroupID:   claims.GroupID,
+		ActorID:   claims.MemberID,
+		EventType: "assignment",
+		Metadata:  meta,
+	})
+
+	h.Q.UpdateIssue(r.Context(), db.UpdateIssueParams{ID: id, GroupID: claims.GroupID})
+
+	assignees, _ := h.Q.ListIssueAssignees(r.Context(), db.ListIssueAssigneesParams{
+		IssueID: id, GroupID: claims.GroupID,
+	})
+	if assignees == nil {
+		assignees = []db.ListIssueAssigneesRow{}
+	}
+	WriteJSON(w, http.StatusOK, assignees)
+}
+
+func (h *IssueHandler) AddArticle(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	perms := h.Perms.Get(r, claims.GroupID)
+	if !auth.AccessAtLeast(claims.MaxAccess, perms.IssueResolve) {
+		WriteError(w, http.StatusForbidden, "forbidden")
+		return
+	}
+
+	var req struct {
+		ArticleID string `json:"article_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.ArticleID == "" {
+		WriteError(w, http.StatusBadRequest, "article_id required")
+		return
+	}
+
+	articleID, err := parseUUID(req.ArticleID)
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid article_id")
+		return
+	}
+
+	issue, err := h.Q.GetIssue(r.Context(), db.GetIssueParams{ID: id, GroupID: claims.GroupID})
+	if err != nil {
+		WriteError(w, http.StatusNotFound, "issue not found")
+		return
+	}
+
+	if _, err := h.Q.GetArticle(r.Context(), db.GetArticleParams{ID: articleID, GroupID: claims.GroupID}); err != nil {
+		WriteError(w, http.StatusNotFound, "article not found")
+		return
+	}
+
+	h.Q.AddIssueArticle(r.Context(), db.AddIssueArticleParams{
+		IssueID: id, ArticleID: articleID, GroupID: claims.GroupID,
+	})
+
+	// Update article status if issue is active
+	if issue.Status == "open" || issue.Status == "in_progress" {
+		existingStatus, _ := h.Q.GetArticleCurrentStatus(r.Context(), db.GetArticleCurrentStatusParams{
+			ID: articleID, GroupID: claims.GroupID,
+		})
+		h.deriveAndApplyArticleStatus(r, claims, articleID, existingStatus, issue.Severity)
+	}
+
+	meta, _ := json.Marshal(map[string]string{"article_id": req.ArticleID})
+	h.Q.CreateIssueEvent(r.Context(), db.CreateIssueEventParams{
+		IssueID:   id,
+		GroupID:   claims.GroupID,
+		ActorID:   claims.MemberID,
+		EventType: "article_added",
+		Metadata:  meta,
+	})
+	h.Q.UpdateIssue(r.Context(), db.UpdateIssueParams{ID: id, GroupID: claims.GroupID})
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *IssueHandler) RemoveArticle(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	articleID, err := parseUUID(chi.URLParam(r, "articleId"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid article id")
+		return
+	}
+
+	perms := h.Perms.Get(r, claims.GroupID)
+	if !auth.AccessAtLeast(claims.MaxAccess, perms.IssueResolve) {
+		WriteError(w, http.StatusForbidden, "forbidden")
+		return
+	}
+
+	if _, err := h.Q.GetIssue(r.Context(), db.GetIssueParams{ID: id, GroupID: claims.GroupID}); err != nil {
+		WriteError(w, http.StatusNotFound, "issue not found")
+		return
+	}
+
+	h.Q.RemoveIssueArticle(r.Context(), db.RemoveIssueArticleParams{
+		IssueID: id, ArticleID: articleID, GroupID: claims.GroupID,
+	})
+
+	// Re-derive the article status now that this issue no longer links it
+	h.reapplyDerivedStatus(r, claims, articleID)
+
+	meta, _ := json.Marshal(map[string]string{"article_id": formatUUID(articleID)})
+	h.Q.CreateIssueEvent(r.Context(), db.CreateIssueEventParams{
+		IssueID:   id,
+		GroupID:   claims.GroupID,
+		ActorID:   claims.MemberID,
+		EventType: "article_removed",
+		Metadata:  meta,
+	})
+	h.Q.UpdateIssue(r.Context(), db.UpdateIssueParams{ID: id, GroupID: claims.GroupID})
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// buildIssueDetail assembles the full issue detail response.
+func (h *IssueHandler) buildIssueDetail(r *http.Request, claims auth.Claims, id pgtype.UUID) (any, error) {
+	issue, err := h.Q.GetIssue(r.Context(), db.GetIssueParams{ID: id, GroupID: claims.GroupID})
+	if err != nil {
+		return nil, err
+	}
+
+	articles, _ := h.Q.ListIssueArticles(r.Context(), db.ListIssueArticlesParams{
+		IssueID: id, GroupID: claims.GroupID,
+	})
+	if articles == nil {
+		articles = []db.ListIssueArticlesRow{}
+	}
+
+	assignees, _ := h.Q.ListIssueAssignees(r.Context(), db.ListIssueAssigneesParams{
+		IssueID: id, GroupID: claims.GroupID,
+	})
+	if assignees == nil {
+		assignees = []db.ListIssueAssigneesRow{}
+	}
+
+	events, _ := h.Q.ListIssueEvents(r.Context(), db.ListIssueEventsParams{
+		IssueID: id, GroupID: claims.GroupID,
+	})
+	if events == nil {
+		events = []db.ListIssueEventsRow{}
+	}
+
+	return map[string]any{
+		"id":          formatUUID(issue.ID),
+		"title":       issue.Title,
+		"description": issue.Description,
+		"severity":    issue.Severity,
+		"status":      issue.Status,
+		"reporter": map[string]string{
+			"id":   issue.ReporterID,
+			"name": issue.ReporterName,
+		},
+		"booking_id": func() any {
+			if issue.BookingID.Valid {
+				return formatUUID(issue.BookingID)
+			}
+			return nil
+		}(),
+		"articles":   articles,
+		"assignees":  assignees,
+		"events":     events,
+		"created_at": issue.CreatedAt,
+		"updated_at": issue.UpdatedAt,
+	}, nil
+}
+
+// deriveAndApplyArticleStatus sets article status to reported_{severity} if it is worse
+// than the current status (missing = unusable > usable > ok).
+func (h *IssueHandler) deriveAndApplyArticleStatus(r *http.Request, claims auth.Claims, articleID pgtype.UUID, currentStatus, newSeverity string) {
+	severityRank := map[string]int{"usable": 1, "unusable": 2, "missing": 2}
+	statusRank := map[string]int{"ok": 0, "reported_usable": 1, "reported_unusable": 2, "reported_missing": 2}
+
+	newStatus := "reported_" + newSeverity
+	if severityRank[newSeverity] >= statusRank[currentStatus] {
+		h.Q.UpdateArticleStatusDirect(r.Context(), db.UpdateArticleStatusDirectParams{
+			ID: articleID, GroupID: claims.GroupID, Status: newStatus,
+		})
+	}
+}
+
+// reapplyDerivedStatus re-derives an article's status from remaining open issues.
+func (h *IssueHandler) reapplyDerivedStatus(r *http.Request, claims auth.Claims, articleID pgtype.UUID) {
+	row, err := h.Q.DeriveArticleStatus(r.Context(), db.DeriveArticleStatusParams{
+		ArticleID: articleID, GroupID: claims.GroupID,
+	})
+	if err != nil {
+		slog.Error("failed to derive article status", "error", err)
+		return
+	}
+
+	// Only update if current status is a reported status (don't overwrite under_repair, archived, etc.)
+	current, err := h.Q.GetArticleCurrentStatus(r.Context(), db.GetArticleCurrentStatusParams{
+		ID: articleID, GroupID: claims.GroupID,
+	})
+	if err != nil {
+		return
+	}
+	if strings.HasPrefix(current, "reported_") || current == "ok" {
+		h.Q.UpdateArticleStatusDirect(r.Context(), db.UpdateArticleStatusDirectParams{
+			ID: articleID, GroupID: claims.GroupID, Status: row,
+		})
+	}
+}
