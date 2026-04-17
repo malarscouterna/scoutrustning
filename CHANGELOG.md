@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.4](https://github.com/malarscouterna/ms-utrustning/compare/v0.6.3...v0.6.4) (2026-04-17)
+
+
+### Bug Fixes
+
+* **web:** clear stale Auth.js cookies before login redirect to break redirect loop ([f08d6cd](https://github.com/malarscouterna/ms-utrustning/commit/f08d6cd45df286b171a13cf3045f129afdb81134))
+* **web:** fix dashboard card overflow on narrow screens, remove footer ([fc31e31](https://github.com/malarscouterna/ms-utrustning/commit/fc31e319e90236b0c29cdc1eb34b06ad5ea0667e))
+
 ## [0.6.3](https://github.com/malarscouterna/ms-utrustning/compare/v0.6.2...v0.6.3) (2026-04-15)
 
 
