@@ -72,7 +72,8 @@ SELECT
     a.id,
     a.commercial_name,
     a.common_name,
-    l.name AS location_name
+    l.name AS location_name,
+    a.individually_tracked
 FROM issue_articles ia
 JOIN articles a ON ia.article_id = a.id
 JOIN locations l ON a.location_id = l.id

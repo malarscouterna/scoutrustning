@@ -66,8 +66,10 @@ BOOKING_ID=$(curl -s "$API/api/v0/bookings" -H "X-Dev-Role-Override: leader-yggd
   | python3 -c "import json,sys; bs=json.load(sys.stdin); print(bs[0]['id'] if bs else '')" 2>/dev/null)
 ARTICLE_ID=$(curl -s "$API/api/v0/articles" -H "X-Dev-Role-Override: manager-equipment" \
   | python3 -c "import json,sys; arts=json.load(sys.stdin); print(arts[0]['id'] if arts else '')" 2>/dev/null)
+ISSUE_ID=$(curl -s "$API/api/v0/issues" -H "X-Dev-Role-Override: manager-equipment" \
+  | python3 -c "import json,sys; issues=json.load(sys.stdin); print(issues[0]['id'] if issues else '')" 2>/dev/null)
 
-echo "Using booking_id=${BOOKING_ID:-<none>}, article_id=${ARTICLE_ID:-<none>}"
+echo "Using booking_id=${BOOKING_ID:-<none>}, article_id=${ARTICLE_ID:-<none>}, issue_id=${ISSUE_ID:-<none>}"
 echo ""
 
 if [ "$DEMO_MODE" = "true" ]; then
@@ -102,6 +104,7 @@ else
   check "Book"       "$WEB/book"      "$LEADER_COOKIE"
   check "Bookings"   "$WEB/bookings"  "$LEADER_COOKIE"
   check "Issues"     "$WEB/issues"    "$LEADER_COOKIE"
+  check "Issues new" "$WEB/issues/new" "$LEADER_COOKIE"
   check "Guide"      "$WEB/guide"     "$LEADER_COOKIE"
   check "Profile"    "$WEB/profile"   "$LEADER_COOKIE"
   check "Login"      "$WEB/login"     "$LEADER_COOKIE"
@@ -110,6 +113,7 @@ else
   echo "Testing static pages (manager)..."
   check "Browse (mgr)"     "$WEB/browse"        "$MANAGER_COOKIE"
   check "Issues (mgr)"     "$WEB/issues"        "$MANAGER_COOKIE"
+  check "Issues new (mgr)" "$WEB/issues/new"    "$MANAGER_COOKIE"
   check "Profile (mgr)"    "$WEB/profile"       "$MANAGER_COOKIE"
   check "New article"      "$WEB/articles/new"   "$MANAGER_COOKIE"
 
@@ -125,6 +129,12 @@ else
     check "Article detail (leader)"  "$WEB/articles/$ARTICLE_ID"       "$LEADER_COOKIE"
     check "Article detail (mgr)"    "$WEB/articles/$ARTICLE_ID"       "$MANAGER_COOKIE"
     check "Article edit (mgr)"      "$WEB/articles/$ARTICLE_ID/edit"  "$MANAGER_COOKIE"
+  fi
+
+  if [ -n "$ISSUE_ID" ]; then
+    echo "Testing issue detail..."
+    check "Issue detail (leader)"  "$WEB/issues/$ISSUE_ID"  "$LEADER_COOKIE"
+    check "Issue detail (mgr)"    "$WEB/issues/$ISSUE_ID"  "$MANAGER_COOKIE"
   fi
 
   # --- Access control: manager-only pages redirect for leaders ---

@@ -115,9 +115,7 @@ Results are grouped by commercial_name + location. Same product in different loc
 **Response** `200`
 
 ### `PUT /api/v0/articles/{id}/status`
-Update article status with an optional comment. Any user can set issue statuses (`reported_usable`, `reported_unusable`, `lost`) - comment is required for these. Manager-only statuses (`ok`, `incoming`, `under_repair`, `archived`, etc.) require `manager` access level. Logs an article event (`issue_reported` for issue statuses, `issue_resolved` when setting back to `ok`, `status_change` otherwise).
-
-Valid statuses: `ok`, `reported_usable`, `incoming`, `reported_unusable`, `under_repair`, `lost`, `archived`.
+Update article status. Manager-only. Valid statuses: `ok`, `incoming`, `under_repair`, `archived`. The `reported_*` statuses are set automatically via the issues system (`POST /api/v0/issues`), not via this endpoint. The `lost` status has been removed - use `archived` for confirmed-gone articles.
 
 `expected_available_date` is only valid for `incoming` and `under_repair` statuses. When set, the article becomes bookable for date ranges starting on or after this date.
 
@@ -126,11 +124,10 @@ Valid statuses: `ok`, `reported_usable`, `incoming`, `reported_unusable`, `under
 {
   "status": "under_repair",
   "comment": "Sent for repair",
-  "expected_available_date": "2026-07-01",
-  "image_ids": ["uuid1"]
+  "expected_available_date": "2026-07-01"
 }
 ```
-Required: `status`. `comment` required when reporting (reported_usable, reported_unusable, lost), optional for manager statuses. `expected_available_date` optional, only for incoming/under_repair. `image_ids` optional array of issue image UUIDs (from `POST /images/issue`), stored in event metadata.
+Required: `status`. `comment` optional. `expected_available_date` optional, only for incoming/under_repair.
 
 **Response** `200` (updated article) | `400` | `403` | `404`
 
@@ -444,26 +441,113 @@ Transition a picked_up booking to `returned`. All items must have a final return
 ### `PUT /api/v0/bookings/{id}/items/{itemId}/return`
 Set the return status for a single booking item. Booking must be in `picked_up` status. Access: creator, team members, or equipment manager.
 
-Side effects - article status is orthogonal to booking state. Only explicit condition reports change the article:
-- `returned_ok` - no change to article status (condition preserved), logs `returned` event
-- `delayed` - no article status change, item stays on loan, logs `returned` event with `delayed` status
-- `reported_usable` - sets article status to `reported_usable`, logs `issue_reported` event
-- `reported_unusable` - sets article status to `reported_unusable`, logs `issue_reported` event
-- `lost` - sets article status to `lost`, logs `issue_reported` event
+Side effects: `reported_usable`/`reported_unusable`/`missing` no longer set article status directly. The caller is expected to create an issue via `POST /api/v0/issues` with the matching severity and `booking_id`. Article status is then derived from open issues. The `lost` return status has been removed - use `missing` severity when creating an issue.
+
+- `returned_ok` - no change to article status, logs `returned` event
+- `delayed` - no article status change, item stays on loan
+- `reported_usable` / `reported_unusable` / `missing` - records return status only; caller must `POST /api/v0/issues` separately
 - `""` (undo) - no change to article status
 
 **Body**
 ```json
 {
   "return_status": "returned_ok",
-  "expected_return_date": "2026-06-10",
-  "notes": "Optional, used as issue description for broken/lost",
-  "image_ids": ["uuid"]
+  "expected_return_date": "2026-06-10"
 }
 ```
-Valid values: `returned_ok`, `delayed`, `reported_usable`, `reported_unusable`, `lost`, `""` (undo). `expected_return_date` required when status is `delayed`. `image_ids` optional array of issue image UUIDs, stored in the article event metadata for condition reports.
+Valid values: `returned_ok`, `delayed`, `reported_usable`, `reported_unusable`, `missing`, `""` (undo). `expected_return_date` required when status is `delayed`.
 
 **Response** `200` | `400` | `403` | `404`
+
+---
+
+## Issues
+
+Issue reports are first-class entities. Each issue has a URL, lifecycle, assignees, and an event thread. Article status (`reported_usable`, `reported_unusable`, `reported_missing`) is derived from open issues - not set directly.
+
+### `GET /api/v0/issues`
+List issues for the group. Any authenticated user.
+
+**Query params**: `status` (comma-separated: `open,in_progress,resolved,archived`), `mine=true` (issues the user reported or is assigned to), `article_id` (UUID).
+
+**Response** `200` - array of issue objects with nested `articles` array.
+
+### `POST /api/v0/issues`
+Create an issue. Any authenticated user.
+
+**Body**
+```json
+{
+  "article_id": "uuid",
+  "severity": "unusable",
+  "description": "Strap is broken",
+  "booking_id": "uuid",
+  "image_ids": ["uuid"],
+  "count": 2
+}
+```
+Required: `article_id`, `severity` (`usable`/`unusable`/`missing`), `description`. Optional: `booking_id` (links issue to the booking that triggered the report), `image_ids`, `count` (for quantity-tracked articles: how many units are affected, default 1 - links that many article rows from the same group).
+
+Title is auto-generated from article name + severity (e.g. "Sibley 6p - Ej användbar").
+
+**Response** `201` (full issue detail) | `400` | `404`
+
+### `GET /api/v0/issues/{id}`
+Get full issue detail including events, assignees, and linked articles. Any authenticated user.
+
+**Response** `200` | `404`
+```json
+{
+  "id": "uuid", "title": "string", "description": "string",
+  "severity": "usable|unusable|missing",
+  "status": "open|in_progress|resolved|archived",
+  "reporter": {"id": "string", "name": "string"},
+  "booking_id": "uuid|null",
+  "articles": [{"id": "uuid", "commercial_name": "string", "common_name": "string", "location_name": "string", "individually_tracked": true}],
+  "assignees": [{"user_id": "string", "user_name": "string", "assigned_at": "timestamptz"}],
+  "events": [{"id": "uuid", "actor_name": "string", "event_type": "comment|status_change|assignment|article_added|article_removed", "description": "string", "metadata": {}, "created_at": "timestamptz"}],
+  "created_at": "timestamptz", "updated_at": "timestamptz"
+}
+```
+
+### `PUT /api/v0/issues/{id}`
+Update issue fields. `status` changes require manager access (`issue_resolve_role`). `title`/`description` can be updated by any user.
+
+**Body**
+```json
+{"title": "string", "description": "string", "status": "in_progress", "comment": "Optional comment logged alongside the status change"}
+```
+
+**Response** `200` (full issue detail) | `400` | `403` | `404`
+
+### `POST /api/v0/issues/{id}/comments`
+Add a comment (with optional images). Any authenticated user.
+
+**Body**
+```json
+{"description": "Checked it - needs replacement", "image_ids": ["uuid"]}
+```
+
+**Response** `201` (full issue detail) | `400` | `404`
+
+### `PUT /api/v0/issues/{id}/assignees`
+Replace the assignee list. Manager only.
+
+**Body** `{"user_ids": ["string"]}`
+
+**Response** `200` (full issue detail) | `403` | `404`
+
+### `POST /api/v0/issues/{id}/articles`
+Add an article to the issue. Manager only.
+
+**Body** `{"article_id": "uuid"}`
+
+**Response** `200` (full issue detail) | `403` | `404`
+
+### `DELETE /api/v0/issues/{id}/articles/{articleId}`
+Remove an article from the issue. Manager only.
+
+**Response** `200` (full issue detail) | `403` | `404`
 
 ---
 

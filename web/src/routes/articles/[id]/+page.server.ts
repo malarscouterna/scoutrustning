@@ -7,7 +7,10 @@ export const load: PageServerLoad = async ({ fetch, parent, params }) => {
 	if (!user) throw redirect(302, '/');
 
 	const api = createApiClient({ fetch });
-	const article = await api.getArticle(params.id);
+	const [article, activeIssues] = await Promise.all([
+		api.getArticle(params.id),
+		api.listIssues({ article_id: params.id, status: 'open,in_progress' })
+	]);
 
 	// For quantity tracked: fetch group siblings for overview (status summary, purchase info)
 	let groupArticles: Awaited<ReturnType<typeof api.listArticles>> | null = null;
@@ -23,5 +26,5 @@ export const load: PageServerLoad = async ({ fetch, parent, params }) => {
 		);
 	}
 
-	return { article, groupArticles };
+	return { article, groupArticles, activeIssues };
 };

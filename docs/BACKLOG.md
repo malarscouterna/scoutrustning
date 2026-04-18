@@ -2,6 +2,16 @@
 
 Deferred work items - things to grab when there's time, smaller tasks set aside during major work. When an item is completed, move it to [accomplished.md](accomplished.md).
 
+## Group members API + assignee picker
+
+Add `GET /api/v0/users` (manager only) that returns all users who have ever logged in to the group. Used by:
+1. The issue detail page assignee picker - managers can add/remove assignees by selecting group members.
+2. A new "Medlemmar" section on the group settings page so managers can see who has accounts in the group.
+
+In demo mode (`DEMO_MODE=true`), the endpoint should return the configured personas from `dev-personas.json` instead of real users, so demo environments do not expose real member data.
+
+Response shape: `[{ "id": "string", "name": "string", "email": "string" }]`
+
 ## Auth redirect loop - remove debug logging
 
 `hooks.server.ts` logs `[auth] redirect to login` and `[auth] stale session cookie detected` on every unauthenticated request. Once the fix has been confirmed stable in production, remove these `console.log` calls or gate them behind a `DEBUG_AUTH` env flag.
@@ -19,11 +29,9 @@ Remaining from the original item:
 - Admin interface for access levels → being built as kanban UI on settings page
 - Replace "project" concept → done, replaced with `role` team type
 
-## Report issue - standalone entry point
+## Mention users in issue comments
 
-Currently issues can only be reported from within the article detail page (`/articles/[id]`). A "Rapportera problem" button should be accessible from the browse page group row and/or from the navigation, so users can report issues without having to first navigate into a specific article. Requires a dedicated `/report` page or a modal that takes an article lookup (search by common_name) and routes into the existing ReportIssueForm component.
-
-Also: ability to add another user (manager or trusted) to an issue by mentioning them in a comment, so they get notified when action is needed.
+Ability to add another user (manager or trusted) to an issue by mentioning them in a comment. Requires `GET /api/v0/users` (blocked on Group members API above) and notification infrastructure.
 
 ## Date change conflict UX
 
@@ -105,13 +113,6 @@ Currently shows a warning but doesn't resolve the conflict.
 
 Grouped return UI for quantity-tracked items: one row per product group with count inputs instead of individual rows with identical names.
 
-## Issue reporting - booking context in event history
-
-Link article events to booking IDs when they originate from a booking flow. Show context like "Rapporterad vid återlämning av bokning #X".
-
-## Ärenden - per-user filtering
-
-Filter issues page to only show articles the user personally reported. Requires a query parameter (e.g. `reported_by=me`) filtering on article events.
 
 ## Pickup state - partial indication
 
@@ -137,9 +138,6 @@ Backdate article events in the seed script for realistic history spread. No API 
 
 When dates change on a booking with items, re-validate all items against the new range. Currently the API returns 409 for conflicts but the UI doesn't handle it gracefully. The date fields should be locked once items are added to the cart - changing dates could invalidate the entire cart (articles no longer available). To change dates, the user should remove all items first, or the UI should show which items conflict and offer to remove them. Until this is built, date inputs are disabled after the first item is added.
 
-## Quantity-tracked items - batch issue reporting
-
-On the article detail page for quantity tracked groups, allow reporting issues for multiple items at once (e.g. "3 LED lamps broken"). Currently reports go to the representative article only. Needs a count input on the report form that creates events on N articles in the group. Similar UX to the return flow's per-item status.
 
 ## Shared visual identity for interactive elements
 
@@ -226,9 +224,6 @@ Add a visible sort/filter for approval level in the browse view. The default vie
 
 Bookings list should be sorted: submitted first, then approved/confirmed, then picked_up, then draft, then returned/rejected/cancelled. Within each status group, sort ascending by start_date. Currently the list is unsorted (server return order).
 
-## Issue reporting - rethink and browser entry points
-
-Issue reporting needs a rethought UX. Key open questions: (1) How to surface a link to the issue page for non-ok items in browse - both individually tracked (each article has a link) and quantity tracked (currently only representative article linked). (2) The article detail page should list sibling items in the same group, including items at different locations, so users can navigate to the specific article they want to report on. (3) Should there be a direct "Rapportera problem" entry point from the browse group row without having to expand first? See ux-revamp.md feedback #6.
 
 ## Group settings on tab bar
 

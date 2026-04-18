@@ -258,7 +258,8 @@ SELECT
     a.id,
     a.commercial_name,
     a.common_name,
-    l.name AS location_name
+    l.name AS location_name,
+    a.individually_tracked
 FROM issue_articles ia
 JOIN articles a ON ia.article_id = a.id
 JOIN locations l ON a.location_id = l.id
@@ -271,10 +272,11 @@ type ListIssueArticlesParams struct {
 }
 
 type ListIssueArticlesRow struct {
-	ID             pgtype.UUID `json:"id"`
-	CommercialName string      `json:"commercial_name"`
-	CommonName     string      `json:"common_name"`
-	LocationName   string      `json:"location_name"`
+	ID                  pgtype.UUID `json:"id"`
+	CommercialName      string      `json:"commercial_name"`
+	CommonName          string      `json:"common_name"`
+	LocationName        string      `json:"location_name"`
+	IndividuallyTracked bool        `json:"individually_tracked"`
 }
 
 func (q *Queries) ListIssueArticles(ctx context.Context, arg ListIssueArticlesParams) ([]ListIssueArticlesRow, error) {
@@ -291,6 +293,7 @@ func (q *Queries) ListIssueArticles(ctx context.Context, arg ListIssueArticlesPa
 			&i.CommercialName,
 			&i.CommonName,
 			&i.LocationName,
+			&i.IndividuallyTracked,
 		); err != nil {
 			return nil, err
 		}

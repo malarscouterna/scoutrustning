@@ -136,6 +136,62 @@ export interface GroupSettings {
 	manager_notes_role: string;
 }
 
+export interface IssueArticle {
+	id: string;
+	commercial_name: string;
+	common_name: string;
+	location_name: string;
+	individually_tracked: boolean;
+}
+
+export interface IssueAssignee {
+	user_id: string;
+	user_name: string;
+	assigned_at: string;
+}
+
+export interface IssueEvent {
+	id: string;
+	issue_id: string;
+	actor_id: string;
+	actor_name: string;
+	event_type: string;
+	description: string;
+	metadata: Record<string, any>;
+	created_at: string;
+}
+
+// Issue as returned by GET /issues (list)
+export interface Issue {
+	id: string;
+	title: string;
+	description: string;
+	severity: 'usable' | 'unusable' | 'missing';
+	status: 'open' | 'in_progress' | 'resolved' | 'archived';
+	reporter_id: string;
+	reporter_name: string;
+	booking_id: string | null;
+	created_at: string;
+	updated_at: string;
+	articles: IssueArticle[];
+}
+
+// Issue as returned by GET /issues/:id, POST /issues, etc. (detail)
+export interface IssueDetail {
+	id: string;
+	title: string;
+	description: string;
+	severity: 'usable' | 'unusable' | 'missing';
+	status: 'open' | 'in_progress' | 'resolved' | 'archived';
+	reporter: { id: string; name: string };
+	booking_id: string | null;
+	created_at: string;
+	updated_at: string;
+	articles: IssueArticle[];
+	assignees: IssueAssignee[];
+	events: IssueEvent[];
+}
+
 export interface SharedImage {
 	id: string;
 	file_id: string;
@@ -414,5 +470,29 @@ export function createApiClient(opts: FetchOptions = {}) {
 			requestMut<Category>(`/categories/${id}`, 'PUT', data, opts),
 		deleteCategory: (id: string) =>
 			requestMut<void>(`/categories/${id}`, 'DELETE', undefined, opts),
+
+		// Issues
+		listIssues: (params?: { status?: string; mine?: boolean; article_id?: string }) => {
+			const query = new URLSearchParams();
+			if (params?.status) query.set('status', params.status);
+			if (params?.mine) query.set('mine', 'true');
+			if (params?.article_id) query.set('article_id', params.article_id);
+			const qs = query.toString();
+			return request<Issue[]>(`/issues${qs ? '?' + qs : ''}`, opts);
+		},
+		createIssue: (data: { article_id: string; severity: string; description: string; booking_id?: string; image_ids?: string[]; count?: number }) =>
+			requestMut<IssueDetail>('/issues', 'POST', data, opts),
+		getIssue: (id: string) =>
+			request<IssueDetail>(`/issues/${id}`, opts),
+		updateIssue: (id: string, data: { title?: string; description?: string; status?: string; comment?: string }) =>
+			requestMut<IssueDetail>(`/issues/${id}`, 'PUT', data, opts),
+		addIssueComment: (id: string, data: { description: string; image_ids?: string[] }) =>
+			requestMut<IssueDetail>(`/issues/${id}/comments`, 'POST', data, opts),
+		replaceIssueAssignees: (id: string, userIds: string[]) =>
+			requestMut<IssueDetail>(`/issues/${id}/assignees`, 'PUT', { user_ids: userIds }, opts),
+		addIssueArticle: (id: string, articleId: string) =>
+			requestMut<IssueDetail>(`/issues/${id}/articles`, 'POST', { article_id: articleId }, opts),
+		removeIssueArticle: (id: string, articleId: string) =>
+			requestMut<void>(`/issues/${id}/articles/${articleId}`, 'DELETE', undefined, opts),
 	};
 }

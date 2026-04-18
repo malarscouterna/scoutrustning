@@ -25,6 +25,10 @@ echo "API ready."
 
 echo "Clearing existing seed data..."
 docker compose exec -T db psql -U utrustning -d utrustning -c "
+  DELETE FROM issue_events;
+  DELETE FROM issue_assignees;
+  DELETE FROM issue_articles;
+  DELETE FROM issue_reports;
   DELETE FROM article_events;
   DELETE FROM booking_events;
   DELETE FROM booking_items;
@@ -172,7 +176,7 @@ else
 fi
 
 echo ""
-echo "Reporting issues on quantity-tracked articles..."
+echo "Reporting issues and setting article statuses..."
 
 # Helper: upload an issue image and return the image_id
 upload_issue_image() {
@@ -180,6 +184,45 @@ upload_issue_image() {
   curl -sf -X POST "$API/api/v0/images/issue" \
     -H "X-Dev-Role-Override: $PERSONA" \
     -F "file=@$FILE" | python3 -c "import json,sys; print(json.load(sys.stdin)['image_id'])"
+}
+
+# Helper: create an issue and return the issue_id (empty string on failure)
+# Usage: create_issue ARTICLE_ID SEVERITY DESCRIPTION PERSONA [IMAGE_IDS_JSON] [BOOKING_ID]
+create_issue() {
+  local ARTICLE_ID=$1 SEVERITY=$2 DESCRIPTION=$3 PERSONA=$4
+  local IMAGE_IDS="${5:-}" BOOKING_ID="${6:-}"
+  [ -z "$ARTICLE_ID" ] && echo "" && return 0
+  local BODY="{\"article_id\":\"$ARTICLE_ID\",\"severity\":\"$SEVERITY\",\"description\":\"$DESCRIPTION\""
+  if [ -n "$IMAGE_IDS" ]; then BODY="$BODY,\"image_ids\":$IMAGE_IDS"; fi
+  if [ -n "$BOOKING_ID" ]; then BODY="$BODY,\"booking_id\":\"$BOOKING_ID\""; fi
+  BODY="$BODY}"
+  curl -sf -X POST "$API/api/v0/issues" \
+    -H "X-Dev-Role-Override: $PERSONA" -H "Content-Type: application/json" \
+    -d "$BODY" 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || echo ""
+}
+
+# Helper: resolve an issue (no-op if empty ID)
+resolve_issue() {
+  local ISSUE_ID=$1 PERSONA=$2
+  [ -z "$ISSUE_ID" ] && return 0
+  curl -sf -X PUT "$API/api/v0/issues/$ISSUE_ID" \
+    -H "X-Dev-Role-Override: $PERSONA" -H "Content-Type: application/json" \
+    -d '{"status":"resolved"}' > /dev/null || true
+}
+
+# Helper: set issue in_progress and add a comment (no-op if empty ID)
+progress_issue() {
+  local ISSUE_ID=$1 COMMENT=$2 PERSONA=$3 IMAGE_IDS="${4:-}"
+  [ -z "$ISSUE_ID" ] && return 0
+  curl -sf -X PUT "$API/api/v0/issues/$ISSUE_ID" \
+    -H "X-Dev-Role-Override: $PERSONA" -H "Content-Type: application/json" \
+    -d '{"status":"in_progress"}' > /dev/null || true
+  local CBODY="{\"description\":\"$COMMENT\""
+  if [ -n "$IMAGE_IDS" ]; then CBODY="$CBODY,\"image_ids\":$IMAGE_IDS"; fi
+  CBODY="$CBODY}"
+  curl -sf -X POST "$API/api/v0/issues/$ISSUE_ID/comments" \
+    -H "X-Dev-Role-Override: $PERSONA" -H "Content-Type: application/json" \
+    -d "$CBODY" > /dev/null || true
 }
 
 # Tältlampa LED: report 2 with issues
@@ -192,44 +235,36 @@ LAMP1=$(echo "$LAMP_IDS" | sed -n '1p')
 LAMP2=$(echo "$LAMP_IDS" | sed -n '2p')
 LAMP3=$(echo "$LAMP_IDS" | sed -n '3p')
 
-# Upload an image for the first lamp report
+# LAMP1: open issue (usable), stays open
 LAMP_IMG=$(upload_issue_image "$SEED_IMG_DIR/lykta.webp" "leader-yggdrasil")
-curl -sf -X PUT "$API/api/v0/articles/$LAMP1/status" \
-  -H "$LEADER" -H "Content-Type: application/json" \
-  -d "{\"status\":\"reported_usable\",\"comment\":\"Blinkar ibland\",\"image_ids\":[\"$LAMP_IMG\"]}" > /dev/null
-echo "  Tältlampa LED: 1 reported usable (blinkar) + image"
+create_issue "$LAMP1" "usable" "Blinkar ibland, verkar vara ett kontaktfel" "leader-yggdrasil" "[\"$LAMP_IMG\"]" > /dev/null
+echo "  Tältlampa LED 1: open issue (usable, blinkar) + image"
 
-# Upload two images for the second lamp (unusable)
+# LAMP2: unusable issue → manager progresses → resolves → new unusable issue (open, in_progress)
 LAMP_IMG2=$(upload_issue_image "$SEED_IMG_DIR/lykta.webp" "leader-yggdrasil")
 LAMP_IMG3=$(upload_issue_image "$SEED_IMG_DIR/eldstad.webp" "leader-yggdrasil")
-curl -sf -X PUT "$API/api/v0/articles/$LAMP2/status" \
-  -H "$LEADER" -H "Content-Type: application/json" \
-  -d "{\"status\":\"reported_unusable\",\"comment\":\"Helt trasig, lyser inte alls\",\"image_ids\":[\"$LAMP_IMG2\",\"$LAMP_IMG3\"]}" > /dev/null
-# Manager investigates, sets under repair
+LAMP2_ISSUE1=$(create_issue "$LAMP2" "unusable" "Helt trasig, lyser inte alls" "leader-yggdrasil" "[\"$LAMP_IMG2\",\"$LAMP_IMG3\"]")
 curl -sf -X PUT "$API/api/v0/articles/$LAMP2/status" \
   -H "$HEADER" -H "Content-Type: application/json" \
   -d '{"status":"under_repair","comment":"Skickat för reparation"}' > /dev/null
-# Repaired, back to ok
+resolve_issue "$LAMP2_ISSUE1" "manager-equipment"
+# After resolve, article re-derives to ok. Now manager sets under_repair again (in progress).
 curl -sf -X PUT "$API/api/v0/articles/$LAMP2/status" \
   -H "$HEADER" -H "Content-Type: application/json" \
   -d '{"status":"ok","comment":"Reparerad, fungerar igen"}' > /dev/null
-# Breaks again
-curl -sf -X PUT "$API/api/v0/articles/$LAMP2/status" \
-  -H "$LEADER" -H "Content-Type: application/json" \
-  -d '{"status":"reported_unusable","comment":"Trasig igen, samma problem"}' > /dev/null
-# Add a note with image from manager
+# Breaks again - new issue, now in_progress
+LAMP2_ISSUE2=$(create_issue "$LAMP2" "unusable" "Trasig igen, samma problem som innan" "leader-yggdrasil")
 LAMP_NOTE_IMG=$(upload_issue_image "$SEED_IMG_DIR/lykta.webp" "manager-equipment")
-curl -sf -X POST "$API/api/v0/articles/$LAMP2/events" \
-  -H "$HEADER" -H "Content-Type: application/json" \
-  -d "{\"message\":\"Ser ut som att kontakten är oxiderad, behöver bytas\",\"image_ids\":[\"$LAMP_NOTE_IMG\"]}" > /dev/null
-echo "  Tältlampa LED: 1 reported unusable (trasig, reparerad, trasig igen) + manager note with image"
+progress_issue "$LAMP2_ISSUE2" "Ser ut som att kontakten är oxiderad, behöver bytas" "manager-equipment" "[\"$LAMP_NOTE_IMG\"]"
+echo "  Tältlampa LED 2: resolved issue + new in_progress issue + manager comment with image"
 
+# LAMP3: under_repair directly (manager decision, no issue entity)
 curl -sf -X PUT "$API/api/v0/articles/$LAMP3/status" \
   -H "$HEADER" -H "Content-Type: application/json" \
   -d '{"status":"under_repair","comment":"Skickad för batteribyte","expected_available_date":"2026-07-10"}' > /dev/null
-echo "  Tältlampa LED: 1 under repair (beräknas klar 10 jul)"
+echo "  Tältlampa LED 3: under repair (beräknas klar 10 jul)"
 
-# Lykta: archive one
+# Lykta: archive one (manager decision, no issue entity)
 LYKTA_IDS=$(curl -s "$API/api/v0/articles?search=Lykta" -H "$HEADER" | python3 -c "
 import json,sys
 ids = [a['id'] for a in json.load(sys.stdin)]
@@ -241,7 +276,7 @@ curl -sf -X PUT "$API/api/v0/articles/$LYKTA1/status" \
   -d '{"status":"archived","comment":"Uttjänt, ersätts inte"}' > /dev/null
 echo "  Lykta: 1 archived"
 
-# Stormkök: report issues on a couple
+# Stormkök: open issues on a couple
 STORM_IDS=$(curl -s "$API/api/v0/articles?search=Stormk%C3%B6k" -H "$HEADER" | python3 -c "
 import json,sys
 ids = [a['id'] for a in json.load(sys.stdin) if a['individually_tracked']]
@@ -251,18 +286,14 @@ STORM4=$(echo "$STORM_IDS" | sed -n '4p')
 STORM5=$(echo "$STORM_IDS" | sed -n '5p')
 
 STORM_IMG=$(upload_issue_image "$SEED_IMG_DIR/stormkok.webp" "leader-yggdrasil")
-curl -sf -X PUT "$API/api/v0/articles/$STORM4/status" \
-  -H "$LEADER" -H "Content-Type: application/json" \
-  -d "{\"status\":\"reported_usable\",\"comment\":\"Brännaren flämtar lite\",\"image_ids\":[\"$STORM_IMG\"]}" > /dev/null
-echo "  Stormkök 4: reported usable (flämtar) + image"
+create_issue "$STORM4" "usable" "Brännaren flämtar lite" "leader-yggdrasil" "[\"$STORM_IMG\"]" > /dev/null
+echo "  Stormkök 4: open issue (usable, flämtar) + image"
 
 STORM_IMG2=$(upload_issue_image "$SEED_IMG_DIR/stormkok-2.webp" "leader-yggdrasil")
-curl -sf -X PUT "$API/api/v0/articles/$STORM5/status" \
-  -H "$LEADER" -H "Content-Type: application/json" \
-  -d "{\"status\":\"reported_unusable\",\"comment\":\"Läcker bränsle, farligt\",\"image_ids\":[\"$STORM_IMG2\"]}" > /dev/null
-echo "  Stormkök 5: reported unusable (läcker) + image"
+create_issue "$STORM5" "unusable" "Läcker bränsle, farligt att använda" "leader-yggdrasil" "[\"$STORM_IMG2\"]" > /dev/null
+echo "  Stormkök 5: open issue (unusable, läcker) + image"
 
-# Stormkök 7 (Östergården): incoming with expected date
+# Stormkök 7 (Östergården): incoming with expected date (manager decision, no issue entity)
 STORM_OG_IDS=$(curl -s "$API/api/v0/articles?search=Stormk%C3%B6k" -H "$HEADER" | python3 -c "
 import json,sys
 for a in json.load(sys.stdin):
@@ -355,65 +386,49 @@ curl -sf -X PUT "$API/api/v0/bookings/$BOOKING_ID/items/$SIBLEY1_ITEM/return" \
   -d '{"return_status":"returned_ok"}' > /dev/null
 echo "  Sibley 1: returned OK"
 
-# Return Sibley 2 as reported_usable (creates picked_up + issue_reported events)
+# Return Sibley 2 as reported_usable, then create issue linked to booking
 SIBLEY2_ITEM=$(find_item "$BOOKING_ID" "Sibley 2" "leader-yggdrasil")
+SIBLEY2_ART=$(find_article "Sibley 2")
 SIBLEY_ISSUE_IMG1=$(upload_issue_image "$SEED_IMG_DIR/sibley.webp" "leader-yggdrasil")
 curl -sf -X PUT "$API/api/v0/bookings/$BOOKING_ID/items/$SIBLEY2_ITEM/return" \
   -H "$LEADER" -H "Content-Type: application/json" \
-  -d "{\"return_status\":\"reported_usable\",\"notes\":\"Liten reva i duken\",\"image_ids\":[\"$SIBLEY_ISSUE_IMG1\"]}" > /dev/null
-echo "  Sibley 2: returned with issue (reva i duken) + image"
+  -d '{"return_status":"reported_usable"}' > /dev/null
+SIBLEY_ISSUE1=$(create_issue "$SIBLEY2_ART" "usable" "Liten reva i duken" "leader-yggdrasil" "[\"$SIBLEY_ISSUE_IMG1\"]" "$BOOKING_ID")
+echo "  Sibley 2: returned reported_usable + issue created (booking-linked) + image"
 
-# Manager acknowledges Sibley 2 issue → under_repair
-SIBLEY2_ART=$(find_article "Sibley 2")
+# Manager acknowledges: set in_progress, adds comment, sets under_repair on article
+progress_issue "$SIBLEY_ISSUE1" "Skickat till lagning" "manager-equipment"
 curl -sf -X PUT "$API/api/v0/articles/$SIBLEY2_ART/status" \
   -H "$HEADER" -H "Content-Type: application/json" \
   -d '{"status":"under_repair","comment":"Skickat till lagning"}' > /dev/null
-echo "  Sibley 2: manager set under_repair"
-
-# Manager resolves Sibley 2 → ok
+# Resolves - article re-derives to ok
+resolve_issue "$SIBLEY_ISSUE1" "manager-equipment"
 curl -sf -X PUT "$API/api/v0/articles/$SIBLEY2_ART/status" \
   -H "$HEADER" -H "Content-Type: application/json" \
-  -d '{"status":"ok","comment":"Lagad, redo att användas igen"}' > /dev/null
-echo "  Sibley 2: manager resolved → ok"
+  -d '{"status":"ok"}' > /dev/null
+echo "  Sibley 2: issue resolved → ok"
 
-# Leader reports new issue on Sibley 2 → reported_unusable
+# Leader reports again (unusable) - new open issue
 SIBLEY_ISSUE_IMG2=$(upload_issue_image "$SEED_IMG_DIR/sibley-2.webp" "leader-yggdrasil")
-curl -sf -X PUT "$API/api/v0/articles/$SIBLEY2_ART/status" \
-  -H "$LEADER" -H "Content-Type: application/json" \
-  -d "{\"status\":\"reported_unusable\",\"comment\":\"Revan har öppnat sig igen, går inte att använda\",\"image_ids\":[\"$SIBLEY_ISSUE_IMG2\"]}" > /dev/null
-echo "  Sibley 2: leader re-reported as unusable + image"
+SIBLEY_ISSUE2=$(create_issue "$SIBLEY2_ART" "unusable" "Revan har öppnat sig igen, går inte att använda" "leader-yggdrasil" "[\"$SIBLEY_ISSUE_IMG2\"]")
+echo "  Sibley 2: new open issue (unusable, reva öppnat sig) + image"
 
-# Manager sets under_repair again
+# Manager sets in_progress and under_repair
+progress_issue "$SIBLEY_ISSUE2" "Ny lagning behövs, skickar iväg igen" "manager-equipment"
 curl -sf -X PUT "$API/api/v0/articles/$SIBLEY2_ART/status" \
   -H "$HEADER" -H "Content-Type: application/json" \
   -d '{"status":"under_repair","comment":"Ny lagning behövs"}' > /dev/null
-echo "  Sibley 2: manager set under_repair again"
-
-# Manager resolves again
-curl -sf -X PUT "$API/api/v0/articles/$SIBLEY2_ART/status" \
-  -H "$HEADER" -H "Content-Type: application/json" \
-  -d '{"status":"ok","comment":"Dubbelsydd, borde hålla nu"}' > /dev/null
-echo "  Sibley 2: manager resolved again → ok"
-
-# Leader reports a third time
-SIBLEY_ISSUE_IMG3=$(upload_issue_image "$SEED_IMG_DIR/sibley.webp" "leader-yggdrasil")
-SIBLEY_ISSUE_IMG4=$(upload_issue_image "$SEED_IMG_DIR/sibley-2.webp" "leader-yggdrasil")
-curl -sf -X PUT "$API/api/v0/articles/$SIBLEY2_ART/status" \
-  -H "$LEADER" -H "Content-Type: application/json" \
-  -d "{\"status\":\"reported_unusable\",\"comment\":\"Sömmarna har gått upp igen, behöver bytas ut\",\"image_ids\":[\"$SIBLEY_ISSUE_IMG3\",\"$SIBLEY_ISSUE_IMG4\"]}" > /dev/null
-echo "  Sibley 2: leader reported unusable a third time + 2 images"
+echo "  Sibley 2: issue in_progress, article under_repair"
 
 # ─── Standalone issue reports (not from bookings) ───
 echo ""
 echo "Creating standalone issue reports..."
 
-# Jägarpanna: reported usable
+# Jägarpanna: open issue (usable)
 JAGAR_ID=$(curl -s "$API/api/v0/articles?search=J%C3%A4garpanna" -H "$HEADER" | python3 -c "import json,sys; arts=json.load(sys.stdin); print(arts[0]['id'] if arts else '')")
 if [ -n "$JAGAR_ID" ]; then
-  curl -sf -X PUT "$API/api/v0/articles/$JAGAR_ID/status" \
-    -H "$LEADER" -H "Content-Type: application/json" \
-    -d '{"status":"reported_usable","comment":"Rostfläckar på pannan"}' > /dev/null
-  echo "  Jägarpanna: reported usable (rostfläckar)"
+  create_issue "$JAGAR_ID" "usable" "Rostfläckar på pannan, bör rengöras" "leader-yggdrasil" > /dev/null
+  echo "  Jägarpanna: open issue (usable, rostfläckar)"
 fi
 
 # ─── Booking 2: Confirmed, reserved for next week (not yet picked up) ───

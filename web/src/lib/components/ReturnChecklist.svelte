@@ -2,6 +2,7 @@
 	import { createApiClient, type BookingItem } from '$lib/api/client';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
 	import ImageAttachInput from '$lib/components/ImageAttachInput.svelte';
+	import ReportIssueSheet from '$lib/components/ReportIssueSheet.svelte';
 
 	interface Props {
 		bookingId: string;
@@ -24,8 +25,18 @@
 	let quantityInputs = $state<Record<string, number>>({});
 	let expandedGroups = $state<Set<string>>(new Set());
 
-	const labels: Record<string, string> = { returned_ok: 'OK', delayed: 'Försenad', reported_usable: 'Problem — användbar', reported_unusable: 'Problem — ej användbar', lost: 'Saknas' };
-	const colors: Record<string, string> = { returned_ok: 'bg-green-100 text-green-800', delayed: 'bg-orange-100 text-orange-800', reported_usable: 'bg-orange-100 text-orange-800', reported_unusable: 'bg-red-100 text-red-800', lost: 'bg-challengerpink-100 text-challengerpink-800' };
+	const labels: Record<string, string> = { returned_ok: 'OK', delayed: 'Försenad', reported_usable: 'Problem — användbar', reported_unusable: 'Problem — ej användbar', missing: 'Saknas' };
+	const colors: Record<string, string> = { returned_ok: 'bg-green-100 text-green-800', delayed: 'bg-orange-100 text-orange-800', reported_usable: 'bg-orange-100 text-orange-800', reported_unusable: 'bg-red-100 text-red-800', missing: 'bg-challengerpink-100 text-challengerpink-800' };
+
+	// Mapping from return_status to issue severity for the report sheet
+	const returnStatusToSeverity: Record<string, string> = {
+		reported_usable: 'usable',
+		reported_unusable: 'unusable',
+		missing: 'missing'
+	};
+
+	// Issue sheet state - opened after confirming a reportable return status
+	let issueSheetArticle = $state<{ id: string; name: string; severity: string } | null>(null);
 
 	interface QGroup { key: string; name: string; loc: string; place: string; picked: BookingItem[]; notPicked: number; }
 	interface QRow { status: string; count: number; items: BookingItem[]; }
@@ -36,7 +47,7 @@
 		for (const i of items) {
 			if (i.individually_tracked) continue;
 			const k = `${i.commercial_name}|${i.location_name}`;
-			const isPicked = i.pickup_status && i.pickup_status !== 'lost';
+			const isPicked = i.pickup_status;
 			const g = m.get(k);
 			if (g) { if (isPicked) g.picked.push(i); else g.notPicked++; }
 			else m.set(k, { key: k, name: i.commercial_name, loc: i.location_name, place: i.place, picked: isPicked ? [i] : [], notPicked: isPicked ? 0 : 1 });
@@ -97,7 +108,7 @@
 		return rows;
 	}
 
-	let pickedUp = $derived(items.filter((i) => i.pickup_status && i.pickup_status !== 'lost'));
+	let pickedUp = $derived(items.filter((i) => i.pickup_status));
 	let returnedCount = $derived(pickedUp.filter((i) => i.return_status && i.return_status !== 'pending').length);
 	let canComplete = $derived(pickedUp.length > 0 && pickedUp.every((i) => i.return_status && i.return_status !== 'pending' && i.return_status !== 'delayed'));
 
@@ -112,16 +123,20 @@
 		} catch (e: any) { error = e.message; }
 	}
 
-	async function confirmForm(itemId: string) {
+	async function confirmForm(item: BookingItem) {
 		if (!form.status) return;
 		if (form.status === 'delayed' && form.expectedReturnDate) lastExpectedDate = form.expectedReturnDate;
-		await setReturn(itemId, form.status, {
+		await setReturn(item.id, form.status, {
 			expected_return_date: form.status === 'delayed' ? form.expectedReturnDate : undefined,
 			notes: form.notes || undefined,
 			image_ids: formImageIds.length ? formImageIds : undefined
 		});
+		const severity = returnStatusToSeverity[form.status];
 		activeItemId = null;
 		formImageIds = [];
+		if (severity) {
+			issueSheetArticle = { id: item.article_id, name: item.common_name, severity };
+		}
 	}
 
 	function openForm(id: string) {
@@ -156,10 +171,14 @@
 					notes: form.notes || undefined,
 					image_ids: formImageIds.length ? formImageIds : undefined
 				});
+			const severity = returnStatusToSeverity[form.status];
 			activeGroupKey = null;
 			delete quantityInputs[`${g.key}_form`];
 			formImageIds = [];
 			await reload(); flash(g.key);
+			if (severity && unhandled[0]) {
+				issueSheetArticle = { id: unhandled[0].article_id, name: g.name, severity };
+			}
 		} catch (e: any) { error = e.message; }
 	}
 
@@ -239,7 +258,7 @@
 					class:bg-green-50={row.status === 'returned_ok'}
 					class:bg-orange-50={row.status === 'delayed' || row.status === 'reported_usable'}
 					class:bg-red-50={row.status === 'reported_unusable'}
-					class:bg-challengerpink-50={row.status === 'lost'}
+					class:bg-challengerpink-50={row.status === 'missing'}
 				>
 					<div class="px-4 py-3 flex items-center gap-3">
 						<button type="button" onclick={() => expandable && toggleExpand(g.key)} class="flex-1 text-left" class:cursor-pointer={expandable} class:cursor-default={!expandable}>
@@ -272,7 +291,7 @@
 						<span class="text-neutral-500">av {unhandled.length} kvar</span>
 					</div>
 					<div class="flex flex-wrap gap-2">
-						{#each ['returned_ok', 'delayed', 'reported_usable', 'reported_unusable', 'lost'] as s}
+						{#each ['returned_ok', 'delayed', 'reported_usable', 'reported_unusable', 'missing'] as s}
 							<button onclick={() => form.status = s} class="text-xs px-3 py-1 rounded border" class:bg-blue-700={form.status === s} class:text-white={form.status === s}>{labels[s]}</button>
 						{/each}
 					</div>
@@ -281,7 +300,7 @@
 							<input type="date" bind:value={form.expectedReturnDate} oninput={() => checkConflict(g.name, form.expectedReturnDate)} class="block border rounded px-2 py-1 text-sm w-full" /></label>
 						{#if delayWarning}<p class="text-xs text-orange-600">⚠ {delayWarning}</p>{/if}
 					{/if}
-					{#if form.status === 'reported_usable' || form.status === 'reported_unusable' || form.status === 'lost'}
+					{#if form.status === 'reported_usable' || form.status === 'reported_unusable' || form.status === 'missing'}
 						<label class="block"><span class="text-xs text-neutral-600">Beskrivning</span>
 							<input type="text" bind:value={form.notes} placeholder="Vad hände?" class="block border rounded px-2 py-1 text-sm w-full" /></label>
 						<ImageAttachInput bind:imageIds={formImageIds} />
@@ -305,9 +324,9 @@
 		{@const expandable = hasExpandable(tGroup.imageIds, tGroup.description, tGroup.instructions)}
 		{@const expanded = expandedGroups.has(tKey)}
 		{#each tGroup.items as item}
-		{@const notPicked = !item.pickup_status || item.pickup_status === 'lost'}
+		{@const notPicked = !item.pickup_status}
 		{@const hasReturn = item.return_status && item.return_status !== 'pending'}
-		<div class="border rounded" class:bg-green-50={item.return_status === 'returned_ok'} class:bg-orange-50={item.return_status === 'delayed' || item.return_status === 'reported_usable'} class:bg-red-50={item.return_status === 'reported_unusable'} class:bg-challengerpink-50={item.return_status === 'lost'} class:bg-neutral-50={notPicked}>
+		<div class="border rounded" class:bg-green-50={item.return_status === 'returned_ok'} class:bg-orange-50={item.return_status === 'delayed' || item.return_status === 'reported_usable'} class:bg-red-50={item.return_status === 'reported_unusable'} class:bg-challengerpink-50={item.return_status === 'missing'} class:bg-neutral-50={notPicked}>
 			<div class="px-4 py-3 flex items-center gap-3">
 				<button type="button" onclick={() => expandable && toggleExpand(tKey)} class="flex-1 text-left" class:cursor-pointer={expandable} class:cursor-default={!expandable}>
 					<div class="font-medium text-sm">{item.common_name}{#if expandable && tGroup.items[0] === item}<span class="text-xs text-neutral-400 ml-1">{expanded ? '▲' : '▼'}</span>{/if}</div>
@@ -333,7 +352,7 @@
 		{#if activeItemId === item.id}
 			<div class="border rounded p-3 bg-neutral-50 text-sm space-y-2">
 				<div class="flex flex-wrap gap-2">
-					{#each ['returned_ok', 'delayed', 'reported_usable', 'reported_unusable', 'lost'] as s}
+					{#each ['returned_ok', 'delayed', 'reported_usable', 'reported_unusable', 'missing'] as s}
 						<button onclick={() => form.status = s} class="text-xs px-3 py-1 rounded border" class:bg-blue-700={form.status === s} class:text-white={form.status === s}>{labels[s]}</button>
 					{/each}
 				</div>
@@ -342,13 +361,13 @@
 						<input type="date" bind:value={form.expectedReturnDate} oninput={() => checkConflict(item.commercial_name, form.expectedReturnDate)} class="block border rounded px-2 py-1 text-sm w-full" /></label>
 					{#if delayWarning}<p class="text-xs text-orange-600">⚠ {delayWarning}</p>{/if}
 				{/if}
-				{#if form.status === 'reported_usable' || form.status === 'reported_unusable' || form.status === 'lost'}
+				{#if form.status === 'reported_usable' || form.status === 'reported_unusable' || form.status === 'missing'}
 					<label class="block"><span class="text-xs text-neutral-600">Beskrivning</span>
 						<input type="text" bind:value={form.notes} placeholder="Vad hände?" class="block border rounded px-2 py-1 text-sm w-full" /></label>
 					<ImageAttachInput bind:imageIds={formImageIds} />
 				{/if}
 				<div class="flex gap-2">
-					<button onclick={() => confirmForm(item.id)} disabled={!form.status || (form.status === 'delayed' && !form.expectedReturnDate)} class="text-xs bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50">Bekräfta</button>
+					<button onclick={() => confirmForm(item)} disabled={!form.status || (form.status === 'delayed' && !form.expectedReturnDate)} class="text-xs bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50">Bekräfta</button>
 					<button onclick={() => activeItemId = null} class="text-xs text-neutral-600 underline">Avbryt</button>
 				</div>
 			</div>
@@ -359,4 +378,15 @@
 
 {#if canComplete}
 	<button onclick={() => { api.returnBooking(bookingId).then(onBookingReturned).catch((e) => error = e.message); }} class="mt-4 bg-green-700 text-white px-4 py-2 rounded text-sm">Slutför återlämning</button>
+{/if}
+
+{#if issueSheetArticle}
+	<ReportIssueSheet
+		articleId={issueSheetArticle.id}
+		articleName={issueSheetArticle.name}
+		open={true}
+		severity={issueSheetArticle.severity}
+		bookingId={bookingId}
+		onClose={() => issueSheetArticle = null}
+	/>
 {/if}

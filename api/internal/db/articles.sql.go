@@ -521,6 +521,43 @@ func (q *Queries) ListActiveBookingConflicts(ctx context.Context, arg ListActive
 	return items, nil
 }
 
+const listArticleIDsInGroup = `-- name: ListArticleIDsInGroup :many
+SELECT a.id
+FROM articles a
+WHERE a.group_id = $1
+    AND a.commercial_name = $2
+    AND a.location_id = $3
+    AND a.status != 'archived'
+ORDER BY a.created_at
+`
+
+type ListArticleIDsInGroupParams struct {
+	GroupID        string      `json:"group_id"`
+	CommercialName string      `json:"commercial_name"`
+	LocationID     pgtype.UUID `json:"location_id"`
+}
+
+// Returns non-archived article IDs in a quantity tracked group, ordered by creation date.
+func (q *Queries) ListArticleIDsInGroup(ctx context.Context, arg ListArticleIDsInGroupParams) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, listArticleIDsInGroup, arg.GroupID, arg.CommercialName, arg.LocationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []pgtype.UUID{}
+	for rows.Next() {
+		var id pgtype.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listArticles = `-- name: ListArticles :many
 SELECT a.id, a.group_id, a.commercial_name, a.common_name, a.category_id, a.location_id, a.status, a.individually_tracked, a.approval_level, a.image_ids, a.description, a.instructions, a.manager_notes, a.purchase_date, a.purchase_price, a.place, a.expected_available_date, a.import_batch_id, a.created_at, a.updated_at,
     l.name AS location_name,

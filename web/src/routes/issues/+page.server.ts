@@ -1,19 +1,22 @@
 import { createApiClient } from '$lib/api/client';
+import { isManager } from '$lib/user';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ fetch, url }) => {
+export const load: PageServerLoad = async ({ fetch, url, parent }) => {
 	const api = createApiClient({ fetch });
-	const filter = url.searchParams.get('status') || 'reported_usable,reported_unusable,under_repair,lost';
-	const showResolved = url.searchParams.get('resolved') === 'true';
-	const effectiveFilter = showResolved ? filter + ',ok' : filter;
+	const { user } = await parent();
+	const showClosed = url.searchParams.get('closed') === 'true';
 
-	const [myArticles, allArticles] = await Promise.all([
-		api.listArticles({ status: effectiveFilter, mine: true }),
-		api.listArticles({ status: effectiveFilter, mine: false })
+	const activeStatuses = 'open,in_progress';
+	const allStatuses = showClosed ? 'open,in_progress,resolved,archived' : activeStatuses;
+
+	const [myIssues, allIssues] = await Promise.all([
+		api.listIssues({ status: allStatuses, mine: true }),
+		isManager(user) ? api.listIssues({ status: allStatuses }) : Promise.resolve([])
 	]);
 
-	const myIds = new Set(myArticles.map(a => a.id));
-	const otherArticles = allArticles.filter(a => !myIds.has(a.id));
+	const myIds = new Set(myIssues.map(i => i.id));
+	const otherIssues = allIssues.filter(i => !myIds.has(i.id));
 
-	return { myArticles, otherArticles, filter, showResolved };
+	return { myIssues, otherIssues, showClosed, isManager: isManager(user) };
 };

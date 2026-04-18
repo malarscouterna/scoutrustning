@@ -304,7 +304,7 @@ func TestIssueFlow_Comments(t *testing.T) {
 	issueID := issue["id"].(string)
 
 	t.Run("any user can add comment", func(t *testing.T) {
-		b, _ := json.Marshal(map[string]any{"comment": "Will check tomorrow"})
+		b, _ := json.Marshal(map[string]any{"description": "Will check tomorrow"})
 		resp, err := manager.Post("/api/v0/issues/"+issueID+"/comments", bytes.NewReader(b))
 		if err != nil {
 			t.Fatal(err)
@@ -318,7 +318,7 @@ func TestIssueFlow_Comments(t *testing.T) {
 	})
 
 	t.Run("comment without text rejected", func(t *testing.T) {
-		b, _ := json.Marshal(map[string]any{"comment": ""})
+		b, _ := json.Marshal(map[string]any{"description": ""})
 		resp, err := leader.Post("/api/v0/issues/"+issueID+"/comments", bytes.NewReader(b))
 		if err != nil {
 			t.Fatal(err)

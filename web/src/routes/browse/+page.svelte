@@ -5,7 +5,7 @@
 	import { hasRole, accessAtLeast, canBook } from '$lib/user';
 	import { page } from '$app/stores';
 	import { cart } from '$lib/stores/cart.svelte';
-	import ReportIssueForm from '$lib/components/ReportIssueForm.svelte';
+	import ReportIssueSheet from '$lib/components/ReportIssueSheet.svelte';
 	import ArticleEventHistory from '$lib/components/ArticleEventHistory.svelte';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
 
@@ -121,7 +121,7 @@
 		showArchived = data.filters.status?.includes('archived') ?? false;
 	});
 	let expandedGroups = $state<Set<string>>(new Set());
-	let reportingArticleId = $state<string | null>(null);
+	let reportingArticle = $state<{ id: string; name: string; isQuantityTracked?: boolean; groupTotal?: number } | null>(null);
 	let showHistoryFor = $state<string | null>(null);
 	let showIssueHistoryFor = $state<string | null>(null);
 	let issueHistory = $state<Map<string, { events: any[]; loading: boolean }>>(new Map());
@@ -402,11 +402,8 @@
 		window.location.href = '/browse';
 	}
 
-	function handleIssueReported(newStatus: string) {
-		if (reportingArticleId) {
-			articles = articles.map((a) => a.id === reportingArticleId ? { ...a, status: newStatus } : a);
-		}
-		reportingArticleId = null;
+	function handleIssueReported() {
+		reportingArticle = null;
 		reportedMessage = 'Problem rapporterat!';
 		setTimeout(() => reportedMessage = '', 4000);
 	}
@@ -704,7 +701,7 @@
 												{#if isManager}
 													<a href="/articles/{article.id}/edit" class="inline-flex items-center gap-1 text-xs text-neutral-600 border border-neutral-200 bg-neutral-50 rounded px-2 py-0.5 hover:bg-neutral-100">Redigera ›</a>
 												{/if}
-												<button onclick={() => reportingArticleId = reportingArticleId === article.id ? null : article.id} class="text-xs text-blue-700 underline">Rapportera</button>
+												<button onclick={() => reportingArticle = { id: article.id, name: article.common_name }} class="text-xs text-blue-700 underline">Rapportera</button>
 												<button onclick={() => showHistoryFor = showHistoryFor === article.id ? null : article.id} class="text-xs text-neutral-500 underline">Historik</button>
 											</span>
 										</div>
@@ -733,9 +730,6 @@
 											{/if}
 										{/if}
 									</div>
-									{#if reportingArticleId === article.id}
-										<ReportIssueForm articleId={article.id} articleName={article.common_name} onReported={handleIssueReported} onCancel={() => reportingArticleId = null} />
-									{/if}
 									{#if showHistoryFor === article.id}
 										<div class="py-2">
 											<ArticleEventHistory articleId={article.id} />
@@ -792,6 +786,7 @@
 								{/each}
 								<div class="flex flex-wrap items-center gap-2 pt-1">
 									<a href="/articles/{group.representativeId}" class="inline-flex items-center gap-1 text-xs text-blue-700 border border-blue-200 bg-blue-50 rounded px-2 py-1 hover:bg-blue-100">Visa artikelsida ›</a>
+									<button onclick={() => reportingArticle = { id: group.representativeId, name: group.commercialName, isQuantityTracked: true, groupTotal: group.nonArchivedCount }} class="text-xs text-blue-700 underline">Rapportera</button>
 									{#if isManager}
 										<a href="/articles/{group.representativeId}/edit?group=true" class="inline-flex items-center gap-1 text-xs text-neutral-600 border border-neutral-200 bg-neutral-50 rounded px-2 py-1 hover:bg-neutral-100">Redigera ›</a>
 									{/if}
@@ -807,6 +802,18 @@
 		{/each}
 	</div>
 </div>
+
+{#if reportingArticle}
+	<ReportIssueSheet
+		articleId={reportingArticle.id}
+		articleName={reportingArticle.name}
+		open={true}
+		isQuantityTracked={reportingArticle.isQuantityTracked ?? false}
+		groupTotal={reportingArticle.groupTotal ?? 0}
+		onReported={handleIssueReported}
+		onClose={() => reportingArticle = null}
+	/>
+{/if}
 
 {#snippet inlineTextInfo(a: Article, key: string)}
 	{@const isExpanded = expandedDescriptions.has(key)}

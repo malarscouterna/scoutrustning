@@ -212,6 +212,16 @@ WHERE a.group_id = @group_id
     AND a.location_id = @location_id
     AND a.status != 'archived';
 
+-- name: ListArticleIDsInGroup :many
+-- Returns non-archived article IDs in a quantity tracked group, ordered by creation date.
+SELECT a.id
+FROM articles a
+WHERE a.group_id = @group_id
+    AND a.commercial_name = @commercial_name
+    AND a.location_id = @location_id
+    AND a.status != 'archived'
+ORDER BY a.created_at;
+
 -- name: ListNewestInGroup :many
 -- Returns articles in a group ordered newest first, for archiving excess.
 -- Excludes articles in active bookings.
