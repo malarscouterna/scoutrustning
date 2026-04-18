@@ -90,6 +90,7 @@ func (h *IssueHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Description string   `json:"description"`
 		BookingID   *string  `json:"booking_id"`
 		ImageIds    []string `json:"image_ids"`
+		Count       int      `json:"count"` // for quantity-tracked articles: number of units affected (default 1)
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		WriteError(w, http.StatusBadRequest, "invalid request body")
@@ -107,6 +108,9 @@ func (h *IssueHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if req.Description == "" {
 		WriteError(w, http.StatusBadRequest, "description required")
 		return
+	}
+	if req.Count < 1 {
+		req.Count = 1
 	}
 
 	articleID, err := parseUUID(req.ArticleID)
@@ -156,14 +160,37 @@ func (h *IssueHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.Q.AddIssueArticle(r.Context(), db.AddIssueArticleParams{
-		IssueID:   issue.ID,
-		ArticleID: articleID,
-		GroupID:   claims.GroupID,
-	}); err != nil {
-		slog.Error("failed to link issue article", "error", err)
-		WriteError(w, http.StatusInternalServerError, "failed to create issue")
-		return
+	// Collect article IDs to link. For quantity-tracked articles, link `count` units from the same group.
+	articleIDs := []pgtype.UUID{articleID}
+	if !article.IndividuallyTracked && req.Count > 1 {
+		groupIDs, _ := h.Q.ListArticleIDsInGroup(r.Context(), db.ListArticleIDsInGroupParams{
+			GroupID:        claims.GroupID,
+			CommercialName: article.CommercialName,
+			LocationID:     article.LocationID,
+		})
+		// Build set starting with the primary article, then fill up to count from group
+		seen := map[pgtype.UUID]bool{articleID: true}
+		for _, gid := range groupIDs {
+			if len(articleIDs) >= req.Count {
+				break
+			}
+			if !seen[gid] {
+				articleIDs = append(articleIDs, gid)
+				seen[gid] = true
+			}
+		}
+	}
+
+	for _, aid := range articleIDs {
+		if err := h.Q.AddIssueArticle(r.Context(), db.AddIssueArticleParams{
+			IssueID:   issue.ID,
+			ArticleID: aid,
+			GroupID:   claims.GroupID,
+		}); err != nil {
+			slog.Error("failed to link issue article", "error", err)
+			WriteError(w, http.StatusInternalServerError, "failed to create issue")
+			return
+		}
 	}
 
 	// Log creation event
@@ -181,8 +208,13 @@ func (h *IssueHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Metadata:    meta,
 	})
 
-	// Update article status based on this new issue
-	h.deriveAndApplyArticleStatus(r, claims, articleID, article.Status, req.Severity)
+	// Update article status for all linked articles
+	for _, aid := range articleIDs {
+		linkedArticle, err := h.Q.GetArticle(r.Context(), db.GetArticleParams{ID: aid, GroupID: claims.GroupID})
+		if err == nil {
+			h.deriveAndApplyArticleStatus(r, claims, aid, linkedArticle.Status, req.Severity)
+		}
+	}
 
 	// Touch updated_at on the issue
 	h.Q.UpdateIssue(r.Context(), db.UpdateIssueParams{
@@ -305,11 +337,11 @@ func (h *IssueHandler) AddComment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Comment  string   `json:"comment"`
-		ImageIds []string `json:"image_ids"`
+		Description string   `json:"description"`
+		ImageIds    []string `json:"image_ids"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Comment == "" {
-		WriteError(w, http.StatusBadRequest, "comment required")
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Description == "" {
+		WriteError(w, http.StatusBadRequest, "description required")
 		return
 	}
 
@@ -319,15 +351,14 @@ func (h *IssueHandler) AddComment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	meta, _ := json.Marshal(map[string]any{"image_ids": req.ImageIds})
-	event, err := h.Q.CreateIssueEvent(r.Context(), db.CreateIssueEventParams{
+	if _, err := h.Q.CreateIssueEvent(r.Context(), db.CreateIssueEventParams{
 		IssueID:     id,
 		GroupID:     claims.GroupID,
 		ActorID:     claims.MemberID,
 		EventType:   "comment",
-		Description: req.Comment,
+		Description: req.Description,
 		Metadata:    meta,
-	})
-	if err != nil {
+	}); err != nil {
 		WriteError(w, http.StatusInternalServerError, "failed to add comment")
 		return
 	}
@@ -335,7 +366,8 @@ func (h *IssueHandler) AddComment(w http.ResponseWriter, r *http.Request) {
 	// Touch updated_at
 	h.Q.UpdateIssue(r.Context(), db.UpdateIssueParams{ID: id, GroupID: claims.GroupID})
 
-	WriteJSON(w, http.StatusCreated, event)
+	detail, _ := h.buildIssueDetail(r, claims, id)
+	WriteJSON(w, http.StatusCreated, detail)
 }
 
 func (h *IssueHandler) ReplaceAssignees(w http.ResponseWriter, r *http.Request) {

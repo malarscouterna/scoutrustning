@@ -8,6 +8,30 @@ Newest first.
 
 ---
 
+## 2026-04-18
+
+### Issues revamp - frontend (Phase 1 complete)
+
+See [issues-revamp.md](issues-revamp.md) for the full design.
+
+Completes the frontend side of the issues revamp (backend landed 2026-04-17). All 15 implementation steps are done.
+
+**New pages**: `/issues/new` (report form with article search, severity picker, count for quantity-tracked), `/issues/[id]` (detail with event thread, assignees, manager status actions with optional comment).
+
+**Rebuilt**: `/issues` list page - Mina/Övriga sections, "Visa avslutade" toggle. Dashboard - Felanmälan as a primary CTA in the top actions area.
+
+**New/updated components**: `ReportIssueSheet` (reusable slide-up sheet, replaces `ReportIssueForm`), `IssueCard` (rebuilt around `Issue` type, groups quantity-tracked articles and shows "(N st)" count), `ReturnChecklist` (`lost` replaced with `missing`, confirmed broken/missing opens `ReportIssueSheet`).
+
+**Article page**: shows active (open/in_progress) issues via `IssueCard`.
+
+**Browse page**: "Rapportera" button added to quantity-tracked group rows.
+
+**Quantity-tracked count**: `POST /api/v0/issues` accepts `count` - links N article rows from the same group and derives status on each. New `ListArticleIDsInGroup` sqlc query. `ListIssueArticles` now returns `individually_tracked` so cards and detail pages can group rows.
+
+**Bug fixes**: `AddComment` accepted `comment` field but client sent `description` - fixed. Handler now returns full `IssueDetail`. `expand_less`/`expand_more` icons replaced with `▲`/`▼` (not in font subset).
+
+---
+
 ## 2026-04-13
 
 ### UX revamp - dashboard, floating cart, and real-time item management

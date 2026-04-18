@@ -29,6 +29,7 @@
 		<scout-button type="link" href="/browse" variant="outlined">Visa utrustning</scout-button>
 		<scout-button type="link" href="/profile" variant="outlined">Inställningar</scout-button>
 		<scout-button type="link" href="/guide" variant="outlined">Användarguide</scout-button>
+		<scout-button type="link" href="/issues/new" variant="primary">Felanmälan</scout-button>
 	</div>
 
 	<div class="grid md:grid-cols-2 gap-6">
@@ -91,8 +92,8 @@
 			{#if data.myIssues.length > 0}
 				<h3 class="text-sm font-medium text-neutral-500 mb-1">Mina ärenden</h3>
 				<div class="space-y-1 mb-3">
-					{#each data.myIssues as article}
-						<IssueCard {article} />
+					{#each data.myIssues as issue}
+						<IssueCard {issue} />
 					{/each}
 				</div>
 			{/if}
@@ -100,8 +101,8 @@
 			{#if mgr && managerIssuesLimited.length > 0}
 				<h3 class="text-sm font-medium text-neutral-500 mb-1">Aktiva ärenden</h3>
 				<div class="space-y-1 mb-3">
-					{#each managerIssuesLimited as article}
-						<IssueCard {article} />
+					{#each managerIssuesLimited as issue}
+						<IssueCard {issue} />
 					{/each}
 				</div>
 			{/if}

@@ -4,7 +4,8 @@
 	import { hasRole, canBook } from '$lib/user';
 	import { page } from '$app/stores';
 	import { cart } from '$lib/stores/cart.svelte';
-	import ReportIssueForm from '$lib/components/ReportIssueForm.svelte';
+	import ReportIssueSheet from '$lib/components/ReportIssueSheet.svelte';
+	import IssueCard from '$lib/components/IssueCard.svelte';
 	import ArticleEventHistory from '$lib/components/ArticleEventHistory.svelte';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
@@ -155,8 +156,7 @@
 		}
 	}
 
-	function handleIssueReported(newStatus: string) {
-		statusOverride = newStatus;
+	function handleIssueReported() {
 		reporting = false;
 		message = 'Problem rapporterat!';
 		setTimeout(() => message = '', 4000);
@@ -283,16 +283,15 @@
 			{/if}
 		</div>
 
-		{#if reporting}
-			<div class="mb-6">
-				<ReportIssueForm
-					articleId={article.id}
-					articleName={article.common_name}
-					onReported={handleIssueReported}
-					onCancel={() => reporting = false}
-				/>
-			</div>
-		{/if}
+		<ReportIssueSheet
+			articleId={article.id}
+			articleName={article.common_name || article.commercial_name}
+			open={reporting}
+			isQuantityTracked={isQuantityTracked}
+			groupTotal={groupArticles?.filter(a => a.status !== 'archived').length ?? 0}
+			onReported={handleIssueReported}
+			onClose={() => reporting = false}
+		/>
 	</div>
 
 	<div class="flex gap-2 mb-2">
@@ -310,6 +309,17 @@
 	<div class="mb-4">
 		<ImageAttachInput bind:imageIds={noteImageIds} />
 	</div>
+
+	{#if data.activeIssues.length > 0}
+		<div class="mb-4">
+			<h2 class="font-medium mb-2">Aktiva ärenden</h2>
+			<div class="space-y-2">
+				{#each data.activeIssues as issue}
+					<IssueCard {issue} />
+				{/each}
+			</div>
+		</div>
+	{/if}
 
 	<h2 class="font-medium mb-2">Historik</h2>
 	{#if isQuantityTracked}

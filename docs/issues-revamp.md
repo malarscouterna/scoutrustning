@@ -321,6 +321,9 @@ Bilder (valfritt)
 | `PUT` | `/api/v0/issues/{id}/assignees` | Manager | Replace assignee list |
 | `POST` | `/api/v0/issues/{id}/articles` | Manager | Add an article to the issue |
 | `DELETE` | `/api/v0/issues/{id}/articles/{articleId}` | Manager | Remove an article from the issue |
+| `GET` | `/api/v0/users` | Manager | List group members (for assignee picker) |
+
+> **Note:** `GET /api/v0/users` does not yet exist and must be added before the assignee picker UI can be built. In demo mode, the endpoint should return the group's configured personas (from `dev-personas.json`) instead of real users, so that demo environments don't expose real member data.
 
 ### Existing endpoints - behavior changes
 
@@ -395,30 +398,36 @@ This revamp intentionally breaks backwards compatibility. The system is pre-rele
 ### New
 | File | Purpose |
 |---|---|
-| `api/migrations/NNNN_issue_reports.sql` | New tables: issue_reports, issue_articles, issue_assignees, issue_events |
+| `api/migrations/00002_issue_reports.sql` | New tables: issue_reports, issue_articles, issue_assignees, issue_events |
 | `api/internal/db/queries/issues.sql` | sqlc queries for issues |
 | `api/internal/handler/issues.go` | Issue handlers |
 | `web/src/routes/issues/[id]/+page.svelte` | Issue detail page |
 | `web/src/routes/issues/[id]/+page.server.ts` | Server load for issue detail |
 | `web/src/routes/issues/new/+page.svelte` | Report issue form |
-| `web/src/routes/issues/new/+page.server.ts` | Server actions for report form |
-| `web/src/lib/components/ReportIssueSheet.svelte` | Reusable slide-up report form |
-| `web/src/lib/components/IssueCard.svelte` | Issue card for list + dashboard |
+| `web/src/routes/issues/new/+page.server.ts` | Server load for report form (pre-fill from query params) |
+| `web/src/lib/components/ReportIssueSheet.svelte` | Reusable slide-up report sheet (replaced ReportIssueForm.svelte) |
+| `web/src/lib/components/IssueCard.svelte` | Issue card for list + dashboard (rewritten from Article-based to Issue-based) |
+
+### Deleted
+| File | Reason |
+|---|---|
+| `web/src/lib/components/ReportIssueForm.svelte` | Superseded by `ReportIssueSheet.svelte` |
 
 ### Modified
 | File | Change |
 |---|---|
 | `api/internal/handler/articles.go` | Restrict `UpdateStatus` to non-reported statuses; add status-derivation logic |
 | `api/internal/handler/bookings.go` | Remove status-setting from return flow |
-| `web/src/routes/issues/+page.svelte` | Rebuild around issue entities |
-| `web/src/routes/issues/+page.server.ts` | Load from issues API |
-| `web/src/routes/+page.svelte` | Add CTA + issue cards with dates |
-| `web/src/routes/+page.server.ts` | Fetch issues for dashboard |
-| `web/src/routes/browse/+page.svelte` | Add ReportIssueSheet trigger on article expand |
-| `web/src/routes/articles/[id]/+page.svelte` | Add ReportIssueSheet trigger |
-| `web/src/routes/bookings/[id]/+page.svelte` | Return flow uses ReportIssueSheet |
-| `web/src/lib/api/client.ts` | New API client methods for issues |
-| `smoke-test.sh` | Add checks for /issues/new and a fixture /issues/[id] |
+| `web/src/routes/issues/+page.svelte` | Rebuilt around issue entities (Mina/Övriga sections, "Visa avslutade" toggle) |
+| `web/src/routes/issues/+page.server.ts` | Load from `listIssues()` instead of `listArticles()` |
+| `web/src/routes/+page.svelte` | Add "Felanmälan" CTA + issue cards using `IssueCard` |
+| `web/src/routes/+page.server.ts` | Fetch issues via `listIssues()` for dashboard |
+| `web/src/routes/browse/+page.svelte` | Replace inline `ReportIssueForm` with `ReportIssueSheet` trigger |
+| `web/src/routes/articles/[id]/+page.svelte` | Replace inline `ReportIssueForm` with `ReportIssueSheet` trigger |
+| `web/src/lib/components/ReturnChecklist.svelte` | `lost` return status replaced with `missing`; `reported_*`/`missing` confirm opens `ReportIssueSheet` with `booking_id` |
+| `web/src/lib/api/client.ts` | New `Issue`, `IssueDetail`, `IssueArticle`, `IssueAssignee`, `IssueEvent` types; new issue API methods |
+| `dev-seed.sh` | Rewritten issue-seeding to use `POST /api/v0/issues`; cleanup DELETE order fixed for FK constraints; `lost` return status replaced with `missing` |
+| `smoke-test.sh` | ⬜ Add checks for /issues/new and /issues/[id] (pending) |
 
 ---
 
@@ -431,13 +440,15 @@ This revamp intentionally breaks backwards compatibility. The system is pre-rele
 5. ✅ Booking return handler updated: `lost` removed, `missing` added, `reported_*` return statuses no longer set article status directly (caller creates issue via POST /issues).
 6. ✅ `IssueHandler` mounted in `main.go` at `/api/v0/issues`.
 7. ✅ API tests fully updated. `issues_test.go` rewritten. `access_test.go`, `browse_manager_test.go`, `images_test.go` updated. `pickup_test.go`: removed `lost` pickup_status sub-tests, replaced with `lost_pickup_status_is_rejected` (expects 400) and updated assertions. `view_only_test.go`: `can_report_issue` now uses `POST /api/v0/issues` with issues route mounted. `UpdateItemPickup` handler cleaned up — removed stale `article_status`/`lost` logic (pickup-time issue reporting now done via `POST /api/v0/issues`). All tests pass.
-8. ⬜ `/issues/new` page + server action
-9. ⬜ `/issues/[id]` detail page
-10. ⬜ Rebuild `/issues` list page from issue entities
-11. ⬜ `ReportIssueSheet` component
-12. ⬜ Wire sheet into browse, article detail, booking return
-13. ⬜ Dashboard: CTA + issue cards with dates
-14. ⬜ Smoke test additions, svelte-check
+8. ✅ `/issues/new` page + server action
+9. ✅ `/issues/[id]` detail page (assignee picker deferred - needs `GET /api/v0/users`)
+9a. ⬜ `GET /api/v0/users` endpoint — see [BACKLOG.md "Group members API + assignee picker"](BACKLOG.md). Needed before the assignee picker UI on `/issues/[id]` can be built.
+10. ✅ Rebuild `/issues` list page from issue entities. `IssueCard` component updated to use `Issue` type (was `Article`). `/issues/+page.server.ts` loads from `listIssues()`. `/issues/+page.svelte` rebuilt with Mina/Övriga sections and "Visa avslutade" toggle.
+11. ✅ `ReportIssueSheet` component — `web/src/lib/components/ReportIssueSheet.svelte`. Fixed bottom-sheet overlay with severity picker, description, image upload. `ReportIssueForm.svelte` deleted (superseded).
+12. ✅ Wire sheet into browse, article detail, booking return. Browse and article detail replace `ReportIssueForm` with `ReportIssueSheet`. `ReturnChecklist`: `lost` return status replaced with `missing`; after confirming a `reported_*`/`missing` return, `ReportIssueSheet` opens pre-filled with severity and `booking_id`.
+13. ✅ Dashboard: "Felanmälan" CTA added. `+page.server.ts` loads from `listIssues()`. `IssueCard` now renders issue entities.
+14. ✅ `dev-seed.sh` updated: cleanup order fixed (issue tables deleted before articles), issue-reporting rewritten to use `POST /api/v0/issues`, `lost` return status replaced with `missing`.
+15. ✅ Smoke test additions: `/issues/new` and seeded `/issues/[id]` checks added to `smoke-test.sh`.
 
 ---
 
@@ -508,3 +519,13 @@ These items are **partially addressed** and should be updated to note what remai
 
 - **"Quantity-tracked items - batch issue reporting"** - `ReportIssueSheet` covers single-article reporting from the group detail page; multi-item batch flow (count input for N articles) is still deferred
 - **"Quantity-tracked items - issue reporting during pickup"** - dead code in `PickupChecklist.svelte` (`startGroupReport`, `confirmGroupReport`, `reportingGroupKey`) can now be wired to `ReportIssueSheet`; interaction model (does reporting reduce pickup count?) is still TBD
+
+
+## Post-launch fixes
+
+- ✅ **Symbols**: replaced `material-symbols-outlined` usages (chevron_right, close, arrow_back) with text equivalents (`›`, `×`, `← Ärenden`) matching the rest of the app. Expansion toggle uses `▲`/`▼`.
+- ✅ **Felanmälan CTA**: moved to top CTAs area as a primary `scout-button` after Användarguide, removed from the Ärenden section.
+- ✅ **Status change with comment**: managers see a comment textarea on `/issues/[id]` that is included when changing status.
+- ✅ **Active issues on article page**: article detail now loads and shows open/in_progress issues using `IssueCard`.
+- ✅ **AddComment bug**: API handler accepted `comment` field but client sent `description` - fixed to use `description` consistently. Handler now returns full `IssueDetail` (was returning just the event).
+- ✅ **Quantity-tracked count**: `POST /api/v0/issues` accepts optional `count` field - links N article rows from the same group. `/issues/new` and `ReportIssueSheet` show a count picker for quantity-tracked articles. Browse page has a Rapportera button for quantity-tracked groups. `ListIssueArticles` query includes `individually_tracked` so cards and detail page can group rows and show "(N st)" count.
