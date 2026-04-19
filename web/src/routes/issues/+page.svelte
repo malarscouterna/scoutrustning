@@ -16,9 +16,9 @@
 </script>
 
 <div class="max-w-2xl mx-auto p-4">
-	<div class="flex items-center justify-between mb-4">
+	<div class="flex flex-wrap items-center justify-between gap-2 mb-4">
 		<h1 class="text-heading-sm font-bold">Ärenden</h1>
-		<a href="/issues/new" class="text-sm text-blue-700 hover:underline">Rapportera ett problem →</a>
+		<a href="/issues/new" class="bg-blue-700 text-white px-4 py-2 rounded text-sm">Felanmälan</a>
 	</div>
 
 	{#if data.myIssues.length > 0}
