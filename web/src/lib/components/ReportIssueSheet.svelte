@@ -82,13 +82,13 @@
 
 	<!-- Sheet -->
 	<div
-		class="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-2xl shadow-xl p-5 space-y-4 max-w-lg mx-auto"
+		class="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-2xl shadow-xl p-5 pb-20 space-y-4 max-w-lg mx-auto overflow-y-auto max-h-[85vh]"
 		role="dialog"
 		aria-modal="true"
-		aria-label="Rapportera problem"
+		aria-label="Felanmäl"
 	>
 		<div class="flex items-start justify-between gap-2">
-			<p class="font-semibold text-sm">Rapportera problem – {articleName}</p>
+			<p class="font-semibold text-sm">Felanmäl – {articleName}</p>
 			<button type="button" onclick={close} aria-label="Stäng" class="text-neutral-400 hover:text-neutral-700 shrink-0 text-lg leading-none">×</button>
 		</div>
 

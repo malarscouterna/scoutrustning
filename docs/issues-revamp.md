@@ -449,6 +449,7 @@ This revamp intentionally breaks backwards compatibility. The system is pre-rele
 13. ✅ Dashboard: "Felanmälan" CTA added. `+page.server.ts` loads from `listIssues()`. `IssueCard` now renders issue entities.
 14. ✅ `dev-seed.sh` updated: cleanup order fixed (issue tables deleted before articles), issue-reporting rewritten to use `POST /api/v0/issues`, `lost` return status replaced with `missing`.
 15. ✅ Smoke test additions: `/issues/new` and seeded `/issues/[id]` checks added to `smoke-test.sh`.
+16. ✅ Pickup and return flow issue reporting: `PickupChecklist` - removed dead inline report forms (`startReport`/`confirmReport`/`startGroupReport`/`confirmGroupReport`); "Rapportera" button on individually-tracked items now opens `ReportIssueSheet` directly; fixed `markQuantityGroup` to use `""` instead of `lost` (removed from pickup schema). `ReturnChecklist` - removed redundant inline notes/textarea and image upload for reportable statuses (`reported_usable`/`reported_unusable`/`missing`); these are now handled entirely by the `ReportIssueSheet` that opens after confirming the return status.
 
 ---
 

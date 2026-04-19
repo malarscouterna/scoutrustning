@@ -2,6 +2,7 @@
 	import { createApiClient, type BookingItem } from '$lib/api/client';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
 	import ImageAttachInput from '$lib/components/ImageAttachInput.svelte';
+	import ReportIssueSheet from '$lib/components/ReportIssueSheet.svelte';
 
 	interface Props {
 		bookingId: string;
@@ -17,19 +18,16 @@
 
 	let error = $state('');
 	let swappingItemId = $state<string | null>(null);
-	let reportingItemId = $state<string | null>(null);
-	let reportingGroupKey = $state<string | null>(null);
-	let reportStatus = $state('');
-	let reportComment = $state('');
-	let reportImageIds = $state<string[]>([]);
 	let swapCandidates = $state<{ id: string; common_name: string; location_name: string; place: string; status: string; expected_available_date: string | null }[]>([]);
 	let selectedSwapArticle = $state('');
 	let loading = $state(false);
 	let expandedGroups = $state<Set<string>>(new Set());
 
+	// Issue sheet state - opened when user clicks "Felanmäl" on an item or group
+	let issueSheetArticle = $state<{ id: string; name: string; isQuantityTracked?: boolean; groupTotal?: number } | null>(null);
+
 	const pickupLabels: Record<string, string> = {
 		picked_up: 'Hämtad',
-		lost: 'Saknas',
 		swapped: 'Bytt'
 	};
 
@@ -128,12 +126,14 @@
 					(i) => !i.individually_tracked && i.commercial_name === group.commercialName && i.location_name === group.locationName
 				);
 				for (let i = 0; i < updatedItems.length; i++) {
-					const status = i < pickedCount ? 'picked_up' : 'lost';
+					// Items beyond the picked count are cleared (not marked as lost)
+					const status = i < pickedCount ? 'picked_up' : '';
 					await api.updateItemPickup(bookingId, updatedItems[i].id, status);
 				}
 			} else {
 				for (let i = 0; i < group.items.length; i++) {
-					const status = i < pickedCount ? 'picked_up' : 'lost';
+					// Items beyond the picked count are cleared (not marked as lost)
+					const status = i < pickedCount ? 'picked_up' : '';
 					await api.updateItemPickup(bookingId, group.items[i].id, status);
 				}
 			}
@@ -152,60 +152,6 @@
 				}
 			}
 			await reload();
-		} catch (e: any) {
-			error = e.message;
-		}
-	}
-
-	function startReport(itemId: string) {
-		reportingItemId = itemId;
-		reportingGroupKey = null;
-		reportStatus = '';
-		reportComment = '';
-		reportImageIds = [];
-	}
-
-	function startGroupReport(group: QuantityGroup) {
-		reportingGroupKey = groupKey(group);
-		reportingItemId = null;
-		reportStatus = '';
-		reportComment = '';
-		reportImageIds = [];
-	}
-
-	function cancelReport() {
-		reportingItemId = null;
-		reportingGroupKey = null;
-		reportStatus = '';
-		reportComment = '';
-		reportImageIds = [];
-	}
-
-	async function confirmReport(itemId: string) {
-		if (!reportStatus || !reportComment.trim()) return;
-		error = '';
-		try {
-			const pickupStatus = reportStatus === 'reported_usable' ? 'picked_up' : 'lost';
-			await api.updateItemPickup(bookingId, itemId, pickupStatus, reportStatus, reportComment.trim(), reportImageIds.length ? reportImageIds : undefined);
-			await reload();
-			cancelReport();
-		} catch (e: any) {
-			error = e.message;
-		}
-	}
-
-	async function confirmGroupReport(group: QuantityGroup) {
-		if (!reportStatus || !reportComment.trim()) return;
-		error = '';
-		try {
-			const target = group.items.find((i) => !i.pickup_status) ?? group.items[0];
-			await api.updateArticleStatus(target.article_id, {
-				status: reportStatus,
-				comment: reportComment.trim(),
-				image_ids: reportImageIds.length ? reportImageIds : undefined
-			});
-			await reload();
-			cancelReport();
 		} catch (e: any) {
 			error = e.message;
 		}
@@ -325,10 +271,15 @@
 		{@const qKey = groupKey(group)}
 		{@const expandable = hasExpandable(qImageIds, rep?.article_description ?? '', rep?.article_instructions ?? '')}
 		{@const expanded = expandedGroups.has(qKey)}
+		{@const hasUsableIssue = rep?.article_status === 'reported_usable'}
 		<div class="border rounded" class:bg-green-50={done && picked > 0} class:bg-orange-50={done && picked === 0}>
 			<div class="flex items-center gap-3 px-4 py-3">
 				<button type="button" onclick={() => expandable && toggleExpand(qKey)} class="flex-1 min-w-0 text-left" class:cursor-pointer={expandable} class:cursor-default={!expandable}>
-					<div class="font-medium text-sm">{group.commercialName}{#if expandable}<span class="text-xs text-neutral-400 ml-1">{expanded ? '▲' : '▼'}</span>{/if}</div>
+					<div class="font-medium text-sm">
+						{group.commercialName}
+						{#if hasUsableIssue}<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded ml-1">Felrapporterad</span>{/if}
+						{#if expandable}<span class="text-xs text-neutral-400 ml-1">{expanded ? '▲' : '▼'}</span>{/if}
+					</div>
 					<div class="text-xs text-neutral-500">{group.locationName}{group.place ? ` · ${group.place}` : ''}</div>
 				</button>
 
@@ -340,7 +291,6 @@
 				{:else}
 					{@const key = groupKey(group)}
 					{@const max = groupMax(group)}
-					{#if reportingGroupKey !== qKey}
 					<div class="flex items-center gap-2">
 						<span class="text-sm text-neutral-600">Hämta {group.items.length} st</span>
 						<input
@@ -359,39 +309,16 @@
 							<span class="text-xs text-neutral-400">max {max}</span>
 						{/if}
 					</div>
-					{/if}
 				{/if}
+				<button
+					onclick={() => issueSheetArticle = { id: rep.article_id, name: group.commercialName, isQuantityTracked: true, groupTotal: group.items.length }}
+					class="text-xs bg-orange-600 text-white px-2 py-1 rounded shrink-0"
+				>Felanmäl</button>
 			</div>
 			{#if expanded}
 				{@render infoBlock(qImageIds, group.commercialName, rep?.location_id ?? '', rep?.article_description ?? '', rep?.article_instructions ?? '')}
 			{/if}
 		</div>
-		{#if reportingGroupKey === qKey}
-			<div class="border rounded p-3 bg-orange-50 text-sm mt-1">
-				<p class="mb-2 font-medium">Rapportera problem — {group.commercialName}:</p>
-				<p class="text-xs text-neutral-500 mb-2">Rapporterar på en artikel utan att påverka hämtningen.</p>
-				<div class="space-y-2">
-					<label class="flex items-center gap-2">
-						<input type="radio" name="report-q-{qKey}" value="reported_usable" bind:group={reportStatus} />
-						Användbar men felaktig <span class="text-xs text-neutral-500">(hämtas ändå)</span>
-					</label>
-					<label class="flex items-center gap-2">
-						<input type="radio" name="report-q-{qKey}" value="reported_unusable" bind:group={reportStatus} />
-						Ej användbar <span class="text-xs text-neutral-500">(hämtas inte)</span>
-					</label>
-					<label class="flex items-center gap-2">
-						<input type="radio" name="report-q-{qKey}" value="lost" bind:group={reportStatus} />
-						Saknas
-					</label>
-					<textarea bind:value={reportComment} placeholder="Beskriv problemet..." rows="2" class="block border rounded px-2 py-1 text-sm w-full"></textarea>
-					<ImageAttachInput bind:imageIds={reportImageIds} />
-					<div class="flex gap-2">
-						<button onclick={() => confirmGroupReport(group)} disabled={!reportStatus || !reportComment.trim()} class="text-xs bg-orange-600 text-white px-3 py-1 rounded disabled:opacity-50">Bekräfta</button>
-						<button onclick={cancelReport} class="text-xs text-neutral-600 underline">Avbryt</button>
-					</div>
-				</div>
-			</div>
-		{/if}
 	{/each}
 
 	<!-- Individually tracked items -->
@@ -400,7 +327,7 @@
 		{@const expandable = hasExpandable(tGroup.imageIds, tGroup.description, tGroup.instructions)}
 		{@const expanded = expandedGroups.has(tKey)}
 		{#each tGroup.items as item}
-		<div class="border rounded" class:bg-green-50={item.pickup_status === 'picked_up' || item.pickup_status === 'swapped'} class:bg-challengerpink-50={item.pickup_status === 'lost'}>
+		<div class="border rounded" class:bg-green-50={item.pickup_status === 'picked_up' || item.pickup_status === 'swapped'}>
 			<div class="flex items-center gap-3 px-4 py-3">
 				<button type="button" onclick={() => expandable && toggleExpand(tKey)} class="flex-1 min-w-0 text-left" class:cursor-pointer={expandable} class:cursor-default={!expandable}>
 					<div class="font-medium text-sm">
@@ -419,14 +346,14 @@
 
 				<div class="shrink-0">
 					{#if item.pickup_status}
-						<span class="text-xs px-2 py-0.5 rounded" class:bg-green-100={item.pickup_status === 'picked_up' || item.pickup_status === 'swapped'} class:text-green-800={item.pickup_status === 'picked_up' || item.pickup_status === 'swapped'} class:bg-challengerpink-100={item.pickup_status === 'lost'} class:text-challengerpink-800={item.pickup_status === 'lost'}>
+						<span class="text-xs px-2 py-0.5 rounded bg-green-100 text-green-800">
 							{pickupLabels[item.pickup_status] ?? item.pickup_status}
 						</span>
 						<button onclick={() => markPickup(item.id, '')} class="text-xs text-neutral-400 hover:text-neutral-600 ml-1">Ångra</button>
-					{:else if swappingItemId !== item.id && reportingItemId !== item.id}
+					{:else if swappingItemId !== item.id}
 						<div class="flex gap-1">
 							<button onclick={() => markPickup(item.id, 'picked_up')} class="text-xs bg-green-700 text-white px-2 py-1 rounded">Hämtad</button>
-							<button onclick={() => startReport(item.id)} class="text-xs bg-orange-600 text-white px-2 py-1 rounded">Rapportera</button>
+							<button onclick={() => issueSheetArticle = { id: item.article_id, name: item.common_name }} class="text-xs bg-orange-600 text-white px-2 py-1 rounded">Felanmäl</button>
 							<button onclick={() => startSwap(item)} class="text-xs text-blue-700 underline px-1">Byt</button>
 						</div>
 					{/if}
@@ -436,34 +363,6 @@
 				{@render infoBlock(tGroup.imageIds, tGroup.commercialName, tGroup.locationId, tGroup.description, tGroup.instructions)}
 			{/if}
 		</div>
-
-		{#if reportingItemId === item.id}
-			<div class="border rounded p-3 bg-orange-50 text-sm mt-1">
-				<p class="mb-2 font-medium">Rapportera {item.common_name}:</p>
-				<div class="space-y-2">
-					<label class="flex items-center gap-2">
-						<input type="radio" name="report-{item.id}" value="reported_usable" bind:group={reportStatus} />
-						Användbar men felaktig <span class="text-xs text-neutral-500">(hämtas ändå)</span>
-					</label>
-					<label class="flex items-center gap-2">
-						<input type="radio" name="report-{item.id}" value="reported_unusable" bind:group={reportStatus} />
-						Ej användbar <span class="text-xs text-neutral-500">(hämtas inte)</span>
-					</label>
-					<label class="flex items-center gap-2">
-						<input type="radio" name="report-{item.id}" value="lost" bind:group={reportStatus} />
-						Saknas
-					</label>
-					<textarea bind:value={reportComment} placeholder="Beskriv problemet..." rows="2" class="block border rounded px-2 py-1 text-sm w-full"></textarea>
-					<div class="flex items-center gap-2">
-						<ImageAttachInput bind:imageIds={reportImageIds} />
-					</div>
-					<div class="flex gap-2">
-						<button onclick={() => confirmReport(item.id)} disabled={!reportStatus || !reportComment.trim()} class="text-xs bg-orange-600 text-white px-3 py-1 rounded disabled:opacity-50">Bekräfta</button>
-						<button onclick={cancelReport} class="text-xs text-neutral-600 underline">Avbryt</button>
-					</div>
-				</div>
-			</div>
-		{/if}
 
 		{#if swappingItemId === item.id}
 			<div class="border rounded p-3 bg-blue-50 text-sm">
@@ -499,3 +398,16 @@
 		{/each}
 	{/each}
 </div>
+
+{#if issueSheetArticle}
+	<ReportIssueSheet
+		articleId={issueSheetArticle.id}
+		articleName={issueSheetArticle.name}
+		open={true}
+		bookingId={bookingId}
+		isQuantityTracked={issueSheetArticle.isQuantityTracked ?? false}
+		groupTotal={issueSheetArticle.groupTotal ?? 0}
+		onReported={() => reload()}
+		onClose={() => issueSheetArticle = null}
+	/>
+{/if}

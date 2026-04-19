@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { createApiClient, type BookingItem } from '$lib/api/client';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
-	import ImageAttachInput from '$lib/components/ImageAttachInput.svelte';
 	import ReportIssueSheet from '$lib/components/ReportIssueSheet.svelte';
 
 	interface Props {
@@ -19,7 +18,6 @@
 	let activeItemId = $state<string | null>(null);
 	let activeGroupKey = $state<string | null>(null);
 	let form = $state({ status: '', expectedReturnDate: '', notes: '' });
-	let formImageIds = $state<string[]>([]);
 	let lastExpectedDate = $state('');
 	let delayWarning = $state('');
 	let quantityInputs = $state<Record<string, number>>({});
@@ -126,14 +124,13 @@
 	async function confirmForm(item: BookingItem) {
 		if (!form.status) return;
 		if (form.status === 'delayed' && form.expectedReturnDate) lastExpectedDate = form.expectedReturnDate;
+		const severity = returnStatusToSeverity[form.status];
 		await setReturn(item.id, form.status, {
 			expected_return_date: form.status === 'delayed' ? form.expectedReturnDate : undefined,
-			notes: form.notes || undefined,
-			image_ids: formImageIds.length ? formImageIds : undefined
+			// notes/images for reportable statuses are entered via ReportIssueSheet below
+			notes: severity ? undefined : form.notes || undefined,
 		});
-		const severity = returnStatusToSeverity[form.status];
 		activeItemId = null;
-		formImageIds = [];
 		if (severity) {
 			issueSheetArticle = { id: item.article_id, name: item.common_name, severity };
 		}
@@ -142,7 +139,6 @@
 	function openForm(id: string) {
 		activeItemId = id; activeGroupKey = null;
 		form = { status: '', expectedReturnDate: lastExpectedDate, notes: '' }; delayWarning = '';
-		formImageIds = [];
 	}
 
 	async function returnGroupOk(g: QGroup) {
@@ -163,18 +159,17 @@
 		const unhandled = g.picked.filter((i) => !i.return_status || i.return_status === 'pending');
 		const count = Math.min(quantityInputs[`${g.key}_form`] ?? 1, unhandled.length);
 		if (form.status === 'delayed' && form.expectedReturnDate) lastExpectedDate = form.expectedReturnDate;
+		const severity = returnStatusToSeverity[form.status];
 		try {
 			for (let i = 0; i < count; i++)
 				await api.updateItemReturn(bookingId, unhandled[i].id, {
 					return_status: form.status,
 					expected_return_date: form.status === 'delayed' ? form.expectedReturnDate : undefined,
-					notes: form.notes || undefined,
-					image_ids: formImageIds.length ? formImageIds : undefined
+					// notes/images for reportable statuses are entered via ReportIssueSheet below
+					notes: severity ? undefined : form.notes || undefined,
 				});
-			const severity = returnStatusToSeverity[form.status];
 			activeGroupKey = null;
 			delete quantityInputs[`${g.key}_form`];
-			formImageIds = [];
 			await reload(); flash(g.key);
 			if (severity && unhandled[0]) {
 				issueSheetArticle = { id: unhandled[0].article_id, name: g.name, severity };
@@ -194,7 +189,6 @@
 		const unhandled = g.picked.filter((i) => !i.return_status || i.return_status === 'pending');
 		activeGroupKey = g.key; activeItemId = null;
 		form = { status: '', expectedReturnDate: lastExpectedDate, notes: '' }; delayWarning = '';
-		formImageIds = [];
 		quantityInputs[`${g.key}_form`] = quantityInputs[g.key] ?? unhandled.length;
 	}
 
@@ -301,9 +295,7 @@
 						{#if delayWarning}<p class="text-xs text-orange-600">⚠ {delayWarning}</p>{/if}
 					{/if}
 					{#if form.status === 'reported_usable' || form.status === 'reported_unusable' || form.status === 'missing'}
-						<label class="block"><span class="text-xs text-neutral-600">Beskrivning</span>
-							<input type="text" bind:value={form.notes} placeholder="Vad hände?" class="block border rounded px-2 py-1 text-sm w-full" /></label>
-						<ImageAttachInput bind:imageIds={formImageIds} />
+						<p class="text-xs text-neutral-500">Beskrivning och bilder anges i nästa steg.</p>
 					{/if}
 					<div class="flex gap-2">
 						<button onclick={() => confirmGroupForm(g)} disabled={!form.status || (form.status === 'delayed' && !form.expectedReturnDate)} class="text-xs bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50">Bekräfta</button>
@@ -362,9 +354,7 @@
 					{#if delayWarning}<p class="text-xs text-orange-600">⚠ {delayWarning}</p>{/if}
 				{/if}
 				{#if form.status === 'reported_usable' || form.status === 'reported_unusable' || form.status === 'missing'}
-					<label class="block"><span class="text-xs text-neutral-600">Beskrivning</span>
-						<input type="text" bind:value={form.notes} placeholder="Vad hände?" class="block border rounded px-2 py-1 text-sm w-full" /></label>
-					<ImageAttachInput bind:imageIds={formImageIds} />
+					<p class="text-xs text-neutral-500">Beskrivning och bilder anges i nästa steg.</p>
 				{/if}
 				<div class="flex gap-2">
 					<button onclick={() => confirmForm(item)} disabled={!form.status || (form.status === 'delayed' && !form.expectedReturnDate)} class="text-xs bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50">Bekräfta</button>
