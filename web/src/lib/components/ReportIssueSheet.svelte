@@ -75,14 +75,15 @@
 	<!-- Backdrop -->
 	<button
 		type="button"
-		class="fixed inset-0 z-40 bg-black/40"
+		class="fixed inset-0 z-40 bg-black/60"
 		aria-label="Stäng"
 		onclick={close}
 	></button>
 
-	<!-- Sheet -->
+	<!-- Centered modal -->
+	<div class="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
 	<div
-		class="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-2xl shadow-xl p-5 pb-20 space-y-4 max-w-lg mx-auto overflow-y-auto max-h-[85vh]"
+		class="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto p-5 space-y-4 pointer-events-auto"
 		role="dialog"
 		aria-modal="true"
 		aria-label="Felanmäl"
@@ -156,5 +157,6 @@
 			</button>
 			<button onclick={close} class="text-sm text-neutral-600 underline px-2">Avbryt</button>
 		</div>
+	</div>
 	</div>
 {/if}
