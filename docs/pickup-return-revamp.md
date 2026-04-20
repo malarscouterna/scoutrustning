@@ -296,12 +296,12 @@ The swap flow (`startSwap`, `confirmSwap`, `swapCandidates`) applies only to ind
 
 ## Implementation order
 
-1. **Backend** - Remove auto-revert in `UpdateItemPickup` (`bookings.go`). (Issue 3)
-2. **Backend** - Block PUT booking edit if status is `picked_up`. (Issue 4)
-3. **Frontend `+page.svelte`** - Lift `reload` into the parent, add poll/reload race guard (Issue 13). Hide Redigera for `picked_up`, add hint (Issue 4). Add `pickupStarted` guard (Issue 5). Remove personal booking label (Issue 6). Fix `reopenBooking` (Issue 12).
-4. **Frontend `PickupChecklist.svelte`** - Split quantity groups by status category, show partial pickup state, add "Ta bort från bokning" option, add issue-detail expand for reported_usable rows (Issues 1, 2). Simplify `markQuantityGroup`: remove `loadExtraAvailability`, remove `max` cap, use reload return value directly (Issues 7, 8, Proposal A). Add "Lägg till utrustning" button → `AddItemSheet`.
-5. **Frontend `ReturnChecklist.svelte`** - Clear active form on external update (Issue 9). Guard Slutför button (Issue 10). Reset count input on form open (Issue 11). Add "Lägg till utrustning" button → `AddItemSheet`.
-6. **Frontend `AddItemSheet.svelte`** - New component: article search, +/- quantity picker, availability + approval filtering, calls `addBookingItems` on confirm (Proposal A).
+1. ✅ **Backend** - Remove auto-revert in `UpdateItemPickup` (`bookings.go`). (Issue 3)
+2. ✅ **Backend** - Block PUT booking edit if status is `picked_up`. (Issue 4)
+3. ✅ **Frontend `+page.svelte`** - Lift `reload` into the parent, add poll/reload race guard (Issue 13). Hide Redigera for `picked_up` (Issue 4). `pickupMode`/`returnMode` state-based navigation with overview hub (Issues 5, F2). Remove personal booking label (Issue 6). Fix `reopenBooking` (Issue 12). Floating bottom bar with "Tillbaka" + "Lägg till utrustning" (F4). Cart warning on pickup start (F5).
+4. ✅ **Frontend `PickupChecklist.svelte`** - Split quantity groups by status category, partial pickup visibility, "Ta bort från bokning", issue-detail expand for reported_usable (Issues 1, 2). Simplified `markQuantityGroup`: removed `loadExtraAvailability`, uses reload return value (Issues 7, 8, Proposal A). "Byt" crash fix (F3).
+5. ✅ **Frontend `ReturnChecklist.svelte`** - Clear active form on external update (Issue 9). Guard Slutför button (Issue 10). Reset count input on form open (Issue 11).
+6. ✅ **Frontend `AddItemSheet.svelte`** - Modal overlay, free-text search + category browse, non-approved items shown disabled, calls `addBookingItems` on confirm (Proposal A, F1).
 
 ---
 
@@ -333,4 +333,83 @@ No new API endpoints needed (uses existing `addBookingItems`, `removeBookingItem
 ## Feedback:
 - We currently both urge users to create a new booking and to add items. Adding items should be put up top in the ui. The picker is good but could open as a popup instead of now in lower edge of display. Maybe we could either search in free-text or choose first a category and then show everything in that category. We can remove the "Vill du lägga till mer utrustning? Skapa en ny bokning.". When searching, also non-approved items should show, but not possible to select (maybe when pressing them user should be urges to create a new booking and send to approval)
 - All buttons should be up top. When in pickup we don't need a starta återlämning button but a simple Tillbaka button would be great, moving you to the booking overview instead. In the booking overview we can then see what items are picked up so far, and move into either pickup or return flow
-- 
+- The byt button should still show something even when nothing can be changed into, now it shows "available is not iterable" - but it should be able to handle that case gracfully. it should not auto-assume that we picked something up nonetheless if error reported.
+- Actually, both the tillbaka button and the lägg till utrustning button should probably be floating at bottom of our page.
+- If we start a pickup flow, we should not at same time be able to have a cart up - it should be set into draft, but maybe show some warning when going into booking
+- partial return and partial pickup should be just as natural to do. Complete with tillbaka button to show overview of booking but without action alternatives.
+
+---
+
+## Feedback implementation plan
+
+### F1. AddItemSheet as floating button + modal popup
+
+**Files:** `PickupChecklist.svelte`, `ReturnChecklist.svelte`, `AddItemSheet.svelte`, `+page.svelte`
+
+- Remove the inline `+ Lägg till utrustning` button from the bottom of `PickupChecklist` and `ReturnChecklist`. The button moves to a shared floating bottom bar in `+page.svelte` (see F4).
+- Restyle `AddItemSheet` as a centered modal (fixed overlay) rather than a bottom-of-list insertion.
+- Add category browse alongside free-text search: first show a category list (derived from `commercial_name` groupings or a dedicated endpoint); selecting a category filters results. Free-text search also works directly.
+- Non-approved items appear in search/category results but are visually disabled (opacity, no selection). Tapping them shows a small inline hint: "Kräver godkännande - skapa en ny bokning" with a link to `/browse`.
+- Articles with zero available quantity (fully booked for the date range, or all units unavailable) also appear in results but are disabled and labelled "Ej tillgänglig". Tapping them shows "Skapa en ny bokning för ett annat datum" with a link to `/browse`.
+- Remove the `"Vill du lägga till mer utrustning? Skapa en ny bokning."` hint from `+page.svelte` (the `picked_up` else-branch under the Redigera button).
+
+### F2. Navigation redesign: Tillbaka + overview as hub
+
+**File:** `+page.svelte`
+
+**New flow:**
+- `+page.svelte` is the overview hub. When `booking.status === 'picked_up'` and no pickup/return mode is active, show the booking overview with item pickup statuses and two action buttons: "Fortsätt utlämning" (if any items lack `pickup_status`) and "Påbörja återlämning".
+- `pickupMode` and `returnMode` are local boolean flags (replacing the old `pickupStarted` + `showReturn`). Only one can be active at a time.
+- In pickup mode: render `PickupChecklist`. Floating bottom bar (F4) shows "Tillbaka" and "Lägg till utrustning".
+- In return mode: render `ReturnChecklist`. Floating bottom bar shows "Tillbaka" and "Lägg till utrustning".
+- "Tillbaka" exits the current mode and returns to overview without any API call. Partial progress is preserved.
+- Remove the `Starta återlämning` button that was rendered below `PickupChecklist`.
+- Overview item list: show each item with its `pickup_status` badge (Hämtad / Ej hämtad) so the user can see progress at a glance. Re-use `BookingItemsList` or inline the status display.
+
+### F3. Fix "Byt" crash when no swap candidates
+
+**File:** `PickupChecklist.svelte` - `startSwap()`
+
+- The `listAvailableArticles` call returns an array; if the API returns an error or non-iterable, the spread `[current, ...available]` crashes. Wrap in a try/catch that sets `swapCandidates = [current]` on failure so the UI shows "Inga tillgängliga ersättare" gracefully.
+- If `available` is empty (not an error, just no candidates), the UI already handles `swapCandidates.length <= 1 && swapCandidates[0]?.is_current` - verify this path renders correctly and does not auto-confirm pickup.
+- Do not call `markPickup` or `confirmSwap` automatically when the swap list is empty or errors.
+
+### F4. Floating bottom bar in pickup/return modes
+
+**File:** `+page.svelte`
+
+- When `pickupMode` or `returnMode` is active, render a sticky bottom bar fixed to the bottom of the viewport (e.g. `fixed bottom-0 left-0 right-0 bg-white border-t px-4 py-3 flex gap-3`).
+- In pickup mode bar contains: "Tillbaka" button (left, secondary style) and "Lägg till utrustning" button (right, primary style).
+- In return mode bar contains only: "Tillbaka" button. Adding equipment is not allowed during return.
+- "Lägg till utrustning" opens `AddItemSheet` (state lives in `+page.svelte`, passed as prop or via context).
+- Add `pb-20` (or equivalent) to the checklist wrapper so content is not obscured by the bar.
+
+### F5. Cart - draft warning when starting pickup
+
+**File:** `+page.svelte`, `$lib/stores/cart.svelte`
+
+- On `startPickup()`, before calling `api.pickupBooking`, check if the cart store has an active booking ID that differs from `booking.id`.
+- If yes: show a confirmation dialog (native `confirm()` or inline warning): "Du har en aktiv varukorg. Den kommer att sättas till utkast för att du ska kunna påbörja utlämning. Vill du fortsätta?"
+- On confirm: call `api.updateBooking(cartBookingId, { status: 'draft' })` (or whichever endpoint sets a booking back to draft - check if this exists; if not, use `cancelBooking` is too destructive, so may need a dedicated revert-to-draft endpoint or just clear the cart without API call). Clear the cart store (`activeBookingId = null`). Then proceed with `startPickup`.
+- On cancel: abort, do not start pickup.
+- **Note:** Check whether the API supports reverting a submitted/confirmed booking to draft. If not, just clear the cart store locally and note the booking remains in its current status (the cart UI will no longer show it as active).
+
+### F6. Partial pickup and partial return - overview without action pressure
+
+This is largely covered by F2 (Tillbaka returns to overview). Additional notes:
+
+- The overview does not show a "you must complete" prompt. It shows current state neutrally.
+- "Fortsätt utlämning" only appears if there are items without `pickup_status` (partial pickup possible).
+- "Påbörja återlämning" always appears when `booking.status === 'picked_up'` (per Proposal E - already accepted).
+- If all items are picked up, "Fortsätt utlämning" is hidden (nothing left to pick up).
+- If the user has already started a return (some items have `return_status`), change "Påbörja återlämning" to "Fortsätt återlämning".
+
+---
+
+### Feedback implementation order
+
+1. **F3** - Fix "Byt" crash (isolated, low risk)
+2. **F2 + F4** - Navigation redesign + floating bar (core UX change)
+3. **F1** - AddItemSheet modal + category browse + non-approved items
+4. **F5** - Cart warning on pickup start
+5. **F6** - Verify overview neutrality (mostly falls out of F2)

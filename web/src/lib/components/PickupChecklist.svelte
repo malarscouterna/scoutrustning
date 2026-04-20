@@ -2,7 +2,6 @@
 	import { createApiClient, type BookingItem, type Issue } from '$lib/api/client';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
 	import ReportIssueSheet from '$lib/components/ReportIssueSheet.svelte';
-	import AddItemSheet from '$lib/components/AddItemSheet.svelte';
 
 	interface Props {
 		bookingId: string;
@@ -20,7 +19,6 @@
 	let loading = $state(false);
 	let expandedGroups = $state<Set<string>>(new Set());
 	let issuesByArticle = $state<Record<string, Issue[]>>({});
-	let showAddItemSheet = $state(false);
 
 	// Issue sheet
 	let issueSheetArticle = $state<{ id: string; name: string; isQuantityTracked?: boolean; groupTotal?: number } | null>(null);
@@ -208,11 +206,11 @@
 		swappingItemId = item.id;
 		selectedSwapArticle = '';
 		try {
-			const available = await api.listAvailableArticles(startDate, endDate, {
+			const result = await api.listAvailableArticles(startDate, endDate, {
 				exclude_booking_id: bookingId,
 				commercial_name: item.commercial_name
 			});
-			// Prepend the current booked item so user can choose to keep it
+			const available = Array.isArray(result) ? result : [];
 			const current: SwapCandidate = {
 				id: item.article_id,
 				common_name: item.common_name,
@@ -544,8 +542,6 @@
 	{/each}
 </div>
 
-<button onclick={() => showAddItemSheet = true} class="mt-4 text-sm border rounded px-3 py-2 text-neutral-700">+ Lägg till utrustning</button>
-
 {#if issueSheetArticle}
 	<ReportIssueSheet
 		articleId={issueSheetArticle.id}
@@ -559,12 +555,3 @@
 	/>
 {/if}
 
-{#if showAddItemSheet}
-	<AddItemSheet
-		{bookingId}
-		{startDate}
-		{endDate}
-		onAdded={async () => { await onUpdate(); showAddItemSheet = false; }}
-		onClose={() => showAddItemSheet = false}
-	/>
-{/if}

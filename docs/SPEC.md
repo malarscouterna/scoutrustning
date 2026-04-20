@@ -59,12 +59,13 @@ Article status represents the item's **condition** - an orthogonal concern from 
 | Status | Bookable? | Notes |
 |---|---|---|
 | OK | Yes | Working, no issues |
-| Reported - usable | Yes | Flagged issue, still usable |
+| Reported - usable | Yes | Flagged issue, still usable. Derived from open `usable`-severity issues. |
 | Incoming | Yes (future) | Ordered/planned, bookable for dates after `expected_available_date` |
-| Reported - unusable | No | Flagged issue, not usable |
+| Reported - unusable | No | Flagged issue, not usable. Derived from open `unusable`-severity issues. |
 | Under repair | No (until date) | Out for repair, bookable for dates after `expected_available_date` |
-| Lost | No | Gone |
 | Archived | No | Retired from inventory |
+
+**UPDATE**: The `lost` article status has been removed. Articles confirmed gone should be set to `archived`. Missing items are reported via an issue with `missing` severity instead. Article status is now derived from open issue entities - see Issue Reports below.
 
 ### Packages
 
@@ -122,11 +123,15 @@ Delayed items keep the booking open and the article unavailable. The booker rema
 
 ### Issue Reports
 
-Any authenticated user can report an issue on any article at any time (including while it's loaned out). Reporting sets the article status to "Reported - usable" or "Reported - unusable" and creates an `issue_reported` article event with the description.
+**UPDATE**: Issues are now first-class entities. See [issues-revamp.md](issues-revamp.md) for the full design.
 
-There is no separate issue table. An article with a reported status *is* an open issue. Equipment managers resolve issues by changing the article status back to OK (or to under repair, archived, etc.) via the Ärenden page. Every status change is logged as an article event with an optional comment, forming the full issue history.
+Any authenticated user can report an issue on any article. Issues are stored as `issue_reports` rows with their own lifecycle (`open`, `in_progress`, `resolved`, `archived`), severity (`usable`, `unusable`, `missing`), linked articles, assignees, and event history (comments, status changes).
 
-See `docs/issues-and-events.md` for design details.
+Article status (`reported_usable`, `reported_unusable`) is derived from open issues: the worst-severity open issue on an article determines its status. When all issues resolve, the article returns to `ok`.
+
+Issue reporting is available everywhere via a `ReportIssueSheet` slide-up component: browse page, article detail, and booking return checklist. Each issue has its own URL at `/issues/[id]`. The issues list at `/issues` shows "Mina ärenden" and (for managers) "Övriga ärenden".
+
+Booking return flow: selecting a broken/missing return status opens `ReportIssueSheet` pre-filled with severity and `booking_id`. The issue creation and return status update are separate API calls; the return call no longer sets article status directly.
 
 ### Users
 
@@ -256,24 +261,30 @@ Issue report images are separate - attached to article events, documenting speci
 
 Any leader with access to the booking (creator, or unit member if unit booking) can do pickup.
 
-1. Open confirmed booking
-2. See checklist of reserved articles, filterable and sortable by category and location
-3. See which specific items are assigned and where to find them
-4. Tick off each item as picked up
-5. If an item is unavailable or wrong → swap for another available one
-6. Can add extra items
-7. Confirm pickup
+1. Open confirmed booking; "Starta utlämning" transitions it to `picked_up`
+2. Booking overview shows item pickup progress and two action buttons: "Fortsätt utlämning" and "Påbörja återlämning"
+3. In pickup mode: checklist of reserved articles grouped by status category (ok, reported_usable, reported_unusable)
+4. Quantity-tracked groups show partial state ("X / N st hämtade") as soon as any item is picked up
+5. Individually tracked items: tick off, swap for another available one, or report an issue via "Felanmäl"
+6. Quantity groups with reported_usable items show issue detail; "Hämtad ändå" or "Ta bort från bokning"
+7. "Lägg till utrustning" floating button opens `AddItemSheet` to add items mid-pickup
+8. "Tillbaka" returns to booking overview; partial progress is preserved
+
+**UPDATE**: Booking stays `picked_up` once entered - undoing all pickups no longer reverts to confirmed. Editing a `picked_up` booking is blocked; add items instead via `AddItemSheet`.
 
 ### Leader: Return equipment
 
 Any leader with access to the booking can do (partial) returns. Different leaders can return different items at different times.
 
-1. Open active (picked up) booking
-2. Per-article return checklist, filterable and sortable by category and location
-3. For each article, set return status: OK / Delayed / Broken / Lost
-4. Broken/Lost auto-creates issue report
-5. Delayed sets an expected return date, booking stays open
-6. Confirm return (partial returns keep booking open)
+1. Open active (picked up) booking - overview shows pickup progress
+2. Enter return mode via "Påbörja återlämning"
+3. Per-article return checklist
+4. For each article, set return status: OK / Delayed / Broken / Missing
+5. Broken/Missing confirms the status then opens `ReportIssueSheet` to create an issue report
+6. Delayed sets an expected return date, booking stays open
+7. Confirm return (partial returns keep booking open); "Tillbaka" exits to booking overview
+
+**UPDATE**: `lost` return status removed; replaced by `missing` severity on issue reports. Broken/Missing no longer auto-sets article status - caller creates an issue via `POST /api/v0/issues`.
 
 ### Equipment manager: Inventory
 
@@ -405,7 +416,7 @@ All tables have `group_id` (text, FK → groups). Omitted below for brevity.
 | booking_id | uuid | FK → bookings |
 | article_id | uuid | FK → articles |
 | pickup_status | text | Nullable: picked_up, swapped, not_available |
-| return_status | text | Nullable: returned_ok, delayed, broken, lost, pending |
+| return_status | text | Nullable: returned_ok, delayed, broken, missing, pending |
 | notes | text | |
 
 ### article_events
@@ -439,6 +450,46 @@ All tables have `group_id` (text, FK → groups). Omitted below for brevity.
 | gchat_webhook_url | text | Google Chat webhook URL |
 | default_approval_level | text | Default for new articles: none/low/high |
 | created_at / updated_at | timestamptz | |
+
+### issue_reports
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| group_id | text | FK → groups |
+| title | text | Auto-generated from article name + severity |
+| description | text | |
+| severity | text | usable, unusable, missing |
+| status | text | open, in_progress, resolved, archived |
+| reporter_id | text | FK → users |
+| booking_id | uuid | Nullable, FK → bookings (set when reported via booking flow) |
+| created_at / updated_at | timestamptz | |
+
+### issue_articles
+| Column | Type | Notes |
+|---|---|---|
+| issue_id | uuid | FK → issue_reports |
+| article_id | uuid | FK → articles |
+| group_id | text | FK → groups |
+
+### issue_assignees
+| Column | Type | Notes |
+|---|---|---|
+| issue_id | uuid | FK → issue_reports |
+| user_id | text | FK → users |
+| group_id | text | FK → groups |
+| assigned_at | timestamptz | |
+
+### issue_events
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| issue_id | uuid | FK → issue_reports |
+| group_id | text | FK → groups |
+| actor_id | text | FK → users |
+| event_type | text | comment, status_change, assignment, article_added, article_removed |
+| description | text | |
+| metadata | jsonb | { image_ids?, new_status?, user_id? } |
+| created_at | timestamptz | |
 
 ### audit_log
 | Column | Type | Notes |
@@ -664,7 +715,7 @@ CSV column mapping:
 - Integration tests ✅
 - Frontend: Report issue from article view, manager issue queue, article event history ✅
 - Frontend: Role-aware issues page (leaders see read-only, managers get status controls) ✅
-- **UPDATE**: Replaced separate `issue_reports` table with article status + article events model. See [issues-and-events.md](docs/issues-and-events.md).
+- **UPDATE**: Issues are now first-class entities in `issue_reports`, `issue_articles`, `issue_assignees`, `issue_events` tables (migration 00002). Article status is derived from open issues. `ReportIssueSheet` is the unified reporting entry point across all pages. `/issues/[id]` detail page with comments and status management. See [issues-revamp.md](issues-revamp.md).
 
 #### Step 8: Access control & multi-tenancy tests ✅
 - Dev persona switcher (cookie-based, floating panel, clean path to real OIDC)

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { PageData } from './$types';
 	import { createApiClient, type Article, type AvailabilityGroup } from '$lib/api/client';
+import type { TeamMembership } from '$lib/user';
 	import { statusLabels } from '$lib/labels';
 	import { hasRole, accessAtLeast, canBook } from '$lib/user';
 	import { page } from '$app/stores';
@@ -18,7 +19,7 @@
 	// otherwise fall back to the user's max_access.
 	let cartTeamAccess = $derived.by((): string | null => {
 		if (!cart.active || !cartBookingDates?.teamName) return null;
-		const team = $page.data.user?.teams.find(t => t.team_name === cartBookingDates!.teamName);
+		const team = $page.data.user?.teams.find((t: TeamMembership) => t.team_name === cartBookingDates!.teamName);
 		return team?.access_level ?? null;
 	});
 	let isTrusted = $derived(accessAtLeast(cartTeamAccess ?? $page.data.user?.max_access, 'trusted'));

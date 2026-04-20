@@ -2,18 +2,15 @@
 	import { createApiClient, type BookingItem } from '$lib/api/client';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
 	import ReportIssueSheet from '$lib/components/ReportIssueSheet.svelte';
-	import AddItemSheet from '$lib/components/AddItemSheet.svelte';
 
 	interface Props {
 		bookingId: string;
 		items: BookingItem[];
-		startDate?: string;
-		endDate?: string;
 		onUpdate: () => Promise<BookingItem[]>;
 		onBookingReturned: () => void;
 	}
 
-	let { bookingId, items, startDate = '', endDate = '', onUpdate, onBookingReturned }: Props = $props();
+	let { bookingId, items, onUpdate, onBookingReturned }: Props = $props();
 	const api = createApiClient();
 
 	let error = $state('');
@@ -26,7 +23,6 @@
 	let quantityInputs = $state<Record<string, number>>({});
 	let expandedGroups = $state<Set<string>>(new Set());
 	let completing = $state(false);
-	let showAddItemSheet = $state(false);
 
 	const labels: Record<string, string> = { returned_ok: 'OK', delayed: 'Försenad', reported_usable: 'Problem — användbar', reported_unusable: 'Problem — ej användbar', missing: 'Saknas' };
 	const colors: Record<string, string> = { returned_ok: 'bg-green-100 text-green-800', delayed: 'bg-orange-100 text-orange-800', reported_usable: 'bg-orange-100 text-orange-800', reported_unusable: 'bg-red-100 text-red-800', missing: 'bg-challengerpink-100 text-challengerpink-800' };
@@ -380,8 +376,8 @@
 	{/each}
 </div>
 
-<div class="mt-4 flex flex-wrap items-center gap-3">
-	{#if canComplete}
+{#if canComplete}
+	<div class="mt-4">
 		<button
 			disabled={completing}
 			onclick={async () => {
@@ -397,9 +393,8 @@
 			}}
 			class="bg-green-700 text-white px-4 py-2 rounded text-sm disabled:opacity-50"
 		>Slutför återlämning</button>
-	{/if}
-	<button onclick={() => showAddItemSheet = true} class="text-sm border rounded px-3 py-2 text-neutral-700">+ Lägg till utrustning</button>
-</div>
+	</div>
+{/if}
 
 {#if issueSheetArticle}
 	<ReportIssueSheet
@@ -412,12 +407,3 @@
 	/>
 {/if}
 
-{#if showAddItemSheet}
-	<AddItemSheet
-		{bookingId}
-		{startDate}
-		{endDate}
-		onAdded={async () => { await onUpdate(); showAddItemSheet = false; }}
-		onClose={() => showAddItemSheet = false}
-	/>
-{/if}

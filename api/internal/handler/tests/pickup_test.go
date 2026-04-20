@@ -305,22 +305,19 @@ func TestPickupFlow_UndoPickupStatus(t *testing.T) {
 		}
 	})
 
-	t.Run("booking reverts to confirmed when all pickups undone", func(t *testing.T) {
+	t.Run("booking stays picked_up when all pickups undone", func(t *testing.T) {
 		resp, _ := leader.Get("/api/v0/bookings/" + bookingID)
 		defer resp.Body.Close()
 		var result map[string]any
 		json.NewDecoder(resp.Body).Decode(&result)
 		booking := result["booking"].(map[string]any)
-		if booking["status"] != "confirmed" {
-			t.Errorf("expected confirmed after all pickups undone, got %v", booking["status"])
+		if booking["status"] != "picked_up" {
+			t.Errorf("expected picked_up after all pickups undone, got %v", booking["status"])
 		}
 	})
 
-	t.Run("item can be re-marked after re-entering pickup", func(t *testing.T) {
-		// Re-transition to picked_up state after all pickups were undone
-		resp, _ := leader.Post("/api/v0/bookings/"+bookingID+"/pickup", nil)
-		resp.Body.Close()
-
+	t.Run("item can be re-marked without re-entering pickup", func(t *testing.T) {
+		// Booking stays picked_up so no re-transition needed
 		b, _ := json.Marshal(map[string]any{"pickup_status": "picked_up"})
 		resp, err := leader.Put("/api/v0/bookings/"+bookingID+"/items/"+itemIDs[0]+"/pickup", bytes.NewReader(b))
 		if err != nil {
