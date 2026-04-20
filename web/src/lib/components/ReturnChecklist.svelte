@@ -2,15 +2,18 @@
 	import { createApiClient, type BookingItem } from '$lib/api/client';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
 	import ReportIssueSheet from '$lib/components/ReportIssueSheet.svelte';
+	import AddItemSheet from '$lib/components/AddItemSheet.svelte';
 
 	interface Props {
 		bookingId: string;
 		items: BookingItem[];
-		onUpdate: (items: BookingItem[]) => void;
+		startDate?: string;
+		endDate?: string;
+		onUpdate: () => Promise<BookingItem[]>;
 		onBookingReturned: () => void;
 	}
 
-	let { bookingId, items, onUpdate, onBookingReturned }: Props = $props();
+	let { bookingId, items, startDate = '', endDate = '', onUpdate, onBookingReturned }: Props = $props();
 	const api = createApiClient();
 
 	let error = $state('');
@@ -22,18 +25,18 @@
 	let delayWarning = $state('');
 	let quantityInputs = $state<Record<string, number>>({});
 	let expandedGroups = $state<Set<string>>(new Set());
+	let completing = $state(false);
+	let showAddItemSheet = $state(false);
 
 	const labels: Record<string, string> = { returned_ok: 'OK', delayed: 'Försenad', reported_usable: 'Problem — användbar', reported_unusable: 'Problem — ej användbar', missing: 'Saknas' };
 	const colors: Record<string, string> = { returned_ok: 'bg-green-100 text-green-800', delayed: 'bg-orange-100 text-orange-800', reported_usable: 'bg-orange-100 text-orange-800', reported_unusable: 'bg-red-100 text-red-800', missing: 'bg-challengerpink-100 text-challengerpink-800' };
 
-	// Mapping from return_status to issue severity for the report sheet
 	const returnStatusToSeverity: Record<string, string> = {
 		reported_usable: 'usable',
 		reported_unusable: 'unusable',
 		missing: 'missing'
 	};
 
-	// Issue sheet state - opened after confirming a reportable return status
 	let issueSheetArticle = $state<{ id: string; name: string; severity: string } | null>(null);
 
 	interface QGroup { key: string; name: string; loc: string; place: string; picked: BookingItem[]; notPicked: number; }
@@ -81,6 +84,19 @@
 		return [...map.values()];
 	});
 
+	// Clear stale active form when items update externally
+	$effect(() => {
+		if (activeItemId && !items.find(i => i.id === activeItemId && (!i.return_status || i.return_status === 'pending'))) {
+			activeItemId = null;
+		}
+		if (activeGroupKey) {
+			const g = groups.find(g => g.key === activeGroupKey);
+			if (!g || g.picked.filter(i => !i.return_status || i.return_status === 'pending').length === 0) {
+				activeGroupKey = null;
+			}
+		}
+	});
+
 	function toggleExpand(key: string) {
 		const next = new Set(expandedGroups);
 		if (next.has(key)) next.delete(key); else next.add(key);
@@ -110,14 +126,13 @@
 	let returnedCount = $derived(pickedUp.filter((i) => i.return_status && i.return_status !== 'pending').length);
 	let canComplete = $derived(pickedUp.length > 0 && pickedUp.every((i) => i.return_status && i.return_status !== 'pending' && i.return_status !== 'delayed'));
 
-	async function reload() { onUpdate((await api.getBooking(bookingId)).items); }
 	function flash(key: string) { savedKey = key; setTimeout(() => { if (savedKey === key) savedKey = null; }, 2000); }
 
 	async function setReturn(itemId: string, status: string, extra?: { expected_return_date?: string; notes?: string; image_ids?: string[] }) {
 		error = '';
 		try {
 			await api.updateItemReturn(bookingId, itemId, { return_status: status, ...extra });
-			await reload(); flash(itemId);
+			await onUpdate(); flash(itemId);
 		} catch (e: any) { error = e.message; }
 	}
 
@@ -127,7 +142,6 @@
 		const severity = returnStatusToSeverity[form.status];
 		await setReturn(item.id, form.status, {
 			expected_return_date: form.status === 'delayed' ? form.expectedReturnDate : undefined,
-			// notes/images for reportable statuses are entered via ReportIssueSheet below
 			notes: severity ? undefined : form.notes || undefined,
 		});
 		activeItemId = null;
@@ -149,7 +163,7 @@
 			for (let i = 0; i < count; i++)
 				await api.updateItemReturn(bookingId, unhandled[i].id, { return_status: 'returned_ok' });
 			delete quantityInputs[g.key];
-			await reload(); flash(g.key);
+			await onUpdate(); flash(g.key);
 		} catch (e: any) { error = e.message; }
 	}
 
@@ -165,12 +179,11 @@
 				await api.updateItemReturn(bookingId, unhandled[i].id, {
 					return_status: form.status,
 					expected_return_date: form.status === 'delayed' ? form.expectedReturnDate : undefined,
-					// notes/images for reportable statuses are entered via ReportIssueSheet below
 					notes: severity ? undefined : form.notes || undefined,
 				});
 			activeGroupKey = null;
 			delete quantityInputs[`${g.key}_form`];
-			await reload(); flash(g.key);
+			await onUpdate(); flash(g.key);
 			if (severity && unhandled[0]) {
 				issueSheetArticle = { id: unhandled[0].article_id, name: g.name, severity };
 			}
@@ -181,7 +194,7 @@
 		error = '';
 		try {
 			for (const i of row.items) await api.updateItemReturn(bookingId, i.id, { return_status: '' });
-			await reload();
+			await onUpdate();
 		} catch (e: any) { error = e.message; }
 	}
 
@@ -189,7 +202,8 @@
 		const unhandled = g.picked.filter((i) => !i.return_status || i.return_status === 'pending');
 		activeGroupKey = g.key; activeItemId = null;
 		form = { status: '', expectedReturnDate: lastExpectedDate, notes: '' }; delayWarning = '';
-		quantityInputs[`${g.key}_form`] = quantityInputs[g.key] ?? unhandled.length;
+		// Always reset to current unhandled count (Issue 11)
+		quantityInputs[`${g.key}_form`] = unhandled.length;
 	}
 
 	async function checkConflict(name: string, date: string) {
@@ -366,9 +380,26 @@
 	{/each}
 </div>
 
-{#if canComplete}
-	<button onclick={() => { api.returnBooking(bookingId).then(onBookingReturned).catch((e) => error = e.message); }} class="mt-4 bg-green-700 text-white px-4 py-2 rounded text-sm">Slutför återlämning</button>
-{/if}
+<div class="mt-4 flex flex-wrap items-center gap-3">
+	{#if canComplete}
+		<button
+			disabled={completing}
+			onclick={async () => {
+				completing = true;
+				try {
+					await api.returnBooking(bookingId);
+					onBookingReturned();
+				} catch (e: any) {
+					error = e.message;
+				} finally {
+					completing = false;
+				}
+			}}
+			class="bg-green-700 text-white px-4 py-2 rounded text-sm disabled:opacity-50"
+		>Slutför återlämning</button>
+	{/if}
+	<button onclick={() => showAddItemSheet = true} class="text-sm border rounded px-3 py-2 text-neutral-700">+ Lägg till utrustning</button>
+</div>
 
 {#if issueSheetArticle}
 	<ReportIssueSheet
@@ -378,5 +409,15 @@
 		severity={issueSheetArticle.severity}
 		bookingId={bookingId}
 		onClose={() => issueSheetArticle = null}
+	/>
+{/if}
+
+{#if showAddItemSheet}
+	<AddItemSheet
+		{bookingId}
+		{startDate}
+		{endDate}
+		onAdded={async () => { await onUpdate(); showAddItemSheet = false; }}
+		onClose={() => showAddItemSheet = false}
 	/>
 {/if}

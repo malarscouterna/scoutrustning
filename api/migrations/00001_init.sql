@@ -145,7 +145,6 @@ CREATE TABLE bookings (
     start_date date NOT NULL,
     end_date date NOT NULL,
     notes text NOT NULL DEFAULT '',
-    pre_pickup_status text,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT bookings_status_check CHECK (status IN (

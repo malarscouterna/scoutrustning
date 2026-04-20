@@ -33,12 +33,26 @@ import type { PageData } from './$types';
 		}
 	});
 
+	let reloading = false;
+
+	async function reload(): Promise<BookingItem[]> {
+		reloading = true;
+		try {
+			const result = await api.getBooking(booking.id);
+			items = result.items;
+			return result.items;
+		} finally {
+			reloading = false;
+		}
+	}
+
 	// Poll for updates during active pickup/return
 	let pollTimer: ReturnType<typeof setInterval> | null = null;
 
 	function startPolling() {
 		stopPolling();
 		pollTimer = setInterval(async () => {
+			if (reloading) return;
 			try {
 				const result = await api.getBooking(booking.id);
 				items = result.items;
@@ -86,7 +100,7 @@ import type { PageData } from './$types';
 	};
 
 	let editable = $derived(
-		['draft', 'submitted', 'approved', 'confirmed', 'picked_up'].includes(booking.status)
+		['draft', 'submitted', 'approved', 'confirmed'].includes(booking.status)
 	);
 
 	let cancellable = $derived(
@@ -122,23 +136,18 @@ import type { PageData } from './$types';
 		}
 	}
 
+	let pickupStarted = $state(false);
+
 	async function startPickup() {
 		error = '';
 		try {
 			booking = await api.pickupBooking(booking.id);
+			pickupStarted = true;
 			message = 'Utlämning startad';
 			setTimeout(() => message = '', 4000);
 		} catch (e: any) {
 			error = e.message;
 		}
-	}
-
-	function handlePickupUpdate(updatedItems: BookingItem[]) {
-		items = updatedItems;
-	}
-
-	function handleReturnUpdate(updatedItems: BookingItem[]) {
-		items = updatedItems;
 	}
 
 	function handleBookingReturned() {
@@ -158,10 +167,6 @@ import type { PageData } from './$types';
 			error = e.message;
 		}
 	}
-
-	let anyPickedUp = $derived(
-		items.some((i) => i.pickup_status !== null)
-	);
 
 	let showReturn = $state(false);
 	let approvalMessage = $state('');
@@ -252,8 +257,6 @@ import type { PageData } from './$types';
 				För: <span class="font-medium text-blue-700">{booking.team_name}</span>
 			{:else if booking.used_by_external}
 				För: {booking.used_by_external}
-			{:else}
-				Personlig bokning
 			{/if}
 		</p>
 
@@ -312,6 +315,8 @@ import type { PageData } from './$types';
 		<div class="flex flex-wrap items-center gap-2">
 			{#if editable}
 				<a href="/book?id={booking.id}" class="bg-blue-700 text-white px-4 py-2 rounded text-sm">Redigera</a>
+			{:else if booking.status === 'picked_up'}
+				<p class="text-sm text-neutral-500">Vill du lägga till mer utrustning? <a href="/browse" class="text-blue-700 underline">Skapa en ny bokning.</a></p>
 			{/if}
 			{#if booking.status === 'draft'}
 				<div class="border rounded p-4 mb-3 bg-neutral-50">
@@ -342,12 +347,12 @@ import type { PageData } from './$types';
 	</div>
 
 	<h2 class="font-medium mb-2">Utrustning ({items.length} artiklar)</h2>
-	{#if booking.status === 'picked_up'}
+	{#if booking.status === 'picked_up' || pickupStarted}
 		{#if showReturn}
 			<ReturnChecklist
 				bookingId={booking.id}
 				{items}
-				onUpdate={handleReturnUpdate}
+				onUpdate={reload}
 				onBookingReturned={handleBookingReturned}
 			/>
 		{:else}
@@ -356,11 +361,9 @@ import type { PageData } from './$types';
 				{items}
 				startDate={booking.start_date}
 				endDate={booking.end_date}
-				onUpdate={handlePickupUpdate}
+				onUpdate={reload}
 			/>
-			{#if anyPickedUp}
-				<button onclick={() => showReturn = true} class="mt-4 bg-blue-700 text-white px-4 py-2 rounded text-sm">Starta återlämning</button>
-			{/if}
+			<button onclick={() => showReturn = true} class="mt-4 bg-blue-700 text-white px-4 py-2 rounded text-sm">Starta återlämning</button>
 		{/if}
 	{:else if booking.status === 'returned'}
 		<BookingItemsList {items} />

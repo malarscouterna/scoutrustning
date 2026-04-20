@@ -396,7 +396,6 @@ All tables have `group_id` (text, FK → groups). Omitted below for brevity.
 | start_date | date | |
 | end_date | date | |
 | notes | text | |
-| pre_pickup_status | text | Nullable, stores status before pickup (confirmed/approved) for revert on undo |
 | created_at / updated_at | timestamptz | |
 
 ### booking_items

@@ -86,10 +86,6 @@ When copying a booking, items that aren't available for the new dates should be 
 
 No optimistic locking. Booking detail polls every 10s during active statuses. Consider `updated_at` checks on writes if conflicts become a real problem.
 
-## Pickup - report missing items
-
-When confirming pickup of quantity-tracked items with a count lower than booked, prompt the user to report missing items. Currently the shortfall is silently marked as `not_available`.
-
 ## Manager article swap on active bookings
 
 Managers should be able to swap articles on `confirmed`/`approved` bookings, not just during pickup (`picked_up` status). Use cases: unexpected unavailability, delayed returns from other bookings, inventory rebalancing. When an article is given a new status, managers should be informed about potential unavailability issues.
@@ -113,14 +109,6 @@ Currently shows a warning but doesn't resolve the conflict.
 
 Grouped return UI for quantity-tracked items: one row per product group with count inputs instead of individual rows with identical names.
 
-
-## Pickup state - partial indication
-
-When some but not all items are picked up, visually indicate partial pickup. A "done with pickup" button to confirm even if not all items were collected.
-
-## Pickup state - adding items after full pickup
-
-If new items are added to a fully picked-up booking, revert to partial pickup state.
 
 ## Pickup date validation
 
@@ -231,4 +219,6 @@ The group settings page has too many fields to fit comfortably. Consider a compa
 
 ## Quantity-tracked items - issue reporting during pickup
 
-Allow reporting issues on quantity-tracked items during the pickup flow. The report should be orthogonal to pickup - reporting a broken item doesn't reduce the pickup count (the user grabs a different physical unit instead). Implementation started (state + handler in PickupChecklist, button removed) but deferred because the interaction model needs more thought: should the report target a specific physical article? How does it interact with the pickup count confirmation? The dead code (`startGroupReport`, `confirmGroupReport`, `reportingGroupKey`) is still in PickupChecklist.svelte.
+Quantity groups are now split by status category at pickup: ok items show the count picker, reported_usable items show their issue detail and "Hämtad ändå" / "Ta bort från bokning" options, and reported_unusable items are shown disabled. The "Felanmäl" button on ok rows opens the ReportIssueSheet.
+
+What's still missing: when confirming a count lower than booked, prompt the user to report the shortfall as missing items. Currently the shortfall is silently left with no pickup_status.
