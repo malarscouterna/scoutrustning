@@ -222,3 +222,25 @@ The group settings page has too many fields to fit comfortably. Consider a compa
 Quantity groups are now split by status category at pickup: ok items show the count picker, reported_usable items show their issue detail and "Hämtad ändå" / "Ta bort från bokning" options, and reported_unusable items are shown disabled. The "Felanmäl" button on ok rows opens the ReportIssueSheet.
 
 What's still missing: when confirming a count lower than booked, prompt the user to report the shortfall as missing items. Currently the shortfall is silently left with no pickup_status.
+
+## Pickup/return - svelte-check Node compatibility
+
+`svelte-check` now installed as a devDependency (`^3.x`). However, `@sveltejs/vite-plugin-svelte@7` uses `styleText` from `node:util` (added in Node 20.12), which causes svelte-check to fail when loading `svelte.config.js` on Node 18. Pre-existing TS errors in `BookingItemsList.svelte` and `+page.svelte` (object literal lookup pattern `{{key: val}[expr]}` is parsed incorrectly by svelte-check 3's TS engine) are also unresolved.
+
+Fix options: upgrade to Node 20 on the host, or downgrade `@sveltejs/vite-plugin-svelte` to 6.x (requires verifying compatibility with SvelteKit 2 / Svelte 5).
+
+## Pickup/return - AddItemSheet: non-approved item tap → new booking
+
+When a non-approved item is tapped in `AddItemSheet`, a small inline hint shows "Kräver godkännande - skapa en ny bokning". The link to `/browse` is shown but no pre-fill of article or dates is passed. Could pre-fill the browse page with the cart's dates and the selected article as a search query for a smoother handoff.
+
+## Pickup overview - booking hub page
+
+The booking detail page (`/bookings/[id]`) shows an overview hub when `booking.status === 'picked_up'` with item pickup statuses and action buttons. Consider extracting the item status list into a reusable component (or extending `BookingItemsList`) to avoid duplicating the status badge logic between the overview and the checklist.
+
+## Merge bookings
+
+When a user wants to consolidate two active pickups into one, there is no merge flow. Currently they must create a new booking. Deferred from pickup/return revamp.
+
+## Personal booking deprecation
+
+Managers cannot distinguish personal bookings (no team, no external name) from other users' personal bookings. Options: show creator name always (requires backend name join on booking response), remove personal booking creation from the UI, or deprecate the concept in favour of external-name bookings.

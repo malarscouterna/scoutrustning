@@ -244,8 +244,8 @@
 												{/if}
 												{#if item.return_status && item.return_status !== 'returned_ok' && item.return_status !== 'pending'}
 													<span class="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700"
-													>{{returned_ok: 'OK', delayed: 'Försenad', reported_usable: 'Problem - användbar', reported_unusable: 'Problem - ej användbar', lost: 'Saknas'}[item.return_status] ?? item.return_status}</span>
-												{:else if !item.pickup_status || item.pickup_status === 'lost'}
+													>{({'returned_ok': 'OK', 'delayed': 'Försenad', 'reported_usable': 'Problem - användbar', 'reported_unusable': 'Problem - ej användbar', 'missing': 'Saknas'} as Record<string,string>)[item.return_status!] ?? item.return_status}</span>
+												{:else if !item.pickup_status}
 													<span class="text-xs text-neutral-400">Ej hämtad</span>
 												{/if}
 												{#if editable && onRemove}

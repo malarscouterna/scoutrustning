@@ -146,13 +146,15 @@ Alla som tillhör samma avdelning kan se och hantera bokningen, det behöver int
 
 När det är dags att lämna tillbaka:
 
-1. Öppna bokningen och klicka **Starta återlämning**.
-2. För varje artikel, välj status:
+1. Öppna bokningen. Du ser en översikt med hur många artiklar som är hämtade.
+2. Klicka **Påbörja återlämning** för att gå till återlämningslistan.
+3. För varje artikel, välj status:
    - **OK**: allt i sin ordning.
    - **Försenad**: du har inte artikeln med dig just nu, men den kommer. Bokningen hålls öppen.
-   - **Trasig**: något är sönder. Ett ärende skapas automatiskt.
-   - **Saknas**: artikeln är borta. Ett ärende skapas och artikeln markeras som saknad.
-3. Du behöver inte lämna tillbaka allt på en gång. Delåterlämningar fungerar: en ledare lämnar tre saker på söndag, en annan lämnar resten på måndag.
+   - **Trasig**: något är sönder. Du får fylla i ett ärende direkt.
+   - **Saknas**: artikeln är borta. Du får fylla i ett ärende och artikeln markeras som saknad.
+4. Klicka **Tillbaka** för att återgå till bokningsöversikten utan att avsluta bokningen.
+5. Du behöver inte lämna tillbaka allt på en gång. Delåterlämningar fungerar: en ledare lämnar tre saker på söndag, en annan lämnar resten på måndag.
 
 Bokningen stängs automatiskt när alla artiklar är återlämnade.
 

@@ -274,6 +274,7 @@
 			</label>
 		</div>
 
+		<!-- svelte-ignore a11y_click_events_have_key_events --><!-- svelte-ignore a11y_no_static_element_interactions -->
 		<scout-button
 			type="button"
 			variant="primary"
@@ -343,6 +344,7 @@
 		</div>
 
 		<div class="flex gap-2 mb-6">
+			<!-- svelte-ignore a11y_click_events_have_key_events --><!-- svelte-ignore a11y_no_static_element_interactions -->
 			<scout-button
 				type="button"
 				variant="outlined"
@@ -364,6 +366,7 @@
 		<!-- Primary actions -->
 		<div class="flex flex-wrap gap-3 mt-6">
 			<scout-button type="link" href="/browse" variant="outlined">Lägg till utrustning</scout-button>
+			<!-- svelte-ignore a11y_click_events_have_key_events --><!-- svelte-ignore a11y_no_static_element_interactions -->
 			<scout-button
 				type="button"
 				variant="primary"
@@ -376,6 +379,7 @@
 
 		<!-- Cancel - separated so it's not accidentally tapped -->
 		<div class="mt-6 pt-4 border-t">
+			<!-- svelte-ignore a11y_click_events_have_key_events --><!-- svelte-ignore a11y_no_static_element_interactions -->
 			<scout-button type="button" variant="danger" size="large" onclick={cancelBooking}>
 				Avbryt bokning
 			</scout-button>

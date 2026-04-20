@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { createApiClient, type Article } from '$lib/api/client';
 	import { goto } from '$app/navigation';
+	import { untrack } from 'svelte';
 	import ImageAttachInput from '$lib/components/ImageAttachInput.svelte';
 	import type { PageData } from './$types';
 
@@ -15,8 +16,8 @@
 	let selectedArticle = $state<Article | null>(null);
 	let showResults = $state(false);
 
-	// Form fields
-	let severity = $state(data.prefill.severity);
+	// Form fields - snapshot prefill values once (user edits them in the form)
+	let severity = $state(untrack(() => data.prefill.severity));
 	let description = $state('');
 	let imageIds = $state<string[]>([]);
 	let submitting = $state(false);

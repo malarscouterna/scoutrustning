@@ -410,16 +410,13 @@ Set the pickup status for a single booking item. Booking must be in `picked_up` 
 
 Sending an empty string clears the pickup status (undo). The booking stays in `picked_up` status regardless - undoing all pickups does not revert the booking.
 
-Optionally report the article's condition at pickup via `article_status` and `comment`. When `article_status` is set, `comment` is required.
-- `reported_usable` with `pickup_status: picked_up` - pick it up but flag the issue
-- `reported_unusable` with `pickup_status: lost` - don't pick it up, report as unusable
-- `lost` with `pickup_status: lost` - article is missing
-
 **Body**
 ```json
-{"pickup_status": "picked_up", "article_status": "reported_usable", "comment": "Burner is wobbly", "image_ids": ["uuid"]}
+{"pickup_status": "picked_up"}
 ```
-Valid `pickup_status` values: `picked_up`, `lost`, `""` (undo). `article_status` is optional: `reported_usable`, `reported_unusable`, `lost`. `image_ids` optional array of issue image UUIDs, stored in the article event metadata.
+Valid `pickup_status` values: `picked_up`, `not_available`, `""` (undo).
+
+To report an issue discovered at pickup, use `POST /api/v0/issues` separately after marking the item.
 
 **Response** `200` | `400` | `403` | `404`
 

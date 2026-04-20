@@ -47,7 +47,7 @@ When the user says done or finished, perform this checklist:
 3. **Multi-tenancy**: `group_id` filtering on all new queries.
 4. **Style**: Code matches existing conventions (see `coding-conventions.md`).
 5. **Tests**: New functionality has integration tests covering the happy path. Run the full test suite: `cd api && go test ./internal/handler/tests/ -timeout 180s -count=1 2>&1 && bash ../smoke-test.sh`
-6. **Svelte warnings**: Run `cd web && npx svelte-check` and verify zero warnings on Svelte files. Do not introduce new warnings.
+6. **Svelte warnings**: Run `cd web && PATH=/usr/local/bin:$PATH pnpm run check` and verify zero errors and warnings. Requires Node 24 — the system default `node` is v18 which cannot load the Vite plugin. Do not introduce new warnings.
 7. **Documentation** — verify each of these is still accurate and update if needed:
    - `docs/API.md` — reflects any new or changed endpoints
    - `docs/SPEC.md` — reflects current architecture and decisions

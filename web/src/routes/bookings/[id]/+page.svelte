@@ -3,8 +3,10 @@
 	import BookingItemsList from '$lib/components/BookingItemsList.svelte';
 	import PickupChecklist from '$lib/components/PickupChecklist.svelte';
 	import ReturnChecklist from '$lib/components/ReturnChecklist.svelte';
+	import AddItemSheet from '$lib/components/AddItemSheet.svelte';
 	import { isManager as checkManager } from '$lib/user';
-import type { PageData } from './$types';
+	import { cart } from '$lib/stores/cart.svelte';
+	import type { PageData } from './$types';
 	import { page } from '$app/stores';
 	import { onDestroy } from 'svelte';
 
@@ -46,7 +48,6 @@ import type { PageData } from './$types';
 		}
 	}
 
-	// Poll for updates during active pickup/return
 	let pollTimer: ReturnType<typeof setInterval> | null = null;
 
 	function startPolling() {
@@ -69,11 +70,7 @@ import type { PageData } from './$types';
 
 	$effect(() => {
 		const active = !['returned', 'cancelled', 'rejected'].includes(booking.status);
-		if (active) {
-			startPolling();
-		} else {
-			stopPolling();
-		}
+		if (active) startPolling(); else stopPolling();
 	});
 
 	onDestroy(stopPolling);
@@ -107,6 +104,21 @@ import type { PageData } from './$types';
 		booking.status !== 'returned' && booking.status !== 'cancelled'
 	);
 
+	let anyPickedUp = $derived(items.some((i) => i.pickup_status));
+	let allPickedUp = $derived(items.length > 0 && items.every((i) => i.pickup_status));
+	let anyReturnStarted = $derived(items.some((i) => i.return_status && i.return_status !== 'pending'));
+
+	let pickupMode = $state(false);
+	let returnMode = $state(false);
+	let showAddItemSheet = $state(false);
+
+	// Auto-resume return mode if a return was already started
+	$effect(() => {
+		if (anyReturnStarted && booking.status === 'picked_up') {
+			returnMode = true;
+		}
+	});
+
 	async function submitBooking() {
 		error = '';
 		try {
@@ -136,13 +148,16 @@ import type { PageData } from './$types';
 		}
 	}
 
-	let pickupStarted = $state(false);
-
 	async function startPickup() {
 		error = '';
+		const cartId = cart.id;
+		if (cartId && cartId !== booking.id) {
+			if (!confirm('Du har en aktiv varukorg. Den kommer att rensas när du startar utlämningen. Vill du fortsätta?')) return;
+			cart.clear();
+		}
 		try {
 			booking = await api.pickupBooking(booking.id);
-			pickupStarted = true;
+			pickupMode = true;
 			message = 'Utlämning startad';
 			setTimeout(() => message = '', 4000);
 		} catch (e: any) {
@@ -152,6 +167,7 @@ import type { PageData } from './$types';
 
 	function handleBookingReturned() {
 		booking = { ...booking, status: 'returned' };
+		returnMode = false;
 		message = 'Allt återlämnat!';
 		setTimeout(() => message = '', 4000);
 	}
@@ -160,7 +176,7 @@ import type { PageData } from './$types';
 		error = '';
 		try {
 			booking = { ...booking, status: 'picked_up' };
-			showReturn = true;
+			returnMode = true;
 			message = 'Bokning öppnad igen';
 			setTimeout(() => message = '', 4000);
 		} catch (e: any) {
@@ -168,7 +184,6 @@ import type { PageData } from './$types';
 		}
 	}
 
-	let showReturn = $state(false);
 	let approvalMessage = $state('');
 	let submitMessage = $state('');
 	let forceApproval = $state(false);
@@ -221,17 +236,9 @@ import type { PageData } from './$types';
 			error = e.message;
 		}
 	}
-
-	// Auto-resume return mode if a return was already started
-	$effect(() => {
-		if (items.some((i) => i.return_status && i.return_status !== 'pending')) {
-			showReturn = true;
-		}
-	});
-
 </script>
 
-<div class="max-w-4xl mx-auto p-4">
+<div class="max-w-4xl mx-auto p-4" class:pb-24={pickupMode || returnMode}>
 	{#if message}
 		<div class="bg-green-50 border border-green-200 rounded p-3 mt-4 text-green-800 text-sm">{message}</div>
 	{/if}
@@ -240,135 +247,163 @@ import type { PageData } from './$types';
 		<div class="bg-red-50 border border-red-200 rounded p-3 mt-4 text-red-800 text-sm">{error}</div>
 	{/if}
 
-	<div class="mt-4 mb-6">
-		<div class="flex items-center gap-3 mb-2">
-			<h1 class="text-heading-sm font-bold">
-				{booking.start_date} — {booking.end_date}
-			</h1>
-			<span class="text-sm px-2 py-0.5 rounded {statusColors[booking.status] ?? 'bg-neutral-100'}">
-				{statusLabels[booking.status] ?? booking.status}
-			</span>
-		</div>
-		{#if booking.notes}
-			<p class="text-neutral-600 mb-2">{booking.notes}</p>
-		{/if}
-		<p class="text-sm text-neutral-500 mb-3">
-			{#if booking.team_name}
-				För: <span class="font-medium text-blue-700">{booking.team_name}</span>
-			{:else if booking.used_by_external}
-				För: {booking.used_by_external}
-			{/if}
-		</p>
-
-		{#if bookingEvents.length > 0}
-			<div class="border rounded mb-3 divide-y">
-				{#each bookingEvents as event}
-					<div class="px-4 py-2 text-sm {event.event_type === 'rejected' ? 'bg-red-50' : event.event_type === 'approved' ? 'bg-green-50' : 'bg-neutral-50'}">
-						<div class="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-neutral-500 mb-0.5">
-							<span class="font-medium text-neutral-700">{event.actor_name}</span>
-							<span>
-								{{
-									submitted: 'skickade för godkännande',
-									approved: 'godkände',
-									rejected: 'nekade',
-									cancelled: 'avbokade',
-									note: 'kommenterade'
-								}[event.event_type] ?? event.event_type}
-							</span>
-							<span>{new Date(event.created_at).toLocaleDateString('sv', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
-						</div>
-						{#if event.message}
-							<p class="text-neutral-700">{event.message}</p>
-						{/if}
-					</div>
-				{/each}
+	{#if !pickupMode && !returnMode}
+		<div class="mt-4 mb-6">
+			<div class="flex items-center gap-3 mb-2">
+				<h1 class="text-heading-sm font-bold">
+					{booking.start_date} — {booking.end_date}
+				</h1>
+				<span class="text-sm px-2 py-0.5 rounded {statusColors[booking.status] ?? 'bg-neutral-100'}">
+					{statusLabels[booking.status] ?? booking.status}
+				</span>
 			</div>
-		{/if}
+			{#if booking.notes}
+				<p class="text-neutral-600 mb-2">{booking.notes}</p>
+			{/if}
+			<p class="text-sm text-neutral-500 mb-3">
+				{#if booking.team_name}
+					För: <span class="font-medium text-blue-700">{booking.team_name}</span>
+				{:else if booking.used_by_external}
+					För: {booking.used_by_external}
+				{/if}
+			</p>
 
-		<div class="flex gap-2 mb-3">
-			<input
-				type="text"
-				bind:value={noteMessage}
-				placeholder="Lägg till en kommentar..."
-				class="flex-1 border rounded px-3 py-2 text-sm"
-				onkeydown={(e) => { if (e.key === 'Enter') addNote(); }}
-			/>
-			<button onclick={addNote} disabled={!noteMessage.trim()} class="bg-neutral-700 text-white px-3 py-2 rounded text-sm disabled:opacity-50">Skicka</button>
-		</div>
-
-		{#if isManager && booking.status === 'submitted'}
-			<div class="border rounded p-4 mb-3 bg-orange-50">
-				<p class="text-sm font-medium text-orange-800 mb-2">Denna bokning väntar på godkännande</p>
-				<textarea
-					bind:value={approvalMessage}
-					placeholder="Meddelande till bokaren (valfritt)"
-					class="w-full border rounded px-3 py-2 text-sm mb-2"
-					rows="2"
-				></textarea>
-				<div class="flex gap-2">
-					<button onclick={approveBooking} class="bg-green-700 text-white px-4 py-2 rounded text-sm">Godkänn</button>
-					<button onclick={rejectBooking} class="bg-red-600 text-white px-4 py-2 rounded text-sm">Neka</button>
+			<!-- Action buttons up top -->
+			{#if booking.status === 'picked_up'}
+				<div class="flex flex-wrap gap-2 mb-4">
+					<button onclick={() => pickupMode = true} class="bg-blue-700 text-white px-4 py-2 rounded text-sm">
+						{allPickedUp ? 'Se utlämning' : 'Fortsätt utlämning'}
+					</button>
+					<button onclick={() => returnMode = true} class="bg-green-700 text-white px-4 py-2 rounded text-sm">
+						{anyReturnStarted ? 'Fortsätt återlämning' : 'Påbörja återlämning'}
+					</button>
 				</div>
-			</div>
-		{/if}
-
-		<div class="flex flex-wrap items-center gap-2">
-			{#if editable}
-				<a href="/book?id={booking.id}" class="bg-blue-700 text-white px-4 py-2 rounded text-sm">Redigera</a>
-			{:else if booking.status === 'picked_up'}
-				<p class="text-sm text-neutral-500">Vill du lägga till mer utrustning? <a href="/browse" class="text-blue-700 underline">Skapa en ny bokning.</a></p>
 			{/if}
-			{#if booking.status === 'draft'}
-				<div class="border rounded p-4 mb-3 bg-neutral-50">
+
+			{#if bookingEvents.length > 0}
+				<div class="border rounded mb-3 divide-y">
+					{#each bookingEvents as event}
+						<div class="px-4 py-2 text-sm {event.event_type === 'rejected' ? 'bg-red-50' : event.event_type === 'approved' ? 'bg-green-50' : 'bg-neutral-50'}">
+							<div class="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-neutral-500 mb-0.5">
+								<span class="font-medium text-neutral-700">{event.actor_name}</span>
+								<span>
+									{({'submitted': 'skickade för godkännande', 'approved': 'godkände', 'rejected': 'nekade', 'cancelled': 'avbokade', 'note': 'kommenterade'} as Record<string,string>)[event.event_type] ?? event.event_type}
+								</span>
+								<span>{new Date(event.created_at).toLocaleDateString('sv', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+							</div>
+							{#if event.message}
+								<p class="text-neutral-700">{event.message}</p>
+							{/if}
+						</div>
+					{/each}
+				</div>
+			{/if}
+
+			<div class="flex gap-2 mb-3">
+				<input
+					type="text"
+					bind:value={noteMessage}
+					placeholder="Lägg till en kommentar..."
+					class="flex-1 border rounded px-3 py-2 text-sm"
+					onkeydown={(e) => { if (e.key === 'Enter') addNote(); }}
+				/>
+				<button onclick={addNote} disabled={!noteMessage.trim()} class="bg-neutral-700 text-white px-3 py-2 rounded text-sm disabled:opacity-50">Skicka</button>
+			</div>
+
+			{#if isManager && booking.status === 'submitted'}
+				<div class="border rounded p-4 mb-3 bg-orange-50">
+					<p class="text-sm font-medium text-orange-800 mb-2">Denna bokning väntar på godkännande</p>
 					<textarea
-						bind:value={submitMessage}
-						placeholder="Meddelande till utrustningsansvarig (valfritt)"
+						bind:value={approvalMessage}
+						placeholder="Meddelande till bokaren (valfritt)"
 						class="w-full border rounded px-3 py-2 text-sm mb-2"
 						rows="2"
 					></textarea>
-					<div class="flex items-center gap-3">
-						<button onclick={submitBooking} class="bg-green-700 text-white px-4 py-2 rounded text-sm">Skicka bokning</button>
-						<label class="flex items-center gap-1.5 text-sm text-neutral-600">
-							<input type="checkbox" bind:checked={forceApproval} />
-							Vill ha bekräftelse från ansvarig
-						</label>
+					<div class="flex gap-2">
+						<button onclick={approveBooking} class="bg-green-700 text-white px-4 py-2 rounded text-sm">Godkänn</button>
+						<button onclick={rejectBooking} class="bg-red-600 text-white px-4 py-2 rounded text-sm">Neka</button>
 					</div>
 				</div>
 			{/if}
-			{#if booking.status === 'confirmed' || booking.status === 'approved'}
-				<button onclick={startPickup} class="bg-blue-700 text-white px-4 py-2 rounded text-sm">Starta utlämning</button>
-			{/if}
-			{#if cancellable}
-				<button onclick={cancelBooking} class="text-sm text-red-600 underline">
-					{booking.status === 'draft' ? 'Ta bort utkast' : 'Avboka'}
-				</button>
-			{/if}
-		</div>
-	</div>
 
-	<h2 class="font-medium mb-2">Utrustning ({items.length} artiklar)</h2>
-	{#if booking.status === 'picked_up' || pickupStarted}
-		{#if showReturn}
-			<ReturnChecklist
-				bookingId={booking.id}
-				{items}
-				onUpdate={reload}
-				onBookingReturned={handleBookingReturned}
-			/>
+			<div class="flex flex-wrap items-center gap-2">
+				{#if editable}
+					<a href="/book?id={booking.id}" class="bg-blue-700 text-white px-4 py-2 rounded text-sm">Redigera</a>
+				{/if}
+				{#if booking.status === 'draft'}
+					<div class="border rounded p-4 mb-3 bg-neutral-50">
+						<textarea
+							bind:value={submitMessage}
+							placeholder="Meddelande till utrustningsansvarig (valfritt)"
+							class="w-full border rounded px-3 py-2 text-sm mb-2"
+							rows="2"
+						></textarea>
+						<div class="flex items-center gap-3">
+							<button onclick={submitBooking} class="bg-green-700 text-white px-4 py-2 rounded text-sm">Skicka bokning</button>
+							<label class="flex items-center gap-1.5 text-sm text-neutral-600">
+								<input type="checkbox" bind:checked={forceApproval} />
+								Vill ha bekräftelse från ansvarig
+							</label>
+						</div>
+					</div>
+				{/if}
+				{#if booking.status === 'confirmed' || booking.status === 'approved'}
+					<button onclick={startPickup} class="bg-blue-700 text-white px-4 py-2 rounded text-sm">Starta utlämning</button>
+				{/if}
+				{#if cancellable}
+					<button onclick={cancelBooking} class="text-sm text-red-600 underline">
+						{booking.status === 'draft' ? 'Ta bort utkast' : 'Avboka'}
+					</button>
+				{/if}
+			</div>
+		</div>
+
+		<h2 class="font-medium mb-2">Utrustning ({items.length} artiklar)</h2>
+		{#if booking.status === 'returned'}
+			<BookingItemsList {items} />
+			<button onclick={reopenBooking} class="mt-4 text-sm text-blue-700 underline">Öppna igen</button>
 		{:else}
-			<PickupChecklist
-				bookingId={booking.id}
-				{items}
-				startDate={booking.start_date}
-				endDate={booking.end_date}
-				onUpdate={reload}
-			/>
-			<button onclick={() => showReturn = true} class="mt-4 bg-blue-700 text-white px-4 py-2 rounded text-sm">Starta återlämning</button>
+			<BookingItemsList {items} />
 		{/if}
-	{:else if booking.status === 'returned'}
-		<BookingItemsList {items} />
-		<button onclick={reopenBooking} class="mt-4 text-sm text-blue-700 underline">Öppna igen</button>
-	{:else}
-		<BookingItemsList {items} />
+	{:else if pickupMode}
+		<PickupChecklist
+			bookingId={booking.id}
+			{items}
+			startDate={booking.start_date}
+			endDate={booking.end_date}
+			onUpdate={reload}
+		/>
+	{:else if returnMode}
+		<ReturnChecklist
+			bookingId={booking.id}
+			{items}
+			onUpdate={reload}
+			onBookingReturned={handleBookingReturned}
+		/>
 	{/if}
 </div>
+
+{#if pickupMode || returnMode}
+	<div class="fixed bottom-0 left-0 right-0 bg-white border-t px-4 py-3 flex gap-3 z-40 shadow-lg">
+		<button
+			onclick={() => { pickupMode = false; returnMode = false; }}
+			class="border rounded px-4 py-2 text-sm text-neutral-700"
+		>← Tillbaka</button>
+		{#if pickupMode}
+			<button
+				onclick={() => showAddItemSheet = true}
+				class="bg-blue-700 text-white rounded px-4 py-2 text-sm"
+			>+ Lägg till utrustning</button>
+		{/if}
+	</div>
+{/if}
+
+{#if showAddItemSheet}
+	<AddItemSheet
+		bookingId={booking.id}
+		startDate={booking.start_date}
+		endDate={booking.end_date}
+		onAdded={async () => { await reload(); showAddItemSheet = false; }}
+		onClose={() => showAddItemSheet = false}
+	/>
+{/if}
