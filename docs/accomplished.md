@@ -8,6 +8,52 @@ Newest first.
 
 ---
 
+## 2026-04-20
+
+### Pickup / return flow revamp
+
+See [pickup-return-revamp.md](pickup-return-revamp.md) for the full design doc.
+
+Fixed 13 UX and state-management bugs in the pickup/return flow, plus 5 simplification proposals.
+
+**Backend changes:**
+
+- `UpdateItemPickup` no longer auto-reverts the booking to `confirmed`/`approved` when all pickups are undone. Once in `picked_up`, the booking stays there until cancelled or returned (Issue 3).
+- `PUT /bookings/{id}` (metadata update) now blocks edits when status is `picked_up`. Item-level add/remove still allowed. Prevents the approval re-trigger bug when editing a picked-up booking (Issue 4).
+- Removed `pre_pickup_status` column from `bookings` table (migration `00003_drop_pre_pickup_status.sql`). Removed the three sqlc queries (`SetPrePickupStatus`, `GetPrePickupStatus`, `NoItemsPickedUp`) and updated generated code (Proposal B).
+
+**Frontend `+page.svelte`:**
+
+- Lifted `reload()` into the parent page. Both checklists receive `onUpdate: () => Promise<BookingItem[]>` instead of doing their own `api.getBooking` calls. Parent owns a `reloading` flag; poll skips if a reload is in flight (Issues 13, Proposal C).
+- Added `pickupStarted` flag - keeps the pickup checklist visible even if a poll returns an unexpected status (Issue 5).
+- "Redigera" button hidden for `picked_up` bookings; replaced with a hint linking to `/browse` (Issue 4).
+- Removed the "Personlig bokning" label - nothing shown when no team or external name (Issue 6).
+- "Starta återlämning" always shown when booking is `picked_up` - no longer gated on `anyPickedUp` (Proposal E).
+
+**Frontend `PickupChecklist.svelte`:**
+
+- Quantity groups now split by status category: `ok` (count picker), `reported_usable` (amber, expandable with issue title/description/severity, "Hämtad ändå" + "Ta bort från bokning"), `reported_unusable` (red, disabled) (Issue 1).
+- Partial pickup state visible mid-flow: "X / N st hämtade" shown as soon as any item is picked, picker remains to adjust (Issue 2).
+- `markQuantityGroup` now uses the return value from `onUpdate()` directly for the stale-items bug fix (Issue 7).
+- Removed `loadExtraAvailability` and the `max` cap - count picker uncapped, API rejects if unavailable (Issue 8, Proposal A).
+- Issue detail expand for `reported_usable` rows: fetches `GET /api/v0/issues?article_id=...&status=open` on expand.
+- "Ta bort från bokning" option on reported_usable and reported_unusable sub-groups (calls existing `removeBookingItem` per item).
+- "Lägg till utrustning" button opens new `AddItemSheet`.
+
+**Frontend `ReturnChecklist.svelte`:**
+
+- `$effect` clears `activeItemId`/`activeGroupKey` when items update externally and the active form no longer has an unhandled item (Issue 9).
+- "Slutför återlämning" guarded with `completing` flag - disabled while in flight, prevents double-tap 400 (Issue 10).
+- `openGroupForm` always resets `quantityInputs[key_form]` to the current unhandled count (Issue 11).
+- `onUpdate` signature changed to `() => Promise<BookingItem[]>` matching parent (Proposal C).
+- "Lägg till utrustning" button opens `AddItemSheet`.
+
+**New: `AddItemSheet.svelte`:**
+
+Slide-up sheet for adding items during pickup or return. Article search with 300 ms debounce against `GET /api/v0/articles/availability`, +/- quantity picker, inline availability count, approval level warning. Calls existing `addBookingItems` on confirm (Proposal A).
+
+---
+
 ## 2026-04-18
 
 ### Issues revamp - frontend (Phase 1 complete)
@@ -175,7 +221,7 @@ CSV import supports a `count` column — rows with count > 1 create multiple qua
 
 - Article event history supports `?limit=N` with "show all" in the UI
 - Background goroutine cleans up empty draft bookings after 48 hours
-- Undoing all pickups reverts booking to pre-pickup status via `pre_pickup_status` column
+- ~~Undoing all pickups reverts booking to pre-pickup status via `pre_pickup_status` column~~ **UPDATE (2026-04-20):** This behaviour and column were removed - see pickup/return flow revamp entry.
 
 ### Shared test container
 

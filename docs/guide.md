@@ -132,9 +132,13 @@ Du kan skriva ett meddelande till utrustningsansvarig när du skickar bokningen,
 När din bokning är bekräftad (eller godkänd) kan du starta utlämningen:
 
 1. Öppna bokningen och klicka **Starta utlämning**.
-2. Du ser en checklista med alla artiklar: vilka specifika saker du ska hämta och var de finns (t.ex. "Stormkök 10, hylla 3 i Hajkförrådet").
+2. Du ser en checklista med alla artiklar. Individuellt spårade artiklar visas med namn och plats. Antalsspårade artiklar visas som grupper med en räknare.
 3. Bocka av varje artikel när du hämtar den.
-4. Om en artikel inte finns där den ska, eller om du vill byta till en annan, använd **byt**-funktionen för att välja en annan tillgänglig artikel av samma typ.
+4. Om en artikel är felrapporterad visas den med en färgmarkering: orange (kan användas) eller röd (ej tillgänglig). Orange artiklar kan bockas av med "Hämtad ändå" eller tas bort från bokningen. Röda artiklar kan inte hämtas ut.
+5. Om en individuellt spårad artikel inte finns där den ska, använd **byt**-funktionen för att välja en annan tillgänglig artikel av samma typ.
+6. Behöver du hämta fler saker? Klicka **Lägg till utrustning** för att söka och lägga till fler artiklar direkt i utlämningsläget.
+
+Bokningen kan inte redigeras (datum, enhet, anteckningar) efter att utlämningen startats. Vill du lägga till mer utrustning skapar du en ny bokning.
 
 Alla som tillhör samma avdelning kan se och hantera bokningen, det behöver inte vara samma person som skapade den. Det gäller hela flödet: se bokningsdetaljer, följa godkännandekonversationen, hämta ut, och lämna tillbaka. Det går till och med att vara inne i bokningen flera samtidigt, ifall ni står tillsammans för att hämta ut saker eller har delat upp er på olika förråd.
 

@@ -274,7 +274,7 @@ Get booking with its items (including article details).
 ```
 
 ### `PUT /api/v0/bookings/{id}`
-Update a booking. Allowed on draft, submitted, approved, confirmed, and picked_up bookings. Access: creator, team members, or equipment manager.
+Update a booking. Allowed on draft, submitted, approved, and confirmed bookings. Blocked once the booking is in `picked_up` status - use item-level endpoints instead. Access: creator, team members, or equipment manager.
 
 All fields are optional - only provided fields are updated. If dates change, all existing items are re-validated against availability.
 
@@ -401,14 +401,14 @@ Create a new draft booking with the same team, notes, and items as the source. D
 ```
 
 ### `POST /api/v0/bookings/{id}/pickup`
-Transition a confirmed or approved booking to `picked_up`. Saves the current status (`confirmed` or `approved`) as `pre_pickup_status` so it can be restored if all pickups are undone. Access: creator, team members, or equipment manager.
+Transition a confirmed or approved booking to `picked_up`. Once in `picked_up` status, the booking stays there until explicitly cancelled or all items are returned - undoing individual item pickups does not revert the booking status. Access: creator, team members, or equipment manager.
 
 **Response** `200` | `400` | `403` | `404`
 
 ### `PUT /api/v0/bookings/{id}/items/{itemId}/pickup`
 Set the pickup status for a single booking item. Booking must be in `picked_up` status. Access: creator, team members, or equipment manager. Logs a `picked_up` article event with the acting user.
 
-Sending an empty string clears the pickup status (undo). If all items in the booking have their pickup status cleared, the booking automatically reverts to its pre-pickup status (`confirmed` or `approved`).
+Sending an empty string clears the pickup status (undo). The booking stays in `picked_up` status regardless - undoing all pickups does not revert the booking.
 
 Optionally report the article's condition at pickup via `article_status` and `comment`. When `article_status` is set, `comment` is required.
 - `reported_usable` with `pickup_status: picked_up` - pick it up but flag the issue

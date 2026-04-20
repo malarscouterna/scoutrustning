@@ -66,7 +66,6 @@ type Booking struct {
 	StartDate             pgtype.Date        `json:"start_date"`
 	EndDate               pgtype.Date        `json:"end_date"`
 	Notes                 string             `json:"notes"`
-	PrePickupStatus       pgtype.Text        `json:"pre_pickup_status"`
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 }

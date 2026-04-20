@@ -1,14 +1,15 @@
 <script lang="ts">
-	import { createApiClient, type BookingItem } from '$lib/api/client';
+	import { createApiClient, type BookingItem, type Issue } from '$lib/api/client';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
 	import ReportIssueSheet from '$lib/components/ReportIssueSheet.svelte';
+	import AddItemSheet from '$lib/components/AddItemSheet.svelte';
 
 	interface Props {
 		bookingId: string;
 		items: BookingItem[];
 		startDate: string;
 		endDate: string;
-		onUpdate: (items: BookingItem[]) => void;
+		onUpdate: () => Promise<BookingItem[]>;
 	}
 
 	let { bookingId, items, startDate, endDate, onUpdate }: Props = $props();
@@ -18,6 +19,8 @@
 	let error = $state('');
 	let loading = $state(false);
 	let expandedGroups = $state<Set<string>>(new Set());
+	let issuesByArticle = $state<Record<string, Issue[]>>({});
+	let showAddItemSheet = $state(false);
 
 	// Issue sheet
 	let issueSheetArticle = $state<{ id: string; name: string; isQuantityTracked?: boolean; groupTotal?: number } | null>(null);
@@ -47,10 +50,20 @@
 		return status === 'reported_unusable' || status === 'reported_missing';
 	}
 
-	interface QuantityGroup {
+	type StatusCategory = 'ok' | 'reported_usable' | 'reported_unusable';
+
+	function statusCategory(articleStatus: string | null | undefined): StatusCategory {
+		if (isUnusable(articleStatus)) return 'reported_unusable';
+		if (articleStatus === 'reported_usable') return 'reported_usable';
+		return 'ok';
+	}
+
+	interface QuantitySubGroup {
 		commercialName: string;
 		locationName: string;
 		place: string;
+		category: StatusCategory;
+		key: string;
 		items: BookingItem[];
 	}
 
@@ -64,16 +77,26 @@
 	}
 
 	let trackedItems = $derived(items.filter((i) => i.individually_tracked));
-	let quantityGroups = $derived.by(() => {
-		const map = new Map<string, QuantityGroup>();
+	let quantitySubGroups = $derived.by(() => {
+		const map = new Map<string, QuantitySubGroup>();
 		for (const item of items) {
 			if (item.individually_tracked) continue;
-			const key = `${item.commercial_name}|${item.location_name}`;
+			const cat = statusCategory(item.article_status);
+			const key = `${item.commercial_name}|${item.location_name}|${cat}`;
 			const existing = map.get(key);
 			if (existing) existing.items.push(item);
-			else map.set(key, { commercialName: item.commercial_name, locationName: item.location_name, place: item.place, items: [item] });
+			else map.set(key, {
+				commercialName: item.commercial_name,
+				locationName: item.location_name,
+				place: item.place,
+				category: cat,
+				key,
+				items: [item]
+			});
 		}
-		return [...map.values()];
+		// Sort: ok first, then reported_usable, then reported_unusable
+		const order: StatusCategory[] = ['ok', 'reported_usable', 'reported_unusable'];
+		return [...map.values()].sort((a, b) => order.indexOf(a.category) - order.indexOf(b.category));
 	});
 
 	let trackedGroups = $derived.by(() => {
@@ -105,55 +128,78 @@
 
 	let checkedCount = $derived(items.filter((i) => i.pickup_status !== null).length);
 
-	async function reload() {
-		const result = await api.getBooking(bookingId);
-		onUpdate(result.items);
-		return result.items;
-	}
-
 	async function markPickup(itemId: string, status: string) {
 		error = '';
 		try {
 			await api.updateItemPickup(bookingId, itemId, status);
-			await reload();
+			await onUpdate();
 		} catch (e: any) {
 			error = e.message;
 		}
 	}
 
-	async function markQuantityGroup(group: QuantityGroup, pickedCount: number) {
+	async function markQuantityGroup(group: QuantitySubGroup, pickedCount: number) {
 		error = '';
 		try {
 			const extraNeeded = pickedCount - group.items.length;
 			if (extraNeeded > 0) {
 				await api.addBookingItems(bookingId, group.commercialName, extraNeeded, group.locationName);
-				await reload();
-				const updatedItems = items.filter(
-					(i) => !i.individually_tracked && i.commercial_name === group.commercialName && i.location_name === group.locationName
+				const freshItems = await onUpdate();
+				const updatedItems = freshItems.filter(
+					(i) => !i.individually_tracked &&
+						i.commercial_name === group.commercialName &&
+						i.location_name === group.locationName &&
+						statusCategory(i.article_status) === 'ok'
 				);
 				for (let i = 0; i < updatedItems.length; i++) {
 					await api.updateItemPickup(bookingId, updatedItems[i].id, i < pickedCount ? 'picked_up' : '');
 				}
+				await onUpdate();
 			} else {
 				for (let i = 0; i < group.items.length; i++) {
 					await api.updateItemPickup(bookingId, group.items[i].id, i < pickedCount ? 'picked_up' : '');
 				}
+				await onUpdate();
 			}
-			await reload();
 		} catch (e: any) {
 			error = e.message;
 		}
 	}
 
-	async function resetQuantityGroup(group: QuantityGroup) {
+	async function resetQuantityGroup(group: QuantitySubGroup) {
 		error = '';
 		try {
 			for (const item of group.items) {
 				if (item.pickup_status) await api.updateItemPickup(bookingId, item.id, '');
 			}
-			await reload();
+			await onUpdate();
 		} catch (e: any) {
 			error = e.message;
+		}
+	}
+
+	async function removeFromBooking(group: QuantitySubGroup) {
+		error = '';
+		loading = true;
+		try {
+			for (const item of group.items) {
+				await api.removeBookingItem(bookingId, item.id);
+			}
+			await onUpdate();
+		} catch (e: any) {
+			error = e.message;
+		} finally {
+			loading = false;
+		}
+	}
+
+	async function loadIssuesForArticle(articleId: string) {
+		if (issuesByArticle[articleId]) return;
+		try {
+			const issues = await api.listIssues({ article_id: articleId, status: 'open' });
+			issuesByArticle = { ...issuesByArticle, [articleId]: issues };
+		} catch {
+			issuesByArticle = { ...issuesByArticle, [articleId]: [] };
 		}
 	}
 
@@ -195,12 +241,11 @@
 		loading = true;
 		try {
 			if (selectedSwapArticle === currentArticleId) {
-				// User chose to pick up the reported item anyway
 				await api.updateItemPickup(bookingId, itemId, 'picked_up');
 			} else {
 				await api.swapItem(bookingId, itemId, selectedSwapArticle);
 			}
-			await reload();
+			await onUpdate();
 			cancelSwap();
 		} catch (e: any) {
 			error = e.message;
@@ -210,64 +255,23 @@
 	}
 
 	let quantityInputs = $state<Record<string, number>>({});
-	let extraAvailable = $state<Record<string, number>>({});
 
-	function groupKey(group: QuantityGroup): string {
-		return `${group.commercialName}|${group.locationName}`;
-	}
-
-	function groupPickedCount(group: QuantityGroup): number {
+	function groupPickedCount(group: QuantitySubGroup): number {
 		return group.items.filter((i) => i.pickup_status === 'picked_up' || i.pickup_status === 'swapped').length;
 	}
 
-	function groupIsDone(group: QuantityGroup): boolean {
+	function groupIsDone(group: QuantitySubGroup): boolean {
 		return group.items.every((i) => i.pickup_status !== null);
 	}
 
-	function groupMax(group: QuantityGroup): number {
-		return group.items.length + (extraAvailable[groupKey(group)] ?? 0);
+	function groupHasAnyPickedUp(group: QuantitySubGroup): boolean {
+		return group.items.some((i) => i.pickup_status !== null);
 	}
-
-	interface GroupStatusCounts {
-		unusable: number;   // reported_unusable or reported_missing
-		usable: number;     // reported_usable
-		ok: number;         // everything else
-	}
-
-	function groupStatusCounts(group: QuantityGroup): GroupStatusCounts {
-		let unusable = 0, usable = 0, ok = 0;
-		for (const i of group.items) {
-			if (isUnusable(i.article_status)) unusable++;
-			else if (i.article_status === 'reported_usable') usable++;
-			else ok++;
-		}
-		return { unusable, usable, ok };
-	}
-
-	async function loadExtraAvailability() {
-		for (const group of quantityGroups) {
-			const key = groupKey(group);
-			try {
-				const available = await api.listAvailableArticles(startDate, endDate, {
-					exclude_booking_id: bookingId,
-					commercial_name: group.commercialName
-				});
-				extraAvailable[key] = available.length;
-			} catch {
-				extraAvailable[key] = 0;
-			}
-		}
-	}
-
-	$effect(() => {
-		if (quantityGroups.length > 0) loadExtraAvailability();
-	});
 
 	async function onReported(articleId: string) {
-		const freshItems = await reload();
+		const freshItems = await onUpdate();
 		if (pendingSwapArticleId === articleId) {
 			pendingSwapArticleId = null;
-			// Use fresh items directly — reactive prop may not have flushed yet
 			const item = freshItems.find((i) => i.article_id === articleId && !i.pickup_status);
 			if (item) await startSwap(item);
 		}
@@ -301,64 +305,137 @@
 <p class="text-sm text-neutral-500 mb-3">Avprickad: {checkedCount} / {items.length}</p>
 
 <div class="space-y-1">
-	<!-- Quantity-tracked groups -->
-	{#each quantityGroups as group}
+	<!-- Quantity-tracked sub-groups (split by status category) -->
+	{#each quantitySubGroups as group}
 		{@const picked = groupPickedCount(group)}
 		{@const done = groupIsDone(group)}
+		{@const anyPickedUp = groupHasAnyPickedUp(group)}
 		{@const rep = group.items[0]}
 		{@const qImageIds = rep?.image_ids ?? []}
-		{@const qKey = groupKey(group)}
-		{@const expandable = hasExpandable(qImageIds, rep?.article_description ?? '', rep?.article_instructions ?? '')}
-		{@const expanded = expandedGroups.has(qKey)}
-		{@const counts = groupStatusCounts(group)}
-		<div class="border rounded" class:bg-green-50={done && picked > 0} class:bg-orange-50={done && picked === 0}>
+		{@const expandable = group.category === 'reported_usable' || hasExpandable(qImageIds, rep?.article_description ?? '', rep?.article_instructions ?? '')}
+		{@const expanded = expandedGroups.has(group.key)}
+		{@const isUnusableGroup = group.category === 'reported_unusable'}
+		{@const isUsableGroup = group.category === 'reported_usable'}
+		<div class="border rounded"
+			class:bg-green-50={done && picked > 0 && !isUnusableGroup && !isUsableGroup}
+			class:bg-orange-50={(done && picked === 0 && !isUnusableGroup) || isUsableGroup}
+			class:bg-red-50={isUnusableGroup}
+		>
 			<div class="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
-				<button type="button" onclick={() => expandable && toggleExpand(qKey)} class="flex-1 min-w-[8rem] text-left" class:cursor-pointer={expandable} class:cursor-default={!expandable}>
+				<button type="button"
+					onclick={() => {
+						if (isUsableGroup && rep) loadIssuesForArticle(rep.article_id);
+						if (expandable) toggleExpand(group.key);
+					}}
+					class="flex-1 min-w-[8rem] text-left"
+					class:cursor-pointer={expandable}
+					class:cursor-default={!expandable}
+				>
 					<div class="font-medium text-sm">
 						{group.commercialName}
+						{#if isUnusableGroup}
+							<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded ml-1">Ej tillgänglig</span>
+						{:else if isUsableGroup}
+							<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded ml-1">Felrapporterad</span>
+						{/if}
 						{#if expandable}<span class="text-xs text-neutral-400 ml-1">{expanded ? '▲' : '▼'}</span>{/if}
 					</div>
 					<div class="text-xs text-neutral-500">
 						{group.locationName}{group.place ? ` · ${group.place}` : ''}
-						{#if counts.unusable > 0}<span class="text-red-600 ml-1">· {counts.unusable} ej tillgänglig{counts.unusable > 1 ? 'a' : ''}</span>{/if}
-						{#if counts.usable > 0}<span class="text-orange-600 ml-1">· {counts.usable} felrapporterad{counts.usable > 1 ? 'e' : ''}</span>{/if}
+						· {group.items.length} st
 					</div>
 				</button>
 
 				<div class="flex flex-wrap items-center gap-2">
-					{#if done}
-						<span class="text-sm font-medium" class:text-green-800={picked > 0} class:text-orange-800={picked === 0}>
-							{picked} / {group.items.length} st hämtade
-						</span>
-						<button onclick={() => resetQuantityGroup(group)} class="text-xs text-neutral-400 hover:text-neutral-600">Ångra</button>
-					{:else}
-						{@const key = groupKey(group)}
-						{@const max = groupMax(group)}
-						<span class="text-sm text-neutral-600">Hämta {group.items.length} st</span>
-						<input
-							type="number"
-							min="0"
-							{max}
-							value={quantityInputs[key] ?? group.items.length}
-							oninput={(e) => quantityInputs[key] = parseInt(e.currentTarget.value) || 0}
-							class="w-16 text-center border rounded px-2 py-1 text-sm"
-						/>
-						<button
-							onclick={() => markQuantityGroup(group, quantityInputs[key] ?? group.items.length)}
-							class="text-xs bg-green-700 text-white px-3 py-1 rounded"
-						>Bekräfta</button>
-						{#if (extraAvailable[key] ?? 0) > 0}
-							<span class="text-xs text-neutral-400">max {max}</span>
+					{#if isUnusableGroup}
+						<!-- Cannot be picked up -->
+					{:else if isUsableGroup}
+						<!-- reported_usable: pickup or remove -->
+						{#if !done}
+							<button
+								onclick={() => markQuantityGroup(group, group.items.length)}
+								class="text-xs bg-orange-600 text-white px-3 py-1 rounded"
+								disabled={loading}
+							>Hämtad ändå</button>
+							<button
+								onclick={() => removeFromBooking(group)}
+								class="text-xs text-red-600 underline"
+								disabled={loading}
+							>Ta bort från bokning</button>
+						{:else}
+							<span class="text-sm font-medium text-orange-800">
+								{picked} / {group.items.length} st hämtade
+							</span>
+							<button onclick={() => resetQuantityGroup(group)} class="text-xs text-neutral-400 hover:text-neutral-600">Ångra</button>
 						{/if}
+					{:else}
+						<!-- ok group: count picker, show partial state if any picked up -->
+						{#if anyPickedUp}
+							<span class="text-sm font-medium" class:text-green-800={picked > 0} class:text-orange-800={picked === 0}>
+								{picked} / {group.items.length} st hämtade
+							</span>
+						{/if}
+						{#if !done}
+							{@const key = group.key}
+							<span class="text-sm text-neutral-600">Hämta {group.items.length} st</span>
+							<input
+								type="number"
+								min="0"
+								value={quantityInputs[key] ?? group.items.length}
+								oninput={(e) => quantityInputs[key] = parseInt(e.currentTarget.value) || 0}
+								class="w-16 text-center border rounded px-2 py-1 text-sm"
+							/>
+							<button
+								onclick={() => markQuantityGroup(group, quantityInputs[group.key] ?? group.items.length)}
+								class="text-xs bg-green-700 text-white px-3 py-1 rounded"
+							>Bekräfta</button>
+						{:else if !anyPickedUp}
+							<span class="text-sm font-medium text-orange-800">
+								{picked} / {group.items.length} st hämtade
+							</span>
+							<button onclick={() => resetQuantityGroup(group)} class="text-xs text-neutral-400 hover:text-neutral-600">Ångra</button>
+						{:else}
+							<button onclick={() => resetQuantityGroup(group)} class="text-xs text-neutral-400 hover:text-neutral-600">Ångra</button>
+						{/if}
+						<button
+							onclick={() => { issueSheetArticle = { id: rep.article_id, name: group.commercialName, isQuantityTracked: true, groupTotal: group.items.length }; pendingSwapArticleId = null; }}
+							class="text-xs bg-orange-600 text-white px-2 py-1 rounded"
+						>Felanmäl</button>
 					{/if}
-					<button
-						onclick={() => { issueSheetArticle = { id: rep.article_id, name: group.commercialName, isQuantityTracked: true, groupTotal: group.items.length }; pendingSwapArticleId = null; }}
-						class="text-xs bg-orange-600 text-white px-2 py-1 rounded"
-					>Felanmäl</button>
 				</div>
 			</div>
 			{#if expanded}
-				{@render infoBlock(qImageIds, group.commercialName, rep?.location_id ?? '', rep?.article_description ?? '', rep?.article_instructions ?? '')}
+				{#if isUsableGroup}
+					<div class="px-4 py-2 border-t space-y-2 text-xs text-neutral-600">
+						{#if issuesByArticle[rep?.article_id ?? '']}
+							{@const openIssues = issuesByArticle[rep?.article_id ?? '']}
+							{#if openIssues.length > 0}
+								{@const issue = openIssues[0]}
+								<div>
+									<div class="flex items-center gap-2 mb-1">
+										<span class="font-medium text-neutral-700">{issue.title}</span>
+										{#if issue.severity === 'unusable'}
+											<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">Ej användbar</span>
+										{:else if issue.severity === 'usable'}
+											<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">Användbar</span>
+										{:else if issue.severity === 'missing'}
+											<span class="text-xs bg-challengerpink-100 text-challengerpink-700 px-1.5 py-0.5 rounded">Saknas</span>
+										{/if}
+									</div>
+									{#if issue.description}
+										<p class="text-neutral-600">{issue.description}</p>
+									{/if}
+								</div>
+							{:else}
+								<p class="text-neutral-400">Inga öppna felrapporter hittades.</p>
+							{/if}
+						{:else}
+							<p class="text-neutral-400">Laddar felrapport...</p>
+						{/if}
+					</div>
+				{:else}
+					{@render infoBlock(qImageIds, group.commercialName, rep?.location_id ?? '', rep?.article_description ?? '', rep?.article_instructions ?? '')}
+				{/if}
 			{/if}
 		</div>
 	{/each}
@@ -402,11 +479,9 @@
 						<button onclick={() => markPickup(item.id, '')} class="text-xs text-neutral-400 hover:text-neutral-600 ml-1">Ångra</button>
 					{:else if swappingItemId !== item.id}
 						{#if unusable}
-							<!-- Reported unusable/missing: prefer swap, but allow picking up anyway -->
 							<button onclick={() => startSwap(item)} class="text-xs bg-blue-700 text-white px-2 py-1 rounded">Byt</button>
 							<button onclick={() => markPickup(item.id, 'picked_up')} class="text-xs text-neutral-500 underline px-1">Hämtad ändå</button>
 						{:else if reported}
-							<!-- Reported usable: can pick up but suggest swap -->
 							<button onclick={() => markPickup(item.id, 'picked_up')} class="text-xs bg-green-700 text-white px-2 py-1 rounded">Hämtad ändå</button>
 							<button onclick={() => startSwap(item)} class="text-xs text-blue-700 underline px-1">Byt</button>
 						{:else}
@@ -469,6 +544,8 @@
 	{/each}
 </div>
 
+<button onclick={() => showAddItemSheet = true} class="mt-4 text-sm border rounded px-3 py-2 text-neutral-700">+ Lägg till utrustning</button>
+
 {#if issueSheetArticle}
 	<ReportIssueSheet
 		articleId={issueSheetArticle.id}
@@ -479,5 +556,15 @@
 		groupTotal={issueSheetArticle.groupTotal ?? 0}
 		onReported={() => onReported(issueSheetArticle!.id)}
 		onClose={() => { issueSheetArticle = null; pendingSwapArticleId = null; }}
+	/>
+{/if}
+
+{#if showAddItemSheet}
+	<AddItemSheet
+		{bookingId}
+		{startDate}
+		{endDate}
+		onAdded={async () => { await onUpdate(); showAddItemSheet = false; }}
+		onClose={() => showAddItemSheet = false}
 	/>
 {/if}

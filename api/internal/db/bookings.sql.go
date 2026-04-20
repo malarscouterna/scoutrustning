@@ -87,7 +87,7 @@ func (q *Queries) AllItemsReturned(ctx context.Context, arg AllItemsReturnedPara
 const approveBooking = `-- name: ApproveBooking :one
 UPDATE bookings SET status = 'confirmed', updated_at = now()
 WHERE id = $1 AND group_id = $2 AND status = 'submitted'
-RETURNING id, group_id, created_by, used_by_team_id, used_by_external, used_by_external_contact, status, start_date, end_date, notes, pre_pickup_status, created_at, updated_at
+RETURNING id, group_id, created_by, used_by_team_id, used_by_external, used_by_external_contact, status, start_date, end_date, notes, created_at, updated_at
 `
 
 type ApproveBookingParams struct {
@@ -109,7 +109,6 @@ func (q *Queries) ApproveBooking(ctx context.Context, arg ApproveBookingParams) 
 		&i.StartDate,
 		&i.EndDate,
 		&i.Notes,
-		&i.PrePickupStatus,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -358,7 +357,7 @@ INSERT INTO bookings (
     $1, $2, $3, $4,
     $5, 'draft', $6, $7, $8
 )
-RETURNING id, group_id, created_by, used_by_team_id, used_by_external, used_by_external_contact, status, start_date, end_date, notes, pre_pickup_status, created_at, updated_at
+RETURNING id, group_id, created_by, used_by_team_id, used_by_external, used_by_external_contact, status, start_date, end_date, notes, created_at, updated_at
 `
 
 type CreateBookingParams struct {
@@ -395,7 +394,6 @@ func (q *Queries) CreateBooking(ctx context.Context, arg CreateBookingParams) (B
 		&i.StartDate,
 		&i.EndDate,
 		&i.Notes,
-		&i.PrePickupStatus,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -456,7 +454,7 @@ func (q *Queries) DeleteBooking(ctx context.Context, arg DeleteBookingParams) er
 }
 
 const getBooking = `-- name: GetBooking :one
-SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.notes, b.pre_pickup_status, b.created_at, b.updated_at, t.name AS team_name
+SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.notes, b.created_at, b.updated_at, t.name AS team_name
 FROM bookings b
 LEFT JOIN teams t ON b.used_by_team_id = t.id
 WHERE b.id = $1 AND b.group_id = $2
@@ -478,7 +476,6 @@ type GetBookingRow struct {
 	StartDate             pgtype.Date        `json:"start_date"`
 	EndDate               pgtype.Date        `json:"end_date"`
 	Notes                 string             `json:"notes"`
-	PrePickupStatus       pgtype.Text        `json:"pre_pickup_status"`
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 	TeamName              pgtype.Text        `json:"team_name"`
@@ -498,29 +495,11 @@ func (q *Queries) GetBooking(ctx context.Context, arg GetBookingParams) (GetBook
 		&i.StartDate,
 		&i.EndDate,
 		&i.Notes,
-		&i.PrePickupStatus,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.TeamName,
 	)
 	return i, err
-}
-
-const getPrePickupStatus = `-- name: GetPrePickupStatus :one
-SELECT pre_pickup_status FROM bookings
-WHERE id = $1 AND group_id = $2
-`
-
-type GetPrePickupStatusParams struct {
-	ID      pgtype.UUID `json:"id"`
-	GroupID string      `json:"group_id"`
-}
-
-func (q *Queries) GetPrePickupStatus(ctx context.Context, arg GetPrePickupStatusParams) (pgtype.Text, error) {
-	row := q.db.QueryRow(ctx, getPrePickupStatus, arg.ID, arg.GroupID)
-	var pre_pickup_status pgtype.Text
-	err := row.Scan(&pre_pickup_status)
-	return pre_pickup_status, err
 }
 
 const getTeamByID = `-- name: GetTeamByID :one
@@ -549,7 +528,7 @@ func (q *Queries) GetTeamByID(ctx context.Context, arg GetTeamByIDParams) (Team,
 }
 
 const listAllBookings = `-- name: ListAllBookings :many
-SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.notes, b.pre_pickup_status, b.created_at, b.updated_at, t.name AS team_name
+SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.notes, b.created_at, b.updated_at, t.name AS team_name
 FROM bookings b
 LEFT JOIN teams t ON b.used_by_team_id = t.id
 WHERE b.group_id = $1
@@ -567,7 +546,6 @@ type ListAllBookingsRow struct {
 	StartDate             pgtype.Date        `json:"start_date"`
 	EndDate               pgtype.Date        `json:"end_date"`
 	Notes                 string             `json:"notes"`
-	PrePickupStatus       pgtype.Text        `json:"pre_pickup_status"`
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 	TeamName              pgtype.Text        `json:"team_name"`
@@ -593,7 +571,6 @@ func (q *Queries) ListAllBookings(ctx context.Context, groupID string) ([]ListAl
 			&i.StartDate,
 			&i.EndDate,
 			&i.Notes,
-			&i.PrePickupStatus,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.TeamName,
@@ -796,7 +773,7 @@ func (q *Queries) ListBookingTeams(ctx context.Context, groupID string) ([]ListB
 }
 
 const listBookingsByStatus = `-- name: ListBookingsByStatus :many
-SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.notes, b.pre_pickup_status, b.created_at, b.updated_at, t.name AS team_name
+SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.notes, b.created_at, b.updated_at, t.name AS team_name
 FROM bookings b
 LEFT JOIN teams t ON b.used_by_team_id = t.id
 WHERE b.group_id = $1 AND b.status = $2
@@ -819,7 +796,6 @@ type ListBookingsByStatusRow struct {
 	StartDate             pgtype.Date        `json:"start_date"`
 	EndDate               pgtype.Date        `json:"end_date"`
 	Notes                 string             `json:"notes"`
-	PrePickupStatus       pgtype.Text        `json:"pre_pickup_status"`
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 	TeamName              pgtype.Text        `json:"team_name"`
@@ -845,7 +821,6 @@ func (q *Queries) ListBookingsByStatus(ctx context.Context, arg ListBookingsBySt
 			&i.StartDate,
 			&i.EndDate,
 			&i.Notes,
-			&i.PrePickupStatus,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.TeamName,
@@ -861,7 +836,7 @@ func (q *Queries) ListBookingsByStatus(ctx context.Context, arg ListBookingsBySt
 }
 
 const listBookingsByUser = `-- name: ListBookingsByUser :many
-SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.notes, b.pre_pickup_status, b.created_at, b.updated_at, t.name AS team_name
+SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.notes, b.created_at, b.updated_at, t.name AS team_name
 FROM bookings b
 LEFT JOIN teams t ON b.used_by_team_id = t.id
 WHERE b.group_id = $1
@@ -888,7 +863,6 @@ type ListBookingsByUserRow struct {
 	StartDate             pgtype.Date        `json:"start_date"`
 	EndDate               pgtype.Date        `json:"end_date"`
 	Notes                 string             `json:"notes"`
-	PrePickupStatus       pgtype.Text        `json:"pre_pickup_status"`
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 	TeamName              pgtype.Text        `json:"team_name"`
@@ -914,7 +888,6 @@ func (q *Queries) ListBookingsByUser(ctx context.Context, arg ListBookingsByUser
 			&i.StartDate,
 			&i.EndDate,
 			&i.Notes,
-			&i.PrePickupStatus,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.TeamName,
@@ -929,31 +902,10 @@ func (q *Queries) ListBookingsByUser(ctx context.Context, arg ListBookingsByUser
 	return items, nil
 }
 
-const noItemsPickedUp = `-- name: NoItemsPickedUp :one
-SELECT NOT EXISTS (
-    SELECT 1 FROM booking_items
-    WHERE booking_id = $1 AND group_id = $2
-        AND pickup_status IS NOT NULL
-) AS none_picked_up
-`
-
-type NoItemsPickedUpParams struct {
-	BookingID pgtype.UUID `json:"booking_id"`
-	GroupID   string      `json:"group_id"`
-}
-
-// Returns true if every item in the booking has a null pickup_status.
-func (q *Queries) NoItemsPickedUp(ctx context.Context, arg NoItemsPickedUpParams) (bool, error) {
-	row := q.db.QueryRow(ctx, noItemsPickedUp, arg.BookingID, arg.GroupID)
-	var none_picked_up bool
-	err := row.Scan(&none_picked_up)
-	return none_picked_up, err
-}
-
 const rejectBooking = `-- name: RejectBooking :one
 UPDATE bookings SET status = 'draft', updated_at = now()
 WHERE id = $1 AND group_id = $2 AND status = 'submitted'
-RETURNING id, group_id, created_by, used_by_team_id, used_by_external, used_by_external_contact, status, start_date, end_date, notes, pre_pickup_status, created_at, updated_at
+RETURNING id, group_id, created_by, used_by_team_id, used_by_external, used_by_external_contact, status, start_date, end_date, notes, created_at, updated_at
 `
 
 type RejectBookingParams struct {
@@ -975,7 +927,6 @@ func (q *Queries) RejectBooking(ctx context.Context, arg RejectBookingParams) (B
 		&i.StartDate,
 		&i.EndDate,
 		&i.Notes,
-		&i.PrePickupStatus,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -995,22 +946,6 @@ type RemoveBookingItemParams struct {
 
 func (q *Queries) RemoveBookingItem(ctx context.Context, arg RemoveBookingItemParams) error {
 	_, err := q.db.Exec(ctx, removeBookingItem, arg.ID, arg.GroupID, arg.BookingID)
-	return err
-}
-
-const setPrePickupStatus = `-- name: SetPrePickupStatus :exec
-UPDATE bookings SET pre_pickup_status = $1
-WHERE id = $2 AND group_id = $3
-`
-
-type SetPrePickupStatusParams struct {
-	PrePickupStatus pgtype.Text `json:"pre_pickup_status"`
-	ID              pgtype.UUID `json:"id"`
-	GroupID         string      `json:"group_id"`
-}
-
-func (q *Queries) SetPrePickupStatus(ctx context.Context, arg SetPrePickupStatusParams) error {
-	_, err := q.db.Exec(ctx, setPrePickupStatus, arg.PrePickupStatus, arg.ID, arg.GroupID)
 	return err
 }
 
@@ -1057,7 +992,7 @@ UPDATE bookings SET
     notes = $6,
     updated_at = now()
 WHERE id = $7 AND group_id = $8
-RETURNING id, group_id, created_by, used_by_team_id, used_by_external, used_by_external_contact, status, start_date, end_date, notes, pre_pickup_status, created_at, updated_at
+RETURNING id, group_id, created_by, used_by_team_id, used_by_external, used_by_external_contact, status, start_date, end_date, notes, created_at, updated_at
 `
 
 type UpdateBookingParams struct {
@@ -1094,7 +1029,6 @@ func (q *Queries) UpdateBooking(ctx context.Context, arg UpdateBookingParams) (B
 		&i.StartDate,
 		&i.EndDate,
 		&i.Notes,
-		&i.PrePickupStatus,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -1170,7 +1104,7 @@ func (q *Queries) UpdateBookingItemReturnStatus(ctx context.Context, arg UpdateB
 const updateBookingStatus = `-- name: UpdateBookingStatus :one
 UPDATE bookings SET status = $1, updated_at = now()
 WHERE id = $2 AND group_id = $3
-RETURNING id, group_id, created_by, used_by_team_id, used_by_external, used_by_external_contact, status, start_date, end_date, notes, pre_pickup_status, created_at, updated_at
+RETURNING id, group_id, created_by, used_by_team_id, used_by_external, used_by_external_contact, status, start_date, end_date, notes, created_at, updated_at
 `
 
 type UpdateBookingStatusParams struct {
@@ -1193,7 +1127,6 @@ func (q *Queries) UpdateBookingStatus(ctx context.Context, arg UpdateBookingStat
 		&i.StartDate,
 		&i.EndDate,
 		&i.Notes,
-		&i.PrePickupStatus,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
