@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.7.0](https://github.com/malarscouterna/ms-utrustning/compare/v0.6.6...v0.7.0) (2026-04-21)
+
+
+### ⚠ BREAKING CHANGES
+
+* **web:** pickup/return flow revamp - UX fixes and state bugs
+* **web:** issues revamp - first-class issue entities (frontend)
+* **api:** see above
+
+### Features
+
+* **api:** promote issues to first-class entities (backend) ([a55a78b](https://github.com/malarscouterna/ms-utrustning/commit/a55a78b02c2af6d5e63ae5fa763df69346b113e0))
+* **web:** issues revamp - first-class issue entities (frontend) ([64edbee](https://github.com/malarscouterna/ms-utrustning/commit/64edbee7553fdae99897cdbde08613da8e26d6cb))
+* **web:** pickup/return flow revamp - UX fixes and state bugs ([579a76c](https://github.com/malarscouterna/ms-utrustning/commit/579a76cb122478b3720cef39d9d7072b87d92236))
+
+
+### Bug Fixes
+
+* test, type-check, and docs sign-off for pickup/return revamp ([9909dc4](https://github.com/malarscouterna/ms-utrustning/commit/9909dc4ad0f3f5931cd3aa727f79eccb34f36bd9))
+* **web:** align pickup/return issue reporting to ReportIssueSheet pattern ([c27f308](https://github.com/malarscouterna/ms-utrustning/commit/c27f3084292f77c41b0e389053b2ca3ed90c72da))
+* **web:** improve pickup checklist swap UX and status awareness ([9049cc4](https://github.com/malarscouterna/ms-utrustning/commit/9049cc4c934bc600794e9fa216a8721f4693586e))
+
 ## [0.6.6](https://github.com/malarscouterna/ms-utrustning/compare/v0.6.5...v0.6.6) (2026-04-17)
 
 
