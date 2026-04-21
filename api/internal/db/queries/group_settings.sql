@@ -7,13 +7,13 @@ INSERT INTO group_settings (
     group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url,
     default_approval_level, default_access_unknown, default_access_troop,
     default_access_role, image_upload_role, booking_role, article_edit_role,
-    issue_resolve_role, manager_notes_role
+    issue_resolve_role, manager_notes_role, default_language
 )
 VALUES (
     @group_id, @notification_email_from, @smtp_key_encrypted, @gchat_webhook_url,
     @default_approval_level, @default_access_unknown, @default_access_troop,
     @default_access_role, @image_upload_role, @booking_role, @article_edit_role,
-    @issue_resolve_role, @manager_notes_role
+    @issue_resolve_role, @manager_notes_role, @default_language
 )
 ON CONFLICT (group_id) DO UPDATE SET
     notification_email_from = @notification_email_from,
@@ -28,6 +28,7 @@ ON CONFLICT (group_id) DO UPDATE SET
     article_edit_role = @article_edit_role,
     issue_resolve_role = @issue_resolve_role,
     manager_notes_role = @manager_notes_role,
+    default_language = @default_language,
     updated_at = now()
 RETURNING *;
 

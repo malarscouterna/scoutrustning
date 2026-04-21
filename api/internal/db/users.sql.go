@@ -7,10 +7,12 @@ package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const getUser = `-- name: GetUser :one
-SELECT id, group_id, name, email, notification_channel, gchat_webhook_url, active_group_id, created_at, updated_at FROM users
+SELECT id, group_id, name, email, notification_channel, gchat_webhook_url, active_group_id, created_at, updated_at, language FROM users
 WHERE id = $1 AND group_id = $2
 `
 
@@ -32,8 +34,25 @@ func (q *Queries) GetUser(ctx context.Context, arg GetUserParams) (User, error) 
 		&i.ActiveGroupID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Language,
 	)
 	return i, err
+}
+
+const updateUserLanguage = `-- name: UpdateUserLanguage :exec
+UPDATE users SET language = $1, updated_at = now()
+WHERE id = $2 AND group_id = $3
+`
+
+type UpdateUserLanguageParams struct {
+	Language pgtype.Text `json:"language"`
+	ID       string      `json:"id"`
+	GroupID  string      `json:"group_id"`
+}
+
+func (q *Queries) UpdateUserLanguage(ctx context.Context, arg UpdateUserLanguageParams) error {
+	_, err := q.db.Exec(ctx, updateUserLanguage, arg.Language, arg.ID, arg.GroupID)
+	return err
 }
 
 const upsertUser = `-- name: UpsertUser :one
@@ -43,7 +62,7 @@ ON CONFLICT (id) DO UPDATE SET
     name = EXCLUDED.name,
     email = EXCLUDED.email,
     updated_at = now()
-RETURNING id, group_id, name, email, notification_channel, gchat_webhook_url, active_group_id, created_at, updated_at
+RETURNING id, group_id, name, email, notification_channel, gchat_webhook_url, active_group_id, created_at, updated_at, language
 `
 
 type UpsertUserParams struct {
@@ -71,6 +90,7 @@ func (q *Queries) UpsertUser(ctx context.Context, arg UpsertUserParams) (User, e
 		&i.ActiveGroupID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Language,
 	)
 	return i, err
 }

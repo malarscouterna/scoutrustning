@@ -20,6 +20,7 @@ import (
 	"github.com/malarscouterna/ms-utrustning/api/internal/auth"
 	"github.com/malarscouterna/ms-utrustning/api/internal/db"
 	"github.com/malarscouterna/ms-utrustning/api/internal/handler"
+	"github.com/malarscouterna/ms-utrustning/api/internal/i18n"
 	"github.com/malarscouterna/ms-utrustning/api/internal/images"
 )
 
@@ -86,12 +87,24 @@ func main() {
 				handler.WriteError(w, http.StatusUnauthorized, "unauthorized")
 				return
 			}
-			// Get group name and permissions
 			groupName := ""
 			if g, err := queries.GetGroup(r.Context(), claims.GroupID); err == nil {
 				groupName = g.Name
 			}
 			perms := permCache.Get(r, claims.GroupID)
+
+			// Resolve language: user preference → group default → 'sv'
+			lang := "sv"
+			if settings, err := queries.GetGroupSettings(r.Context(), claims.GroupID); err == nil {
+				lang = settings.DefaultLanguage
+			}
+			if user, err := queries.GetUser(r.Context(), db.GetUserParams{
+				ID:      claims.MemberID,
+				GroupID: claims.GroupID,
+			}); err == nil && user.Language.Valid && i18n.Supported(user.Language.String) {
+				lang = user.Language.String
+			}
+
 			handler.WriteJSON(w, http.StatusOK, map[string]any{
 				"member_id":  claims.MemberID,
 				"group_id":   claims.GroupID,
@@ -100,6 +113,7 @@ func main() {
 				"email":      claims.Email,
 				"teams":      claims.Teams,
 				"max_access": claims.MaxAccess,
+				"language":   lang,
 				"permissions": map[string]string{
 					"image_upload":  perms.ImageUpload,
 					"booking":       perms.Booking,

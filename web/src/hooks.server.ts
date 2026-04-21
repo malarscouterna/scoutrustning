@@ -2,6 +2,7 @@ import type { Handle } from '@sveltejs/kit';
 import { redirect } from '@sveltejs/kit';
 import { sequence } from '@sveltejs/kit/hooks';
 import { authHandle } from './auth';
+import { i18n } from '$lib/i18n';
 
 const API_URL = process.env.API_URL || 'http://localhost:8080';
 const DEV_MODE = process.env.DEV_MODE === 'true';
@@ -109,9 +110,10 @@ const appHandle: Handle = async ({ event, resolve }) => {
 		const target = `${API_URL}${event.url.pathname}${event.url.search}`;
 		const headers = new Headers(event.request.headers);
 
-		// Strip auth headers from client — only the server decides identity
+		// Strip auth and identity headers from client — only the server decides these
 		headers.delete('Authorization');
 		headers.delete('X-Dev-Role-Override');
+		headers.delete('X-Language');
 
 		if (authMode === 'persona') {
 			headers.set('X-Dev-Role-Override', personaKey!);
@@ -143,7 +145,9 @@ const appHandle: Handle = async ({ event, resolve }) => {
 
 const hasOIDC = !!(process.env.AUTH_KEYCLOAK_ID && process.env.AUTH_KEYCLOAK_SECRET && process.env.AUTH_KEYCLOAK_ISSUER);
 
-const innerHandle: Handle = hasOIDC ? sequence(authHandle, appHandle) : appHandle;
+const innerHandle: Handle = hasOIDC
+	? sequence(authHandle, i18n.handle(), appHandle)
+	: sequence(i18n.handle(), appHandle);
 
 // Outer wrapper: post-processes all responses, including thrown redirects.
 // throw redirect() propagates as a JS exception and bypasses normal response

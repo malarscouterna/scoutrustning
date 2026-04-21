@@ -49,6 +49,11 @@ async function fetchMe(fetchFn: typeof globalThis.fetch): Promise<User | null> {
 	}
 }
 
+function setLangCookie(cookies: import('@sveltejs/kit').Cookies, lang: string) {
+	// 'paraglide_lang' is the cookie name Paraglide reads in its handle hook
+	cookies.set('paraglide_lang', lang, { path: '/', httpOnly: false, secure: false, sameSite: 'lax', maxAge: 60 * 60 * 24 * 365 });
+}
+
 export const load: LayoutServerLoad = async ({ cookies, locals, url, fetch: skFetch }) => {
 	if (DEV_MODE) {
 		const personaCookie = cookies.get(PERSONA_COOKIE);
@@ -65,6 +70,7 @@ export const load: LayoutServerLoad = async ({ cookies, locals, url, fetch: skFe
 			}
 			// Persona selected - fetch resolved user from API
 			const user = await fetchMe(skFetch);
+			if (user) setLangCookie(cookies, user.language);
 			return {
 				user,
 				dev: { personas, currentPersona: personaCookie },
@@ -78,6 +84,7 @@ export const load: LayoutServerLoad = async ({ cookies, locals, url, fetch: skFe
 		if (session?.accessToken) {
 			const user = await fetchMe(skFetch);
 			if (user) {
+				setLangCookie(cookies, user.language);
 				return { user, dev: { personas, currentPersona: null }, demo: DEMO_MODE, oidcName: null };
 			}
 			// Logged in via OIDC but group not found — show friendly message
@@ -95,6 +102,7 @@ export const load: LayoutServerLoad = async ({ cookies, locals, url, fetch: skFe
 		// Dev fallback to default persona — set cookie so hooks proxy sends it
 		cookies.set(PERSONA_COOKIE, DEFAULT_PERSONA, { path: '/', httpOnly: false, secure: false, sameSite: 'lax' });
 		const user = await fetchMe(skFetch);
+		if (user) setLangCookie(cookies, user.language);
 		return {
 			user,
 			dev: { personas, currentPersona: DEFAULT_PERSONA },
@@ -114,6 +122,7 @@ export const load: LayoutServerLoad = async ({ cookies, locals, url, fetch: skFe
 		if (oidcName && url.pathname !== '/') throw redirect(302, '/');
 		return { user: null, dev: null, demo: false, oidcName: oidcName ?? null };
 	}
+	setLangCookie(cookies, user.language);
 	return { user, dev: null, demo: false, oidcName: null };
 };
 
