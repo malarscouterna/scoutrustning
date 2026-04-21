@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -199,6 +200,45 @@ func TestIssueFlow_CreateAndGet(t *testing.T) {
 			t.Errorf("expected ok after resolve, got %v", article["status"])
 		}
 	})
+}
+
+func TestIssueFlow_EnglishTitle(t *testing.T) {
+	env := testutil.SetupTestEnv(t)
+	mountIssueRoutes(env)
+
+	manager := env.ClientAs("manager-equipment")
+	articleID := createTestArticle(t, manager, "EnglishTitle")
+
+	b, _ := json.Marshal(map[string]any{
+		"article_id":  articleID,
+		"severity":    "unusable",
+		"description": "Testing English title generation",
+	})
+	req, _ := http.NewRequest("POST", env.Server.URL+"/api/v0/issues", bytes.NewReader(b))
+	req.Header.Set("X-Dev-Role-Override", "leader-yggdrasil")
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: "paraglide_lang", Value: "en"})
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 201, got %d: %s", resp.StatusCode, body)
+	}
+
+	var issue map[string]any
+	json.NewDecoder(resp.Body).Decode(&issue)
+	title, _ := issue["title"].(string)
+	if !strings.Contains(title, "Unusable") {
+		t.Errorf("expected English severity in title, got %q", title)
+	}
+	if strings.Contains(title, "Ej användbar") {
+		t.Errorf("expected English title, got Swedish: %q", title)
+	}
 }
 
 func TestIssueFlow_SeverityPriority(t *testing.T) {

@@ -11,6 +11,7 @@ import (
 
 	"github.com/malarscouterna/ms-utrustning/api/internal/auth"
 	"github.com/malarscouterna/ms-utrustning/api/internal/db"
+	"github.com/malarscouterna/ms-utrustning/api/internal/i18n"
 )
 
 type IssueHandler struct {
@@ -125,17 +126,18 @@ func (h *IssueHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Auto-generate title: "Article name - Severity label"
-	severityLabel := map[string]string{
-		"usable":   "Användbar",
-		"unusable": "Ej användbar",
-		"missing":  "Saknas",
+	lang := "sv"
+	if c, err := r.Cookie("paraglide_lang"); err == nil && i18n.Supported(c.Value) {
+		lang = c.Value
 	}
 	name := article.CommercialName
 	if name == "" {
 		name = article.CommonName
 	}
-	title := name + " - " + severityLabel[req.Severity]
+	title := i18n.T(lang, "issue_title", map[string]string{
+		"commercialName": name,
+		"severity":       i18n.T(lang, "issue_severity_"+req.Severity),
+	})
 
 	var bookingID pgtype.UUID
 	if req.BookingID != nil && *req.BookingID != "" {

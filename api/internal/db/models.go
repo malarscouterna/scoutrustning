@@ -122,6 +122,7 @@ type GroupSetting struct {
 	ManagerNotesRole      string             `json:"manager_notes_role"`
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	DefaultLanguage       string             `json:"default_language"`
 }
 
 type IssueArticle struct {
@@ -232,4 +233,5 @@ type User struct {
 	ActiveGroupID       pgtype.Text        `json:"active_group_id"`
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	Language            pgtype.Text        `json:"language"`
 }

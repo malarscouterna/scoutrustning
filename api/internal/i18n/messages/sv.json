@@ -1,0 +1,50 @@
+{
+  "article_status_ok": "OK",
+  "article_status_reported_usable": "Felrapporterad — användbar",
+  "article_status_incoming": "Inkommande",
+  "article_status_reported_unusable": "Felrapporterad — ej användbar",
+  "article_status_under_repair": "Under reparation",
+  "article_status_lost": "Saknas",
+  "article_status_archived": "Arkiverad",
+
+  "article_approval_none": "Ingen",
+  "article_approval_low": "Låg",
+  "article_approval_high": "Hög",
+
+  "booking_status_draft": "Utkast",
+  "booking_status_submitted": "Väntar på godkännande",
+  "booking_status_approved": "Godkänd",
+  "booking_status_confirmed": "Bekräftad",
+  "booking_status_picked_up": "Uthämtad",
+  "booking_status_returned": "Återlämnad",
+  "booking_status_rejected": "Nekad",
+  "booking_status_cancelled": "Avbokad",
+
+  "issue_severity_usable": "Användbar",
+  "issue_severity_unusable": "Ej användbar",
+  "issue_severity_missing": "Saknas",
+
+  "issue_status_open": "Öppen",
+  "issue_status_in_progress": "Pågår",
+  "issue_status_resolved": "Löst",
+  "issue_status_archived": "Arkiverad",
+
+  "issue_title": "{commercialName} - {severity}",
+
+  "event_type_issue_reported": "Problem rapporterat",
+  "event_type_issue_resolved": "Problem löst",
+  "event_type_status_change": "Statusändring",
+  "event_type_count_changed": "Antal ändrat",
+  "event_type_returned": "Återlämnad",
+  "event_type_booked": "Bokad",
+  "event_type_picked_up": "Uthämtad",
+  "event_type_note": "Kommentar",
+
+  "team_access_view": "Visa",
+  "team_access_book": "Boka",
+  "team_access_trusted": "Betrodd",
+  "team_access_manager": "Utrustningsansvarig",
+
+  "team_type_troop": "Avd.",
+  "team_type_role": "Roll"
+}

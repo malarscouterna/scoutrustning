@@ -1,0 +1,50 @@
+{
+  "article_status_ok": "OK",
+  "article_status_reported_usable": "Reported — usable",
+  "article_status_incoming": "Incoming",
+  "article_status_reported_unusable": "Reported — unusable",
+  "article_status_under_repair": "Under repair",
+  "article_status_lost": "Missing",
+  "article_status_archived": "Archived",
+
+  "article_approval_none": "None",
+  "article_approval_low": "Low",
+  "article_approval_high": "High",
+
+  "booking_status_draft": "Draft",
+  "booking_status_submitted": "Awaiting approval",
+  "booking_status_approved": "Approved",
+  "booking_status_confirmed": "Confirmed",
+  "booking_status_picked_up": "Picked up",
+  "booking_status_returned": "Returned",
+  "booking_status_rejected": "Rejected",
+  "booking_status_cancelled": "Cancelled",
+
+  "issue_severity_usable": "Usable",
+  "issue_severity_unusable": "Unusable",
+  "issue_severity_missing": "Missing",
+
+  "issue_status_open": "Open",
+  "issue_status_in_progress": "In progress",
+  "issue_status_resolved": "Resolved",
+  "issue_status_archived": "Archived",
+
+  "issue_title": "{commercialName} - {severity}",
+
+  "event_type_issue_reported": "Issue reported",
+  "event_type_issue_resolved": "Issue resolved",
+  "event_type_status_change": "Status change",
+  "event_type_count_changed": "Count changed",
+  "event_type_returned": "Returned",
+  "event_type_booked": "Booked",
+  "event_type_picked_up": "Picked up",
+  "event_type_note": "Comment",
+
+  "team_access_view": "View",
+  "team_access_book": "Book",
+  "team_access_trusted": "Trusted",
+  "team_access_manager": "Equipment manager",
+
+  "team_type_troop": "Troop",
+  "team_type_role": "Role"
+}

@@ -1,0 +1,12 @@
+{
+  "$schema": "https://inlang.com/schema/project-settings",
+  "sourceLanguageTag": "sv",
+  "languageTags": ["sv", "en"],
+  "modules": [
+    "https://cdn.jsdelivr.net/npm/@inlang/plugin-message-format@4/dist/index.js",
+    "https://cdn.jsdelivr.net/npm/@inlang/plugin-m-function-matcher@0/dist/index.js"
+  ],
+  "plugin.inlang.messageFormat": {
+    "pathPattern": "../api/internal/i18n/messages/{languageTag}.json"
+  }
+}

@@ -9,6 +9,7 @@ web/node_modules/
 web/.svelte-kit/
 web/build/
 web/static/ui-webc/
+web/src/lib/paraglide/
 web/dev-personas.json
 web/role-mapping.json
 web/guide.md

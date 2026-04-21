@@ -38,6 +38,7 @@ type groupSettingsResponse struct {
 	ArticleEditRole       string `json:"article_edit_role"`
 	IssueResolveRole      string `json:"issue_resolve_role"`
 	ManagerNotesRole      string `json:"manager_notes_role"`
+	DefaultLanguage       string `json:"default_language"`
 }
 
 func (h *GroupSettingsHandler) Get(w http.ResponseWriter, r *http.Request) {
@@ -56,6 +57,7 @@ func (h *GroupSettingsHandler) Get(w http.ResponseWriter, r *http.Request) {
 			ArticleEditRole:      "manager",
 			IssueResolveRole:     "manager",
 			ManagerNotesRole:     "manager",
+			DefaultLanguage:      "sv",
 		})
 		return
 	}
@@ -86,6 +88,7 @@ type groupSettingsRequest struct {
 	ArticleEditRole       string  `json:"article_edit_role"`
 	IssueResolveRole      string  `json:"issue_resolve_role"`
 	ManagerNotesRole      string  `json:"manager_notes_role"`
+	DefaultLanguage       string  `json:"default_language"`
 }
 
 func (h *GroupSettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
@@ -149,6 +152,16 @@ func (h *GroupSettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	defaultLanguage := req.DefaultLanguage
+	if defaultLanguage == "" {
+		defaultLanguage = "sv"
+	}
+	validLanguages := map[string]bool{"sv": true, "en": true}
+	if !validLanguages[defaultLanguage] {
+		WriteError(w, http.StatusBadRequest, "invalid default_language")
+		return
+	}
+
 	// Handle SMTP key: nil = don't change, empty string = clear, non-empty = encrypt and store
 	var smtpKeyEncrypted []byte
 	if req.SmtpKey != nil {
@@ -183,6 +196,7 @@ func (h *GroupSettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		ArticleEditRole:       req.ArticleEditRole,
 		IssueResolveRole:      req.IssueResolveRole,
 		ManagerNotesRole:      req.ManagerNotesRole,
+		DefaultLanguage:       defaultLanguage,
 	})
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, "failed to save settings")
@@ -215,6 +229,7 @@ func settingsToResponse(s db.GroupSetting) groupSettingsResponse {
 		ArticleEditRole:       s.ArticleEditRole,
 		IssueResolveRole:      s.IssueResolveRole,
 		ManagerNotesRole:      s.ManagerNotesRole,
+		DefaultLanguage:       s.DefaultLanguage,
 		SmtpKeySet:            len(s.SmtpKeyEncrypted) > 0,
 	}
 	if len(s.SmtpKeyEncrypted) > 0 {
