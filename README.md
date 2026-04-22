@@ -24,6 +24,7 @@ Pre-release (`v0`). Breaking changes expected. Currently implements:
 - Configurable per-team access levels (view, book, trusted, manager)
 - Auto-discovery of troops/roles from OIDC claims
 - Multi-tenancy (group-scoped, ready for multiple organizations)
+- Internationalization: Swedish and English, switchable per user or group
 
 ## Stack
 
