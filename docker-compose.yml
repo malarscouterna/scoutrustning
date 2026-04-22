@@ -37,7 +37,8 @@ services:
   web:
     image: ${WEB_IMAGE:-ms-utrustning-web}
     build:
-      context: ./web
+      context: .
+      dockerfile: web/Dockerfile
       target: ${BUILD_TARGET:-production}
     ports:
       - "${WEB_PORT:-3000}:3000"
