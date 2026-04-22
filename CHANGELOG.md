@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.1](https://github.com/malarscouterna/ms-utrustning/compare/v0.8.0...v0.8.1) (2026-04-22)
+
+
+### Bug Fixes
+
+* **web:** fix Docker production build - copy i18n messages into build context ([7a8fa39](https://github.com/malarscouterna/ms-utrustning/commit/7a8fa390be4783738cb581434584ab19e8dea983))
+
 ## [0.8.0](https://github.com/malarscouterna/ms-utrustning/compare/v0.7.0...v0.8.0) (2026-04-22)
 
 
