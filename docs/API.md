@@ -737,6 +737,45 @@ Convert and serve as JPEG (quality 85) with `Content-Disposition: attachment` fo
 
 ---
 
+## User
+
+### `GET /api/v0/me`
+Returns the authenticated user's resolved profile.
+
+**Response** `200`
+```json
+{
+  "member_id": 12345,
+  "group_id": 67,
+  "group_name": "Mälarscouterna",
+  "name": "Anna Svensson",
+  "email": "anna@example.com",
+  "teams": [...],
+  "max_access": "manager",
+  "language": "sv",
+  "permissions": {
+    "image_upload": "book",
+    "booking": "view",
+    "article_edit": "manager",
+    "issue_resolve": "manager",
+    "manager_notes": "manager"
+  }
+}
+```
+`language` is the resolved language (`sv` or `en`): user preference → group default → `sv`.
+
+### `PUT /api/v0/me/language`
+Set the user's personal language preference.
+
+```json
+{ "language": "en" }
+```
+`language`: `"sv"` | `"en"` to set a preference, `null` or `""` to clear (inherit group default).
+
+**Response** `204` | `400` (unsupported language) | `401`
+
+---
+
 ## Group Settings
 
 All endpoints require `manager` access level.
@@ -755,7 +794,8 @@ Returns group settings. SMTP key is returned masked.
   "default_access_unknown": "view",
   "default_access_troop": "book",
   "default_access_role": "book",
-  "image_upload_role": "book"
+  "image_upload_role": "book",
+  "default_language": "sv"
 }
 ```
 
@@ -769,7 +809,8 @@ Returns group settings. SMTP key is returned masked.
   "default_access_unknown": "view",
   "default_access_troop": "book",
   "default_access_role": "book",
-  "image_upload_role": "book"
+  "image_upload_role": "book",
+  "default_language": "sv"
 }
 ```
 `smtp_key`: `null` = keep existing, `""` = clear, non-empty = encrypt and store.

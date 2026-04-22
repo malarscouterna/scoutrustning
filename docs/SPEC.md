@@ -862,11 +862,11 @@ A read-only public API for external consumers (other scout websites, apps, digit
 
 ## Internationalization (i18n)
 
-Swedish (`sv`) is the only UI language. English (`en`) is planned as a second language.
+Swedish (`sv`) and English (`en`) are supported. Swedish is the default.
 
-- **Current state**: All user-facing strings are hardcoded in Swedish. No i18n system is set up yet (known debt, see backlog).
-- The Go API is language-agnostic: returns data as stored, uses error keys (not human-readable messages) so the frontend can translate them when i18n is added.
-- User-generated content (article names, category names, descriptions) is stored as-is - not translated.
+- **Current state**: Full i18n system in place. All UI strings go through Paraglide on the frontend and `i18n.T()` on the backend. See `docs/i18n.md` for architecture details.
+- Language is resolved per request: user preference → group default → `sv`. Set via `PUT /api/v0/me/language` (user) or `PUT /api/v0/group-settings` (group default).
+- User-generated content (article names, category names, descriptions, issue titles) is stored as-is and not translated.
 - Code, comments, API field names, and documentation are always in English.
 
 ## Analytics

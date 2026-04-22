@@ -295,6 +295,42 @@
 		importLoading = false;
 	}
 
+	// --- User language preference ---
+	let userLanguage = $state<string>('sv');
+	$effect(() => { userLanguage = data.user?.language ?? 'sv'; });
+	let languageSaving = $state(false);
+	let languageMessage = $state('');
+
+	async function saveLanguage() {
+		languageSaving = true;
+		languageMessage = '';
+		try {
+			await api.updateLanguage(userLanguage);
+			// Set cookie immediately client-side so the next page load activates the language in one step.
+			document.cookie = `paraglide_lang=${userLanguage}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
+			location.reload();
+		} catch (e: any) {
+			languageMessage = 'Fel: ' + e.message;
+			languageSaving = false;
+		}
+	}
+
+	// --- Group language preference ---
+	let groupLanguage = $state<string>('sv');
+	let groupLanguageMessage = $state('');
+	$effect(() => {
+		if (data.groupSettings) groupLanguage = data.groupSettings.default_language ?? 'sv';
+	});
+
+	async function saveGroupLanguage() {
+		try {
+			groupSettings = await api.updateGroupSettings({ default_language: groupLanguage });
+			flash(v => groupLanguageMessage = v, 'Sparat');
+		} catch (e: any) {
+			groupLanguageMessage = 'Fel: ' + e.message;
+		}
+	}
+
 	// --- Group notification settings ---
 	async function saveSettings() {
 		settingsError = '';
@@ -368,7 +404,18 @@
 
 		<section class="mb-6 border rounded-lg p-4">
 			<h2 class="font-medium mb-3">Mina inställningar</h2>
-			<p class="text-sm text-neutral-500">Personliga inställningar kommer i en framtida version.</p>
+			<div class="flex items-center gap-3">
+				<label class="text-sm text-neutral-700" for="user-language">Språk</label>
+				<select id="user-language" bind:value={userLanguage} class="border rounded px-2 py-1 text-sm">
+					<option value="sv">Svenska{groupLanguage !== 'sv' ? '' : ' (gruppens val)'}</option>
+					<option value="en">English{groupLanguage !== 'en' ? '' : ' (group default)'}</option>
+				</select>
+				<button onclick={saveLanguage} disabled={languageSaving} class="text-sm bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50">
+					{languageSaving ? 'Sparar...' : 'Spara'}
+				</button>
+				{#if languageMessage}<span class="text-sm text-green-600">{languageMessage}</span>{/if}
+			</div>
+			<p class="text-xs text-neutral-400 mt-2">Gäller gränssnittet. Artikelnamn, beskrivningar och annat innehåll som skapats av användare visas alltid på gruppens språk.</p>
 		</section>
 
 		<section class="mb-6 border rounded-lg p-4">
@@ -714,6 +761,20 @@
 					{/if}
 				</div>
 			{/if}
+		</section>
+
+		<!-- Group language -->
+		<section class="mb-6 border rounded-lg p-4">
+			<h3 class="font-medium mb-2">Språk</h3>
+			<div class="flex items-center gap-3">
+				<label class="text-sm text-neutral-700" for="group-language">Standardspråk för gruppen</label>
+				<select id="group-language" bind:value={groupLanguage} class="border rounded px-2 py-1 text-sm">
+					<option value="sv">Svenska</option>
+					<option value="en">English</option>
+				</select>
+				<button onclick={saveGroupLanguage} class="text-sm bg-blue-700 text-white px-3 py-1 rounded">Spara</button>
+				{#if groupLanguageMessage}<span class="text-sm text-green-600">{groupLanguageMessage}</span>{/if}
+			</div>
 		</section>
 
 		<!-- Notifications -->

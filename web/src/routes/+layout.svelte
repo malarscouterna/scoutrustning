@@ -3,6 +3,8 @@
 	import { page } from '$app/stores';
 	import DevPersonaSwitcher from '$lib/components/DevPersonaSwitcher.svelte';
 	import FloatingCart from '$lib/components/FloatingCart.svelte';
+	import { ParaglideJS } from '@inlang/paraglide-sveltekit';
+	import { i18n } from '$lib/i18n';
 
 	let { children, data } = $props();
 
@@ -20,6 +22,7 @@
 	let onSectionRoot = $derived(section !== null && $page.url.pathname === section.href);
 </script>
 
+<ParaglideJS {i18n} languageTag={(data.user?.language ?? 'sv') as 'sv' | 'en'}>
 {#if data.demo}
 	<a href="/guide" class="block bg-adventurerorange-100 border-b border-adventurerorange-300 text-adventurerorange-900 text-center text-sm py-2 px-4 font-medium hover:bg-adventurerorange-200">
 		🏕️ Demo — detta är en testmiljö. Bokningar och data kan återställas när som helst.
@@ -71,4 +74,4 @@
 {#if data.user}
 	<FloatingCart />
 {/if}
-
+</ParaglideJS>
