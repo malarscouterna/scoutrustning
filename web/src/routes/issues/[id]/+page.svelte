@@ -6,6 +6,8 @@
 	import { onMount, untrack } from 'svelte';
 	import ImageAttachInput from '$lib/components/ImageAttachInput.svelte';
 	import type { PageData } from './$types';
+	import { msg } from '$lib/msg';
+	import { issueStatusColors, issueSeverityColors } from '$lib/styles';
 
 	let { data }: { data: PageData } = $props();
 	const api = createApiClient();
@@ -84,40 +86,6 @@
 		statusAction = '';
 	}
 
-	const severityLabels: Record<string, string> = {
-		usable: 'Användbar',
-		unusable: 'Ej användbar',
-		missing: 'Saknas'
-	};
-
-	const severityColors: Record<string, string> = {
-		usable: 'bg-orange-100 text-orange-800',
-		unusable: 'bg-red-100 text-red-800',
-		missing: 'bg-red-100 text-red-800'
-	};
-
-	const statusLabels: Record<string, string> = {
-		open: 'Öppen',
-		in_progress: 'Pågår',
-		resolved: 'Löst',
-		archived: 'Arkiverad'
-	};
-
-	const statusColors: Record<string, string> = {
-		open: 'bg-blue-50 text-blue-700',
-		in_progress: 'bg-yellow-50 text-yellow-800',
-		resolved: 'bg-green-100 text-green-800',
-		archived: 'bg-neutral-100 text-neutral-500'
-	};
-
-	const eventTypeLabels: Record<string, string> = {
-		comment: 'Kommentar',
-		status_change: 'Status ändrad',
-		assignment: 'Tilldelning',
-		article_added: 'Utrustning tillagd',
-		article_removed: 'Utrustning borttagen'
-	};
-
 	function formatDate(ts: string) {
 		const d = new Date(ts);
 		const now = new Date();
@@ -128,12 +96,12 @@
 	}
 
 	function formatEventMeta(event: IssueDetail['events'][0]): string {
-		const m = event.metadata ?? {};
-		if (event.event_type === 'status_change' && m.new_status) {
-			return statusLabels[m.new_status] ?? m.new_status;
+		const meta = event.metadata ?? {};
+		if (event.event_type === 'status_change' && meta.new_status) {
+			return msg(`issue_status_${meta.new_status}`) ?? meta.new_status;
 		}
-		if (event.event_type === 'assignment' && m.user_name) {
-			return m.user_name;
+		if (event.event_type === 'assignment' && meta.user_name) {
+			return meta.user_name;
 		}
 		return '';
 	}
@@ -144,14 +112,14 @@
 
 	<div class="flex flex-wrap items-start justify-between gap-2 mb-1">
 		<h1 class="text-heading-sm font-bold">{issue.title}</h1>
-		<span class="text-xs px-2 py-1 rounded font-medium {statusColors[issue.status] ?? 'bg-neutral-100'}">
-			{statusLabels[issue.status] ?? issue.status}
+		<span class="text-xs px-2 py-1 rounded font-medium {issueStatusColors[issue.status] ?? 'bg-neutral-100'}">
+			{msg(`issue_status_${issue.status}`) ?? issue.status}
 		</span>
 	</div>
 
 	<div class="flex flex-wrap items-center gap-2 text-sm text-neutral-500 mb-4">
-		<span class="px-2 py-0.5 rounded text-xs font-medium {severityColors[issue.severity] ?? 'bg-neutral-100'}">
-			{severityLabels[issue.severity] ?? issue.severity}
+		<span class="px-2 py-0.5 rounded text-xs font-medium {issueSeverityColors[issue.severity] ?? 'bg-neutral-100'}">
+			{msg(`issue_severity_${issue.severity}`) ?? issue.severity}
 		</span>
 		<span>rapporterat av {issue.reporter.name}</span>
 		<span>·</span>
@@ -241,7 +209,7 @@
 							<div class="flex flex-wrap items-baseline gap-x-1.5">
 								<span class="font-medium">{event.actor_name}</span>
 								{#if event.event_type !== 'comment'}
-									<span class="text-neutral-500">{eventTypeLabels[event.event_type] ?? event.event_type}</span>
+									<span class="text-neutral-500">{msg(`issue_event_type_${event.event_type}`) ?? event.event_type}</span>
 									{#if formatEventMeta(event)}
 										<span class="text-neutral-600 font-medium">{formatEventMeta(event)}</span>
 									{/if}

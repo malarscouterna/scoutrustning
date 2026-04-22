@@ -46,5 +46,16 @@
   "team_access_manager": "Equipment manager",
 
   "team_type_troop": "Troop",
-  "team_type_role": "Role"
+  "team_type_role": "Role",
+
+  "team_access_view_description": "Can view equipment and report issues",
+  "team_access_book_description": "Can book equipment",
+  "team_access_trusted_description": "Automatic approval for low level",
+  "team_access_manager_description": "Full access to inventory, issues and approvals",
+
+  "issue_event_type_comment": "Comment",
+  "issue_event_type_status_change": "Status changed",
+  "issue_event_type_assignment": "Assignment",
+  "issue_event_type_article_added": "Equipment added",
+  "issue_event_type_article_removed": "Equipment removed"
 }

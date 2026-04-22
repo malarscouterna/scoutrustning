@@ -9,6 +9,8 @@
 	import type { PageData } from './$types';
 	import { page } from '$app/stores';
 	import { onDestroy } from 'svelte';
+	import { msg } from '$lib/msg';
+	import { bookingStatusColors } from '$lib/styles';
 
 	let { data }: { data: PageData } = $props();
 
@@ -27,9 +29,9 @@
 	});
 
 	$effect(() => {
-		const msg = $page.url.searchParams.get('msg');
-		if (msg) {
-			message = msg;
+		const urlMsg = $page.url.searchParams.get('msg');
+		if (urlMsg) {
+			message = urlMsg;
 			history.replaceState({}, '', $page.url.pathname);
 			setTimeout(() => message = '', 4000);
 		}
@@ -74,27 +76,6 @@
 	});
 
 	onDestroy(stopPolling);
-
-	const statusLabels: Record<string, string> = {
-		draft: 'Utkast',
-		submitted: 'Väntar på godkännande',
-		approved: 'Godkänd',
-		confirmed: 'Bekräftad',
-		picked_up: 'Uthämtad',
-		returned: 'Återlämnad',
-		rejected: 'Nekad',
-		cancelled: 'Avbokad'
-	};
-
-	const statusColors: Record<string, string> = {
-		draft: 'bg-neutral-100',
-		submitted: 'bg-orange-100 text-orange-800',
-		confirmed: 'bg-green-100 text-green-800',
-		picked_up: 'bg-blue-100 text-blue-800',
-		returned: 'bg-neutral-100',
-		rejected: 'bg-red-100 text-red-800',
-		cancelled: 'bg-neutral-100 text-neutral-500'
-	};
 
 	let editable = $derived(
 		['draft', 'submitted', 'approved', 'confirmed'].includes(booking.status)
@@ -253,8 +234,8 @@
 				<h1 class="text-heading-sm font-bold">
 					{booking.start_date} — {booking.end_date}
 				</h1>
-				<span class="text-sm px-2 py-0.5 rounded {statusColors[booking.status] ?? 'bg-neutral-100'}">
-					{statusLabels[booking.status] ?? booking.status}
+				<span class="text-sm px-2 py-0.5 rounded {bookingStatusColors[booking.status] ?? 'bg-neutral-100'}">
+					{msg(`booking_status_${booking.status}`) ?? booking.status}
 				</span>
 			</div>
 			{#if booking.notes}

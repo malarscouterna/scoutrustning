@@ -6,13 +6,7 @@
 	import { cart } from '$lib/stores/cart.svelte';
 	import BookingItemsList from '$lib/components/BookingItemsList.svelte';
 	import type { PageData } from './$types';
-
-	const accessLabels: Record<string, string> = {
-		view: 'Visa',
-		book: 'Boka',
-		trusted: 'Betrodd',
-		manager: 'Ansvarig'
-	};
+	import { msg } from '$lib/msg';
 
 	let { data }: { data: PageData } = $props();
 
@@ -116,8 +110,8 @@
 		}
 	});
 
-	function showMessage(msg: string) {
-		message = msg;
+	function showMessage(text: string) {
+		message = text;
 		setTimeout(() => message = '', 4000);
 	}
 
@@ -258,7 +252,7 @@
 				<span class="text-sm">Bokas för</span>
 				<select bind:value={newUnit} class="border rounded px-3 py-2">
 					{#each userTeams.filter(u => myTeamSet.has(u.name)) as unit}
-						<option value={unit.id}>{unit.name} ({accessLabels[unit.access_level] ?? unit.access_level})</option>
+						<option value={unit.id}>{unit.name} ({msg(`team_access_${unit.access_level}`) ?? unit.access_level})</option>
 					{/each}
 					<option value="">Personlig bokning</option>
 					{#if isManager}
@@ -266,7 +260,7 @@
 						{#if otherTeams.length > 0}
 							<option disabled>───</option>
 							{#each otherTeams as unit}
-								<option value={unit.id}>{unit.name} ({accessLabels[unit.access_level] ?? unit.access_level})</option>
+								<option value={unit.id}>{unit.name} ({msg(`team_access_${unit.access_level}`) ?? unit.access_level})</option>
 							{/each}
 						{/if}
 					{/if}
@@ -327,7 +321,7 @@
 				<span class="text-sm">Bokas för</span>
 				<select bind:value={selectedUnit} class="border rounded px-3 py-2">
 					{#each userTeams.filter(u => myTeamSet.has(u.name)) as unit}
-						<option value={unit.id}>{unit.name} ({accessLabels[unit.access_level] ?? unit.access_level})</option>
+						<option value={unit.id}>{unit.name} ({msg(`team_access_${unit.access_level}`) ?? unit.access_level})</option>
 					{/each}
 					<option value="">Personlig bokning</option>
 					{#if isManager}
@@ -335,7 +329,7 @@
 						{#if otherTeams.length > 0}
 							<option disabled>───</option>
 							{#each otherTeams as unit}
-								<option value={unit.id}>{unit.name} ({accessLabels[unit.access_level] ?? unit.access_level})</option>
+								<option value={unit.id}>{unit.name} ({msg(`team_access_${unit.access_level}`) ?? unit.access_level})</option>
 							{/each}
 						{/if}
 					{/if}

@@ -46,5 +46,16 @@
   "team_access_manager": "Utrustningsansvarig",
 
   "team_type_troop": "Avd.",
-  "team_type_role": "Roll"
+  "team_type_role": "Roll",
+
+  "team_access_view_description": "Kan se utrustning och rapportera problem",
+  "team_access_book_description": "Kan boka utrustning",
+  "team_access_trusted_description": "Automatiskt godkännande för låg nivå",
+  "team_access_manager_description": "Full tillgång till inventarie, ärenden och godkännanden",
+
+  "issue_event_type_comment": "Kommentar",
+  "issue_event_type_status_change": "Status ändrad",
+  "issue_event_type_assignment": "Tilldelning",
+  "issue_event_type_article_added": "Utrustning tillagd",
+  "issue_event_type_article_removed": "Utrustning borttagen"
 }

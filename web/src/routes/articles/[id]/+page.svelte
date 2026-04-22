@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { createApiClient, type ArticleEvent } from '$lib/api/client';
-	import { statusLabels, statusColors, approvalLabels, eventTypeLabels, eventTypeColors } from '$lib/labels';
+	import { msg } from '$lib/msg';
+	import { articleStatusColors, articleEventTypeColors } from '$lib/styles';
 	import { hasRole, canBook } from '$lib/user';
 	import { page } from '$app/stores';
 	import { cart } from '$lib/stores/cart.svelte';
@@ -98,10 +99,10 @@
 	});
 
 	function formatEventMeta(event: ArticleEvent): string {
-		const m = event.metadata ?? {};
-		if (m.old_count && m.new_count) return `${m.old_count} → ${m.new_count}`;
-		if (m.new_status && m.old_status) {
-			return `${statusLabels[m.old_status] ?? m.old_status} → ${statusLabels[m.new_status] ?? m.new_status}`;
+		const meta = event.metadata ?? {};
+		if (meta.old_count && meta.new_count) return `${meta.old_count} → ${meta.new_count}`;
+		if (meta.new_status && meta.old_status) {
+			return `${msg(`article_status_${meta.old_status}`) ?? meta.old_status} → ${msg(`article_status_${meta.new_status}`) ?? meta.new_status}`;
 		}
 		return '';
 	}
@@ -203,8 +204,8 @@
 				<h1 class="text-heading-sm font-bold">{article.commercial_name || article.common_name}</h1>
 			{:else}
 				<h1 class="text-heading-sm font-bold">{article.common_name}</h1>
-				<span class="text-sm px-2 py-0.5 rounded {statusColors[effectiveStatus] ?? 'bg-neutral-100'}">
-					{statusLabels[effectiveStatus] ?? effectiveStatus}
+				<span class="text-sm px-2 py-0.5 rounded {articleStatusColors[effectiveStatus] ?? 'bg-neutral-100'}">
+					{msg(`article_status_${effectiveStatus}`) ?? effectiveStatus}
 				</span>
 			{/if}
 		</div>
@@ -226,8 +227,8 @@
 				<h2 class="text-sm font-medium text-neutral-600 mb-1">Status ({groupArticles.length} st)</h2>
 				<div class="flex flex-wrap gap-2">
 					{#each statusSummary as { status, count }}
-						<span class="text-xs px-2 py-0.5 rounded {statusColors[status] ?? 'bg-neutral-100'}">
-							{count} {statusLabels[status] ?? status}
+						<span class="text-xs px-2 py-0.5 rounded {articleStatusColors[status] ?? 'bg-neutral-100'}">
+							{count} {msg(`article_status_${status}`) ?? status}
 						</span>
 					{/each}
 				</div>
@@ -250,7 +251,7 @@
 
 		<div class="flex flex-wrap gap-x-6 gap-y-2 text-sm text-neutral-500 mb-4">
 			<span>Spårning: {article.individually_tracked ? 'Individuell' : 'Antal'}</span>
-			<span>Godkännande: {approvalLabels[article.approval_level] ?? article.approval_level}</span>
+			<span>Godkännande: {msg(`article_approval_${article.approval_level}`) ?? article.approval_level}</span>
 			{#if isQuantityTracked && purchaseOverview}
 				{#if purchaseOverview.dates.length > 0}
 					<span>Inköpt: {purchaseOverview.dates.join(', ')}</span>
@@ -334,7 +335,7 @@
 					<div class="text-xs">
 						<div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
 							<span class="text-neutral-400 shrink-0">{new Date(event.created_at).toLocaleDateString('sv')}</span>
-							<span class="font-medium {eventTypeColors[event.event_type] ?? 'text-neutral-700'}">{eventTypeLabels[event.event_type] ?? event.event_type}{#if count > 1} ×{count}{/if}</span>
+							<span class="font-medium {articleEventTypeColors[event.event_type] ?? 'text-neutral-700'}">{msg(`event_type_${event.event_type}`) ?? event.event_type}{#if count > 1} ×{count}{/if}</span>
 							{#if formatEventMeta(event)}<span class="text-neutral-500">{formatEventMeta(event)}</span>{/if}
 							<span class="text-neutral-400 shrink-0">{event.actor_name}</span>
 						</div>

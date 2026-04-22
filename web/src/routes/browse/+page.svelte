@@ -2,7 +2,7 @@
 	import type { PageData } from './$types';
 	import { createApiClient, type Article, type AvailabilityGroup } from '$lib/api/client';
 import type { TeamMembership } from '$lib/user';
-	import { statusLabels } from '$lib/labels';
+	import { msg } from '$lib/msg';
 	import { hasRole, accessAtLeast, canBook } from '$lib/user';
 	import { page } from '$app/stores';
 	import { cart } from '$lib/stores/cart.svelte';
@@ -691,11 +691,11 @@ import type { TeamMembership } from '$lib/user';
 											<span class="text-xs text-neutral-500">{article.place || '—'}</span>
 											{#if article.status !== 'ok' || article.current_booking_id}
 												<button onclick={() => toggleIssueHistory(article.id)} class="inline-block px-2 py-0.5 rounded text-xs cursor-pointer {statusBadgeClass(article.status)}">
-													{statusLabels[article.status] ?? article.status}
+													{msg(`article_status_${article.status}`) ?? article.status}
 												</button>
 											{:else}
 												<span class="inline-block px-2 py-0.5 rounded text-xs {statusBadgeClass(article.status)}">
-													{statusLabels[article.status] ?? article.status}
+													{msg(`article_status_${article.status}`) ?? article.status}
 												</span>
 											{/if}
 											<span class="ml-auto flex gap-2 shrink-0">
@@ -750,11 +750,11 @@ import type { TeamMembership } from '$lib/user';
 									<div class="flex items-start gap-2">
 										{#if row.status !== 'ok'}
 											<button onclick={() => toggleIssueHistory(representativeId)} class="inline-block px-2 py-0.5 rounded text-xs cursor-pointer {statusBadgeClass(row.status)}">
-												×{row.count} {statusLabels[row.status] ?? row.status}
+												×{row.count} {msg(`article_status_${row.status}`) ?? row.status}
 											</button>
 										{:else}
 											<span class="inline-block px-2 py-0.5 rounded text-xs {statusBadgeClass(row.status)}">
-												×{row.count} {statusLabels[row.status] ?? row.status}
+												×{row.count} {msg(`article_status_${row.status}`) ?? row.status}
 											</span>
 										{/if}
 										<div class="min-w-0">

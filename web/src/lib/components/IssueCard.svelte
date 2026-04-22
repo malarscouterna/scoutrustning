@@ -1,37 +1,13 @@
 <script lang="ts">
 	import type { Issue } from '$lib/api/client';
+	import { msg } from '$lib/msg';
+	import { issueStatusColors, issueSeverityColors } from '$lib/styles';
 
 	interface Props {
 		issue: Issue;
 	}
 
 	let { issue }: Props = $props();
-
-	const severityLabels: Record<string, string> = {
-		usable: 'Användbar',
-		unusable: 'Ej användbar',
-		missing: 'Saknas'
-	};
-
-	const severityColors: Record<string, string> = {
-		usable: 'bg-orange-100 text-orange-800',
-		unusable: 'bg-red-100 text-red-800',
-		missing: 'bg-red-100 text-red-800'
-	};
-
-	const statusLabels: Record<string, string> = {
-		open: 'Öppen',
-		in_progress: 'Pågår',
-		resolved: 'Löst',
-		archived: 'Arkiverad'
-	};
-
-	const statusColors: Record<string, string> = {
-		open: 'bg-blue-50 text-blue-700',
-		in_progress: 'bg-yellow-50 text-yellow-800',
-		resolved: 'bg-green-100 text-green-800',
-		archived: 'bg-neutral-100 text-neutral-500'
-	};
 
 	function formatDate(ts: string) {
 		const d = new Date(ts);
@@ -73,14 +49,14 @@
 	<div class="flex flex-wrap items-start justify-between gap-2">
 		<span class="font-medium text-sm">{issue.title}</span>
 		{#if issue.status !== 'open'}
-			<span class="text-xs px-2 py-0.5 rounded font-medium shrink-0 {statusColors[issue.status] ?? 'bg-neutral-100'}">
-				{statusLabels[issue.status] ?? issue.status}
+			<span class="text-xs px-2 py-0.5 rounded font-medium shrink-0 {issueStatusColors[issue.status] ?? 'bg-neutral-100'}">
+				{msg(`issue_status_${issue.status}`) ?? issue.status}
 			</span>
 		{/if}
 	</div>
 	<div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-neutral-500">
-		<span class="px-1.5 py-0.5 rounded font-medium {severityColors[issue.severity] ?? 'bg-neutral-100'}">
-			{severityLabels[issue.severity] ?? issue.severity}
+		<span class="px-1.5 py-0.5 rounded font-medium {issueSeverityColors[issue.severity] ?? 'bg-neutral-100'}">
+			{msg(`issue_severity_${issue.severity}`) ?? issue.severity}
 		</span>
 		{#if articleNames}
 			<span>{articleNames}</span>

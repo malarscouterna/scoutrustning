@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { isManager as checkManager } from '$lib/user';
 	import type { PageData } from './$types';
+	import { msg } from '$lib/msg';
+	import { bookingStatusColors } from '$lib/styles';
 
 	let { data }: { data: PageData } = $props();
 
@@ -14,28 +16,6 @@
 			? (data.pendingCount > 0 ? 'pending' : 'all')
 			: 'mine';
 	});
-
-	const statusLabels: Record<string, string> = {
-		draft: 'Utkast',
-		submitted: 'Väntar på godkännande',
-		approved: 'Godkänd',
-		confirmed: 'Bekräftad',
-		picked_up: 'Uthämtad',
-		returned: 'Återlämnad',
-		rejected: 'Nekad',
-		cancelled: 'Avbokad'
-	};
-
-	const statusColors: Record<string, string> = {
-		draft: 'bg-neutral-100',
-		submitted: 'bg-orange-100 text-orange-800',
-		approved: 'bg-blue-100 text-blue-800',
-		confirmed: 'bg-green-100 text-green-800',
-		picked_up: 'bg-blue-100 text-blue-800',
-		returned: 'bg-neutral-100',
-		rejected: 'bg-red-100 text-red-800',
-		cancelled: 'bg-neutral-100 text-neutral-500'
-	};
 
 	function isMine(booking: any): boolean {
 		if (booking.created_by === data.user?.member_id) return true;
@@ -109,8 +89,8 @@
 								<span class="text-xs text-neutral-400">Personlig</span>
 							{/if}
 						</div>
-						<span class="text-xs px-2 py-0.5 rounded {statusColors[booking.status] ?? 'bg-neutral-100'}">
-							{statusLabels[booking.status] ?? booking.status}
+						<span class="text-xs px-2 py-0.5 rounded {bookingStatusColors[booking.status] ?? 'bg-neutral-100'}">
+							{msg(`booking_status_${booking.status}`) ?? booking.status}
 						</span>
 					</div>
 					{#if booking.notes}
