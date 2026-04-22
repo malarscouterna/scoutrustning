@@ -1,13 +1,7 @@
 <script lang="ts">
 	import type { User } from '$lib/user';
 	import { cart } from '$lib/stores/cart.svelte';
-
-	const accessLabels: Record<string, string> = {
-		view: 'Visa',
-		book: 'Boka',
-		trusted: 'Betrodd',
-		manager: 'Ansvarig'
-	};
+	import { msg } from '$lib/msg';
 
 	let {
 		personas,
@@ -65,7 +59,7 @@
 						<div class="font-medium text-xs">🔑 ScoutID-inloggning</div>
 						{#if isScoutID && user}
 							<div class="text-xs text-green-700">
-								{user.name} · {accessLabels[user.max_access] ?? user.max_access}
+								{user.name} · {msg(`team_access_${user.max_access}`) ?? user.max_access}
 								{#if user.teams.length > 0}
 									· {user.teams.map(t => t.team_name).join(', ')}
 								{/if}

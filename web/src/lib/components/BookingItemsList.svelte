@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { createApiClient, type BookingItem } from '$lib/api/client';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
+	import { msg } from '$lib/msg';
 
 	interface Props {
 		items: BookingItem[];
@@ -38,16 +39,6 @@
 	});
 
 	const statusOrder = ['ok', 'reported_usable', 'incoming', 'reported_unusable', 'under_repair', 'lost', 'archived'] as const;
-
-	const statusLabels: Record<string, string> = {
-		ok: 'OK',
-		reported_usable: 'Felrapporterad - användbar',
-		reported_unusable: 'Felrapporterad - ej användbar',
-		incoming: 'Inkommande',
-		under_repair: 'Under reparation',
-		lost: 'Saknas',
-		archived: 'Arkiverad'
-	};
 
 	interface ItemGroup {
 		key: string;
@@ -269,7 +260,7 @@
 												 row.status === 'reported_usable' ? 'bg-orange-100 text-orange-700' :
 												 row.status === 'reported_unusable' ? 'bg-red-100 text-red-700' :
 												 'bg-neutral-100 text-neutral-600'}"
-											>×{row.count} {statusLabels[row.status] ?? row.status}</span>
+											>×{row.count} {msg(`article_status_${row.status}`) ?? row.status}</span>
 											{#if row.hasConflict}
 												<span class="text-xs text-orange-700">Inte tillgänglig för de valda datumen</span>
 											{/if}

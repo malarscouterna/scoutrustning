@@ -3,18 +3,12 @@
 	import { browser } from '$app/environment';
 	import CrudList from '$lib/components/CrudList.svelte';
 	import type { PageData } from './$types';
+	import { msg } from '$lib/msg';
 
 	let { data }: { data: PageData } = $props();
 	let user = $derived(data.user);
 	const api = createApiClient();
 	let mgr = $derived(user?.max_access === 'manager');
-
-	const accessLevelConfig: Record<string, { label: string; description: string }> = {
-		view: { label: 'Visa', description: 'Kan se utrustning och rapportera problem' },
-		book: { label: 'Boka', description: 'Kan boka utrustning' },
-		trusted: { label: 'Betrodd', description: 'Automatiskt godkännande för låg nivå' },
-		manager: { label: 'Utrustningsansvarig', description: 'Full tillgång till inventarie, ärenden och godkännanden' }
-	};
 
 	import type { TeamMembership } from '$lib/user';
 
@@ -34,8 +28,6 @@
 	let allTeams = $state<Team[]>([]);
 	$effect(() => { allTeams = data.teams ?? []; });
 	const accessLevels = ['view', 'book', 'trusted', 'manager'] as const;
-	const accessLevelLabels: Record<string, string> = { view: 'Visa', book: 'Boka', trusted: 'Betrodd', manager: 'Ansvarig' };
-	const typeLabels: Record<string, string> = { troop: 'Avd.', role: 'Roll' };
 	let editingTeamId = $state<string | null>(null);
 	let editingTeamName = $state('');
 	let selectedTeamId = $state<string | null>(null);
@@ -170,14 +162,14 @@
 
 	async function deleteMyImage(img: typeof myImages[0]) {
 		const totalRefs = img.own_group_count + img.other_group_count;
-		let msg = 'Är du säker på att du vill ta bort bilden?';
+		let confirmMsg = 'Är du säker på att du vill ta bort bilden?';
 		if (totalRefs > 1) {
 			const parts: string[] = [];
 			if (img.own_group_count > 1) parts.push(`${img.own_group_count - 1} i din kår`);
 			if (img.other_group_count > 0) parts.push(`${img.other_group_count} i andra kårer`);
-			msg = `Bilden används på ${parts.join(' och ')}. Om du tar bort den försvinner den därifrån också. Fortsätt?`;
+			confirmMsg = `Bilden används på ${parts.join(' och ')}. Om du tar bort den försvinner den därifrån också. Fortsätt?`;
 		}
-		if (!confirm(msg)) return;
+		if (!confirm(confirmMsg)) return;
 		try {
 			await api.deleteMyImage(img.id);
 			myImages = myImages.filter(i => i.id !== img.id);
@@ -358,8 +350,8 @@
 				<div class="space-y-3">
 					{#each Object.entries(teamsByAccess) as [level, teams]}
 						<div class="bg-neutral-50 rounded-lg px-4 py-3">
-							<div class="font-medium text-sm">{accessLevelConfig[level]?.label ?? level}</div>
-							<div class="text-xs text-neutral-500 mb-2">{accessLevelConfig[level]?.description ?? ''}</div>
+							<div class="font-medium text-sm">{msg(`team_access_${level}`) ?? level}</div>
+							<div class="text-xs text-neutral-500 mb-2">{msg(`team_access_${level}_description`) ?? ''}</div>
 							<div class="flex flex-wrap gap-2">
 								{#each teams as team}
 									<span class="text-xs bg-white text-neutral-700 px-2 py-1 rounded shadow-sm">
@@ -499,7 +491,7 @@
 					{@const teams = teamsByLevel(level)}
 					<div class="border rounded-lg">
 						<div class="px-3 py-1.5 bg-neutral-50 rounded-t-lg border-b">
-							<span class="text-sm font-medium">{accessLevelLabels[level]}</span>
+							<span class="text-sm font-medium">{msg(`team_access_${level}`) ?? level}</span>
 							<span class="text-xs text-neutral-400 ml-1">({teams.length})</span>
 						</div>
 						<div class="p-1.5 space-y-0.5 min-h-[48px]">
@@ -512,7 +504,7 @@
 									class:ring-blue-300={selectedTeamId === team.id}
 								>
 									<span class="truncate flex-1">{team.name}</span>
-									<span class="text-[10px] text-neutral-400 shrink-0">{typeLabels[team.type] ?? team.type}</span>
+									<span class="text-[10px] text-neutral-400 shrink-0">{msg(`team_type_${team.type}`) ?? team.type}</span>
 								</button>
 							{/each}
 							{#if teams.length === 0}
@@ -540,7 +532,7 @@
 								<button onclick={() => editingTeamId = null} class="text-sm text-neutral-500 underline">Avbryt</button>
 							{:else}
 								<span class="font-medium text-sm">{team.name}</span>
-								<span class="text-xs text-neutral-400">{typeLabels[team.type]}</span>
+								<span class="text-xs text-neutral-400">{msg(`team_type_${team.type}`) ?? team.type}</span>
 								{#if team.claim_mappings?.length > 0}
 									<span class="text-xs text-neutral-400">— {team.claim_mappings[0].claim_scope}:{team.claim_mappings[0].claim_id}</span>
 								{/if}
@@ -557,7 +549,7 @@
 										aria-label="Ändra åtkomstnivå"
 									>
 										{#each accessLevels as l}
-											<option value={l}>{accessLevelLabels[l]}</option>
+											<option value={l}>{msg(`team_access_${l}`) ?? l}</option>
 										{/each}
 									</select>
 								</label>
@@ -587,7 +579,7 @@
 							<span class="text-xs text-neutral-500">Åtkomstnivå</span>
 							<select bind:value={newTeam.access_level} class="border rounded px-2 py-1 text-sm">
 								{#each accessLevels as l}
-									<option value={l}>{accessLevelLabels[l]}</option>
+									<option value={l}>{msg(`team_access_${l}`) ?? l}</option>
 								{/each}
 							</select>
 						</label>
@@ -626,7 +618,7 @@
 						<span>{perm.label}</span>
 						<select bind:value={permForm[perm.key]} class="border rounded px-2 py-1 text-sm w-32">
 							{#each allowedLevels(perm.min) as l}
-								<option value={l}>{accessLevelLabels[l]}</option>
+								<option value={l}>{msg(`team_access_${l}`) ?? l}</option>
 							{/each}
 						</select>
 					</label>
@@ -641,7 +633,7 @@
 						<span>{cfg.label}</span>
 						<select bind:value={permForm[cfg.key]} class="border rounded px-2 py-1 text-sm w-32">
 							{#each ['view', 'book', 'trusted', 'manager'] as l}
-								<option value={l}>{accessLevelLabels[l]}</option>
+								<option value={l}>{msg(`team_access_${l}`) ?? l}</option>
 							{/each}
 						</select>
 					</label>

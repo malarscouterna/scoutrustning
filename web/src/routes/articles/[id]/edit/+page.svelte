@@ -2,7 +2,8 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { createApiClient } from '$lib/api/client';
-	import { statusLabels, statusColors } from '$lib/labels';
+	import { msg } from '$lib/msg';
+	import { articleStatusColors } from '$lib/styles';
 	import ArticleForm from '$lib/components/ArticleForm.svelte';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
@@ -23,7 +24,7 @@
 	});
 
 	function statusBadgeClass(status: string): string {
-		return statusColors[status] ?? 'bg-neutral-100';
+		return articleStatusColors[status] ?? 'bg-neutral-100';
 	}
 
 	async function handleSubmit(articles: Record<string, unknown>[]) {
@@ -122,7 +123,7 @@
 					{#each data.groupItems as item}
 						<div class="px-3 py-2 flex flex-wrap items-center gap-x-4 gap-y-1">
 							<span class="font-medium text-neutral-700 min-w-24">{item.common_name}</span>
-							<span class="text-xs px-2 py-0.5 rounded {statusBadgeClass(item.status)}">{statusLabels[item.status] ?? item.status}</span>
+							<span class="text-xs px-2 py-0.5 rounded {statusBadgeClass(item.status)}">{msg(`article_status_${item.status}`) ?? item.status}</span>
 							{#if item.purchase_date}
 								<span class="text-xs text-neutral-500">Inköpt: {item.purchase_date}</span>
 							{/if}

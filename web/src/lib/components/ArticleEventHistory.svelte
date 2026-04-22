@@ -2,7 +2,8 @@
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
 	import { createApiClient, type ArticleEvent } from '$lib/api/client';
-	import { statusLabels, eventTypeLabels, eventTypeColors } from '$lib/labels';
+	import { msg } from '$lib/msg';
+	import { articleEventTypeColors } from '$lib/styles';
 
 	interface Props {
 		articleId: string;
@@ -21,13 +22,13 @@
 	let lightbox: any = null;
 
 	function formatMeta(event: ArticleEvent): string {
-		const m = event.metadata ?? {};
+		const meta = event.metadata ?? {};
 		const parts: string[] = [];
-		if (m.reason === 'lost' || m.reason === 'missing_at_pickup') parts.push('saknas');
-		if (m.new_status && m.old_status) {
-			parts.push(`${statusLabels[m.old_status] ?? m.old_status} → ${statusLabels[m.new_status] ?? m.new_status}`);
-		} else if (m.new_status && event.event_type !== 'issue_reported') {
-			parts.push(`→ ${statusLabels[m.new_status] ?? m.new_status}`);
+		if (meta.reason === 'lost' || meta.reason === 'missing_at_pickup') parts.push('saknas');
+		if (meta.new_status && meta.old_status) {
+			parts.push(`${msg(`article_status_${meta.old_status}`) ?? meta.old_status} → ${msg(`article_status_${meta.new_status}`) ?? meta.new_status}`);
+		} else if (meta.new_status && event.event_type !== 'issue_reported') {
+			parts.push(`→ ${msg(`article_status_${meta.new_status}`) ?? meta.new_status}`);
 		}
 		return parts.join(' · ');
 	}
@@ -95,7 +96,7 @@
 			<div class="text-xs">
 				<div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
 					<span class="text-neutral-400 shrink-0">{new Date(event.created_at).toLocaleDateString('sv')}</span>
-					<span class="font-medium {eventTypeColors[event.event_type] ?? 'text-neutral-700'}">{eventTypeLabels[event.event_type] ?? event.event_type}</span>
+					<span class="font-medium {articleEventTypeColors[event.event_type] ?? 'text-neutral-700'}">{msg(`event_type_${event.event_type}`) ?? event.event_type}</span>
 					{#if formatMeta(event)}<span class="text-neutral-500">{formatMeta(event)}</span>{/if}
 					<span class="text-neutral-400 shrink-0">{event.actor_name}</span>
 				</div>
