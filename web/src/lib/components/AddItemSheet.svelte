@@ -1,6 +1,7 @@
 
 <script lang="ts">
 	import { createApiClient, type AvailabilityGroup, type Category } from '$lib/api/client';
+	import * as m from '$lib/paraglide/messages.js';
 
 	interface Props {
 		bookingId: string;
@@ -32,8 +33,8 @@
 	}
 
 	function disabledReason(g: AvailabilityGroup): string {
-		if (g.approval_level !== 'none') return 'Kräver godkännande';
-		if ((g.available_count + g.reported_usable_count) === 0) return 'Ej tillgänglig';
+		if (g.approval_level !== 'none') return 'approval';
+		if ((g.available_count + g.reported_usable_count) === 0) return 'unavailable';
 		return '';
 	}
 
@@ -89,10 +90,10 @@
 </script>
 
 <div class="fixed inset-0 z-50 flex items-start justify-center pt-12 px-4">
-	<button type="button" class="absolute inset-0 bg-black/40" onclick={onClose} aria-label="Stäng"></button>
+	<button type="button" class="absolute inset-0 bg-black/40" onclick={onClose} aria-label={m.btn_close()}></button>
 	<div class="relative bg-white rounded-2xl w-full max-w-lg max-h-[80vh] flex flex-col shadow-xl">
 		<div class="flex items-center justify-between px-4 pt-4 pb-2 border-b">
-			<h2 class="font-semibold text-base">Lägg till utrustning</h2>
+			<h2 class="font-semibold text-base">{m.add_item_title()}</h2>
 			<button onclick={onClose} class="text-neutral-400 hover:text-neutral-600 text-xl leading-none">×</button>
 		</div>
 
@@ -100,7 +101,7 @@
 			<!-- svelte-ignore a11y_autofocus -->
 			<input
 				type="search"
-				placeholder="Sök utrustning..."
+				placeholder={m.add_item_search_placeholder()}
 				bind:value={searchQuery}
 				class="w-full border rounded px-3 py-2 text-sm"
 				autofocus
@@ -127,11 +128,11 @@
 
 		<div class="overflow-y-auto flex-1 px-4 pb-4 space-y-2">
 			{#if loading}
-				<p class="text-sm text-neutral-400 py-4 text-center">Laddar...</p>
+				<p class="text-sm text-neutral-400 py-4 text-center">{m.btn_loading()}</p>
 			{:else if !showResults}
-				<p class="text-sm text-neutral-400 py-4 text-center">Sök eller välj en kategori ovan.</p>
+				<p class="text-sm text-neutral-400 py-4 text-center">{m.add_item_empty_hint()}</p>
 			{:else if results.length === 0}
-				<p class="text-sm text-neutral-400 py-4 text-center">Inga artiklar hittades.</p>
+				<p class="text-sm text-neutral-400 py-4 text-center">{m.add_item_no_results()}</p>
 			{:else}
 				{#each results as group}
 					{@const key = groupKey(group)}
@@ -144,11 +145,11 @@
 							<div class="text-xs text-neutral-500">{group.location_name}</div>
 							{#if reason}
 								<div class="text-xs text-orange-600 mt-0.5">
-									{reason}
-									{#if reason === 'Kräver godkännande'}
-										— <a href="/browse" class="underline">skapa ny bokning</a>
+									{reason === 'approval' ? m.add_item_requires_approval() : m.add_item_unavailable()}
+									{#if reason === 'approval'}
+										— <a href="/browse" class="underline">{m.add_item_create_booking_link()}</a>
 									{:else}
-										— <a href="/browse" class="underline">välj annat datum</a>
+										— <a href="/browse" class="underline">{m.add_item_change_date_link()}</a>
 									{/if}
 								</div>
 							{/if}
@@ -158,20 +159,20 @@
 								<button
 									onclick={() => quantities[key] = Math.max(1, qty - 1)}
 									class="w-7 h-7 border rounded text-sm flex items-center justify-center"
-									aria-label="Minska antal"
+									aria-label={m.add_item_decrease_aria()}
 								>−</button>
 								<span class="w-8 text-center text-sm">{qty}</span>
 								<button
 									onclick={() => quantities[key] = qty + 1}
 									class="w-7 h-7 border rounded text-sm flex items-center justify-center"
-									aria-label="Öka antal"
+									aria-label={m.add_item_increase_aria()}
 								>+</button>
 							</div>
 							<button
 								onclick={() => addItem(group)}
 								disabled={adding}
 								class="text-xs bg-blue-700 text-white px-3 py-1.5 rounded disabled:opacity-50"
-							>Lägg till</button>
+							>{m.btn_add()}</button>
 						{/if}
 					</div>
 				{/each}

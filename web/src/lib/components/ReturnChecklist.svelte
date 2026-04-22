@@ -2,6 +2,7 @@
 	import { createApiClient, type BookingItem } from '$lib/api/client';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
 	import ReportIssueSheet from '$lib/components/ReportIssueSheet.svelte';
+	import * as m from '$lib/paraglide/messages.js';
 
 	interface Props {
 		bookingId: string;
@@ -24,7 +25,13 @@
 	let expandedGroups = $state<Set<string>>(new Set());
 	let completing = $state(false);
 
-	const labels: Record<string, string> = { returned_ok: 'OK', delayed: 'Försenad', reported_usable: 'Problem — användbar', reported_unusable: 'Problem — ej användbar', missing: 'Saknas' };
+	const labels = $derived<Record<string, string>>({
+		returned_ok: m.return_status_ok(),
+		delayed: m.return_status_late(),
+		reported_usable: m.return_status_problem_usable(),
+		reported_unusable: m.return_status_problem_unusable(),
+		missing: m.return_status_missing()
+	});
 	const colors: Record<string, string> = { returned_ok: 'bg-green-100 text-green-800', delayed: 'bg-orange-100 text-orange-800', reported_usable: 'bg-orange-100 text-orange-800', reported_unusable: 'bg-red-100 text-red-800', missing: 'bg-challengerpink-100 text-challengerpink-800' };
 
 	const returnStatusToSeverity: Record<string, string> = {
@@ -220,13 +227,13 @@
 		{/if}
 		{#if description}
 			<div>
-				<span class="font-medium text-neutral-500">Beskrivning:</span>
+				<span class="font-medium text-neutral-500">{m.lbl_description_colon()}</span>
 				<p class="mt-0.5">{description}</p>
 			</div>
 		{/if}
 		{#if instructions}
 			<div>
-				<span class="font-medium text-neutral-500">Instruktioner:</span>
+				<span class="font-medium text-neutral-500">{m.lbl_instructions_colon()}</span>
 				<p class="mt-0.5">{instructions}</p>
 			</div>
 		{/if}
@@ -234,7 +241,7 @@
 {/snippet}
 
 {#if error}<div class="bg-red-50 border border-red-200 rounded p-3 mb-3 text-red-800 text-sm">{error}</div>{/if}
-<p class="text-sm text-neutral-500 mb-3">Återlämnad: {returnedCount} / {pickedUp.length}</p>
+<p class="text-sm text-neutral-500 mb-3">{m.return_returned_label()} {returnedCount} / {pickedUp.length}</p>
 
 <div class="space-y-1">
 	{#each groups as g}
@@ -249,7 +256,7 @@
 						<div class="font-medium text-sm">{g.name}{#if expandable}<span class="text-xs text-neutral-400 ml-1">{expanded ? '▲' : '▼'}</span>{/if}</div>
 						<div class="text-xs text-neutral-500">{g.loc}{g.place ? ` · ${g.place}` : ''}</div>
 					</button>
-					<span class="text-xs text-neutral-400">Ej hämtad ({g.notPicked} st)</span>
+					<span class="text-xs text-neutral-400">{m.return_not_picked_up()} ({g.notPicked} st)</span>
 				</div>
 				{#if expanded}
 					{@render infoBlock(gImageIds, g.name, rep?.location_id ?? '', rep?.article_description ?? '', rep?.article_instructions ?? '')}
@@ -267,20 +274,20 @@
 					<div class="px-4 py-3 flex items-center gap-3">
 						<button type="button" onclick={() => expandable && toggleExpand(g.key)} class="flex-1 text-left" class:cursor-pointer={expandable} class:cursor-default={!expandable}>
 							<div class="font-medium text-sm">{g.name} × {row.count}{#if expandable && rows[0] === row}<span class="text-xs text-neutral-400 ml-1">{expanded ? '▲' : '▼'}</span>{/if}</div>
-							<div class="text-xs text-neutral-500">{g.loc}{g.place ? ` · ${g.place}` : ''}{#if g.notPicked > 0}<span class="text-orange-600"> · {g.notPicked} ej hämtade</span>{/if}</div>
+							<div class="text-xs text-neutral-500">{g.loc}{g.place ? ` · ${g.place}` : ''}{#if g.notPicked > 0}<span class="text-orange-600"> · {g.notPicked} {m.return_not_picked_up()}</span>{/if}</div>
 						</button>
 
 						{#if row.status === '_unhandled' && activeGroupKey !== g.key}
 							{@const unhandledCount = row.count}
 							<input type="number" min="0" max={unhandledCount} value={quantityInputs[g.key] ?? unhandledCount} oninput={(e) => quantityInputs[g.key] = parseInt(e.currentTarget.value) || 0} class="w-16 text-center border rounded px-2 py-1 text-sm" />
-							<button onclick={() => returnGroupOk(g)} class="text-xs bg-green-700 text-white px-2 py-1 rounded">OK</button>
-							<button onclick={() => openGroupForm(g)} class="text-xs border px-2 py-1 rounded text-neutral-700">Annat...</button>
+							<button onclick={() => returnGroupOk(g)} class="text-xs bg-green-700 text-white px-2 py-1 rounded">{m.btn_ok()}</button>
+							<button onclick={() => openGroupForm(g)} class="text-xs border px-2 py-1 rounded text-neutral-700">{m.return_btn_other()}</button>
 						{:else if row.status === '_unhandled'}
 							<!-- hidden while form is open -->
 						{:else}
 							<span class="text-xs px-2 py-0.5 rounded {colors[row.status] ?? ''}">{labels[row.status] ?? row.status}</span>
-							{#if savedKey === g.key}<span class="text-xs text-green-600">Sparad</span>{/if}
-							<button onclick={() => undoGroupRow(row)} class="text-xs text-neutral-400 hover:text-neutral-600">Ångra</button>
+							{#if savedKey === g.key}<span class="text-xs text-green-600">{m.return_saved()}</span>{/if}
+							<button onclick={() => undoGroupRow(row)} class="text-xs text-neutral-400 hover:text-neutral-600">{m.btn_undo()}</button>
 						{/if}
 					</div>
 				</div>
@@ -290,9 +297,9 @@
 				{@const unhandled = g.picked.filter((i) => !i.return_status || i.return_status === 'pending')}
 				<div class="border rounded p-3 bg-neutral-50 text-sm space-y-2">
 					<div class="flex items-center gap-2">
-						<span>Antal:</span>
+						<span>{m.return_count_label()}</span>
 						<input type="number" min="1" max={unhandled.length} value={quantityInputs[`${g.key}_form`] ?? 1} oninput={(e) => quantityInputs[`${g.key}_form`] = parseInt(e.currentTarget.value) || 1} class="w-16 text-center border rounded px-2 py-1" />
-						<span class="text-neutral-500">av {unhandled.length} kvar</span>
+						<span class="text-neutral-500">{m.common_of()} {unhandled.length} {m.common_remaining()}</span>
 					</div>
 					<div class="flex flex-wrap gap-2">
 						{#each ['returned_ok', 'delayed', 'reported_usable', 'reported_unusable', 'missing'] as s}
@@ -300,16 +307,16 @@
 						{/each}
 					</div>
 					{#if form.status === 'delayed'}
-						<label class="block"><span class="text-xs text-neutral-600">Beräknad återlämning</span>
+						<label class="block"><span class="text-xs text-neutral-600">{m.return_expected_date()}</span>
 							<input type="date" bind:value={form.expectedReturnDate} oninput={() => checkConflict(g.name, form.expectedReturnDate)} class="block border rounded px-2 py-1 text-sm w-full" /></label>
 						{#if delayWarning}<p class="text-xs text-orange-600">⚠ {delayWarning}</p>{/if}
 					{/if}
 					{#if form.status === 'reported_usable' || form.status === 'reported_unusable' || form.status === 'missing'}
-						<p class="text-xs text-neutral-500">Beskrivning och bilder anges i nästa steg.</p>
+						<p class="text-xs text-neutral-500">{m.return_desc_hint()}</p>
 					{/if}
 					<div class="flex gap-2">
-						<button onclick={() => confirmGroupForm(g)} disabled={!form.status || (form.status === 'delayed' && !form.expectedReturnDate)} class="text-xs bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50">Bekräfta</button>
-						<button onclick={() => activeGroupKey = null} class="text-xs text-neutral-600 underline">Avbryt</button>
+						<button onclick={() => confirmGroupForm(g)} disabled={!form.status || (form.status === 'delayed' && !form.expectedReturnDate)} class="text-xs bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50">{m.btn_confirm()}</button>
+						<button onclick={() => activeGroupKey = null} class="text-xs text-neutral-600 underline">{m.btn_cancel()}</button>
 					</div>
 				</div>
 			{/if}
@@ -335,15 +342,15 @@
 					<div class="text-xs text-neutral-500">{item.location_name}{item.place ? ` · ${item.place}` : ''}</div>
 				</button>
 				{#if notPicked}
-					<span class="text-xs text-neutral-400">Ej hämtad</span>
+					<span class="text-xs text-neutral-400">{m.return_not_picked_up()}</span>
 				{:else if hasReturn}
 					<span class="text-xs px-2 py-0.5 rounded {colors[item.return_status ?? ''] ?? ''}">{labels[item.return_status ?? ''] ?? item.return_status}</span>
-					{#if savedKey === item.id}<span class="text-xs text-green-600">Sparad</span>{/if}
-					<button onclick={() => setReturn(item.id, '')} class="text-xs text-neutral-400 hover:text-neutral-600">Ångra</button>
+					{#if savedKey === item.id}<span class="text-xs text-green-600">{m.return_saved()}</span>{/if}
+					<button onclick={() => setReturn(item.id, '')} class="text-xs text-neutral-400 hover:text-neutral-600">{m.btn_undo()}</button>
 				{:else if activeItemId !== item.id}
 					<div class="flex gap-1">
-						<button onclick={() => setReturn(item.id, 'returned_ok')} class="text-xs bg-green-700 text-white px-2 py-1 rounded">OK</button>
-						<button onclick={() => openForm(item.id)} class="text-xs border px-2 py-1 rounded text-neutral-700">Annat...</button>
+						<button onclick={() => setReturn(item.id, 'returned_ok')} class="text-xs bg-green-700 text-white px-2 py-1 rounded">{m.btn_ok()}</button>
+						<button onclick={() => openForm(item.id)} class="text-xs border px-2 py-1 rounded text-neutral-700">{m.return_btn_other()}</button>
 					</div>
 				{/if}
 			</div>
@@ -359,16 +366,16 @@
 					{/each}
 				</div>
 				{#if form.status === 'delayed'}
-					<label class="block"><span class="text-xs text-neutral-600">Beräknad återlämning</span>
+					<label class="block"><span class="text-xs text-neutral-600">{m.return_expected_date()}</span>
 						<input type="date" bind:value={form.expectedReturnDate} oninput={() => checkConflict(item.commercial_name, form.expectedReturnDate)} class="block border rounded px-2 py-1 text-sm w-full" /></label>
 					{#if delayWarning}<p class="text-xs text-orange-600">⚠ {delayWarning}</p>{/if}
 				{/if}
 				{#if form.status === 'reported_usable' || form.status === 'reported_unusable' || form.status === 'missing'}
-					<p class="text-xs text-neutral-500">Beskrivning och bilder anges i nästa steg.</p>
+					<p class="text-xs text-neutral-500">{m.return_desc_hint()}</p>
 				{/if}
 				<div class="flex gap-2">
-					<button onclick={() => confirmForm(item)} disabled={!form.status || (form.status === 'delayed' && !form.expectedReturnDate)} class="text-xs bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50">Bekräfta</button>
-					<button onclick={() => activeItemId = null} class="text-xs text-neutral-600 underline">Avbryt</button>
+					<button onclick={() => confirmForm(item)} disabled={!form.status || (form.status === 'delayed' && !form.expectedReturnDate)} class="text-xs bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50">{m.btn_confirm()}</button>
+					<button onclick={() => activeItemId = null} class="text-xs text-neutral-600 underline">{m.btn_cancel()}</button>
 				</div>
 			</div>
 		{/if}
@@ -392,7 +399,7 @@
 				}
 			}}
 			class="bg-green-700 text-white px-4 py-2 rounded text-sm disabled:opacity-50"
-		>Slutför återlämning</button>
+		>{m.return_btn_finish()}</button>
 	</div>
 {/if}
 
@@ -406,4 +413,3 @@
 		onClose={() => issueSheetArticle = null}
 	/>
 {/if}
-

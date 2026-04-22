@@ -6,7 +6,7 @@ root = "."
   delay = 500
   exclude_dir = ["tmp", "vendor"]
   exclude_regex = ["_test\\.go$"]
-  include_ext = ["go", "sql"]
+  include_ext = ["go", "sql", "json"]
   kill_delay = 500
 
 [misc]
