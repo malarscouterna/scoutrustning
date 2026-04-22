@@ -7,6 +7,7 @@
 	import ArticleForm from '$lib/components/ArticleForm.svelte';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
+	import * as m from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -53,7 +54,7 @@
 	}
 
 	async function handleDelete() {
-		if (!confirm('Är du säker? Artikeln tas bort permanent.')) return;
+		if (!confirm(m.page_article_confirm_delete())) return;
 		try {
 			await api.deleteArticle(data.article.id);
 			goto('/browse');
@@ -65,7 +66,7 @@
 
 <div class="max-w-2xl mx-auto p-4">
 	<h1 class="text-heading-sm font-bold mt-2 mb-4">
-		Redigera {isGroupEdit ? data.article.commercial_name || data.article.common_name : data.article.common_name}
+		{m.page_article_edit_heading()} {isGroupEdit ? data.article.commercial_name || data.article.common_name : data.article.common_name}
 	</h1>
 
 	{#if data.article.commercial_name && data.article.location_id}
@@ -100,7 +101,7 @@
 		individuallyTrackedEdit={data.article.individually_tracked && !isGroupEdit}
 		quantityTrackedEdit={isGroupEdit}
 		groupCount={data.groupCount}
-		submitLabel="Spara"
+		submitLabel={m.btn_save()}
 		onSubmit={handleSubmit}
 		onCancel={() => goto('/browse')}
 		{error}
@@ -109,14 +110,14 @@
 
 	{#if data.article.status === 'archived' && !isGroupEdit}
 		<div class="mt-8 pt-4 border-t">
-			<button onclick={handleDelete} class="text-sm text-red-600 underline">Ta bort artikel permanent</button>
+			<button onclick={handleDelete} class="text-sm text-red-600 underline">{m.page_article_btn_delete()}</button>
 		</div>
 	{/if}
 
 	{#if isGroupEdit && data.groupItems && data.groupItems.length > 0}
 		<div class="mt-6">
 			<button onclick={() => showItems = !showItems} class="text-sm text-neutral-500 hover:text-neutral-700">
-				{showItems ? 'Dölj enskilda artiklar ▲' : `Visa enskilda artiklar (${data.groupItems.length} st) ▼`}
+				{showItems ? `${m.page_article_hide_individuals_btn()} ▲` : `${m.page_article_show_individuals_btn()} (${data.groupItems.length} ${m.common_unit_count()}) ▼`}
 			</button>
 			{#if showItems}
 				<div class="mt-2 border rounded divide-y divide-neutral-200 text-sm">
@@ -125,10 +126,10 @@
 							<span class="font-medium text-neutral-700 min-w-24">{item.common_name}</span>
 							<span class="text-xs px-2 py-0.5 rounded {statusBadgeClass(item.status)}">{msg(`article_status_${item.status}`) ?? item.status}</span>
 							{#if item.purchase_date}
-								<span class="text-xs text-neutral-500">Inköpt: {item.purchase_date}</span>
+								<span class="text-xs text-neutral-500">{m.page_article_purchased_label()} {item.purchase_date}</span>
 							{/if}
 							{#if item.purchase_price}
-								<span class="text-xs text-neutral-500">{item.purchase_price} kr</span>
+								<span class="text-xs text-neutral-500">{item.purchase_price} {m.common_currency()}</span>
 							{/if}
 						</div>
 					{/each}

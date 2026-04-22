@@ -3,6 +3,7 @@
 	import { createApiClient, type Article, type AvailabilityGroup } from '$lib/api/client';
 import type { TeamMembership } from '$lib/user';
 	import { msg } from '$lib/msg';
+	import * as m from '$lib/paraglide/messages.js';
 	import { hasRole, accessAtLeast, canBook } from '$lib/user';
 	import { page } from '$app/stores';
 	import { cart } from '$lib/stores/cart.svelte';
@@ -104,7 +105,7 @@ import type { TeamMembership } from '$lib/user';
 				window.location.reload();
 			}
 		} catch (e: any) {
-			bulkMessage = e.message ?? 'Något gick fel.';
+			bulkMessage = e.message ?? m.common_error();
 		} finally {
 			bulkLoading = false;
 		}
@@ -405,7 +406,7 @@ import type { TeamMembership } from '$lib/user';
 
 	function handleIssueReported() {
 		reportingArticle = null;
-		reportedMessage = 'Problem rapporterat!';
+		reportedMessage = m.page_browse_issue_reported();
 		setTimeout(() => reportedMessage = '', 4000);
 	}
 
@@ -459,13 +460,13 @@ import type { TeamMembership } from '$lib/user';
 		<a href="/book?id={cart.id}" class="flex-1 text-blue-800 font-medium hover:underline">
 			Bokar {cartBookingDates.start} - {cartBookingDates.end}{cartBookingDates.teamName ? ` · ${cartBookingDates.teamName}` : ''}
 		</a>
-		<button onclick={() => cart.clear()} class="text-blue-600 hover:text-blue-800 text-lg leading-none" aria-label="Avaktivera bokning">×</button>
+		<button onclick={() => cart.clear()} class="text-blue-600 hover:text-blue-800 text-lg leading-none" aria-label={m.page_browse_disable_booking_aria()}>×</button>
 	</div>
 {/if}
 
 <div class="max-w-4xl mx-auto p-4">
 	<div class="flex items-center justify-between mb-4">
-		<h1 class="text-heading-sm font-bold">Utrustning</h1>
+		<h1 class="text-heading-sm font-bold">{m.page_browse_heading()}</h1>
 		{#if !cart.active && showBook}
 			<scout-button type="link" href="/book" variant="primary">Boka utrustning</scout-button>
 		{/if}
@@ -474,44 +475,44 @@ import type { TeamMembership } from '$lib/user';
 	<div class="flex flex-wrap gap-2 mb-4">
 		<input
 			type="search"
-			placeholder="Sök..."
+			placeholder={m.availability_search_placeholder()}
 			bind:value={search}
 			onkeydown={(e) => e.key === 'Enter' && applyFilters()}
 			class="border rounded px-3 py-2 flex-1 min-w-48"
 		/>
 		<select bind:value={selectedCategory} onchange={applyFilters} class="border rounded px-3 py-2">
-			<option value="">Alla kategorier</option>
+			<option value="">{m.availability_all_categories()}</option>
 			{#each data.categories as cat}
 				<option value={cat.id}>{cat.name}</option>
 			{/each}
 		</select>
 		<select bind:value={selectedLocation} onchange={applyFilters} class="border rounded px-3 py-2">
-			<option value="">Alla platser</option>
+			<option value="">{m.availability_all_locations()}</option>
 			{#each data.locations as loc}
 				<option value={loc.id}>{loc.name}</option>
 			{/each}
 		</select>
 		{#if search || selectedCategory || selectedLocation}
-			<button onclick={clearFilters} class="text-sm underline px-2">Rensa</button>
+			<button onclick={clearFilters} class="text-sm underline px-2">{m.page_browse_btn_clear()}</button>
 		{/if}
 	</div>
 
 	<p class="text-sm text-neutral-600 mb-4">
-		{articles.length} artiklar i {groups.length} grupper
+		{articles.length} {m.page_browse_articles_in()} {groups.length} {m.page_browse_groups()}
 	</p>
 
 	{#if isManager}
 		<div class="flex flex-wrap items-center gap-3 mb-4">
 			<label class="flex items-center gap-2 text-sm">
 				<input type="checkbox" bind:checked={showArchived} onchange={applyFilters} />
-				Visa arkiverade
+				{m.page_browse_show_archived()}
 			</label>
 			<label class="flex items-center gap-2 text-sm">
 				<input type="checkbox" bind:checked={managerMode} />
-				Hanteringsläge
+				{m.page_browse_manage_mode()}
 			</label>
 			{#if managerMode}
-				<a href="/articles/new" class="text-sm bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700">+ Skapa artikel</a>
+				<a href="/articles/new" class="text-sm bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700">{m.page_browse_btn_create()}</a>
 			{/if}
 		</div>
 		{#if managerMode && selectedCount > 0}
@@ -520,18 +521,18 @@ import type { TeamMembership } from '$lib/user';
 				<span class="font-medium">{selectedCount} markerade</span>
 				{#if !activeAction || activeAction === 'status'}
 					<select bind:value={bulkStatus} class="border rounded px-2 py-1 text-xs">
-						<option value="">Ändra status...</option>
+						<option value="">{m.page_browse_change_status()}</option>
 						<option value="ok">OK</option>
-						<option value="under_repair">Under reparation</option>
-						<option value="lost">Saknas</option>
+						<option value="under_repair">{m.article_status_under_repair()}</option>
+						<option value="lost">{m.article_status_lost()}</option>
 						{#if !hasQuantityGroupSelected}
-							<option value="archived">Arkivera</option>
+							<option value="archived">{m.page_browse_action_archive()}</option>
 						{/if}
 					</select>
 				{/if}
 				{#if !activeAction || activeAction === 'location'}
 					<select bind:value={bulkLocationId} class="border rounded px-2 py-1 text-xs">
-						<option value="">Flytta till...</option>
+						<option value="">{m.page_browse_action_move()}</option>
 						{#each data.locations as loc}
 							<option value={loc.id}>{loc.name}</option>
 						{/each}
@@ -565,7 +566,7 @@ import type { TeamMembership } from '$lib/user';
 				{/if}
 				<button onclick={() => { selectedArticles = new Set(); selectedGroups = new Set(); bulkStatus = ''; bulkLocationId = ''; bulkApproval = ''; bulkComment = ''; }} class="text-xs text-neutral-500 underline">Avmarkera</button>
 				{#if hasQuantityGroupSelected && !activeAction}
-					<span class="text-xs text-neutral-500">Arkivering av antalsspårade grupper görs via antal-fältet</span>
+					<span class="text-xs text-neutral-500">{m.page_browse_archive_hint()}</span>
 				{/if}
 			</div>
 		{/if}
@@ -640,7 +641,7 @@ import type { TeamMembership } from '$lib/user';
 									onclick={() => removeFromCart(group.commercialName, group.locationName, group.key)}
 									disabled={isRemoving}
 									class="w-7 h-7 rounded border text-center text-sm font-bold hover:bg-neutral-50 disabled:cursor-not-allowed"
-									aria-label="Ta bort från bokning"
+									aria-label={m.page_browse_disable_booking_aria()}
 								>
 									{isRemoving ? '...' : '−'}
 								</button>
@@ -649,7 +650,7 @@ import type { TeamMembership } from '$lib/user';
 									onclick={() => addToCart(group.commercialName, group.locationName, group.key)}
 									disabled={cartAvail === 0 || isAdding}
 									class="w-7 h-7 rounded border text-center text-sm font-bold {cartAvail > 0 ? 'hover:bg-neutral-50' : 'text-neutral-300 disabled:cursor-not-allowed'}"
-									aria-label="Lägg till i bokning"
+									aria-label={m.page_article_btn_add_to_booking()}
 								>
 									{isAdding ? '...' : '+'}
 								</button>
@@ -662,7 +663,7 @@ import type { TeamMembership } from '$lib/user';
 								class="border-l px-4 flex items-center justify-center text-sm font-bold shrink-0 transition-colors
 									{cartAvail > 0 ? 'text-blue-700 hover:bg-blue-50' : 'text-neutral-300'}
 									disabled:cursor-not-allowed"
-								aria-label="Lägg till i bokning"
+								aria-label={m.page_article_btn_add_to_booking()}
 							>
 								{isAdding ? '...' : '+'}
 							</button>
@@ -700,10 +701,10 @@ import type { TeamMembership } from '$lib/user';
 											{/if}
 											<span class="ml-auto flex gap-2 shrink-0">
 												{#if isManager}
-													<a href="/articles/{article.id}/edit" class="inline-flex items-center gap-1 text-xs text-neutral-600 border border-neutral-200 bg-neutral-50 rounded px-2 py-0.5 hover:bg-neutral-100">Redigera ›</a>
+													<a href="/articles/{article.id}/edit" class="inline-flex items-center gap-1 text-xs text-neutral-600 border border-neutral-200 bg-neutral-50 rounded px-2 py-0.5 hover:bg-neutral-100">{m.page_browse_btn_edit_article()}</a>
 												{/if}
-												<button onclick={() => reportingArticle = { id: article.id, name: article.common_name }} class="text-xs text-blue-700 underline">Rapportera</button>
-												<button onclick={() => showHistoryFor = showHistoryFor === article.id ? null : article.id} class="text-xs text-neutral-500 underline">Historik</button>
+												<button onclick={() => reportingArticle = { id: article.id, name: article.common_name }} class="text-xs text-blue-700 underline">{m.page_browse_btn_report()}</button>
+												<button onclick={() => showHistoryFor = showHistoryFor === article.id ? null : article.id} class="text-xs text-neutral-500 underline">{m.page_browse_btn_history()}</button>
 											</span>
 										</div>
 										{#if bookingLabel(article)}
@@ -718,7 +719,7 @@ import type { TeamMembership } from '$lib/user';
 										{#if showIssueHistoryFor === article.id}
 											{@const ih = issueHistory.get(article.id)}
 											{#if ih?.loading}
-												<p class="text-xs text-neutral-400 mt-1">Laddar...</p>
+												<p class="text-xs text-neutral-400 mt-1">{m.btn_loading()}</p>
 											{:else if ih && ih.events.length > 0}
 												<div class="mt-1 space-y-1">
 													{#each ih.events as event}
@@ -770,7 +771,7 @@ import type { TeamMembership } from '$lib/user';
 											{#if showIssueHistoryFor === representativeId}
 												{@const ih = issueHistory.get(representativeId)}
 												{#if ih?.loading}
-													<p class="text-xs text-neutral-400">Laddar...</p>
+													<p class="text-xs text-neutral-400">{m.btn_loading()}</p>
 												{:else if ih && ih.events.length > 0}
 													<div class="space-y-1">
 														{#each ih.events as event}
@@ -786,10 +787,10 @@ import type { TeamMembership } from '$lib/user';
 									</div>
 								{/each}
 								<div class="flex flex-wrap items-center gap-2 pt-1">
-									<a href="/articles/{group.representativeId}" class="inline-flex items-center gap-1 text-xs text-blue-700 border border-blue-200 bg-blue-50 rounded px-2 py-1 hover:bg-blue-100">Visa artikelsida ›</a>
-									<button onclick={() => reportingArticle = { id: group.representativeId, name: group.commercialName, isQuantityTracked: true, groupTotal: group.nonArchivedCount }} class="text-xs text-blue-700 underline">Rapportera</button>
+									<a href="/articles/{group.representativeId}" class="inline-flex items-center gap-1 text-xs text-blue-700 border border-blue-200 bg-blue-50 rounded px-2 py-1 hover:bg-blue-100">{m.page_browse_btn_view_article()}</a>
+									<button onclick={() => reportingArticle = { id: group.representativeId, name: group.commercialName, isQuantityTracked: true, groupTotal: group.nonArchivedCount }} class="text-xs text-blue-700 underline">{m.page_browse_btn_report()}</button>
 									{#if isManager}
-										<a href="/articles/{group.representativeId}/edit?group=true" class="inline-flex items-center gap-1 text-xs text-neutral-600 border border-neutral-200 bg-neutral-50 rounded px-2 py-1 hover:bg-neutral-100">Redigera ›</a>
+										<a href="/articles/{group.representativeId}/edit?group=true" class="inline-flex items-center gap-1 text-xs text-neutral-600 border border-neutral-200 bg-neutral-50 rounded px-2 py-1 hover:bg-neutral-100">{m.page_browse_btn_edit_article()}</a>
 									{/if}
 								</div>
 							</div>
@@ -826,13 +827,13 @@ import type { TeamMembership } from '$lib/user';
 		{/if}
 		{#if a.instructions}
 			<button type="button" onclick={() => toggleDescriptionExpand(key)} class="text-left cursor-pointer max-w-full">
-				<span class="font-medium text-neutral-500">Instruktioner:</span>
+				<span class="font-medium text-neutral-500">{m.lbl_instructions_colon()}</span>
 				<p class="mt-0.5" class:line-clamp-2={!isExpanded}>{a.instructions}</p>
 			</button>
 		{/if}
 		{#if isManager && a.manager_notes}
 			<div class="bg-amber-50 border border-amber-200 rounded p-2">
-				<span class="font-medium text-amber-700">Intern anteckning:</span>
+				<span class="font-medium text-amber-700">{m.page_browse_internal_note()}</span>
 				<p class="mt-0.5 text-amber-900" class:line-clamp-2={!isExpanded}>{a.manager_notes}</p>
 			</div>
 		{/if}
@@ -843,19 +844,19 @@ import type { TeamMembership } from '$lib/user';
 	<div class="mb-2 space-y-2 text-xs text-neutral-600">
 		{#if a.description}
 			<div>
-				<span class="font-medium text-neutral-500">Beskrivning:</span>
+				<span class="font-medium text-neutral-500">{m.lbl_description_colon()}</span>
 				<p class="mt-0.5">{a.description}</p>
 			</div>
 		{/if}
 		{#if a.instructions}
 			<div>
-				<span class="font-medium text-neutral-500">Instruktioner:</span>
+				<span class="font-medium text-neutral-500">{m.lbl_instructions_colon()}</span>
 				<p class="mt-0.5">{a.instructions}</p>
 			</div>
 		{/if}
 		{#if isManager && a.manager_notes}
 			<div class="bg-amber-50 border border-amber-200 rounded p-2">
-				<span class="font-medium text-amber-700">Intern anteckning:</span>
+				<span class="font-medium text-amber-700">{m.page_browse_internal_note()}</span>
 				<p class="mt-0.5 text-amber-900">{a.manager_notes}</p>
 			</div>
 		{/if}

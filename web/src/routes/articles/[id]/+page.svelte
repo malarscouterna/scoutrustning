@@ -11,6 +11,7 @@
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
 	import ImageAttachInput from '$lib/components/ImageAttachInput.svelte';
+	import * as m from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -39,7 +40,7 @@
 		addingToCart = true;
 		try {
 			await api.addBookingItems(cart.id, article.commercial_name, 1, article.location_name);
-			message = 'Tillagd i bokning!';
+			message = m.page_article_added_to_booking();
 			cart.refresh(); // Notify FloatingCart to reload
 			setTimeout(() => message = '', 3000);
 		} catch {
@@ -159,7 +160,7 @@
 
 	function handleIssueReported() {
 		reporting = false;
-		message = 'Problem rapporterat!';
+		message = m.page_browse_issue_reported();
 		setTimeout(() => message = '', 4000);
 	}
 </script>
@@ -174,7 +175,7 @@
 				disabled={addingToCart ? true : undefined}
 				onclick={addToCart}
 			>
-				{addingToCart ? '...' : 'Lägg till i bokning'}
+				{addingToCart ? '...' : m.page_article_btn_add_to_booking()}
 			</scout-button>
 		</div>
 	{/if}
@@ -224,7 +225,7 @@
 
 		{#if isQuantityTracked && groupArticles}
 			<div class="mb-4">
-				<h2 class="text-sm font-medium text-neutral-600 mb-1">Status ({groupArticles.length} st)</h2>
+				<h2 class="text-sm font-medium text-neutral-600 mb-1">{m.lbl_status()} ({groupArticles.length} {m.common_unit_count()})</h2>
 				<div class="flex flex-wrap gap-2">
 					{#each statusSummary as { status, count }}
 						<span class="text-xs px-2 py-0.5 rounded {articleStatusColors[status] ?? 'bg-neutral-100'}">
@@ -237,31 +238,31 @@
 
 		{#if article.description}
 			<div class="mb-4">
-				<h2 class="text-sm font-medium text-neutral-600 mb-1">Beskrivning</h2>
+				<h2 class="text-sm font-medium text-neutral-600 mb-1">{m.lbl_description()}</h2>
 				<p class="text-sm">{article.description}</p>
 			</div>
 		{/if}
 
 		{#if article.instructions}
 			<div class="mb-4">
-				<h2 class="text-sm font-medium text-neutral-600 mb-1">Instruktioner</h2>
+				<h2 class="text-sm font-medium text-neutral-600 mb-1">{m.lbl_instructions()}</h2>
 				<p class="text-sm">{article.instructions}</p>
 			</div>
 		{/if}
 
 		<div class="flex flex-wrap gap-x-6 gap-y-2 text-sm text-neutral-500 mb-4">
-			<span>Spårning: {article.individually_tracked ? 'Individuell' : 'Antal'}</span>
-			<span>Godkännande: {msg(`article_approval_${article.approval_level}`) ?? article.approval_level}</span>
+			<span>{article.individually_tracked ? m.page_article_tracking_individual() : m.page_article_tracking_count()}</span>
+			<span>{m.page_article_approval_label()} {msg(`article_approval_${article.approval_level}`) ?? article.approval_level}</span>
 			{#if isQuantityTracked && purchaseOverview}
 				{#if purchaseOverview.dates.length > 0}
-					<span>Inköpt: {purchaseOverview.dates.join(', ')}</span>
+					<span>{m.page_article_purchased_label()} {purchaseOverview.dates.join(', ')}</span>
 				{/if}
 				{#if purchaseOverview.prices.length > 0}
 					<span>{purchaseOverview.prices.join(', ')} kr</span>
 				{/if}
 			{:else}
 				{#if article.purchase_date}
-					<span>Inköpt: {article.purchase_date}</span>
+					<span>{m.page_article_purchased_label()} {article.purchase_date}</span>
 				{/if}
 				{#if article.purchase_price}
 					<span>{article.purchase_price} kr</span>
@@ -271,17 +272,17 @@
 
 		{#if isManager && article.manager_notes}
 			<div class="mb-4 bg-amber-50 border border-amber-200 rounded p-3">
-				<h2 class="text-sm font-medium text-amber-800 mb-1">Interna anteckningar</h2>
+				<h2 class="text-sm font-medium text-amber-800 mb-1">{m.page_article_internal_notes()}</h2>
 				<p class="text-sm text-amber-900">{article.manager_notes}</p>
 			</div>
 		{/if}
 
 		<div class="flex flex-wrap gap-2 mb-6">
 			<button onclick={() => reporting = !reporting} class="text-sm text-blue-700 underline">
-				{reporting ? 'Avbryt' : 'Rapportera problem'}
+				{reporting ? m.btn_cancel() : m.page_article_btn_report()}
 			</button>
 			{#if isManager}
-				<a href="/articles/{article.id}/edit{isQuantityTracked ? '?group=true' : ''}" class="inline-flex items-center gap-1 text-xs text-neutral-600 border border-neutral-200 bg-neutral-50 rounded px-2 py-1 hover:bg-neutral-100">Redigera ›</a>
+				<a href="/articles/{article.id}/edit{isQuantityTracked ? '?group=true' : ''}" class="inline-flex items-center gap-1 text-xs text-neutral-600 border border-neutral-200 bg-neutral-50 rounded px-2 py-1 hover:bg-neutral-100">{m.page_article_edit_heading()} ›</a>
 			{/if}
 		</div>
 
@@ -300,12 +301,12 @@
 		<input
 			type="text"
 			bind:value={noteText}
-			placeholder="Lägg till kommentar..."
+			placeholder={m.page_article_comment_placeholder()}
 			onkeydown={(e) => e.key === 'Enter' && addNote()}
 			class="border rounded px-2 py-1.5 text-sm flex-1"
 		/>
 		<button onclick={addNote} disabled={noteSaving || !noteText.trim()} class="text-sm bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 disabled:opacity-50">
-			{noteSaving ? '...' : 'Spara'}
+			{noteSaving ? '...' : m.btn_save()}
 		</button>
 	</div>
 	<div class="mb-4">
@@ -314,7 +315,7 @@
 
 	{#if data.activeIssues.length > 0}
 		<div class="mb-4">
-			<h2 class="font-medium mb-2">Aktiva ärenden</h2>
+			<h2 class="font-medium mb-2">{m.page_article_active_issues()}</h2>
 			<div class="space-y-2">
 				{#each data.activeIssues as issue}
 					<IssueCard {issue} />
@@ -323,12 +324,12 @@
 		</div>
 	{/if}
 
-	<h2 class="font-medium mb-2">Historik</h2>
+	<h2 class="font-medium mb-2">{m.page_article_history_heading()}</h2>
 	{#if isQuantityTracked}
 		{#if groupEventsLoading}
-			<p class="text-xs text-neutral-400 py-1">Laddar historik...</p>
+			<p class="text-xs text-neutral-400 py-1">{m.article_history_loading()}</p>
 		{:else if groupEvents.length === 0}
-			<p class="text-xs text-neutral-400 py-1">Ingen historik</p>
+			<p class="text-xs text-neutral-400 py-1">{m.article_history_empty()}</p>
 		{:else}
 			<div class="space-y-1.5 mt-1">
 				{#each collapsedGroupEvents as { event, count }}
@@ -350,7 +351,7 @@
 					class="text-xs text-blue-600 hover:text-blue-800 mt-2 cursor-pointer"
 					onclick={() => loadGroupEvents()}
 				>
-					Visa alla händelser
+					{m.article_history_show_all()}
 				</button>
 			{/if}
 		{/if}

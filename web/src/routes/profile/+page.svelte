@@ -4,6 +4,7 @@
 	import CrudList from '$lib/components/CrudList.svelte';
 	import type { PageData } from './$types';
 	import { msg } from '$lib/msg';
+	import * as m from '$lib/paraglide/messages.js';
 
 	let { data }: { data: PageData } = $props();
 	let user = $derived(data.user);
@@ -75,7 +76,7 @@
 	}
 
 	async function deleteTeam(teamId: string, teamName: string) {
-		if (!confirm(`Ta bort ${teamName}? Användare med denna koppling får en ny avdelning vid nästa inloggning.`)) return;
+		if (!confirm(m.page_profile_delete_team_confirm({ teamName }))) return;
 		teamError = '';
 		try {
 			await api.deleteTeam(teamId);
@@ -114,7 +115,7 @@
 			myImages = myImages.map(i => i.id === editingMyImage!.id ? { ...i, title: editMyTitle, description: editMyDescription, shared: editMyShared } : i);
 			editingMyImage = null;
 		} catch (e: any) {
-			editMyError = e.message ?? 'Kunde inte spara';
+			editMyError = e.message ?? m.common_error();
 		} finally {
 			editMySaving = false;
 		}
@@ -162,12 +163,12 @@
 
 	async function deleteMyImage(img: typeof myImages[0]) {
 		const totalRefs = img.own_group_count + img.other_group_count;
-		let confirmMsg = 'Är du säker på att du vill ta bort bilden?';
+		let confirmMsg = m.page_profile_delete_image_confirm();
 		if (totalRefs > 1) {
 			const parts: string[] = [];
-			if (img.own_group_count > 1) parts.push(`${img.own_group_count - 1} i din kår`);
-			if (img.other_group_count > 0) parts.push(`${img.other_group_count} i andra kårer`);
-			confirmMsg = `Bilden används på ${parts.join(' och ')}. Om du tar bort den försvinner den därifrån också. Fortsätt?`;
+			if (img.own_group_count > 1) parts.push(m.page_profile_image_in_own_group({ count: String(img.own_group_count - 1) }));
+			if (img.other_group_count > 0) parts.push(m.page_profile_image_in_other_groups({ count: String(img.other_group_count) }));
+			confirmMsg = m.page_profile_image_delete_used({ refs: parts.join(' & ') });
 		}
 		if (!confirm(confirmMsg)) return;
 		try {
@@ -175,7 +176,7 @@
 			myImages = myImages.filter(i => i.id !== img.id);
 			if (expandedImageId === img.id) expandedImageId = null;
 		} catch (e: any) {
-			alert(e.message ?? 'Borttagning misslyckades');
+			alert(e.message ?? m.common_error());
 		}
 	}
 
@@ -218,17 +219,17 @@
 	let settingsError = $state('');
 
 	// Permission settings
-	const permissionConfig = [
-		{ key: 'image_upload_role', label: 'Ladda upp bilder', min: 'view' },
-		{ key: 'article_edit_role', label: 'Redigera artiklar', min: 'book' },
-		{ key: 'issue_resolve_role', label: 'Hantera ärenden', min: 'book' },
-		{ key: 'manager_notes_role', label: 'Se interna anteckningar', min: 'trusted' },
-	] as const;
-	const defaultAccessConfig = [
-		{ key: 'default_access_unknown', label: 'Okända användare' },
-		{ key: 'default_access_troop', label: 'Nya avdelningar' },
-		{ key: 'default_access_role', label: 'Nya roller' },
-	] as const;
+	let permissionConfig = $derived([
+		{ key: 'image_upload_role', label: m.page_profile_perm_upload_images(), min: 'view' },
+		{ key: 'article_edit_role', label: m.page_profile_perm_edit_articles(), min: 'book' },
+		{ key: 'issue_resolve_role', label: m.page_profile_perm_manage_issues(), min: 'book' },
+		{ key: 'manager_notes_role', label: m.page_profile_perm_internal_notes(), min: 'trusted' },
+	] as const);
+	let defaultAccessConfig = $derived([
+		{ key: 'default_access_unknown', label: m.page_profile_default_unknown() },
+		{ key: 'default_access_troop', label: m.page_profile_default_new_troops() },
+		{ key: 'default_access_role', label: m.page_profile_default_new_roles() },
+	] as const);
 	let permForm = $state<Record<string, string>>({});
 	let permSaving = $state(false);
 	let permMessage = $state('');
@@ -255,10 +256,10 @@
 		permMessage = '';
 		try {
 			await api.updateGroupSettings(permForm as any);
-			permMessage = 'Sparat';
+			permMessage = m.common_saved();
 			setTimeout(() => permMessage = '', 3000);
 		} catch (e: any) {
-			permMessage = 'Fel: ' + e.message;
+			permMessage = m.page_profile_error_prefix() + e.message;
 		}
 		permSaving = false;
 	}
@@ -310,7 +311,7 @@
 			document.cookie = `paraglide_lang=${userLanguage}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
 			location.reload();
 		} catch (e: any) {
-			languageMessage = 'Fel: ' + e.message;
+			languageMessage = m.page_profile_error_prefix() + e.message;
 			languageSaving = false;
 		}
 	}
@@ -325,9 +326,9 @@
 	async function saveGroupLanguage() {
 		try {
 			groupSettings = await api.updateGroupSettings({ default_language: groupLanguage });
-			flash(v => groupLanguageMessage = v, 'Sparat');
+			flash(v => groupLanguageMessage = v, m.common_saved());
 		} catch (e: any) {
-			groupLanguageMessage = 'Fel: ' + e.message;
+			groupLanguageMessage = m.page_profile_error_prefix() + e.message;
 		}
 	}
 
@@ -345,7 +346,7 @@
 			}
 			groupSettings = await api.updateGroupSettings(payload);
 			settingsForm.smtp_key = '';
-			flash(v => settingsMessage = v, 'Inställningar sparade');
+			flash(v => settingsMessage = v, m.page_profile_settings_saved());
 		} catch (e: any) {
 			settingsError = e.message;
 		}
@@ -354,7 +355,7 @@
 
 {#if !user}
 	<div class="max-w-5xl mx-auto px-4 py-8">
-		<p class="text-neutral-500">Laddar...</p>
+		<p class="text-neutral-500">{m.btn_loading()}</p>
 	</div>
 {:else}
 <div class="max-w-5xl mx-auto px-4 py-8">
@@ -366,22 +367,22 @@
 		<button
 			onclick={() => tab = 'profile'}
 			class="px-3 py-2 text-sm -mb-px {tab === 'profile' ? 'border-b-2 border-blue-700 font-medium text-blue-700' : 'text-neutral-500'}"
-		>Profil</button>
+		>{m.page_profile_tab_profile()}</button>
 		{#if mgr}
 			<button
 				onclick={() => tab = 'group'}
 				class="px-3 py-2 text-sm -mb-px {tab === 'group' ? 'border-b-2 border-blue-700 font-medium text-blue-700' : 'text-neutral-500'}"
-			>Gruppinställningar</button>
+			>{m.page_profile_tab_group()}</button>
 		{/if}
 	</div>
 
 	<!-- Profile tab -->
 	{#if tab === 'profile'}
 		<section class="mb-6 border rounded-lg p-4">
-			<h2 class="font-medium mb-3">Behörigheter</h2>
+			<h2 class="font-medium mb-3">{m.page_profile_permissions_heading()}</h2>
 
 			{#if user.teams.length === 0}
-				<p class="text-sm text-neutral-500">Inga avdelningar eller roller tilldelade.</p>
+				<p class="text-sm text-neutral-500">{m.page_profile_no_teams()}</p>
 			{:else}
 				<div class="space-y-3">
 					{#each Object.entries(teamsByAccess) as [level, teams]}
@@ -392,7 +393,7 @@
 								{#each teams as team}
 									<span class="text-xs bg-white text-neutral-700 px-2 py-1 rounded shadow-sm">
 										{team.team_name}
-										<span class="text-neutral-400">{team.team_type === 'troop' ? 'Avd.' : 'Roll'}</span>
+										<span class="text-neutral-400">{team.team_type === 'troop' ? m.team_type_troop() : m.team_type_role()}</span>
 									</span>
 								{/each}
 							</div>
@@ -403,50 +404,50 @@
 		</section>
 
 		<section class="mb-6 border rounded-lg p-4">
-			<h2 class="font-medium mb-3">Mina inställningar</h2>
+			<h2 class="font-medium mb-3">{m.page_profile_settings_heading()}</h2>
 			<div class="flex items-center gap-3">
-				<label class="text-sm text-neutral-700" for="user-language">Språk</label>
+				<label class="text-sm text-neutral-700" for="user-language">{m.page_profile_language_label()}</label>
 				<select id="user-language" bind:value={userLanguage} class="border rounded px-2 py-1 text-sm">
-					<option value="sv">Svenska{groupLanguage !== 'sv' ? '' : ' (gruppens val)'}</option>
-					<option value="en">English{groupLanguage !== 'en' ? '' : ' (group default)'}</option>
+					<option value="sv">Svenska{groupLanguage !== 'sv' ? '' : ` ${m.page_profile_language_group_default()}`}</option>
+					<option value="en">English{groupLanguage !== 'en' ? '' : ` ${m.page_profile_language_group_default()}`}</option>
 				</select>
 				<button onclick={saveLanguage} disabled={languageSaving} class="text-sm bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50">
-					{languageSaving ? 'Sparar...' : 'Spara'}
+					{languageSaving ? m.btn_saving() : m.btn_save()}
 				</button>
 				{#if languageMessage}<span class="text-sm text-green-600">{languageMessage}</span>{/if}
 			</div>
-			<p class="text-xs text-neutral-400 mt-2">Gäller gränssnittet. Artikelnamn, beskrivningar och annat innehåll som skapats av användare visas alltid på gruppens språk.</p>
+			<p class="text-xs text-neutral-400 mt-2">{m.page_profile_language_hint()}</p>
 		</section>
 
 		<section class="mb-6 border rounded-lg p-4">
-			<h2 class="font-medium mb-3">Mina bilder</h2>
+			<h2 class="font-medium mb-3">{m.page_profile_images_heading()}</h2>
 
 		{#if !myImagesLoaded}
-			<p class="text-sm text-neutral-400">Laddar...</p>
+			<p class="text-sm text-neutral-400">{m.btn_loading()}</p>
 		{:else if myImages.length === 0}
-			<p class="text-sm text-neutral-500">Du har inte laddat upp några bilder ännu.</p>
+			<p class="text-sm text-neutral-500">{m.page_profile_images_empty()}</p>
 		{:else}
-			<p class="text-xs text-neutral-400 mb-2">{myImages.length} {myImages.length === 1 ? 'bild' : 'bilder'}</p>
+			<p class="text-xs text-neutral-400 mb-2">{myImages.length} {myImages.length === 1 ? m.page_profile_image_singular() : m.page_profile_image_plural()}</p>
 			{#if editingMyImage}
 				<div class="border rounded-lg p-4 bg-white space-y-3 mb-4">
 					<div class="flex items-start gap-4">
 						<img src="/api/v0/images/{editingMyImage.file_id}_thumb.webp" alt={editingMyImage.title} class="h-32 rounded object-contain shrink-0" />
 						<div class="flex-1 space-y-3 min-w-0">
 							<label class="block">
-								<span class="text-sm text-neutral-600 block mb-1">Titel</span>
+								<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_image_title_label()}</span>
 								<input type="text" bind:value={editMyTitle} class="border rounded px-2 py-1.5 text-sm w-full" />
 							</label>
 							<label class="block">
-								<span class="text-sm text-neutral-600 block mb-1">Beskrivning</span>
+								<span class="text-sm text-neutral-600 block mb-1">{m.lbl_description()}</span>
 								<textarea bind:value={editMyDescription} rows={2} class="border rounded px-2 py-1.5 text-sm w-full"></textarea>
 							</label>
 							<label class="block">
-								<span class="text-sm text-neutral-600 block mb-1">Fotograf</span>
+								<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_image_photographer_label()}</span>
 								<input type="text" bind:value={editMyAttribution} class="border rounded px-2 py-1.5 text-sm w-full" />
 							</label>
 							<label class="flex items-center gap-2 text-sm">
 								<input type="checkbox" bind:checked={editMyShared} />
-								Dela med andra kårer
+								{m.page_profile_image_share_label()}
 							</label>
 						</div>
 					</div>
@@ -454,8 +455,8 @@
 						<p class="text-xs text-red-600">{editMyError}</p>
 					{/if}
 					<div class="flex gap-2">
-						<button type="button" onclick={saveEditMyImage} disabled={editMySaving} class="text-sm bg-blue-700 text-white px-4 py-2 rounded disabled:opacity-50">{editMySaving ? 'Sparar...' : 'Spara'}</button>
-						<button type="button" onclick={() => editingMyImage = null} class="text-sm text-neutral-500 underline">Avbryt</button>
+						<button type="button" onclick={saveEditMyImage} disabled={editMySaving} class="text-sm bg-blue-700 text-white px-4 py-2 rounded disabled:opacity-50">{editMySaving ? m.btn_saving() : m.btn_save()}</button>
+						<button type="button" onclick={() => editingMyImage = null} class="text-sm text-neutral-500 underline">{m.btn_cancel()}</button>
 					</div>
 				</div>
 			{/if}
@@ -465,21 +466,21 @@
 						<button type="button" onclick={() => openFullscreen(img)} class="w-full cursor-zoom-in">
 							<img
 								src="/api/v0/images/{img.file_id}_thumb.webp"
-								alt={img.title || 'Bild'}
+								alt={img.title || m.page_profile_image_no_title()}
 								class="w-full h-[160px] rounded-t object-contain bg-neutral-50"
 								loading="lazy"
 							/>
 						</button>
 						<div class="px-2 py-1.5">
-							<p class="text-xs font-medium truncate">{img.title || 'Utan titel'}</p>
+							<p class="text-xs font-medium truncate">{img.title || m.page_profile_image_no_title()}</p>
 							{#if img.shared}
-								<span class="text-[10px] bg-blue-100 text-blue-700 px-1 rounded">Delad</span>
+								<span class="text-[10px] bg-blue-100 text-blue-700 px-1 rounded">{m.page_profile_image_shared_badge()}</span>
 							{/if}
 							<div class="flex gap-1.5 mt-1">
 								<button type="button" onclick={() => toggleImageDetail(img)} class="text-[11px] text-blue-700 border border-blue-200 bg-blue-50 rounded px-1.5 py-0.5 hover:bg-blue-100">
-									{expandedImageId === img.id ? 'Dölj' : 'Detaljer'}
+									{expandedImageId === img.id ? m.page_profile_btn_hide() : m.page_profile_btn_details()}
 								</button>
-								<button type="button" onclick={() => startEditMyImage(img)} class="text-[11px] text-blue-700 border border-blue-200 bg-blue-50 rounded px-1.5 py-0.5 hover:bg-blue-100">Redigera</button>
+								<button type="button" onclick={() => startEditMyImage(img)} class="text-[11px] text-blue-700 border border-blue-200 bg-blue-50 rounded px-1.5 py-0.5 hover:bg-blue-100">{m.btn_edit()}</button>
 							</div>
 						</div>
 
@@ -491,26 +492,26 @@
 								{/if}
 
 								<p class="text-[10px] text-neutral-400">
-									{img.format === 'landscape' ? 'Liggande' : img.format === 'portrait' ? 'Stående' : 'Kvadrat'}
+									{img.format === 'landscape' ? m.page_profile_image_orientation_landscape() : img.format === 'portrait' ? m.page_profile_image_orientation_portrait() : m.page_profile_image_orientation_square()}
 									· {new Date(img.created_at).toLocaleDateString('sv')}
 								</p>
 
 								{#if expandedArticles.length > 0}
 									<div>
-										<span class="text-[10px] font-medium text-neutral-500">Används på:</span>
+										<span class="text-[10px] font-medium text-neutral-500">{m.page_profile_image_used_on()}</span>
 										{#each expandedArticles as a}
 											<a href="/articles/{a.article_id}" class="block text-[10px] text-blue-700 hover:underline">{a.commercial_name} — {a.location_name}</a>
 										{/each}
 									</div>
 								{:else}
-									<p class="text-[10px] text-neutral-400">Inte kopplad till någon artikel</p>
+									<p class="text-[10px] text-neutral-400">{m.page_profile_image_not_linked()}</p>
 								{/if}
 
 								{#if img.other_group_count > 0}
-									<p class="text-[10px] text-neutral-400">Används även av {img.other_group_count} {img.other_group_count === 1 ? 'annan kår' : 'andra kårer'}</p>
+									<p class="text-[10px] text-neutral-400">{m.page_profile_image_other_groups({ count: String(img.other_group_count) })}</p>
 								{/if}
 
-								<button type="button" onclick={() => deleteMyImage(img)} class="text-[10px] text-red-600 hover:underline">Ta bort bild</button>
+								<button type="button" onclick={() => deleteMyImage(img)} class="text-[10px] text-red-600 hover:underline">{m.page_profile_btn_delete_image()}</button>
 							</div>
 						{/if}
 					</div>
@@ -520,7 +521,7 @@
 		</section>
 
 		<form method="POST" action="/auth/signout" class="mt-4">
-			<button type="submit" class="text-sm text-red-600 hover:underline">Logga ut</button>
+			<button type="submit" class="text-sm text-red-600 hover:underline">{m.page_profile_btn_logout()}</button>
 		</form>
 
 	<!-- Group settings tab (manager only) -->
@@ -528,8 +529,8 @@
 
 		<!-- Teams -->
 		<section class="mb-6 border rounded-lg p-4">
-			<h3 class="font-medium mb-1">Avdelningar och roller</h3>
-			<p class="text-xs text-neutral-500 mb-3">Avdelningar och roller skapas automatiskt när en användare loggar in med en okänd Scoutnet-koppling. Byt namn och ändra åtkomstnivå här.</p>
+			<h3 class="font-medium mb-1">{m.page_profile_teams_heading()}</h3>
+			<p class="text-xs text-neutral-500 mb-3">{m.page_profile_teams_help()}</p>
 			{#if teamError}
 				<div class="bg-red-50 border border-red-200 rounded p-2 mb-2 text-red-800 text-sm">{teamError}</div>
 			{/if}
@@ -555,7 +556,7 @@
 								</button>
 							{/each}
 							{#if teams.length === 0}
-								<p class="text-xs text-neutral-400 italic px-2 py-1">Inga</p>
+								<p class="text-xs text-neutral-400 italic px-2 py-1">{m.page_profile_teams_empty()}</p>
 							{/if}
 						</div>
 					</div>
@@ -575,8 +576,8 @@
 									onkeydown={(e) => { if (e.key === 'Enter') renameTeam(team.id); if (e.key === 'Escape') editingTeamId = null; }}
 									class="border rounded px-2 py-1 text-sm flex-1 min-w-[150px]"
 								/>
-								<button onclick={() => renameTeam(team.id)} class="text-sm text-blue-700 underline">Spara</button>
-								<button onclick={() => editingTeamId = null} class="text-sm text-neutral-500 underline">Avbryt</button>
+								<button onclick={() => renameTeam(team.id)} class="text-sm text-blue-700 underline">{m.btn_save()}</button>
+								<button onclick={() => editingTeamId = null} class="text-sm text-neutral-500 underline">{m.btn_cancel()}</button>
 							{:else}
 								<span class="font-medium text-sm">{team.name}</span>
 								<span class="text-xs text-neutral-400">{msg(`team_type_${team.type}`) ?? team.type}</span>
@@ -588,20 +589,20 @@
 						{#if editingTeamId !== team.id}
 							<div class="flex flex-wrap items-center gap-2">
 								<label class="flex items-center gap-1.5 text-sm">
-									<span class="text-neutral-600">Åtkomstnivå:</span>
+									<span class="text-neutral-600">{m.page_profile_access_level_label()}</span>
 									<select
 										value={team.access_level}
 										onchange={(e) => changeTeamLevel(team.id, e.currentTarget.value)}
 										class="border rounded px-2 py-1 text-sm"
-										aria-label="Ändra åtkomstnivå"
+										aria-label={m.page_profile_change_access_aria()}
 									>
 										{#each accessLevels as l}
 											<option value={l}>{msg(`team_access_${l}`) ?? l}</option>
 										{/each}
 									</select>
 								</label>
-								<button onclick={() => { editingTeamId = team.id; editingTeamName = team.name; }} class="text-sm text-blue-700 underline">Byt namn</button>
-								<button onclick={() => deleteTeam(team.id, team.name)} class="text-sm text-red-600 underline">Ta bort</button>
+								<button onclick={() => { editingTeamId = team.id; editingTeamName = team.name; }} class="text-sm text-blue-700 underline">{m.page_profile_btn_rename()}</button>
+								<button onclick={() => deleteTeam(team.id, team.name)} class="text-sm text-red-600 underline">{m.btn_delete()}</button>
 							</div>
 						{/if}
 					</div>
@@ -612,14 +613,14 @@
 				<div class="border rounded-lg p-3 space-y-2 mb-2">
 					<div class="flex flex-wrap gap-2">
 						<label class="flex flex-col gap-0.5 flex-1 min-w-[150px]">
-							<span class="text-xs text-neutral-500">Namn</span>
-							<input type="text" bind:value={newTeam.name} placeholder="T.ex. Yggdrasil" class="border rounded px-2 py-1 text-sm" />
+							<span class="text-xs text-neutral-500">{m.page_profile_team_name_label()}</span>
+							<input type="text" bind:value={newTeam.name} placeholder={m.page_profile_team_name_placeholder()} class="border rounded px-2 py-1 text-sm" />
 						</label>
 						<label class="flex flex-col gap-0.5">
-							<span class="text-xs text-neutral-500">Typ</span>
+							<span class="text-xs text-neutral-500">{m.page_profile_team_type_label()}</span>
 							<select bind:value={newTeam.type} class="border rounded px-2 py-1 text-sm">
-								<option value="troop">Avdelning</option>
-								<option value="role">Roll</option>
+								<option value="troop">{m.page_profile_team_type_troop()}</option>
+								<option value="role">{m.page_profile_team_type_role()}</option>
 							</select>
 						</label>
 						<label class="flex flex-col gap-0.5">
@@ -633,32 +634,32 @@
 					</div>
 					<div class="flex flex-wrap gap-2">
 						<label class="flex flex-col gap-0.5">
-							<span class="text-xs text-neutral-500">Scoutnet-id</span>
+							<span class="text-xs text-neutral-500">{m.page_profile_scoutnet_id()}</span>
 							<select bind:value={newTeam.claim_scope} class="border rounded px-2 py-1 text-sm">
-								<option value="troop">Avdelning</option>
-								<option value="group">Kårroll</option>
+								<option value="troop">{m.page_profile_team_type_troop()}</option>
+								<option value="group">{m.page_profile_team_type_group_role()}</option>
 							</select>
 						</label>
 						<label class="flex flex-col gap-0.5 flex-1 min-w-[100px]">
-							<span class="text-xs text-neutral-500">{newTeam.claim_scope === 'troop' ? 'Avdelnings-ID' : 'Rollnamn'} <span class="text-neutral-400">(från Scoutnet)</span></span>
+							<span class="text-xs text-neutral-500">{newTeam.claim_scope === 'troop' ? m.page_profile_troop_id() : m.page_profile_role_name()} <span class="text-neutral-400">{m.page_profile_from_scoutnet()}</span></span>
 							<input type="text" bind:value={newTeam.claim_id} required placeholder={newTeam.claim_scope === 'troop' ? 'T.ex. 17443' : 'T.ex. it_manager'} class="border rounded px-2 py-1 text-sm" />
 						</label>
 					</div>
-					<p class="text-xs text-neutral-400">Scoutnet-id hittas i organisationsinställningar i Scoutnet.</p>
+					<p class="text-xs text-neutral-400">{m.page_profile_scoutnet_id_help()}</p>
 					<div class="flex gap-2">
-						<button onclick={addTeam} class="text-sm bg-blue-700 text-white px-3 py-1 rounded">Lägg till</button>
-						<button onclick={() => showAddTeam = false} class="text-sm text-neutral-500 underline">Avbryt</button>
+						<button onclick={addTeam} class="text-sm bg-blue-700 text-white px-3 py-1 rounded">{m.btn_add()}</button>
+						<button onclick={() => showAddTeam = false} class="text-sm text-neutral-500 underline">{m.btn_cancel()}</button>
 					</div>
 				</div>
 			{:else}
-				<button onclick={() => showAddTeam = true} class="text-sm text-blue-700 underline">+ Lägg till avdelning eller roll</button>
+				<button onclick={() => showAddTeam = true} class="text-sm text-blue-700 underline">{m.page_profile_btn_add_team()}</button>
 			{/if}
 		</section>
 
 		<!-- Permissions -->
 		<section class="mb-6 border rounded-lg p-4">
-			<h3 class="font-medium mb-1">Behörigheter</h3>
-			<p class="text-xs text-neutral-500 mb-3">Vilken åtkomstnivå krävs för varje funktion. Godkänna bokningar och hantera inställningar kräver alltid Ansvarig.</p>
+			<h3 class="font-medium mb-1">{m.page_profile_access_section()}</h3>
+			<p class="text-xs text-neutral-500 mb-3">{m.page_profile_access_help()}</p>
 			<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 mb-3">
 				{#each permissionConfig as perm}
 					<label class="flex items-center justify-between gap-2 text-sm">
@@ -672,8 +673,8 @@
 				{/each}
 			</div>
 
-			<h4 class="text-sm font-medium mt-4 mb-2">Standardnivåer för nya team</h4>
-			<p class="text-xs text-neutral-500 mb-2">Nivå som tilldelas automatiskt skapade team vid första inloggning.</p>
+			<h4 class="text-sm font-medium mt-4 mb-2">{m.page_profile_default_levels_heading()}</h4>
+			<p class="text-xs text-neutral-500 mb-2">{m.page_profile_default_levels_help()}</p>
 			<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 mb-3">
 				{#each defaultAccessConfig as cfg}
 					<label class="flex items-center justify-between gap-2 text-sm">
@@ -686,18 +687,18 @@
 					</label>
 				{/each}
 				<label class="flex items-center justify-between gap-2 text-sm">
-					<span>Standard godkännandenivå</span>
+					<span>{m.page_profile_default_approval()}</span>
 					<select bind:value={permForm['default_approval_level']} class="border rounded px-2 py-1 text-sm w-32">
-						<option value="none">Ingen</option>
-						<option value="low">Låg</option>
-						<option value="high">Hög</option>
+						<option value="none">{m.article_approval_none()}</option>
+						<option value="low">{m.article_approval_low()}</option>
+						<option value="high">{m.article_approval_high()}</option>
 					</select>
 				</label>
 			</div>
 
 			<div class="flex items-center gap-3">
 				<button onclick={savePermissions} disabled={permSaving} class="text-sm bg-blue-700 text-white px-4 py-2 rounded disabled:opacity-50">
-					{permSaving ? 'Sparar...' : 'Spara behörigheter'}
+					{permSaving ? m.btn_saving() : m.page_profile_btn_save_permissions()}
 				</button>
 				{#if permMessage}
 					<span class="text-sm {permMessage.startsWith('Fel') ? 'text-red-600' : 'text-green-600'}">{permMessage}</span>
@@ -707,11 +708,11 @@
 
 		<!-- Locations -->
 		<section class="mb-6 border rounded-lg p-4">
-			<h3 class="font-medium mb-2">Platser</h3>
+			<h3 class="font-medium mb-2">{m.page_profile_locations_heading()}</h3>
 			<CrudList
 				bind:items={locations}
-				label="Plats"
-				placeholder="Ny plats..."
+				label={m.page_profile_location_label()}
+				placeholder={m.page_profile_location_placeholder()}
 				onCreate={(name) => api.createLocation({ name, sort_order: locations.length + 1 })}
 				onUpdate={(id, name) => api.updateLocation(id, { name })}
 				onDelete={(id) => api.deleteLocation(id)}
@@ -720,11 +721,11 @@
 
 		<!-- Categories -->
 		<section class="mb-6 border rounded-lg p-4">
-			<h3 class="font-medium mb-2">Kategorier</h3>
+			<h3 class="font-medium mb-2">{m.page_profile_categories_heading()}</h3>
 			<CrudList
 				bind:items={categories}
-				label="Kategori"
-				placeholder="Ny kategori..."
+				label={m.page_profile_category_label()}
+				placeholder={m.page_profile_category_placeholder()}
 				onCreate={(name) => api.createCategory({ name, sort_order: categories.length + 1 })}
 				onUpdate={(id, name) => api.updateCategory(id, { name })}
 				onDelete={(id) => api.deleteCategory(id)}
@@ -733,11 +734,11 @@
 
 		<!-- CSV Import -->
 		<section class="mb-6 border rounded-lg p-4">
-			<h3 class="font-medium mb-2">Importera artiklar (CSV)</h3>
+			<h3 class="font-medium mb-2">{m.page_profile_import_heading()}</h3>
 			<div class="flex flex-wrap items-center gap-2 mb-2">
 				<input type="file" accept=".csv" onchange={handleFileSelect} class="text-sm file:mr-2 file:px-3 file:py-1 file:rounded file:border file:border-neutral-300 file:bg-white file:text-sm file:text-neutral-700 file:cursor-pointer hover:file:bg-neutral-50" />
 				<button onclick={runImport} disabled={!importFile || importLoading} class="text-sm bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50">
-					{importLoading ? 'Importerar...' : 'Importera'}
+					{importLoading ? m.page_profile_importing() : m.page_profile_btn_import()}
 				</button>
 			</div>
 			{#if importError}
@@ -745,13 +746,13 @@
 			{/if}
 			{#if importResult}
 				<div class="bg-green-50 border border-green-200 rounded p-3 text-sm space-y-1">
-					<p class="text-green-800 font-medium">{importResult.imported} artiklar importerade</p>
+					<p class="text-green-800 font-medium">{m.page_profile_import_result({ count: String(importResult.imported) })}</p>
 					{#if importResult.skipped > 0}
-						<p class="text-orange-700">{importResult.skipped} rader hoppades över</p>
+						<p class="text-orange-700">{m.page_profile_import_skipped({ skipped: String(importResult.skipped) })}</p>
 					{/if}
 					{#if importResult.errors?.length > 0}
 						<details class="text-red-700">
-							<summary class="cursor-pointer">{importResult.errors.length} fel</summary>
+							<summary class="cursor-pointer">{m.page_profile_import_errors({ errors: String(importResult.errors.length) })}</summary>
 							<ul class="mt-1 space-y-0.5 text-xs">
 								{#each importResult.errors as err}
 									<li>{err}</li>
@@ -765,21 +766,21 @@
 
 		<!-- Group language -->
 		<section class="mb-6 border rounded-lg p-4">
-			<h3 class="font-medium mb-2">Språk</h3>
+			<h3 class="font-medium mb-2">{m.page_profile_language_label()}</h3>
 			<div class="flex items-center gap-3">
-				<label class="text-sm text-neutral-700" for="group-language">Standardspråk för gruppen</label>
+				<label class="text-sm text-neutral-700" for="group-language">{m.page_profile_group_language_label()}</label>
 				<select id="group-language" bind:value={groupLanguage} class="border rounded px-2 py-1 text-sm">
 					<option value="sv">Svenska</option>
 					<option value="en">English</option>
 				</select>
-				<button onclick={saveGroupLanguage} class="text-sm bg-blue-700 text-white px-3 py-1 rounded">Spara</button>
+				<button onclick={saveGroupLanguage} class="text-sm bg-blue-700 text-white px-3 py-1 rounded">{m.btn_save()}</button>
 				{#if groupLanguageMessage}<span class="text-sm text-green-600">{groupLanguageMessage}</span>{/if}
 			</div>
 		</section>
 
 		<!-- Notifications -->
 		<section class="mb-6 border rounded-lg p-4">
-			<h3 class="font-medium mb-2">Aviseringar</h3>
+			<h3 class="font-medium mb-2">{m.page_profile_notifications_heading()}</h3>
 			{#if settingsMessage}
 				<div class="bg-green-50 border border-green-200 rounded p-2 mb-2 text-green-800 text-sm">{settingsMessage}</div>
 			{/if}
@@ -788,23 +789,23 @@
 			{/if}
 			<div class="space-y-3">
 				<label class="block">
-					<span class="text-sm text-neutral-600 block mb-1">E-post avsändaradress</span>
+					<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_email_from()}</span>
 					<input type="email" bind:value={settingsForm.notification_email_from} placeholder="utrustning@example.com" class="border rounded px-2 py-1 text-sm w-full" />
 				</label>
 				<label class="block">
 					<span class="text-sm text-neutral-600 block mb-1">
-						SMTP-nyckel
+						{m.page_profile_smtp_key()}
 						{#if groupSettings?.smtp_key_set}
 							<span class="text-neutral-400 ml-1">({groupSettings.smtp_key_masked})</span>
 						{/if}
 					</span>
-					<input type="password" bind:value={settingsForm.smtp_key} placeholder={groupSettings?.smtp_key_set ? 'Lämna tomt för att behålla' : 'Ange SMTP API-nyckel'} class="border rounded px-2 py-1 text-sm w-full" />
+					<input type="password" bind:value={settingsForm.smtp_key} placeholder={groupSettings?.smtp_key_set ? m.page_profile_leave_blank() : m.page_profile_smtp_enter()} class="border rounded px-2 py-1 text-sm w-full" />
 				</label>
 				<label class="block">
-					<span class="text-sm text-neutral-600 block mb-1">Google Chat webhook-URL</span>
+					<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_webhook_url()}</span>
 					<input type="url" bind:value={settingsForm.gchat_webhook_url} placeholder="https://chat.googleapis.com/v1/spaces/..." class="border rounded px-2 py-1 text-sm w-full" />
 				</label>
-				<button onclick={saveSettings} class="text-sm bg-blue-700 text-white px-4 py-2 rounded">Spara</button>
+				<button onclick={saveSettings} class="text-sm bg-blue-700 text-white px-4 py-2 rounded">{m.btn_save()}</button>
 			</div>
 		</section>
 	{/if}

@@ -5,6 +5,7 @@
 	import { browser } from '$app/environment';
 	import { onMount, untrack } from 'svelte';
 	import ImageAttachInput from '$lib/components/ImageAttachInput.svelte';
+	import * as m from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 	import { msg } from '$lib/msg';
 	import { issueStatusColors, issueSeverityColors } from '$lib/styles';
@@ -65,7 +66,7 @@
 			commentImageIds = [];
 			lightbox?.destroy(); lightbox = null;
 		} catch (e: any) {
-			commentError = e.message ?? 'Något gick fel';
+			commentError = e.message ?? m.common_error();
 		}
 		submittingComment = false;
 	}
@@ -80,7 +81,7 @@
 			});
 			statusComment = '';
 		} catch (e: any) {
-			statusError = e.message ?? 'Något gick fel';
+			statusError = e.message ?? m.common_error();
 		}
 		updatingStatus = false;
 		statusAction = '';
@@ -90,8 +91,8 @@
 		const d = new Date(ts);
 		const now = new Date();
 		const diff = now.getTime() - d.getTime();
-		if (diff < 86400000 && d.getDate() === now.getDate()) return 'idag';
-		if (diff < 172800000) return 'igår';
+		if (diff < 86400000 && d.getDate() === now.getDate()) return m.page_issue_today();
+		if (diff < 172800000) return m.page_issue_yesterday();
 		return d.toLocaleDateString('sv', { day: 'numeric', month: 'short', year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined });
 	}
 
@@ -108,7 +109,7 @@
 </script>
 
 <div class="max-w-2xl mx-auto p-4">
-	<a href="/issues" class="text-sm text-neutral-500 hover:text-neutral-800 mb-4 inline-block">← Ärenden</a>
+	<a href="/issues" class="text-sm text-neutral-500 hover:text-neutral-800 mb-4 inline-block">{m.page_issue_back_link()}</a>
 
 	<div class="flex flex-wrap items-start justify-between gap-2 mb-1">
 		<h1 class="text-heading-sm font-bold">{issue.title}</h1>
@@ -121,11 +122,11 @@
 		<span class="px-2 py-0.5 rounded text-xs font-medium {issueSeverityColors[issue.severity] ?? 'bg-neutral-100'}">
 			{msg(`issue_severity_${issue.severity}`) ?? issue.severity}
 		</span>
-		<span>rapporterat av {issue.reporter.name}</span>
+		<span>{m.page_issue_reported_by()} {issue.reporter.name}</span>
 		<span>·</span>
 		<span>{formatDate(issue.created_at)}</span>
 		{#if issue.updated_at !== issue.created_at}
-			<span>· uppdaterat {formatDate(issue.updated_at)}</span>
+			<span>· {m.page_issue_updated()} {formatDate(issue.updated_at)}</span>
 		{/if}
 	</div>
 
@@ -147,7 +148,7 @@
 			return { ind, qt: [...qt.values()] };
 		})()}
 		<div class="mb-4">
-			<p class="text-xs font-medium text-neutral-500 uppercase tracking-wide mb-1">Utrustning</p>
+			<p class="text-xs font-medium text-neutral-500 uppercase tracking-wide mb-1">{m.page_issue_equipment_heading()}</p>
 			<div class="space-y-1">
 				{#each grouped.ind as article}
 					<a href="/articles/{article.id}" class="flex items-center justify-between border rounded px-3 py-2 hover:bg-neutral-50 text-sm">
@@ -180,9 +181,9 @@
 	<!-- Assignees -->
 	{#if issue.assignees.length > 0 || isManager}
 		<div class="mb-4">
-			<p class="text-xs font-medium text-neutral-500 uppercase tracking-wide mb-1">Tilldelad</p>
+			<p class="text-xs font-medium text-neutral-500 uppercase tracking-wide mb-1">{m.page_issue_assigned_heading()}</p>
 			{#if issue.assignees.length === 0}
-				<p class="text-sm text-neutral-400">Ingen tilldelad</p>
+				<p class="text-sm text-neutral-400">{m.page_issue_not_assigned()}</p>
 			{:else}
 				<div class="flex flex-wrap gap-2">
 					{#each issue.assignees as assignee}
@@ -197,9 +198,9 @@
 
 	<!-- Events -->
 	<div class="mb-4">
-		<p class="text-xs font-medium text-neutral-500 uppercase tracking-wide mb-3">Händelser</p>
+		<p class="text-xs font-medium text-neutral-500 uppercase tracking-wide mb-3">{m.page_issue_events_heading()}</p>
 		{#if issue.events.length === 0}
-			<p class="text-sm text-neutral-400">Inga händelser ännu.</p>
+			<p class="text-sm text-neutral-400">{m.page_issue_events_empty()}</p>
 		{:else}
 			<div bind:this={eventsEl} class="space-y-3">
 				{#each issue.events as event}
@@ -239,12 +240,12 @@
 		{#if commentError}
 			<p class="text-red-600 text-xs mb-2">{commentError}</p>
 		{/if}
-		<label for="comment-input" class="sr-only">Skriv en kommentar</label>
+		<label for="comment-input" class="sr-only">{m.page_issue_comment_sr_label()}</label>
 		<textarea
 			id="comment-input"
 			bind:value={commentText}
 			rows="2"
-			placeholder="Skriv en kommentar..."
+			placeholder={m.page_issue_comment_placeholder()}
 			class="w-full text-sm border-0 focus:outline-none resize-none"
 		></textarea>
 		<div class="flex items-center justify-between mt-2 gap-2">
@@ -254,7 +255,7 @@
 				disabled={submittingComment || !commentText.trim()}
 				class="text-sm bg-blue-700 text-white px-4 py-1.5 rounded disabled:opacity-50 shrink-0"
 			>
-				{submittingComment ? 'Skickar...' : 'Skicka'}
+				{submittingComment ? m.btn_submitting() : m.btn_submit()}
 			</button>
 		</div>
 	</div>
@@ -266,12 +267,12 @@
 				<p class="text-red-600 text-xs">{statusError}</p>
 			{/if}
 			<div>
-				<label for="status-comment" class="text-xs font-medium text-neutral-500 block mb-1">Kommentar vid statusbyte <span class="text-neutral-400 font-normal">(valfritt)</span></label>
+				<label for="status-comment" class="text-xs font-medium text-neutral-500 block mb-1">{m.page_issue_status_comment_label()} <span class="text-neutral-400 font-normal">{m.optional()}</span></label>
 				<textarea
 					id="status-comment"
 					bind:value={statusComment}
 					rows="2"
-					placeholder="Lägg till en kommentar..."
+					placeholder={m.page_issue_optional_comment_placeholder()}
 					class="w-full border rounded px-3 py-2 text-sm"
 				></textarea>
 			</div>
@@ -282,7 +283,7 @@
 						disabled={updatingStatus}
 						class="text-sm border border-yellow-400 text-yellow-800 px-3 py-1.5 rounded hover:bg-yellow-50 disabled:opacity-50"
 					>
-						Markera som pågår
+						{m.page_issue_btn_in_progress()}
 					</button>
 				{/if}
 				{#if issue.status === 'open' || issue.status === 'in_progress'}
@@ -291,14 +292,14 @@
 						disabled={updatingStatus}
 						class="text-sm border border-green-500 text-green-800 px-3 py-1.5 rounded hover:bg-green-50 disabled:opacity-50"
 					>
-						Markera som löst
+						{m.page_issue_btn_resolved()}
 					</button>
 					<button
 						onclick={() => changeStatus('archived')}
 						disabled={updatingStatus}
 						class="text-sm border border-neutral-300 text-neutral-600 px-3 py-1.5 rounded hover:bg-neutral-50 disabled:opacity-50"
 					>
-						Arkivera
+						{m.page_issue_btn_archive()}
 					</button>
 				{/if}
 				{#if issue.status === 'resolved' || issue.status === 'archived'}
@@ -307,7 +308,7 @@
 						disabled={updatingStatus}
 						class="text-sm border border-blue-300 text-blue-700 px-3 py-1.5 rounded hover:bg-blue-50 disabled:opacity-50"
 					>
-						Återöppna
+						{m.page_issue_btn_reopen()}
 					</button>
 				{/if}
 			</div>

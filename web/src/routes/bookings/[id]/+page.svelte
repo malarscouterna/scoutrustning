@@ -11,6 +11,7 @@
 	import { onDestroy } from 'svelte';
 	import { msg } from '$lib/msg';
 	import { bookingStatusColors } from '$lib/styles';
+	import * as m from '$lib/paraglide/messages.js';
 
 	let { data }: { data: PageData } = $props();
 
@@ -104,7 +105,7 @@
 		error = '';
 		try {
 			booking = await api.submitBooking(booking.id, submitMessage || undefined, forceApproval || undefined);
-			message = booking.status === 'confirmed' ? 'Bokning bekräftad' : 'Bokning inskickad';
+			message = booking.status === 'confirmed' ? m.page_booking_confirmed() : m.page_booking_submitted();
 			submitMessage = '';
 			forceApproval = false;
 			setTimeout(() => message = '', 4000);
@@ -115,7 +116,7 @@
 	}
 
 	async function cancelBooking() {
-		if (!confirm('Är du säker på att du vill avboka?')) return;
+		if (!confirm(m.common_confirm())) return;
 		error = '';
 		try {
 			await api.cancelBooking(booking.id);
@@ -133,13 +134,13 @@
 		error = '';
 		const cartId = cart.id;
 		if (cartId && cartId !== booking.id) {
-			if (!confirm('Du har en aktiv varukorg. Den kommer att rensas när du startar utlämningen. Vill du fortsätta?')) return;
+			if (!confirm(m.page_booking_confirm_clear_cart())) return;
 			cart.clear();
 		}
 		try {
 			booking = await api.pickupBooking(booking.id);
 			pickupMode = true;
-			message = 'Utlämning startad';
+			message = m.page_booking_pickup_started();
 			setTimeout(() => message = '', 4000);
 		} catch (e: any) {
 			error = e.message;
@@ -149,7 +150,7 @@
 	function handleBookingReturned() {
 		booking = { ...booking, status: 'returned' };
 		returnMode = false;
-		message = 'Allt återlämnat!';
+		message = m.page_booking_all_returned();
 		setTimeout(() => message = '', 4000);
 	}
 
@@ -158,7 +159,7 @@
 		try {
 			booking = { ...booking, status: 'picked_up' };
 			returnMode = true;
-			message = 'Bokning öppnad igen';
+			message = m.page_booking_reopened();
 			setTimeout(() => message = '', 4000);
 		} catch (e: any) {
 			error = e.message;
@@ -196,7 +197,7 @@
 		error = '';
 		try {
 			booking = await api.approveBooking(booking.id, approvalMessage);
-			message = 'Bokning godkänd';
+			message = m.page_booking_confirmed();
 			approvalMessage = '';
 			setTimeout(() => message = '', 4000);
 			loadEvents();
@@ -209,7 +210,7 @@
 		error = '';
 		try {
 			booking = await api.rejectBooking(booking.id, approvalMessage);
-			message = 'Bokning nekad';
+			message = m.page_booking_rejected();
 			approvalMessage = '';
 			setTimeout(() => message = '', 4000);
 			loadEvents();
@@ -243,9 +244,9 @@
 			{/if}
 			<p class="text-sm text-neutral-500 mb-3">
 				{#if booking.team_name}
-					För: <span class="font-medium text-blue-700">{booking.team_name}</span>
+					{m.page_booking_for_label()} <span class="font-medium text-blue-700">{booking.team_name}</span>
 				{:else if booking.used_by_external}
-					För: {booking.used_by_external}
+					{m.page_booking_for_label()} {booking.used_by_external}
 				{/if}
 			</p>
 
@@ -253,10 +254,10 @@
 			{#if booking.status === 'picked_up'}
 				<div class="flex flex-wrap gap-2 mb-4">
 					<button onclick={() => pickupMode = true} class="bg-blue-700 text-white px-4 py-2 rounded text-sm">
-						{allPickedUp ? 'Se utlämning' : 'Fortsätt utlämning'}
+						{allPickedUp ? m.page_booking_btn_view_pickup() : m.page_booking_btn_continue_pickup()}
 					</button>
 					<button onclick={() => returnMode = true} class="bg-green-700 text-white px-4 py-2 rounded text-sm">
-						{anyReturnStarted ? 'Fortsätt återlämning' : 'Påbörja återlämning'}
+						{anyReturnStarted ? m.page_booking_btn_continue_return() : m.page_booking_btn_start_return()}
 					</button>
 				</div>
 			{/if}
@@ -268,7 +269,7 @@
 							<div class="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-neutral-500 mb-0.5">
 								<span class="font-medium text-neutral-700">{event.actor_name}</span>
 								<span>
-									{({'submitted': 'skickade för godkännande', 'approved': 'godkände', 'rejected': 'nekade', 'cancelled': 'avbokade', 'note': 'kommenterade'} as Record<string,string>)[event.event_type] ?? event.event_type}
+									{({'submitted': m.page_booking_event_submitted(), 'approved': m.page_booking_event_approved(), 'rejected': m.page_booking_event_rejected(), 'cancelled': m.page_booking_event_cancelled(), 'note': m.page_booking_event_commented()} as Record<string,string>)[event.event_type] ?? event.event_type}
 								</span>
 								<span>{new Date(event.created_at).toLocaleDateString('sv', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
 							</div>
@@ -284,7 +285,7 @@
 				<input
 					type="text"
 					bind:value={noteMessage}
-					placeholder="Lägg till en kommentar..."
+					placeholder={m.page_booking_message_to_manager()}
 					class="flex-1 border rounded px-3 py-2 text-sm"
 					onkeydown={(e) => { if (e.key === 'Enter') addNote(); }}
 				/>
@@ -293,16 +294,16 @@
 
 			{#if isManager && booking.status === 'submitted'}
 				<div class="border rounded p-4 mb-3 bg-orange-50">
-					<p class="text-sm font-medium text-orange-800 mb-2">Denna bokning väntar på godkännande</p>
+					<p class="text-sm font-medium text-orange-800 mb-2">{m.page_booking_pending_message()}</p>
 					<textarea
 						bind:value={approvalMessage}
-						placeholder="Meddelande till bokaren (valfritt)"
+						placeholder={m.page_booking_message_to_booker()}
 						class="w-full border rounded px-3 py-2 text-sm mb-2"
 						rows="2"
 					></textarea>
 					<div class="flex gap-2">
-						<button onclick={approveBooking} class="bg-green-700 text-white px-4 py-2 rounded text-sm">Godkänn</button>
-						<button onclick={rejectBooking} class="bg-red-600 text-white px-4 py-2 rounded text-sm">Neka</button>
+						<button onclick={approveBooking} class="bg-green-700 text-white px-4 py-2 rounded text-sm">{m.page_booking_btn_approve()}</button>
+						<button onclick={rejectBooking} class="bg-red-600 text-white px-4 py-2 rounded text-sm">{m.page_booking_btn_reject()}</button>
 					</div>
 				</div>
 			{/if}
@@ -315,34 +316,34 @@
 					<div class="border rounded p-4 mb-3 bg-neutral-50">
 						<textarea
 							bind:value={submitMessage}
-							placeholder="Meddelande till utrustningsansvarig (valfritt)"
+							placeholder={m.page_booking_message_to_manager()}
 							class="w-full border rounded px-3 py-2 text-sm mb-2"
 							rows="2"
 						></textarea>
 						<div class="flex items-center gap-3">
-							<button onclick={submitBooking} class="bg-green-700 text-white px-4 py-2 rounded text-sm">Skicka bokning</button>
+							<button onclick={submitBooking} class="bg-green-700 text-white px-4 py-2 rounded text-sm">{m.page_booking_btn_submit()}</button>
 							<label class="flex items-center gap-1.5 text-sm text-neutral-600">
 								<input type="checkbox" bind:checked={forceApproval} />
-								Vill ha bekräftelse från ansvarig
+								{m.page_booking_wants_confirmation()}
 							</label>
 						</div>
 					</div>
 				{/if}
 				{#if booking.status === 'confirmed' || booking.status === 'approved'}
-					<button onclick={startPickup} class="bg-blue-700 text-white px-4 py-2 rounded text-sm">Starta utlämning</button>
+					<button onclick={startPickup} class="bg-blue-700 text-white px-4 py-2 rounded text-sm">{m.page_booking_btn_start_pickup()}</button>
 				{/if}
 				{#if cancellable}
 					<button onclick={cancelBooking} class="text-sm text-red-600 underline">
-						{booking.status === 'draft' ? 'Ta bort utkast' : 'Avboka'}
+						{booking.status === 'draft' ? m.page_booking_btn_delete_draft() : m.page_booking_btn_cancel()}
 					</button>
 				{/if}
 			</div>
 		</div>
 
-		<h2 class="font-medium mb-2">Utrustning ({items.length} artiklar)</h2>
+		<h2 class="font-medium mb-2">{m.page_booking_items_heading({ count: String(items.length) })}</h2>
 		{#if booking.status === 'returned'}
 			<BookingItemsList {items} />
-			<button onclick={reopenBooking} class="mt-4 text-sm text-blue-700 underline">Öppna igen</button>
+			<button onclick={reopenBooking} class="mt-4 text-sm text-blue-700 underline">{m.page_booking_btn_reopen()}</button>
 		{:else}
 			<BookingItemsList {items} />
 		{/if}
@@ -374,7 +375,7 @@
 			<button
 				onclick={() => showAddItemSheet = true}
 				class="bg-blue-700 text-white rounded px-4 py-2 text-sm"
-			>+ Lägg till utrustning</button>
+			>+ {m.page_booking_btn_add_items()}</button>
 		{/if}
 	</div>
 {/if}

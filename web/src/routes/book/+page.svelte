@@ -7,6 +7,7 @@
 	import BookingItemsList from '$lib/components/BookingItemsList.svelte';
 	import type { PageData } from './$types';
 	import { msg } from '$lib/msg';
+	import * as m from '$lib/paraglide/messages.js';
 
 	let { data }: { data: PageData } = $props();
 
@@ -137,7 +138,7 @@
 			);
 			conflictingIds = conflicts;
 			if (conflicts.size === 0) {
-				showMessage('Ändringar sparade');
+				showMessage(m.page_book_changes_saved());
 			}
 		} catch (e: any) {
 			error = e.message;
@@ -206,7 +207,7 @@
 			const booking = await api.submitBooking(bookingId);
 			cart.clear();
 			submitted = true;
-			message = booking.status === 'confirmed' ? 'Bokning bekräftad!' : 'Bokning inskickad!';
+			message = booking.status === 'confirmed' ? m.page_book_booking_confirmed() : m.page_book_booking_submitted();
 		} catch (e: any) {
 			error = e.message;
 		}
@@ -215,7 +216,7 @@
 
 	async function cancelBooking() {
 		if (!bookingId) return;
-		if (!confirm('Är du säker?')) return;
+		if (!confirm(m.common_confirm())) return;
 		try {
 			await api.cancelBooking(bookingId);
 			cart.clear();
@@ -229,7 +230,7 @@
 <div class="max-w-4xl mx-auto p-4">
 	{#if !data.existing}
 		<!-- Create mode -->
-		<h1 class="text-heading-sm font-bold mb-4">Ny bokning</h1>
+		<h1 class="text-heading-sm font-bold mb-4">{m.page_book_heading()}</h1>
 
 		{#if createError}
 			<div class="bg-red-50 border border-red-200 rounded p-3 mb-4 text-red-800 text-sm">{createError}</div>
@@ -237,24 +238,24 @@
 
 		<div class="grid grid-cols-2 sm:flex sm:flex-wrap gap-3 mb-4">
 			<label class="flex flex-col gap-1">
-				<span class="text-sm">Startdatum</span>
+				<span class="text-sm">{m.page_book_start_date()}</span>
 				<input type="date" bind:value={newStartDate} class="border rounded px-3 py-2" />
 			</label>
 			<label class="flex flex-col gap-1">
-				<span class="text-sm">Slutdatum</span>
+				<span class="text-sm">{m.page_book_end_date()}</span>
 				<input type="date" bind:value={newEndDate} class="border rounded px-3 py-2" />
 			</label>
 			<label class="flex flex-col gap-1 col-span-2">
-				<span class="text-sm">Anteckningar</span>
-				<input type="text" bind:value={newNotes} placeholder="T.ex. Hajk med Yggdrasil" class="border rounded px-3 py-2" />
+				<span class="text-sm">{m.page_book_notes()}</span>
+				<input type="text" bind:value={newNotes} placeholder={m.page_book_notes_placeholder()} class="border rounded px-3 py-2" />
 			</label>
 			<label class="flex flex-col gap-1 col-span-2">
-				<span class="text-sm">Bokas för</span>
+				<span class="text-sm">{m.page_book_booked_for()}</span>
 				<select bind:value={newUnit} class="border rounded px-3 py-2">
 					{#each userTeams.filter(u => myTeamSet.has(u.name)) as unit}
 						<option value={unit.id}>{unit.name} ({msg(`team_access_${unit.access_level}`) ?? unit.access_level})</option>
 					{/each}
-					<option value="">Personlig bokning</option>
+					<option value="">{m.page_book_personal()}</option>
 					{#if isManager}
 						{@const otherTeams = userTeams.filter(u => !myTeamSet.has(u.name))}
 						{#if otherTeams.length > 0}
@@ -275,18 +276,18 @@
 			onclick={createBooking}
 			disabled={!newStartDate || !newEndDate || creating ? true : undefined}
 		>
-			{creating ? '...' : 'Skapa bokning'}
+			{creating ? '...' : m.page_book_btn_create()}
 		</scout-button>
 
 	{:else if submitted}
 		<div class="bg-green-50 border border-green-200 rounded p-4">
 			<p class="font-medium text-green-800">{message}</p>
-			<a href="/bookings/{bookingId}" class="underline text-green-700">Visa bokning →</a>
+			<a href="/bookings/{bookingId}" class="underline text-green-700">{m.page_book_view_booking()}</a>
 		</div>
 
 	{:else}
 		<!-- Cart management mode -->
-		<h1 class="text-heading-sm font-bold mb-4">Din bokning</h1>
+		<h1 class="text-heading-sm font-bold mb-4">{m.page_book_your_booking()}</h1>
 
 		{#if message}
 			<div class="bg-green-50 border border-green-200 rounded p-3 mb-4 text-green-800 text-sm">{message}</div>
@@ -298,32 +299,32 @@
 
 		{#if hasConflicts}
 			<div class="bg-orange-50 border border-orange-200 rounded p-3 mb-4 text-orange-800 text-sm">
-				<p class="font-medium mb-1">Datumkonflikt - {conflictingIds.size} artiklar inte tillgängliga för de nya datumen.</p>
-				<p>Ta bort de markerade artiklarna eller ändra tillbaka datumen för att kunna skicka bokningen.</p>
+				<p class="font-medium mb-1">{m.page_book_date_conflict({ count: String(conflictingIds.size) })}</p>
+				<p>{m.page_book_date_conflict_hint()}</p>
 			</div>
 		{/if}
 
 		<!-- Dates, team, notes -->
 		<div class="grid grid-cols-2 sm:flex sm:flex-wrap gap-3 mb-3">
 			<label class="flex flex-col gap-1">
-				<span class="text-sm">Startdatum</span>
+				<span class="text-sm">{m.page_book_start_date()}</span>
 				<input type="date" bind:value={startDate} class="border rounded px-3 py-2" />
 			</label>
 			<label class="flex flex-col gap-1">
-				<span class="text-sm">Slutdatum</span>
+				<span class="text-sm">{m.page_book_end_date()}</span>
 				<input type="date" bind:value={endDate} class="border rounded px-3 py-2" />
 			</label>
 			<label class="flex flex-col gap-1 col-span-2">
-				<span class="text-sm">Anteckningar</span>
-				<input type="text" bind:value={notes} placeholder="T.ex. Hajk med Yggdrasil" class="border rounded px-3 py-2" />
+				<span class="text-sm">{m.page_book_notes()}</span>
+				<input type="text" bind:value={notes} placeholder={m.page_book_notes_placeholder()} class="border rounded px-3 py-2" />
 			</label>
 			<label class="flex flex-col gap-1 col-span-2">
-				<span class="text-sm">Bokas för</span>
+				<span class="text-sm">{m.page_book_booked_for()}</span>
 				<select bind:value={selectedUnit} class="border rounded px-3 py-2">
 					{#each userTeams.filter(u => myTeamSet.has(u.name)) as unit}
 						<option value={unit.id}>{unit.name} ({msg(`team_access_${unit.access_level}`) ?? unit.access_level})</option>
 					{/each}
-					<option value="">Personlig bokning</option>
+					<option value="">{m.page_book_personal()}</option>
 					{#if isManager}
 						{@const otherTeams = userTeams.filter(u => !myTeamSet.has(u.name))}
 						{#if otherTeams.length > 0}
@@ -345,21 +346,21 @@
 				onclick={saveDetails}
 				disabled={saving ? true : undefined}
 			>
-				{saving ? '...' : 'Spara ändringar'}
+				{saving ? '...' : m.page_book_btn_save_changes()}
 			</scout-button>
 		</div>
 
 		<!-- Item list -->
 		{#if cartItems.length > 0}
-			<h2 class="font-medium mb-2">Utrustning ({cartItems.length} artiklar)</h2>
+			<h2 class="font-medium mb-2">{m.page_booking_items_heading({ count: String(cartItems.length) })}</h2>
 			<BookingItemsList items={cartItems} editable conflictingIds={conflictingIds} onRemove={removeFromCart} onAddOne={addOneToCart} onRemoveOne={removeOneFromCart} />
 		{:else}
-			<p class="text-sm text-neutral-500 mb-4">Inga artiklar tillagda ännu.</p>
+			<p class="text-sm text-neutral-500 mb-4">{m.page_book_items_empty()}</p>
 		{/if}
 
 		<!-- Primary actions -->
 		<div class="flex flex-wrap gap-3 mt-6">
-			<scout-button type="link" href="/browse" variant="outlined">Lägg till utrustning</scout-button>
+			<scout-button type="link" href="/browse" variant="outlined">{m.page_book_btn_add_items()}</scout-button>
 			<!-- svelte-ignore a11y_click_events_have_key_events --><!-- svelte-ignore a11y_no_static_element_interactions -->
 			<scout-button
 				type="button"
@@ -367,7 +368,7 @@
 				onclick={submitBooking}
 				disabled={cartItems.length === 0 || hasConflicts || submitting ? true : undefined}
 			>
-				{submitting ? '...' : 'Skicka bokning'}
+				{submitting ? '...' : m.page_booking_btn_submit()}
 			</scout-button>
 		</div>
 
@@ -375,7 +376,7 @@
 		<div class="mt-6 pt-4 border-t">
 			<!-- svelte-ignore a11y_click_events_have_key_events --><!-- svelte-ignore a11y_no_static_element_interactions -->
 			<scout-button type="button" variant="danger" size="large" onclick={cancelBooking}>
-				Avbryt bokning
+				{m.page_book_btn_cancel()}
 			</scout-button>
 		</div>
 	{/if}

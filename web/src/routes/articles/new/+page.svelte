@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { createApiClient } from '$lib/api/client';
 	import ArticleForm from '$lib/components/ArticleForm.svelte';
+	import * as m from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -26,7 +27,7 @@
 </script>
 
 <div class="max-w-2xl mx-auto p-4">
-	<h1 class="text-heading-sm font-bold mt-2 mb-4">Ny artikel</h1>
+	<h1 class="text-heading-sm font-bold mt-2 mb-4">{m.page_article_new_heading()}</h1>
 
 	<ArticleForm
 		mode="create"
@@ -34,7 +35,7 @@
 		categories={data.categories}
 		initial={data.prefill ?? undefined}
 		isManager={true}
-		submitLabel="Skapa"
+		submitLabel={m.page_article_btn_create()}
 		onSubmit={handleSubmit}
 		onCancel={() => goto('/browse')}
 		{error}

@@ -3,6 +3,7 @@
 	import type { PageData } from './$types';
 	import { msg } from '$lib/msg';
 	import { bookingStatusColors } from '$lib/styles';
+	import * as m from '$lib/paraglide/messages.js';
 
 	let { data }: { data: PageData } = $props();
 
@@ -38,8 +39,8 @@
 
 <div class="max-w-4xl mx-auto p-4">
 	<div class="flex items-center justify-between mb-4">
-		<h1 class="text-heading-sm font-bold">Bokningar</h1>
-		<a href="/book" class="bg-blue-700 text-white px-4 py-2 rounded text-sm">Ny bokning</a>
+		<h1 class="text-heading-sm font-bold">{m.page_bookings_heading()}</h1>
+		<a href="/book" class="bg-blue-700 text-white px-4 py-2 rounded text-sm">{m.page_bookings_btn_new()}</a>
 	</div>
 
 	{#if mgr}
@@ -49,29 +50,29 @@
 					onclick={() => filter = 'pending'}
 					class="px-3 py-1.5 rounded text-sm flex items-center gap-1.5 {filter === 'pending' ? 'bg-orange-600 text-white' : 'bg-orange-50 text-orange-700'}"
 				>
-					Väntar på godkännande
+					{m.page_bookings_filter_pending()}
 					<span class="text-xs px-1.5 py-0.5 rounded-full {filter === 'pending' ? 'bg-white/20' : 'bg-orange-200'}">{data.pendingCount}</span>
 				</button>
 			{/if}
 			<button
 				onclick={() => filter = 'mine'}
 				class="px-3 py-1.5 rounded text-sm {filter === 'mine' ? 'bg-blue-700 text-white' : 'bg-neutral-100'}"
-			>Mina</button>
+			>{m.page_bookings_filter_mine()}</button>
 			<button
 				onclick={() => filter = 'all'}
 				class="px-3 py-1.5 rounded text-sm {filter === 'all' ? 'bg-blue-700 text-white' : 'bg-neutral-100'}"
-			>Alla</button>
+			>{m.page_bookings_filter_all()}</button>
 		</div>
 	{/if}
 
 	{#if filteredBookings.length === 0}
 		<p class="text-neutral-500">
 			{#if filter === 'pending'}
-				Inga bokningar väntar på godkännande.
+				{m.page_bookings_empty_pending()}
 			{:else if filter === 'mine'}
-				Du har inga bokningar ännu.
+				{m.page_bookings_empty_mine()}
 			{:else}
-				Inga bokningar ännu.
+				{m.page_bookings_empty_all()}
 			{/if}
 		</p>
 	{:else}
@@ -86,7 +87,7 @@
 							{:else if booking.used_by_external}
 								<span class="text-xs bg-neutral-50 text-neutral-600 px-1.5 py-0.5 rounded">{booking.used_by_external}</span>
 							{:else}
-								<span class="text-xs text-neutral-400">Personlig</span>
+								<span class="text-xs text-neutral-400">{m.page_bookings_personal()}</span>
 							{/if}
 						</div>
 						<span class="text-xs px-2 py-0.5 rounded {bookingStatusColors[booking.status] ?? 'bg-neutral-100'}">

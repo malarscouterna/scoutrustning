@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { ApiError } from '$lib/api/client';
+	import * as m from '$lib/paraglide/messages.js';
 
 	interface Item {
 		id: string;
@@ -36,7 +37,7 @@
 			const item = await onCreate(newName.trim());
 			items = [...items, item];
 			newName = '';
-			flash(`${label} tillagd`);
+			flash(`${label} ${m.crud_added()}`);
 		} catch (e: any) { error = e.message; }
 	}
 
@@ -47,7 +48,7 @@
 			const item = await onUpdate(id, editingName.trim());
 			items = items.map(i => i.id === id ? item : i);
 			editingId = null;
-			flash(`${label} uppdaterad`);
+			flash(`${label} ${m.crud_updated()}`);
 		} catch (e: any) { error = e.message; }
 	}
 
@@ -56,10 +57,10 @@
 		try {
 			await onDelete(id);
 			items = items.filter(i => i.id !== id);
-			flash(`${name} borttagen`);
+			flash(`${name} ${m.crud_removed()}`);
 		} catch (e: any) {
 			if (e instanceof ApiError && e.body?.error === 'has_articles') {
-				error = `Kan inte ta bort — ${e.body.count} artiklar använder ${name.toLowerCase()}. Flytta eller arkivera dem först.`;
+				error = `${m.crud_delete_error_prefix()}${e.body.count} ${m.crud_delete_error_uses()} ${name.toLowerCase()}. ${m.crud_delete_error_hint()}`;
 			} else {
 				error = e.message;
 			}
@@ -78,17 +79,17 @@
 		<div class="flex items-center gap-2 py-1">
 			{#if editingId === item.id}
 				<input type="text" bind:value={editingName} onkeydown={(e) => e.key === 'Enter' && save(item.id)} class="border rounded px-2 py-1 text-sm flex-1" />
-				<button onclick={() => save(item.id)} class="text-xs text-blue-700 underline">Spara</button>
-				<button onclick={() => editingId = null} class="text-xs text-neutral-500 underline">Avbryt</button>
+				<button onclick={() => save(item.id)} class="text-xs text-blue-700 underline">{m.btn_save()}</button>
+				<button onclick={() => editingId = null} class="text-xs text-neutral-500 underline">{m.btn_cancel()}</button>
 			{:else}
 				<span class="flex-1 text-sm">{item.name}</span>
-				<button onclick={() => { editingId = item.id; editingName = item.name; }} class="text-xs text-blue-700 underline">Redigera</button>
-				<button onclick={() => remove(item.id, item.name)} class="text-xs text-red-600 underline">Ta bort</button>
+				<button onclick={() => { editingId = item.id; editingName = item.name; }} class="text-xs text-blue-700 underline">{m.btn_edit()}</button>
+				<button onclick={() => remove(item.id, item.name)} class="text-xs text-red-600 underline">{m.btn_delete()}</button>
 			{/if}
 		</div>
 	{/each}
 </div>
 <div class="flex gap-2">
 	<input type="text" bind:value={newName} placeholder={placeholder} onkeydown={(e) => e.key === 'Enter' && add()} class="border rounded px-2 py-1 text-sm flex-1" />
-	<button onclick={add} disabled={!newName.trim()} class="text-sm bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50">Lägg till</button>
+	<button onclick={add} disabled={!newName.trim()} class="text-sm bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50">{m.btn_add()}</button>
 </div>
