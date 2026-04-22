@@ -2,6 +2,10 @@
 
 Deferred work items - things to grab when there's time, smaller tasks set aside during major work. When an item is completed, move it to [accomplished.md](accomplished.md).
 
+## English user guide
+
+`docs/guide.md` is the source for the in-app guide page and is currently written in Swedish only. An English version is needed once the English UI is fully rolled out. Deferred — low priority until there are actual English-speaking users.
+
 ## Group members API + assignee picker
 
 Add `GET /api/v0/users` (manager only) that returns all users who have ever logged in to the group. Used by:
@@ -73,10 +77,6 @@ Categories are flat. The `categories` table supports `parent_id` but the UI does
 ## Date picker locale
 
 Native `<input type="date">` uses browser/OS locale for week start day. Full control requires a custom date picker component.
-
-## i18n system
-
-All user-facing strings are hardcoded in Swedish. Need to set up an i18n system (e.g. paraglide-sveltekit) before adding English.
 
 ## Unavailable items in copied bookings
 

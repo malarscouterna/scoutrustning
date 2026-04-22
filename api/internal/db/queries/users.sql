@@ -13,4 +13,4 @@ WHERE id = @id AND group_id = @group_id;
 
 -- name: UpdateUserLanguage :exec
 UPDATE users SET language = @language, updated_at = now()
-WHERE id = @id AND group_id = @group_id;
+WHERE id = @id;

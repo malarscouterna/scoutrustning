@@ -41,17 +41,16 @@ func (q *Queries) GetUser(ctx context.Context, arg GetUserParams) (User, error) 
 
 const updateUserLanguage = `-- name: UpdateUserLanguage :exec
 UPDATE users SET language = $1, updated_at = now()
-WHERE id = $2 AND group_id = $3
+WHERE id = $2
 `
 
 type UpdateUserLanguageParams struct {
 	Language pgtype.Text `json:"language"`
 	ID       string      `json:"id"`
-	GroupID  string      `json:"group_id"`
 }
 
 func (q *Queries) UpdateUserLanguage(ctx context.Context, arg UpdateUserLanguageParams) error {
-	_, err := q.db.Exec(ctx, updateUserLanguage, arg.Language, arg.ID, arg.GroupID)
+	_, err := q.db.Exec(ctx, updateUserLanguage, arg.Language, arg.ID)
 	return err
 }
 

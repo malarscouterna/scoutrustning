@@ -372,3 +372,21 @@ See [images.md](images.md) for updated step tracking.
 **API client additions**: `SharedImage` type, `listProductImages`, `listSharedImages`, `addFromShared`, `updateProductImage`.
 
 **`ListProductImages` response**: Now includes `uploaded_by` field for frontend permission checks.
+
+## 2026-04-22
+
+### i18n — Swedish and English (Phases 1–5)
+
+Full internationalisation system covering both frontend and backend. See [i18n.md](i18n.md) for architecture.
+
+**Foundation (Phase 1)**: Migration 00004 adds `users.language` and `group_settings.default_language`. `api/internal/i18n` package with `T()` and `Supported()` using `//go:embed`. Paraglide-SvelteKit installed with cookie-based language detection (no URL prefixes). Language resolved per request: user preference → group default → `sv`. `/api/v0/me` returns resolved `language`. `hooks.server.ts` activates Paraglide; `+layout.server.ts` sets `paraglide_lang` cookie.
+
+**Backend strings (Phase 2)**: Issue title generation in `issues.go` uses `i18n.T()` with the request's `paraglide_lang` cookie.
+
+**Frontend labels.ts removal (Phase 3)**: `labels.ts` deleted. All status/label maps replaced with Paraglide message calls. Non-translatable Tailwind colour maps extracted to `styles.ts`. `msg.ts` helper for runtime key construction.
+
+**Shared components (Phase 4)**: `ReportIssueSheet`, `AddItemSheet`, `PickupChecklist`, `ReturnChecklist`, `BookingItemsList`, `ArticleEventHistory` fully migrated. All string keys added to `sv.json` and `en.json`.
+
+**Language preference UI (Phase 5)**: `PUT /api/v0/me/language` endpoint. Profile page: personal language select (with note that user-generated content is unaffected) and group default language select in manager tab.
+
+**Dev tooling**: Air watches `.json` files so embedded message changes trigger a Go rebuild. Paraglide Vite plugin watches message files via the inlang project for HMR.

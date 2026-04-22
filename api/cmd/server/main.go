@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"os"
@@ -124,7 +125,38 @@ func main() {
 			})
 		})
 
-		articles := &handler.ArticleHandler{Q: queries, Perms: permCache}
+		r.Put("/me/language", func(w http.ResponseWriter, r *http.Request) {
+				claims, ok := auth.ClaimsFromContext(r.Context())
+				if !ok {
+					handler.WriteError(w, http.StatusUnauthorized, "unauthorized")
+					return
+				}
+				var req struct {
+					Language *string `json:"language"`
+				}
+				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+					handler.WriteError(w, http.StatusBadRequest, "invalid request body")
+					return
+				}
+				var lang pgtype.Text
+				if req.Language != nil {
+					if *req.Language != "" && !i18n.Supported(*req.Language) {
+						handler.WriteError(w, http.StatusBadRequest, "unsupported language")
+						return
+					}
+					lang = pgtype.Text{String: *req.Language, Valid: *req.Language != ""}
+				}
+				if err := queries.UpdateUserLanguage(r.Context(), db.UpdateUserLanguageParams{
+					Language: lang,
+					ID:       claims.MemberID,
+				}); err != nil {
+					handler.WriteError(w, http.StatusInternalServerError, "failed to update language")
+					return
+				}
+				w.WriteHeader(http.StatusNoContent)
+			})
+
+			articles := &handler.ArticleHandler{Q: queries, Perms: permCache}
 		locations := &handler.LocationHandler{Q: queries}
 		categories := &handler.CategoryHandler{Q: queries}
 		bookings := &handler.BookingHandler{Q: queries}

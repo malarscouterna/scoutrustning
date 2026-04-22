@@ -134,6 +134,7 @@ export interface GroupSettings {
 	article_edit_role: string;
 	issue_resolve_role: string;
 	manager_notes_role: string;
+	default_language: string;
 }
 
 export interface IssueArticle {
@@ -345,8 +346,10 @@ export function createApiClient(opts: FetchOptions = {}) {
 
 		// Group settings
 		getGroupSettings: () => request<GroupSettings>('/group-settings', opts),
-		updateGroupSettings: (data: { notification_email_from?: string; smtp_key?: string | null; gchat_webhook_url?: string; default_approval_level?: string }) =>
+		updateGroupSettings: (data: { notification_email_from?: string; smtp_key?: string | null; gchat_webhook_url?: string; default_approval_level?: string; default_language?: string }) =>
 			requestMut<GroupSettings>('/group-settings', 'PUT', data, opts),
+		updateLanguage: (language: string | null) =>
+			requestMut<void>('/me/language', 'PUT', { language }, opts),
 
 		// Article CRUD
 		getArticle: (id: string) => request<Article>(`/articles/${id}`, opts),
