@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.8.0](https://github.com/malarscouterna/ms-utrustning/compare/v0.7.0...v0.8.0) (2026-04-22)
+
+
+### Features
+
+* i18n foundation and backend string localisation ([ecc2b51](https://github.com/malarscouterna/ms-utrustning/commit/ecc2b51810d033251c1e4c55045b42ff679f58eb))
+* **i18n:** Phase 4 partial + Phase 5 + language switching fixes ([606b2c8](https://github.com/malarscouterna/ms-utrustning/commit/606b2c84c02cd740187a32d1b7dca648474da574))
+* **i18n:** Phase 4 shared components + air json watch ([aa606b7](https://github.com/malarscouterna/ms-utrustning/commit/aa606b7315f447b41e99e49bed862adfcb6025e0))
+* **web:** complete i18n phase 4 - migrate all route and component strings to Paraglide ([6e77a6a](https://github.com/malarscouterna/ms-utrustning/commit/6e77a6ab92c9f0255d7ad849bf5c756b35ecb626))
+* **web:** Phase 3 i18n - replace labels.ts with Paraglide ([64477a7](https://github.com/malarscouterna/ms-utrustning/commit/64477a7b404697aed3b426b5eb7f601f86b3d95e))
+
 ## [0.7.0](https://github.com/malarscouterna/ms-utrustning/compare/v0.6.6...v0.7.0) (2026-04-21)
 
 
