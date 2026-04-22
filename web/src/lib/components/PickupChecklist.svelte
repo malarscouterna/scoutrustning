@@ -336,9 +336,9 @@
 					<div class="font-medium text-sm">
 						{group.commercialName}
 						{#if isUnusableGroup}
-							<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded ml-1">{m.pickup_unavailable()}</span>
+							<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded ml-1">{m.report_issue_unavailable()}</span>
 						{:else if isUsableGroup}
-							<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded ml-1">{m.pickup_reported()}</span>
+							<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded ml-1">{m.availability_reported()}</span>
 						{/if}
 						{#if expandable}<span class="text-xs text-neutral-400 ml-1">{expanded ? '▲' : '▼'}</span>{/if}
 					</div>
@@ -461,13 +461,13 @@
 						{item.common_name}
 						{#if expandable && tGroup.items[0] === item}<span class="text-xs text-neutral-400 ml-1">{expanded ? '▲' : '▼'}</span>{/if}
 						{#if unusable}
-							<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded ml-1">{m.pickup_unavailable()}</span>
+							<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded ml-1">{m.report_issue_unavailable()}</span>
 						{:else if item.article_status === 'reported_usable'}
-							<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded ml-1">{m.pickup_reported()}</span>
+							<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded ml-1">{m.availability_reported()}</span>
 						{:else if item.article_status === 'incoming'}
 							<span class="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded ml-1">{m.pickup_incoming_badge()}{#if item.article_expected_available_date} — {new Date(item.article_expected_available_date).toLocaleDateString('sv', { day: 'numeric', month: 'short' })}{/if}</span>
 						{:else if item.article_status === 'under_repair'}
-							<span class="text-xs bg-neutral-100 text-neutral-700 px-1.5 py-0.5 rounded ml-1">{m.pickup_under_repair_badge()}{#if item.article_expected_available_date} — {m.pickup_incoming_ready()} {new Date(item.article_expected_available_date).toLocaleDateString('sv', { day: 'numeric', month: 'short' })}{/if}</span>
+							<span class="text-xs bg-neutral-100 text-neutral-700 px-1.5 py-0.5 rounded ml-1">{m.article_status_under_repair()}{#if item.article_expected_available_date} — {m.pickup_incoming_ready()} {new Date(item.article_expected_available_date).toLocaleDateString('sv', { day: 'numeric', month: 'short' })}{/if}</span>
 						{/if}
 					</div>
 					<div class="text-xs text-neutral-500">{item.location_name}{item.place ? ` · ${item.place}` : ''}</div>
@@ -524,13 +524,13 @@
 								{/if}
 							</span>
 							{#if candidateUnusable}
-								<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">{m.pickup_unavailable()}</span>
+								<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">{m.report_issue_unavailable()}</span>
 							{:else if candidate.status === 'reported_usable'}
-								<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">{m.pickup_reported()}</span>
+								<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">{m.availability_reported()}</span>
 							{:else if candidate.status === 'incoming'}
 								<span class="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">{m.pickup_incoming_badge()}{#if candidate.expected_available_date} — {new Date(candidate.expected_available_date).toLocaleDateString('sv', { day: 'numeric', month: 'short' })}{/if}</span>
 							{:else if candidate.status === 'under_repair'}
-								<span class="text-xs bg-neutral-100 text-neutral-700 px-1.5 py-0.5 rounded">{m.pickup_under_repair_badge()}{#if candidate.expected_available_date} — {m.pickup_incoming_ready()} {new Date(candidate.expected_available_date).toLocaleDateString('sv', { day: 'numeric', month: 'short' })}{/if}</span>
+								<span class="text-xs bg-neutral-100 text-neutral-700 px-1.5 py-0.5 rounded">{m.article_status_under_repair()}{#if candidate.expected_available_date} — {m.pickup_incoming_ready()} {new Date(candidate.expected_available_date).toLocaleDateString('sv', { day: 'numeric', month: 'short' })}{/if}</span>
 							{/if}
 							<span class="text-xs text-neutral-500">{candidate.location_name}{candidate.place ? ` · ${candidate.place}` : ''}</span>
 						</label>

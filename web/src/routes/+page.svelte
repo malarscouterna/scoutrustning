@@ -4,6 +4,7 @@
 	import BookingCard from '$lib/components/BookingCard.svelte';
 	import IssueCard from '$lib/components/IssueCard.svelte';
 	import type { PageData } from './$types';
+	import * as m from '$lib/paraglide/messages.js';
 
 	let { data }: { data: PageData } = $props();
 
@@ -24,23 +25,23 @@
 <div class="max-w-4xl mx-auto p-4">
 	<div class="flex flex-wrap gap-2 mb-6">
 		{#if showBook}
-			<scout-button type="link" href="/book" variant="primary">Boka utrustning</scout-button>
+			<scout-button type="link" href="/book" variant="primary">{m.page_home_btn_book()}</scout-button>
 		{/if}
-		<scout-button type="link" href="/browse" variant="outlined">Visa utrustning</scout-button>
-		<scout-button type="link" href="/profile" variant="outlined">Inställningar</scout-button>
-		<scout-button type="link" href="/guide" variant="outlined">Användarguide</scout-button>
-		<scout-button type="link" href="/issues/new" variant="primary">Felanmälan</scout-button>
+		<scout-button type="link" href="/browse" variant="outlined">{m.page_home_btn_browse()}</scout-button>
+		<scout-button type="link" href="/profile" variant="outlined">{m.page_home_btn_settings()}</scout-button>
+		<scout-button type="link" href="/guide" variant="outlined">{m.page_home_btn_guide()}</scout-button>
+		<scout-button type="link" href="/issues/new" variant="primary">{m.page_home_btn_issues()}</scout-button>
 	</div>
 
 	<div class="grid md:grid-cols-2 gap-6">
 		<section class="min-w-0">
 			<div class="flex items-center justify-between mb-3">
-				<h2 class="font-bold text-lg">Bokningar</h2>
-				<a href="/bookings" class="text-sm text-blue-700 hover:underline">Visa alla →</a>
+				<h2 class="font-bold text-lg">{m.page_home_bookings_heading()}</h2>
+				<a href="/bookings" class="text-sm text-blue-700 hover:underline">{m.page_home_view_all()}</a>
 			</div>
 
 			{#if drafts.length > 0}
-				<h3 class="text-sm font-medium text-neutral-500 mb-1">Utkast</h3>
+				<h3 class="text-sm font-medium text-neutral-500 mb-1">{m.page_home_section_draft()}</h3>
 				<div class="space-y-1 mb-3">
 					{#each drafts as booking}
 						<a href="/book?id={booking.id}" onclick={() => activateDraft(booking.id)} class="block border border-l-4 border-l-neutral-300 rounded px-4 py-3 hover:bg-neutral-50 border-dashed">
@@ -60,7 +61,7 @@
 
 			{#if mgr && data.pendingApprovals.length > 0}
 				<h3 class="text-sm font-medium text-orange-700 mb-1">
-					Väntar på godkännande ({data.pendingApprovals.length})
+					{m.page_home_section_pending()} ({data.pendingApprovals.length})
 				</h3>
 				<div class="space-y-1 mb-3">
 					{#each data.pendingApprovals as booking}
@@ -70,7 +71,7 @@
 			{/if}
 
 			{#if active.length > 0}
-				<h3 class="text-sm font-medium text-neutral-500 mb-1">Aktiva</h3>
+				<h3 class="text-sm font-medium text-neutral-500 mb-1">{m.page_home_section_active()}</h3>
 				<div class="space-y-1 mb-3">
 					{#each active as booking}
 						<BookingCard {booking} href="/bookings/{booking.id}" />
@@ -79,18 +80,18 @@
 			{/if}
 
 			{#if data.bookings.length === 0}
-				<p class="text-sm text-neutral-500">Inga bokningar ännu.</p>
+				<p class="text-sm text-neutral-500">{m.page_home_bookings_empty()}</p>
 			{/if}
 		</section>
 
 		<section class="min-w-0">
 			<div class="flex items-center justify-between mb-3">
-				<h2 class="font-bold text-lg">Ärenden</h2>
-				<a href="/issues" class="text-sm text-blue-700 hover:underline">Visa alla →</a>
+				<h2 class="font-bold text-lg">{m.page_home_issues_heading()}</h2>
+				<a href="/issues" class="text-sm text-blue-700 hover:underline">{m.page_home_view_all()}</a>
 			</div>
 
 			{#if data.myIssues.length > 0}
-				<h3 class="text-sm font-medium text-neutral-500 mb-1">Mina ärenden</h3>
+				<h3 class="text-sm font-medium text-neutral-500 mb-1">{m.page_home_my_issues()}</h3>
 				<div class="space-y-1 mb-3">
 					{#each data.myIssues as issue}
 						<IssueCard {issue} />
@@ -99,7 +100,7 @@
 			{/if}
 
 			{#if mgr && managerIssuesLimited.length > 0}
-				<h3 class="text-sm font-medium text-neutral-500 mb-1">Aktiva ärenden</h3>
+				<h3 class="text-sm font-medium text-neutral-500 mb-1">{m.page_home_active_issues()}</h3>
 				<div class="space-y-1 mb-3">
 					{#each managerIssuesLimited as issue}
 						<IssueCard {issue} />
@@ -108,7 +109,7 @@
 			{/if}
 
 			{#if data.myIssues.length === 0 && (!mgr || managerIssuesLimited.length === 0)}
-				<p class="text-sm text-neutral-500">Inga ärenden att visa.</p>
+				<p class="text-sm text-neutral-500">{m.page_home_issues_empty()}</p>
 			{/if}
 		</section>
 	</div>

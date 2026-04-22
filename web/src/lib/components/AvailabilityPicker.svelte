@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { createApiClient, type AvailabilityGroup, type BookingItem, type Category, type Location } from '$lib/api/client';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
+	import * as m from '$lib/paraglide/messages.js';
+	import { msg } from '$lib/msg';
 
 	interface Props {
 		bookingId: string;
@@ -164,25 +166,25 @@
 <div class="flex flex-wrap gap-2 mb-3">
 	<input
 		type="search"
-		placeholder="Sök..."
+		placeholder={m.availability_search_placeholder()}
 		bind:value={searchQuery}
 		class="border rounded px-3 py-2 text-sm flex-1 min-w-48"
 	/>
 	<select bind:value={selectedCategory} onchange={onFilterChange} class="border rounded px-3 py-2 text-sm">
-		<option value="">Alla kategorier</option>
+		<option value="">{m.availability_all_categories()}</option>
 		{#each categories as cat}
 			<option value={cat.id}>{cat.name}</option>
 		{/each}
 	</select>
 	<select bind:value={selectedLocation} onchange={onFilterChange} class="border rounded px-3 py-2 text-sm">
-		<option value="">Alla platser</option>
+		<option value="">{m.availability_all_locations()}</option>
 		{#each locations as loc}
 			<option value={loc.id}>{loc.name}</option>
 		{/each}
 	</select>
 	<label class="flex items-center gap-1.5 text-sm">
 		<input type="checkbox" bind:checked={showAll} />
-		Visa all utrustning
+		{m.availability_show_all()}
 	</label>
 </div>
 
@@ -200,25 +202,25 @@
 					{#if expandable}<span class="text-xs text-neutral-400 ml-1">{infoExpanded ? '▲' : '▼'}</span>{/if}
 					<span class="text-xs text-neutral-500 ml-2">{group.category_name} · {group.location_name}</span>
 					{#if group.approval_level === 'high'}
-						<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded ml-1">Kräver godkännande</span>
+						<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded ml-1">{m.report_issue_requires_approval()}</span>
 					{:else if group.approval_level === 'low'}
 						{#if teamAccessLevel === 'view' || teamAccessLevel === 'book'}
-							<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded ml-1">Kräver godkännande</span>
+							<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded ml-1">{m.report_issue_requires_approval()}</span>
 						{:else}
-							<span class="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded ml-1">Förgodkänd</span>
+							<span class="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded ml-1">{m.availability_pre_approved()}</span>
 						{/if}
 					{/if}
 				</button>
 				<div class="flex items-center gap-2">
 					<div class="text-sm text-neutral-600 text-right">
 						{#if booked > 0}
-							<span class="text-green-700 font-medium">{booked}/{booked + group.available_count} bokade</span>
+							<span class="text-green-700 font-medium">{m.availability_booked_count({ booked: String(booked), total: String(booked + group.available_count) })}</span>
 						{:else}
-							<span>{group.available_count} kvar</span>
+							<span>{m.availability_remaining_count({ count: String(group.available_count) })}</span>
 						{/if}
 						{#if hasFlags}
 							<button onclick={() => toggleDetails(group)} class="text-xs text-neutral-400 ml-1 underline cursor-pointer">
-								({#if group.reported_usable_count > 0}<span class="text-orange-600">{group.reported_usable_count} felrapp.</span>{/if}{#if group.incoming_count > 0}{#if group.reported_usable_count > 0}, {/if}<span class="text-blue-600">{group.incoming_count} inkommande</span>{/if}{#if group.under_repair_count > 0}{#if group.reported_usable_count > 0 || group.incoming_count > 0}, {/if}<span class="text-neutral-600">{group.under_repair_count} reparation</span>{/if})
+								({#if group.reported_usable_count > 0}<span class="text-orange-600">{m.availability_reported_count({ count: String(group.reported_usable_count) })}</span>{/if}{#if group.incoming_count > 0}{#if group.reported_usable_count > 0}, {/if}<span class="text-blue-600">{m.availability_incoming_count({ count: String(group.incoming_count) })}</span>{/if}{#if group.under_repair_count > 0}{#if group.reported_usable_count > 0 || group.incoming_count > 0}, {/if}<span class="text-neutral-600">{m.availability_under_repair_count({ count: String(group.under_repair_count) })}</span>{/if})
 							</button>
 						{/if}
 					</div>
@@ -235,7 +237,7 @@
 						disabled={group.available_count === 0}
 						class="bg-blue-700 text-white text-sm px-3 py-1 rounded disabled:opacity-50"
 					>
-						Lägg till
+						{m.btn_add()}
 					</button>
 				</div>
 			</div>
@@ -246,13 +248,13 @@
 					{/if}
 					{#if group.description}
 						<div>
-							<span class="font-medium text-neutral-500">Beskrivning:</span>
+							<span class="font-medium text-neutral-500">{m.lbl_description_colon()}</span>
 							<p class="mt-0.5">{group.description}</p>
 						</div>
 					{/if}
 					{#if group.instructions}
 						<div>
-							<span class="font-medium text-neutral-500">Instruktioner:</span>
+							<span class="font-medium text-neutral-500">{m.lbl_instructions_colon()}</span>
 							<p class="mt-0.5">{group.instructions}</p>
 						</div>
 					{/if}
@@ -262,21 +264,21 @@
 				{@const detail = detailArticles.get(key)}
 				<div class="border-t px-4 py-2 bg-neutral-50 text-sm space-y-1">
 					{#if !detail}
-						<p class="text-xs text-neutral-400">Laddar...</p>
+						<p class="text-xs text-neutral-400">{m.btn_loading()}</p>
 					{:else if detail.articles.length === 0}
-						<p class="text-xs text-neutral-400">Inga detaljer</p>
+						<p class="text-xs text-neutral-400">{m.availability_no_details()}</p>
 					{:else}
 						{#each detail.articles as article}
 							<div class="flex flex-wrap items-start gap-2 text-xs">
 								<span class="px-1.5 py-0.5 rounded
 									{article.status === 'reported_usable' ? 'bg-orange-100 text-orange-700' : article.status === 'incoming' ? 'bg-blue-50 text-blue-700' : article.status === 'under_repair' ? 'bg-neutral-100 text-neutral-700' : 'bg-neutral-100'}">
-									{article.status === 'reported_usable' ? 'Felrapporterad' : article.status === 'incoming' ? 'Inkommande' : article.status === 'under_repair' ? 'Under reparation' : article.status}
+									{article.status === 'reported_usable' ? m.availability_reported() : article.status === 'incoming' ? m.article_status_incoming() : article.status === 'under_repair' ? m.article_status_under_repair() : article.status}
 								</span>
 								{#if article.common_name !== group.commercial_name}
 									<span class="text-neutral-600">{article.common_name}</span>
 								{/if}
 								{#if article.expected_available_date}
-									<span class="text-blue-600">{article.status === 'incoming' ? 'beräknas levereras' : 'beräknas klar'} {formatDate(article.expected_available_date)}</span>
+									<span class="text-blue-600">{article.status === 'incoming' ? m.availability_expected_delivery() : m.availability_expected_ready()} {formatDate(article.expected_available_date)}</span>
 								{/if}
 								{#if detail.comments.get(article.id)}
 									<span class="text-neutral-500 italic">“{detail.comments.get(article.id)}”</span>

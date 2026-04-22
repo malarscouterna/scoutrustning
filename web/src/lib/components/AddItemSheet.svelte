@@ -145,7 +145,7 @@
 							<div class="text-xs text-neutral-500">{group.location_name}</div>
 							{#if reason}
 								<div class="text-xs text-orange-600 mt-0.5">
-									{reason === 'approval' ? m.add_item_requires_approval() : m.add_item_unavailable()}
+									{reason === 'approval' ? m.report_issue_requires_approval() : m.report_issue_unavailable()}
 									{#if reason === 'approval'}
 										— <a href="/browse" class="underline">{m.add_item_create_booking_link()}</a>
 									{:else}

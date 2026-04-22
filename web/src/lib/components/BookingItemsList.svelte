@@ -165,7 +165,7 @@
 									<span class="flex-1 min-w-0">
 										{group.commercialName}
 										{#if group.approvalLevel === 'low'}
-											<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded ml-1">{m.booking_items_requires_approval()}</span>
+											<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded ml-1">{m.report_issue_requires_approval()}</span>
 										{:else if group.approvalLevel === 'high'}
 											<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded ml-1">{m.booking_items_requires_special_approval()}</span>
 										{/if}
@@ -228,11 +228,11 @@
 												<span class="text-sm">{item.common_name}</span>
 												{#if item.place}<span class="text-sm text-neutral-600">{item.place}</span>{/if}
 												{#if item.article_status === 'reported_usable'}
-													<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">{m.booking_items_reported()}</span>
+													<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">{m.availability_reported()}</span>
 												{:else if item.article_status === 'incoming'}
-													<span class="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded">{m.pickup_incoming_badge()}{#if item.article_expected_available_date} — {m.return_expected_delivery()} {new Date(item.article_expected_available_date).toLocaleDateString('sv', { day: 'numeric', month: 'short' })}{/if}</span>
+													<span class="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded">{m.pickup_incoming_badge()}{#if item.article_expected_available_date} — {m.availability_expected_delivery()} {new Date(item.article_expected_available_date).toLocaleDateString('sv', { day: 'numeric', month: 'short' })}{/if}</span>
 												{:else if item.article_status === 'under_repair'}
-													<span class="text-xs bg-neutral-100 text-neutral-700 px-1.5 py-0.5 rounded">{m.pickup_under_repair_badge()}{#if item.article_expected_available_date} — {m.pickup_incoming_ready()} {new Date(item.article_expected_available_date).toLocaleDateString('sv', { day: 'numeric', month: 'short' })}{/if}</span>
+													<span class="text-xs bg-neutral-100 text-neutral-700 px-1.5 py-0.5 rounded">{m.article_status_under_repair()}{#if item.article_expected_available_date} — {m.pickup_incoming_ready()} {new Date(item.article_expected_available_date).toLocaleDateString('sv', { day: 'numeric', month: 'short' })}{/if}</span>
 												{/if}
 												{#if item.return_status && item.return_status !== 'returned_ok' && item.return_status !== 'pending'}
 													<span class="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700"

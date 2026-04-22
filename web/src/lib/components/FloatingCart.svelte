@@ -2,6 +2,7 @@
 	import { cart } from '$lib/stores/cart.svelte';
 	import { createApiClient, type Booking, type BookingItem } from '$lib/api/client';
 	import { goto } from '$app/navigation';
+	import * as m from '$lib/paraglide/messages.js';
 
 	const api = createApiClient();
 
@@ -208,14 +209,14 @@
 {#if cart.active}
 	<!-- Mobile backdrop only -->
 	{#if open}
-		<button class="fixed inset-0 z-40 bg-black/20 md:hidden" onclick={close} aria-label="Stäng varukorg"></button>
+		<button class="fixed inset-0 z-40 bg-black/20 md:hidden" onclick={close} aria-label={m.cart_close_aria()}></button>
 	{/if}
 
 	<div class="fixed bottom-4 right-4 z-50">
 		{#if open}
 			<div class="bg-white border rounded-lg shadow-xl w-80 sm:w-96 mb-2 max-h-[60vh] flex flex-col">
 				{#if loading}
-					<div class="p-4 text-sm text-neutral-500">Laddar...</div>
+					<div class="p-4 text-sm text-neutral-500">{m.btn_loading()}</div>
 				{:else if booking}
 					<div class="px-4 py-2 border-b text-sm font-medium text-neutral-700 shrink-0 flex items-center justify-between gap-2">
 						<span>
@@ -231,7 +232,7 @@
 
 					<div class="overflow-y-auto flex-1">
 						{#if locationSections.length === 0}
-							<p class="px-4 py-3 text-sm text-neutral-500">Inga artiklar ännu.</p>
+							<p class="px-4 py-3 text-sm text-neutral-500">{m.cart_empty()}</p>
 						{:else}
 							{#each locationSections as section}
 								<div class="px-4 pt-2 pb-0.5 text-xs font-semibold text-neutral-500 uppercase tracking-wide">{section.locationName}</div>
@@ -258,13 +259,13 @@
 					</div>
 
 					<div class="flex items-center gap-2 px-4 py-3 border-t shrink-0">
-						<a href="/book?id={cart.id}" class="text-sm text-blue-700 hover:underline">Visa bokning ›</a>
+						<a href="/book?id={cart.id}" class="text-sm text-blue-700 hover:underline">{m.cart_view_booking()}</a>
 						<button
 							onclick={submit}
 							disabled={itemCount === 0 || submitting}
 							class="ml-auto bg-blue-700 text-white text-sm px-4 py-1.5 rounded disabled:opacity-50"
 						>
-							{submitting ? '...' : 'Skicka'} ›
+							{submitting ? '...' : m.btn_submit()} ›
 						</button>
 					</div>
 				{/if}
@@ -277,11 +278,11 @@
 			class="relative flex items-center justify-center gap-2 bg-blue-700 text-white shadow-lg hover:bg-blue-800 ml-auto
 				w-14 h-14 rounded-full
 				md:w-auto md:h-auto md:rounded-full md:px-5 md:py-3"
-			aria-label="Min bokning"
+			aria-label={m.cart_title()}
 		>
 			<span class="material-symbols-outlined" style="font-size:22px">camping</span>
 			<span class="hidden md:inline text-sm font-medium whitespace-nowrap">
-				Min bokning
+				{m.cart_title()}
 			</span>
 			{#if itemCount > 0}
 				<span

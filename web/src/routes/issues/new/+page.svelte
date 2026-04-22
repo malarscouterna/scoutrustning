@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { untrack } from 'svelte';
 	import ImageAttachInput from '$lib/components/ImageAttachInput.svelte';
+	import * as m from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -83,8 +84,8 @@
 	}
 
 	async function submit() {
-		if (!selectedArticle) { error = 'Välj utrustning'; return; }
-		if (!description.trim()) { error = 'Beskrivning krävs'; return; }
+		if (!selectedArticle) { error = m.page_issue_select_equipment_error(); return; }
+		if (!description.trim()) { error = m.page_issue_description_required(); return; }
 		error = '';
 		submitting = true;
 		try {
@@ -98,16 +99,16 @@
 			});
 			await goto(`/issues/${issue.id}`);
 		} catch (e: any) {
-			error = e.message ?? 'Något gick fel';
+			error = e.message ?? m.common_error();
 			submitting = false;
 		}
 	}
 </script>
 
 <div class="max-w-lg mx-auto p-4">
-	<a href="/issues" class="text-sm text-neutral-500 hover:text-neutral-800 mb-4 inline-block">← Ärenden</a>
+	<a href="/issues" class="text-sm text-neutral-500 hover:text-neutral-800 mb-4 inline-block">{m.page_issue_back_link()}</a>
 
-	<h1 class="text-heading-sm font-bold mb-6">Rapportera ett problem</h1>
+	<h1 class="text-heading-sm font-bold mb-6">{m.page_issue_new_heading()}</h1>
 
 	{#if error}
 		<p class="text-red-600 text-sm mb-4">{error}</p>
@@ -116,7 +117,7 @@
 	<div class="space-y-6">
 		<!-- Article search -->
 		<div>
-			<label for="article-search" class="block text-sm font-medium mb-1">Utrustning</label>
+			<label for="article-search" class="block text-sm font-medium mb-1">{m.page_issue_equipment_heading()}</label>
 			{#if selectedArticle}
 				<div class="flex items-center gap-2 border rounded px-3 py-2 bg-neutral-50">
 					<span class="text-sm flex-1">
@@ -126,7 +127,7 @@
 						{/if}
 						<span class="text-neutral-400 text-xs ml-1">({selectedArticle.location_name})</span>
 					</span>
-					<button onclick={clearArticle} class="text-neutral-400 hover:text-neutral-700 text-lg leading-none" aria-label="Ta bort">×</button>
+					<button onclick={clearArticle} class="text-neutral-400 hover:text-neutral-700 text-lg leading-none" aria-label={m.btn_delete()}>×</button>
 				</div>
 			{:else}
 				<div class="relative">
@@ -137,12 +138,12 @@
 						oninput={onSearchInput}
 						onfocus={() => { if (searchResults.length) showResults = true; }}
 						onblur={() => setTimeout(() => { showResults = false; }, 150)}
-						placeholder="Sök artikel..."
+						placeholder={m.page_issue_search_placeholder()}
 						class="w-full border rounded px-3 py-2 text-sm"
 						autocomplete="off"
 					/>
 					{#if searching}
-						<span class="absolute right-3 top-2.5 text-neutral-400 text-xs">Söker...</span>
+						<span class="absolute right-3 top-2.5 text-neutral-400 text-xs">{m.page_issue_searching()}</span>
 					{/if}
 					{#if showResults && searchResults.length > 0}
 						<ul class="absolute z-10 w-full bg-white border rounded shadow-lg mt-1 max-h-60 overflow-y-auto">
@@ -164,7 +165,7 @@
 						</ul>
 					{:else if showResults && searchQuery.length >= 2 && !searching}
 						<div class="absolute z-10 w-full bg-white border rounded shadow-lg mt-1 px-3 py-2 text-sm text-neutral-500">
-							Inga träffar
+							{m.page_issue_no_results()}
 						</div>
 					{/if}
 				</div>
@@ -175,8 +176,8 @@
 		{#if selectedArticle && isQuantityTracked}
 			<div>
 				<label for="count-input" class="block text-sm font-medium mb-1">
-					Antal drabbade
-					{#if groupTotal > 0}<span class="text-neutral-400 font-normal">(av {groupTotal} st)</span>{/if}
+					{m.report_issue_count_label()}
+					{#if groupTotal > 0}<span class="text-neutral-400 font-normal">{m.page_issue_count_of_total({ total: String(groupTotal) })}</span>{/if}
 				</label>
 				<input
 					id="count-input"
@@ -191,27 +192,27 @@
 
 		<!-- Severity -->
 		<fieldset>
-			<legend class="block text-sm font-medium mb-2">Allvarlighetsgrad</legend>
+			<legend class="block text-sm font-medium mb-2">{m.report_issue_severity_legend()}</legend>
 			<div class="space-y-2">
 				<label class="flex items-center gap-3 cursor-pointer">
 					<input type="radio" bind:group={severity} value="usable" class="mt-0.5" />
 					<span class="text-sm">
-						<span class="font-medium">Användbar</span>
-						<span class="text-neutral-500"> – kan fortfarande användas</span>
+						<span class="font-medium">{m.issue_severity_usable()}</span>
+						<span class="text-neutral-500"> – {m.report_issue_severity_usable_desc()}</span>
 					</span>
 				</label>
 				<label class="flex items-center gap-3 cursor-pointer">
 					<input type="radio" bind:group={severity} value="unusable" class="mt-0.5" />
 					<span class="text-sm">
-						<span class="font-medium">Ej användbar</span>
-						<span class="text-neutral-500"> – kan inte användas</span>
+						<span class="font-medium">{m.issue_severity_unusable()}</span>
+						<span class="text-neutral-500"> – {m.report_issue_severity_unusable_desc()}</span>
 					</span>
 				</label>
 				<label class="flex items-center gap-3 cursor-pointer">
 					<input type="radio" bind:group={severity} value="missing" class="mt-0.5" />
 					<span class="text-sm">
-						<span class="font-medium">Saknas</span>
-						<span class="text-neutral-500"> – finns inte där den ska finnas</span>
+						<span class="font-medium">{m.issue_severity_missing()}</span>
+						<span class="text-neutral-500"> – {m.report_issue_severity_missing_desc()}</span>
 					</span>
 				</label>
 			</div>
@@ -220,20 +221,20 @@
 		<!-- Description -->
 		<div>
 			<label for="description" class="block text-sm font-medium mb-1">
-				Beskrivning <span class="text-red-500">*</span>
+				{m.page_issue_description_label()}
 			</label>
 			<textarea
 				id="description"
 				bind:value={description}
 				rows="4"
-				placeholder="Beskriv problemet..."
+				placeholder={m.report_issue_description_placeholder()}
 				class="w-full border rounded px-3 py-2 text-sm"
 			></textarea>
 		</div>
 
 		<!-- Images -->
 		<div>
-			<p class="text-sm font-medium mb-1">Bilder <span class="text-neutral-400 font-normal">(valfritt)</span></p>
+			<p class="text-sm font-medium mb-1">{m.lbl_images()} <span class="text-neutral-400 font-normal">{m.optional()}</span></p>
 			<ImageAttachInput bind:imageIds />
 		</div>
 
@@ -242,7 +243,7 @@
 			disabled={submitting || !selectedArticle || !description.trim()}
 			class="w-full bg-blue-700 text-white text-sm font-medium py-2.5 rounded disabled:opacity-50"
 		>
-			{submitting ? 'Skickar...' : 'Skicka rapport'}
+			{submitting ? m.btn_submitting() : m.report_issue_submit()}
 		</button>
 	</div>
 </div>
