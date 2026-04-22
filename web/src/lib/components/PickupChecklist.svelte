@@ -2,6 +2,7 @@
 	import { createApiClient, type BookingItem, type Issue } from '$lib/api/client';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
 	import ReportIssueSheet from '$lib/components/ReportIssueSheet.svelte';
+	import * as m from '$lib/paraglide/messages.js';
 
 	interface Props {
 		bookingId: string;
@@ -39,7 +40,10 @@
 	let swapCandidates = $state<SwapCandidate[]>([]);
 	let selectedSwapArticle = $state('');
 
-	const pickupLabels: Record<string, string> = { picked_up: 'Hämtad', swapped: 'Bytt' };
+	const pickupLabels = $derived<Record<string, string>>({
+		picked_up: m.pickup_status_picked_up(),
+		swapped: m.pickup_status_swapped()
+	});
 
 	function isReported(status: string | null | undefined) {
 		return status === 'reported_usable' || status === 'reported_unusable' || status === 'reported_missing';
@@ -283,13 +287,13 @@
 		{/if}
 		{#if description}
 			<div>
-				<span class="font-medium text-neutral-500">Beskrivning:</span>
+				<span class="font-medium text-neutral-500">{m.lbl_description_colon()}</span>
 				<p class="mt-0.5">{description}</p>
 			</div>
 		{/if}
 		{#if instructions}
 			<div>
-				<span class="font-medium text-neutral-500">Instruktioner:</span>
+				<span class="font-medium text-neutral-500">{m.lbl_instructions_colon()}</span>
 				<p class="mt-0.5">{instructions}</p>
 			</div>
 		{/if}
@@ -300,7 +304,7 @@
 	<div class="bg-red-50 border border-red-200 rounded p-3 mb-3 text-red-800 text-sm">{error}</div>
 {/if}
 
-<p class="text-sm text-neutral-500 mb-3">Avprickad: {checkedCount} / {items.length}</p>
+<p class="text-sm text-neutral-500 mb-3">{m.pickup_checked_label()} {checkedCount} / {items.length}</p>
 
 <div class="space-y-1">
 	<!-- Quantity-tracked sub-groups (split by status category) -->
@@ -332,9 +336,9 @@
 					<div class="font-medium text-sm">
 						{group.commercialName}
 						{#if isUnusableGroup}
-							<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded ml-1">Ej tillgänglig</span>
+							<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded ml-1">{m.pickup_unavailable()}</span>
 						{:else if isUsableGroup}
-							<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded ml-1">Felrapporterad</span>
+							<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded ml-1">{m.pickup_reported()}</span>
 						{/if}
 						{#if expandable}<span class="text-xs text-neutral-400 ml-1">{expanded ? '▲' : '▼'}</span>{/if}
 					</div>
@@ -354,28 +358,28 @@
 								onclick={() => markQuantityGroup(group, group.items.length)}
 								class="text-xs bg-orange-600 text-white px-3 py-1 rounded"
 								disabled={loading}
-							>Hämtad ändå</button>
+							>{m.pickup_btn_pick_anyway()}</button>
 							<button
 								onclick={() => removeFromBooking(group)}
 								class="text-xs text-red-600 underline"
 								disabled={loading}
-							>Ta bort från bokning</button>
+							>{m.pickup_btn_remove()}</button>
 						{:else}
 							<span class="text-sm font-medium text-orange-800">
-								{picked} / {group.items.length} st hämtade
+								{picked} / {group.items.length} {m.pickup_count_picked()}
 							</span>
-							<button onclick={() => resetQuantityGroup(group)} class="text-xs text-neutral-400 hover:text-neutral-600">Ångra</button>
+							<button onclick={() => resetQuantityGroup(group)} class="text-xs text-neutral-400 hover:text-neutral-600">{m.btn_undo()}</button>
 						{/if}
 					{:else}
 						<!-- ok group: count picker, show partial state if any picked up -->
 						{#if anyPickedUp}
 							<span class="text-sm font-medium" class:text-green-800={picked > 0} class:text-orange-800={picked === 0}>
-								{picked} / {group.items.length} st hämtade
+								{picked} / {group.items.length} {m.pickup_count_picked()}
 							</span>
 						{/if}
 						{#if !done}
 							{@const key = group.key}
-							<span class="text-sm text-neutral-600">Hämta {group.items.length} st</span>
+							<span class="text-sm text-neutral-600">{m.pickup_btn_pick()} {group.items.length} st</span>
 							<input
 								type="number"
 								min="0"
@@ -386,19 +390,19 @@
 							<button
 								onclick={() => markQuantityGroup(group, quantityInputs[group.key] ?? group.items.length)}
 								class="text-xs bg-green-700 text-white px-3 py-1 rounded"
-							>Bekräfta</button>
+							>{m.btn_confirm()}</button>
 						{:else if !anyPickedUp}
 							<span class="text-sm font-medium text-orange-800">
-								{picked} / {group.items.length} st hämtade
+								{picked} / {group.items.length} {m.pickup_count_picked()}
 							</span>
-							<button onclick={() => resetQuantityGroup(group)} class="text-xs text-neutral-400 hover:text-neutral-600">Ångra</button>
+							<button onclick={() => resetQuantityGroup(group)} class="text-xs text-neutral-400 hover:text-neutral-600">{m.btn_undo()}</button>
 						{:else}
-							<button onclick={() => resetQuantityGroup(group)} class="text-xs text-neutral-400 hover:text-neutral-600">Ångra</button>
+							<button onclick={() => resetQuantityGroup(group)} class="text-xs text-neutral-400 hover:text-neutral-600">{m.btn_undo()}</button>
 						{/if}
 						<button
 							onclick={() => { issueSheetArticle = { id: rep.article_id, name: group.commercialName, isQuantityTracked: true, groupTotal: group.items.length }; pendingSwapArticleId = null; }}
 							class="text-xs bg-orange-600 text-white px-2 py-1 rounded"
-						>Felanmäl</button>
+						>{m.report_issue_title()}</button>
 					{/if}
 				</div>
 			</div>
@@ -413,11 +417,11 @@
 									<div class="flex items-center gap-2 mb-1">
 										<span class="font-medium text-neutral-700">{issue.title}</span>
 										{#if issue.severity === 'unusable'}
-											<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">Ej användbar</span>
+											<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">{m.issue_severity_unusable()}</span>
 										{:else if issue.severity === 'usable'}
-											<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">Användbar</span>
+											<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">{m.issue_severity_usable()}</span>
 										{:else if issue.severity === 'missing'}
-											<span class="text-xs bg-challengerpink-100 text-challengerpink-700 px-1.5 py-0.5 rounded">Saknas</span>
+											<span class="text-xs bg-challengerpink-100 text-challengerpink-700 px-1.5 py-0.5 rounded">{m.issue_severity_missing()}</span>
 										{/if}
 									</div>
 									{#if issue.description}
@@ -428,7 +432,7 @@
 								<p class="text-neutral-400">Inga öppna felrapporter hittades.</p>
 							{/if}
 						{:else}
-							<p class="text-neutral-400">Laddar felrapport...</p>
+							<p class="text-neutral-400">{m.btn_loading()}</p>
 						{/if}
 					</div>
 				{:else}
@@ -457,13 +461,13 @@
 						{item.common_name}
 						{#if expandable && tGroup.items[0] === item}<span class="text-xs text-neutral-400 ml-1">{expanded ? '▲' : '▼'}</span>{/if}
 						{#if unusable}
-							<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded ml-1">Ej tillgänglig</span>
+							<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded ml-1">{m.pickup_unavailable()}</span>
 						{:else if item.article_status === 'reported_usable'}
-							<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded ml-1">Felrapporterad</span>
+							<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded ml-1">{m.pickup_reported()}</span>
 						{:else if item.article_status === 'incoming'}
-							<span class="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded ml-1">Inkommande{#if item.article_expected_available_date} — {new Date(item.article_expected_available_date).toLocaleDateString('sv', { day: 'numeric', month: 'short' })}{/if}</span>
+							<span class="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded ml-1">{m.pickup_incoming_badge()}{#if item.article_expected_available_date} — {new Date(item.article_expected_available_date).toLocaleDateString('sv', { day: 'numeric', month: 'short' })}{/if}</span>
 						{:else if item.article_status === 'under_repair'}
-							<span class="text-xs bg-neutral-100 text-neutral-700 px-1.5 py-0.5 rounded ml-1">Under reparation{#if item.article_expected_available_date} — klar {new Date(item.article_expected_available_date).toLocaleDateString('sv', { day: 'numeric', month: 'short' })}{/if}</span>
+							<span class="text-xs bg-neutral-100 text-neutral-700 px-1.5 py-0.5 rounded ml-1">{m.pickup_under_repair_badge()}{#if item.article_expected_available_date} — {m.pickup_incoming_ready()} {new Date(item.article_expected_available_date).toLocaleDateString('sv', { day: 'numeric', month: 'short' })}{/if}</span>
 						{/if}
 					</div>
 					<div class="text-xs text-neutral-500">{item.location_name}{item.place ? ` · ${item.place}` : ''}</div>
@@ -474,18 +478,18 @@
 						<span class="text-xs px-2 py-0.5 rounded bg-green-100 text-green-800">
 							{pickupLabels[item.pickup_status] ?? item.pickup_status}
 						</span>
-						<button onclick={() => markPickup(item.id, '')} class="text-xs text-neutral-400 hover:text-neutral-600 ml-1">Ångra</button>
+						<button onclick={() => markPickup(item.id, '')} class="text-xs text-neutral-400 hover:text-neutral-600 ml-1">{m.btn_undo()}</button>
 					{:else if swappingItemId !== item.id}
 						{#if unusable}
-							<button onclick={() => startSwap(item)} class="text-xs bg-blue-700 text-white px-2 py-1 rounded">Byt</button>
-							<button onclick={() => markPickup(item.id, 'picked_up')} class="text-xs text-neutral-500 underline px-1">Hämtad ändå</button>
+							<button onclick={() => startSwap(item)} class="text-xs bg-blue-700 text-white px-2 py-1 rounded">{m.pickup_btn_swap()}</button>
+							<button onclick={() => markPickup(item.id, 'picked_up')} class="text-xs text-neutral-500 underline px-1">{m.pickup_btn_pick_anyway()}</button>
 						{:else if reported}
-							<button onclick={() => markPickup(item.id, 'picked_up')} class="text-xs bg-green-700 text-white px-2 py-1 rounded">Hämtad ändå</button>
-							<button onclick={() => startSwap(item)} class="text-xs text-blue-700 underline px-1">Byt</button>
+							<button onclick={() => markPickup(item.id, 'picked_up')} class="text-xs bg-green-700 text-white px-2 py-1 rounded">{m.pickup_btn_pick_anyway()}</button>
+							<button onclick={() => startSwap(item)} class="text-xs text-blue-700 underline px-1">{m.pickup_btn_swap()}</button>
 						{:else}
-							<button onclick={() => markPickup(item.id, 'picked_up')} class="text-xs bg-green-700 text-white px-2 py-1 rounded">Hämtad</button>
-							<button onclick={() => { issueSheetArticle = { id: item.article_id, name: item.common_name }; pendingSwapArticleId = item.article_id; }} class="text-xs bg-orange-600 text-white px-2 py-1 rounded">Felanmäl</button>
-							<button onclick={() => startSwap(item)} class="text-xs text-blue-700 underline px-1">Byt</button>
+							<button onclick={() => markPickup(item.id, 'picked_up')} class="text-xs bg-green-700 text-white px-2 py-1 rounded">{m.pickup_status_picked_up()}</button>
+							<button onclick={() => { issueSheetArticle = { id: item.article_id, name: item.common_name }; pendingSwapArticleId = item.article_id; }} class="text-xs bg-orange-600 text-white px-2 py-1 rounded">{m.report_issue_title()}</button>
+							<button onclick={() => startSwap(item)} class="text-xs text-blue-700 underline px-1">{m.pickup_btn_swap()}</button>
 						{/if}
 					{/if}
 				</div>
@@ -498,9 +502,9 @@
 		{#if swappingItemId === item.id}
 			<div class="border rounded p-3 bg-blue-50 text-sm">
 				{#if swapCandidates.length <= 1 && swapCandidates[0]?.is_current}
-					<p class="text-neutral-600 mb-2">Inga tillgängliga ersättare hittades.</p>
+					<p class="text-neutral-600 mb-2">{m.pickup_no_replacements()}</p>
 				{:else}
-					<p class="mb-2">Välj ersättare för <strong>{item.common_name}</strong>:</p>
+					<p class="mb-2">{m.pickup_choose_replacement()} <strong>{item.common_name}</strong>:</p>
 				{/if}
 				<div class="space-y-1 mb-2">
 					{#each swapCandidates as candidate}
@@ -516,25 +520,25 @@
 							<span>
 								{candidate.common_name}
 								{#if candidate.is_current}
-									<span class="text-xs text-neutral-400">(ursprunglig)</span>
+									<span class="text-xs text-neutral-400">({m.pickup_original_badge()})</span>
 								{/if}
 							</span>
 							{#if candidateUnusable}
-								<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">Ej tillgänglig</span>
+								<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">{m.pickup_unavailable()}</span>
 							{:else if candidate.status === 'reported_usable'}
-								<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">Felrapporterad</span>
+								<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">{m.pickup_reported()}</span>
 							{:else if candidate.status === 'incoming'}
-								<span class="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">Inkommande{#if candidate.expected_available_date} — {new Date(candidate.expected_available_date).toLocaleDateString('sv', { day: 'numeric', month: 'short' })}{/if}</span>
+								<span class="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">{m.pickup_incoming_badge()}{#if candidate.expected_available_date} — {new Date(candidate.expected_available_date).toLocaleDateString('sv', { day: 'numeric', month: 'short' })}{/if}</span>
 							{:else if candidate.status === 'under_repair'}
-								<span class="text-xs bg-neutral-100 text-neutral-700 px-1.5 py-0.5 rounded">Under reparation{#if candidate.expected_available_date} — klar {new Date(candidate.expected_available_date).toLocaleDateString('sv', { day: 'numeric', month: 'short' })}{/if}</span>
+								<span class="text-xs bg-neutral-100 text-neutral-700 px-1.5 py-0.5 rounded">{m.pickup_under_repair_badge()}{#if candidate.expected_available_date} — {m.pickup_incoming_ready()} {new Date(candidate.expected_available_date).toLocaleDateString('sv', { day: 'numeric', month: 'short' })}{/if}</span>
 							{/if}
 							<span class="text-xs text-neutral-500">{candidate.location_name}{candidate.place ? ` · ${candidate.place}` : ''}</span>
 						</label>
 					{/each}
 				</div>
 				<div class="flex gap-2">
-					<button onclick={() => confirmSwap(item.id, item.article_id)} disabled={!selectedSwapArticle || loading} class="text-xs bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50">Bekräfta</button>
-					<button onclick={cancelSwap} class="text-xs text-neutral-600 underline">Avbryt</button>
+					<button onclick={() => confirmSwap(item.id, item.article_id)} disabled={!selectedSwapArticle || loading} class="text-xs bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50">{m.btn_confirm()}</button>
+					<button onclick={cancelSwap} class="text-xs text-neutral-600 underline">{m.btn_cancel()}</button>
 				</div>
 			</div>
 		{/if}
@@ -554,4 +558,3 @@
 		onClose={() => { issueSheetArticle = null; pendingSwapArticleId = null; }}
 	/>
 {/if}
-

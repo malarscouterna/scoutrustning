@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
 	import { createApiClient, type ArticleEvent } from '$lib/api/client';
+	import * as m from '$lib/paraglide/messages.js';
 	import { msg } from '$lib/msg';
 	import { articleEventTypeColors } from '$lib/styles';
 
@@ -24,7 +25,7 @@
 	function formatMeta(event: ArticleEvent): string {
 		const meta = event.metadata ?? {};
 		const parts: string[] = [];
-		if (meta.reason === 'lost' || meta.reason === 'missing_at_pickup') parts.push('saknas');
+		if (meta.reason === 'lost' || meta.reason === 'missing_at_pickup') parts.push(m.article_status_lost());
 		if (meta.new_status && meta.old_status) {
 			parts.push(`${msg(`article_status_${meta.old_status}`) ?? meta.old_status} → ${msg(`article_status_${meta.new_status}`) ?? meta.new_status}`);
 		} else if (meta.new_status && event.event_type !== 'issue_reported') {
@@ -86,9 +87,9 @@
 </script>
 
 {#if loading}
-	<p class="text-xs text-neutral-400 py-1">Laddar historik...</p>
+	<p class="text-xs text-neutral-400 py-1">{m.article_history_loading()}</p>
 {:else if events.length === 0}
-	<p class="text-xs text-neutral-400 py-1">Ingen historik</p>
+	<p class="text-xs text-neutral-400 py-1">{m.article_history_empty()}</p>
 {:else}
 	<div bind:this={containerEl} class="space-y-1.5 mt-1">
 		{#each events as event}
@@ -127,7 +128,7 @@
 			class="text-xs text-blue-600 hover:text-blue-800 mt-2 cursor-pointer"
 			onclick={showAll}
 		>
-			Visa alla händelser
+			{m.article_history_show_all()}
 		</button>
 	{/if}
 {/if}

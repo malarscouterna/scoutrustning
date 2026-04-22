@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { createApiClient, type IssueDetail } from '$lib/api/client';
 	import ImageAttachInput from '$lib/components/ImageAttachInput.svelte';
+	import * as m from '$lib/paraglide/messages.js';
 
 	interface Props {
 		articleId: string;
@@ -34,11 +35,11 @@
 	let submitting = $state(false);
 	let error = $state('');
 
-	const options = [
-		{ value: 'usable', label: 'Användbar', sub: 'kan fortfarande användas' },
-		{ value: 'unusable', label: 'Ej användbar', sub: 'kan inte användas' },
-		{ value: 'missing', label: 'Saknas', sub: 'finns inte där den ska finnas' }
-	];
+	const options = $derived([
+		{ value: 'usable', label: m.issue_severity_usable(), sub: m.report_issue_severity_usable_desc() },
+		{ value: 'unusable', label: m.issue_severity_unusable(), sub: m.report_issue_severity_unusable_desc() },
+		{ value: 'missing', label: m.issue_severity_missing(), sub: m.report_issue_severity_missing_desc() }
+	]);
 
 	function close() {
 		open = false;
@@ -50,7 +51,7 @@
 	}
 
 	async function submit() {
-		if (!description.trim()) { error = 'Beskriv problemet'; return; }
+		if (!description.trim()) { error = m.report_issue_describe_error(); return; }
 		error = '';
 		submitting = true;
 		try {
@@ -65,7 +66,7 @@
 			onReported?.(issue);
 			close();
 		} catch (e: any) {
-			error = e.message ?? 'Något gick fel';
+			error = e.message ?? m.common_error();
 		}
 		submitting = false;
 	}
@@ -76,7 +77,7 @@
 	<button
 		type="button"
 		class="fixed inset-0 z-40 bg-black/60"
-		aria-label="Stäng"
+		aria-label={m.btn_close()}
 		onclick={close}
 	></button>
 
@@ -86,11 +87,11 @@
 		class="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto p-5 space-y-4 pointer-events-auto"
 		role="dialog"
 		aria-modal="true"
-		aria-label="Felanmäl"
+		aria-label={m.report_issue_title()}
 	>
 		<div class="flex items-start justify-between gap-2">
-			<p class="font-semibold text-sm">Felanmäl – {articleName}</p>
-			<button type="button" onclick={close} aria-label="Stäng" class="text-neutral-400 hover:text-neutral-700 shrink-0 text-lg leading-none">×</button>
+			<p class="font-semibold text-sm">{m.report_issue_title()} – {articleName}</p>
+			<button type="button" onclick={close} aria-label={m.btn_close()} class="text-neutral-400 hover:text-neutral-700 shrink-0 text-lg leading-none">×</button>
 		</div>
 
 		{#if error}
@@ -100,8 +101,8 @@
 		{#if isQuantityTracked}
 			<div>
 				<label for="sheet-count" class="text-xs font-medium text-neutral-500 block mb-1">
-					Antal drabbade
-					{#if groupTotal > 0}<span class="text-neutral-400 font-normal">(av {groupTotal} st)</span>{/if}
+					{m.report_issue_count_label()}
+					{#if groupTotal > 0}<span class="text-neutral-400 font-normal">({m.common_of()} {groupTotal} st)</span>{/if}
 				</label>
 				<input
 					id="sheet-count"
@@ -115,7 +116,7 @@
 		{/if}
 
 		<fieldset>
-			<legend class="text-xs font-medium text-neutral-500 mb-2">Allvarlighetsgrad</legend>
+			<legend class="text-xs font-medium text-neutral-500 mb-2">{m.report_issue_severity_legend()}</legend>
 			<div class="space-y-2">
 				{#each options as opt}
 					<label class="flex items-center gap-3 cursor-pointer">
@@ -131,19 +132,19 @@
 
 		<div>
 			<label for="sheet-description" class="text-xs font-medium text-neutral-500 block mb-1">
-				Beskrivning <span class="text-red-500">*</span>
+				{m.lbl_description()} <span class="text-red-500">*</span>
 			</label>
 			<textarea
 				id="sheet-description"
 				bind:value={description}
 				rows="3"
-				placeholder="Beskriv problemet..."
+				placeholder={m.report_issue_description_placeholder()}
 				class="w-full border rounded px-3 py-2 text-sm"
 			></textarea>
 		</div>
 
 		<div>
-			<p class="text-xs font-medium text-neutral-500 mb-1">Bilder <span class="text-neutral-400 font-normal">(valfritt)</span></p>
+			<p class="text-xs font-medium text-neutral-500 mb-1">{m.lbl_images()} <span class="text-neutral-400 font-normal">{m.optional()}</span></p>
 			<ImageAttachInput bind:imageIds />
 		</div>
 
@@ -153,9 +154,9 @@
 				disabled={submitting || !description.trim()}
 				class="flex-1 bg-blue-700 text-white text-sm font-medium py-2.5 rounded disabled:opacity-50"
 			>
-				{submitting ? 'Skickar...' : 'Skicka rapport'}
+				{submitting ? m.btn_submitting() : m.report_issue_submit()}
 			</button>
-			<button onclick={close} class="text-sm text-neutral-600 underline px-2">Avbryt</button>
+			<button onclick={close} class="text-sm text-neutral-600 underline px-2">{m.btn_cancel()}</button>
 		</div>
 	</div>
 	</div>

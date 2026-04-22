@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { createApiClient, type BookingItem } from '$lib/api/client';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
+	import * as m from '$lib/paraglide/messages.js';
 	import { msg } from '$lib/msg';
 
 	interface Props {
@@ -141,7 +142,7 @@
 </script>
 
 {#if items.length === 0}
-	<p class="text-neutral-500">Inga artiklar.</p>
+	<p class="text-neutral-500">{m.booking_items_empty()}</p>
 {:else}
 	<div class="space-y-4">
 		{#each locationSections as section}
@@ -164,9 +165,9 @@
 									<span class="flex-1 min-w-0">
 										{group.commercialName}
 										{#if group.approvalLevel === 'low'}
-											<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded ml-1">Kräver godkännande</span>
+											<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded ml-1">{m.booking_items_requires_approval()}</span>
 										{:else if group.approvalLevel === 'high'}
-											<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded ml-1">Kräver särskilt godkännande</span>
+											<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded ml-1">{m.booking_items_requires_special_approval()}</span>
 										{/if}
 									</span>
 									{#if expandable}
@@ -181,7 +182,7 @@
 												type="button"
 												onclick={() => onRemoveOne!(group.commercialName, group.locationName)}
 												class="w-7 h-7 rounded border text-sm hover:bg-neutral-100 flex items-center justify-center"
-												aria-label="Ta bort en"
+												aria-label={m.booking_items_decrease_aria()}
 											>−</button>
 										{/if}
 										<span class="w-7 text-center text-sm font-medium">{groupCount}</span>
@@ -190,7 +191,7 @@
 												type="button"
 												onclick={() => onAddOne!(group.commercialName, group.locationName)}
 												class="w-7 h-7 rounded border text-sm hover:bg-neutral-100 flex items-center justify-center"
-												aria-label="Lägg till en till"
+												aria-label={m.booking_items_increase_aria()}
 											>+</button>
 										{/if}
 									</div>
@@ -203,13 +204,13 @@
 									{/if}
 									{#if group.description}
 										<div>
-											<span class="font-medium text-neutral-500">Beskrivning:</span>
+											<span class="font-medium text-neutral-500">{m.lbl_description_colon()}</span>
 											<p class="mt-0.5">{group.description}</p>
 										</div>
 									{/if}
 									{#if group.instructions}
 										<div>
-											<span class="font-medium text-neutral-500">Instruktioner:</span>
+											<span class="font-medium text-neutral-500">{m.lbl_instructions_colon()}</span>
 											<p class="mt-0.5">{group.instructions}</p>
 										</div>
 									{/if}
@@ -221,23 +222,23 @@
 									{#each group.items as item}
 										<div class="px-4 py-2" class:bg-orange-50={conflictingIds.has(item.article_id)}>
 											{#if conflictingIds.has(item.article_id)}
-												<p class="text-xs text-orange-700 font-medium mb-1">Inte tillgänglig för de valda datumen</p>
+												<p class="text-xs text-orange-700 font-medium mb-1">{m.booking_items_date_conflict()}</p>
 											{/if}
 											<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
 												<span class="text-sm">{item.common_name}</span>
 												{#if item.place}<span class="text-sm text-neutral-600">{item.place}</span>{/if}
 												{#if item.article_status === 'reported_usable'}
-													<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">Felrapporterad</span>
+													<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">{m.booking_items_reported()}</span>
 												{:else if item.article_status === 'incoming'}
-													<span class="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded">Inkommande{#if item.article_expected_available_date} — {new Date(item.article_expected_available_date).toLocaleDateString('sv', { day: 'numeric', month: 'short' })}{/if}</span>
+													<span class="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded">{m.pickup_incoming_badge()}{#if item.article_expected_available_date} — {m.return_expected_delivery()} {new Date(item.article_expected_available_date).toLocaleDateString('sv', { day: 'numeric', month: 'short' })}{/if}</span>
 												{:else if item.article_status === 'under_repair'}
-													<span class="text-xs bg-neutral-100 text-neutral-700 px-1.5 py-0.5 rounded">Under reparation{#if item.article_expected_available_date} — klar {new Date(item.article_expected_available_date).toLocaleDateString('sv', { day: 'numeric', month: 'short' })}{/if}</span>
+													<span class="text-xs bg-neutral-100 text-neutral-700 px-1.5 py-0.5 rounded">{m.pickup_under_repair_badge()}{#if item.article_expected_available_date} — {m.pickup_incoming_ready()} {new Date(item.article_expected_available_date).toLocaleDateString('sv', { day: 'numeric', month: 'short' })}{/if}</span>
 												{/if}
 												{#if item.return_status && item.return_status !== 'returned_ok' && item.return_status !== 'pending'}
 													<span class="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700"
-													>{({'returned_ok': 'OK', 'delayed': 'Försenad', 'reported_usable': 'Problem - användbar', 'reported_unusable': 'Problem - ej användbar', 'missing': 'Saknas'} as Record<string,string>)[item.return_status!] ?? item.return_status}</span>
+													>{msg(`return_status_${item.return_status}`) ?? item.return_status}</span>
 												{:else if !item.pickup_status}
-													<span class="text-xs text-neutral-400">Ej hämtad</span>
+													<span class="text-xs text-neutral-400">{m.return_not_picked_up()}</span>
 												{/if}
 												{#if editable && onRemove}
 													<button onclick={() => onRemove(item.id)} class="text-red-600 text-xs hover:underline ml-auto">×</button>
@@ -262,7 +263,7 @@
 												 'bg-neutral-100 text-neutral-600'}"
 											>×{row.count} {msg(`article_status_${row.status}`) ?? row.status}</span>
 											{#if row.hasConflict}
-												<span class="text-xs text-orange-700">Inte tillgänglig för de valda datumen</span>
+												<span class="text-xs text-orange-700">{m.booking_items_date_conflict()}</span>
 											{/if}
 										</div>
 									{/each}
