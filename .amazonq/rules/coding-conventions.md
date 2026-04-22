@@ -80,9 +80,21 @@ High — follow these unless they conflict with an explicit user instruction.
 - The Go API is language-agnostic: returns data as stored, uses error keys (not human-readable messages) so the frontend can translate them.
 - Code, comments, API field names, and documentation are always in English.
 - Use ` - ` instead of em-dashes (—) in documentation and comments. Replace em-dashes when editing a file.
-- UI strings are in Swedish (hardcoded, known debt — i18n system not yet set up).
+- UI strings are in Swedish and English, managed via Paraglide (see `docs/i18n.md`). Never hardcode user-visible strings in Svelte templates - always use message keys.
 - Never hardcode credentials or secrets. Use environment variables.
 - Never log tokens, passwords, or PII beyond what's needed for debugging.
+
+### i18n (internationalization)
+
+- All user-visible strings go through Paraglide on the frontend and `i18n.T()` on the backend. See `docs/i18n.md` for full architecture.
+- Message files: `api/internal/i18n/messages/sv.json` and `en.json`. Both files must have identical key sets.
+- Keys are English, underscore-separated snake_case. Namespace by component/page: `page_home_`, `page_browse_`, `article_form_`, `btn_`, `common_`, etc.
+- Before adding a new key, `grep` the JSON file to check if the exact string already exists. Reuse the existing key rather than creating a duplicate. Only create a separate key if the string is likely to diverge across contexts.
+- Variables use `{name}` syntax: `"Visar {count} artiklar"`. Variable names must be identical across all language files.
+- In Svelte files: `import * as m from '$lib/paraglide/messages.js'` for static keys, `import { msg } from '$lib/msg'` for dynamic keys constructed at runtime (e.g. `msg('article_status_' + status)`).
+- Non-translatable style maps (Tailwind classes, colors) live in `web/src/lib/styles.ts`, not in message files.
+- Arrays/objects that contain translatable labels (e.g. status option lists) must use `$derived` so they react to language changes - not `const`.
+- After adding keys to the JSON files, run `pnpm run build` from `web/` (or let Vite HMR pick up the change in dev) to regenerate Paraglide types.
 
 ## Error Handling
 
