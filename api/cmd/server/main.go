@@ -164,6 +164,7 @@ func main() {
 		groupSettings := &handler.GroupSettingsHandler{Q: queries, Perms: permCache}
 		issueHandler := &handler.IssueHandler{Q: queries, Perms: permCache}
 		imageHandler := &images.Handler{Q: queries, ImageDir: imageDir}
+		userHandler := &handler.UserHandler{Q: queries}
 
 		r.Mount("/articles", articles.Routes())
 		r.Mount("/locations", locations.Routes())
@@ -173,6 +174,7 @@ func main() {
 		r.Mount("/group-settings", groupSettings.Routes())
 		r.Mount("/issues", issueHandler.Routes())
 		r.Mount("/images", imageHandler.Routes())
+		r.Mount("/users", userHandler.Routes())
 	})
 
 	addr := getenv("ADDR", ":8080")

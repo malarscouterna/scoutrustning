@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/malarscouterna/ms-utrustning/api/internal/auth"
@@ -27,6 +28,8 @@ func (h *IssueHandler) Routes() chi.Router {
 	r.Put("/{id}", h.Update)
 	r.Post("/{id}/comments", h.AddComment)
 	r.Put("/{id}/assignees", h.ReplaceAssignees)
+	r.Post("/{id}/assignees", h.AddAssignee)
+	r.Delete("/{id}/assignees/{userId}", h.RemoveAssignee)
 	r.Post("/{id}/articles", h.AddArticle)
 	r.Delete("/{id}/articles/{articleId}", h.RemoveArticle)
 	return r
@@ -431,6 +434,97 @@ func (h *IssueHandler) ReplaceAssignees(w http.ResponseWriter, r *http.Request) 
 		assignees = []db.ListIssueAssigneesRow{}
 	}
 	WriteJSON(w, http.StatusOK, assignees)
+}
+
+func (h *IssueHandler) AddAssignee(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	if !claims.IsManager() {
+		WriteError(w, http.StatusForbidden, "forbidden")
+		return
+	}
+
+	var req struct {
+		UserID string `json:"user_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.UserID == "" {
+		WriteError(w, http.StatusBadRequest, "user_id required")
+		return
+	}
+
+	if _, err := h.Q.GetIssue(r.Context(), db.GetIssueParams{ID: id, GroupID: claims.GroupID}); err != nil {
+		WriteError(w, http.StatusNotFound, "issue not found")
+		return
+	}
+
+	if err := h.Q.InsertIssueAssignee(r.Context(), db.InsertIssueAssigneeParams{
+		IssueID: id, UserID: req.UserID, GroupID: claims.GroupID,
+	}); err != nil {
+		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23505" {
+			WriteError(w, http.StatusConflict, "already_assigned")
+			return
+		}
+		WriteError(w, http.StatusInternalServerError, "failed to add assignee")
+		return
+	}
+
+	meta, _ := json.Marshal(map[string]string{"user_id": req.UserID, "action": "added"})
+	h.Q.CreateIssueEvent(r.Context(), db.CreateIssueEventParams{
+		IssueID:   id,
+		GroupID:   claims.GroupID,
+		ActorID:   claims.MemberID,
+		EventType: "assignment",
+		Metadata:  meta,
+	})
+	h.Q.UpdateIssue(r.Context(), db.UpdateIssueParams{ID: id, GroupID: claims.GroupID})
+
+	detail, _ := h.buildIssueDetail(r, claims, id)
+	WriteJSON(w, http.StatusCreated, detail)
+}
+
+func (h *IssueHandler) RemoveAssignee(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	if !claims.IsManager() {
+		WriteError(w, http.StatusForbidden, "forbidden")
+		return
+	}
+
+	userID := chi.URLParam(r, "userId")
+
+	if _, err := h.Q.GetIssue(r.Context(), db.GetIssueParams{ID: id, GroupID: claims.GroupID}); err != nil {
+		WriteError(w, http.StatusNotFound, "issue not found")
+		return
+	}
+
+	if err := h.Q.DeleteIssueAssignee(r.Context(), db.DeleteIssueAssigneeParams{
+		IssueID: id, UserID: userID, GroupID: claims.GroupID,
+	}); err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to remove assignee")
+		return
+	}
+
+	meta, _ := json.Marshal(map[string]string{"user_id": userID, "action": "removed"})
+	h.Q.CreateIssueEvent(r.Context(), db.CreateIssueEventParams{
+		IssueID:   id,
+		GroupID:   claims.GroupID,
+		ActorID:   claims.MemberID,
+		EventType: "assignment",
+		Metadata:  meta,
+	})
+	h.Q.UpdateIssue(r.Context(), db.UpdateIssueParams{ID: id, GroupID: claims.GroupID})
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *IssueHandler) AddArticle(w http.ResponseWriter, r *http.Request) {
