@@ -19,7 +19,8 @@
 		cart.activate(bookingId);
 	}
 
-	let managerIssuesLimited = $derived((data.managerIssues ?? []).slice(0, 5));
+	let myIssueIds = $derived(new Set(data.myIssues.map(i => i.id)));
+	let managerIssuesLimited = $derived((data.managerIssues ?? []).filter(i => !myIssueIds.has(i.id)).slice(0, 5));
 </script>
 
 <div class="max-w-4xl mx-auto p-4">

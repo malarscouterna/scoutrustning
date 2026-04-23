@@ -473,7 +473,11 @@ func (h *IssueHandler) AddAssignee(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	meta, _ := json.Marshal(map[string]string{"user_id": req.UserID, "action": "added"})
+	assigneeName := req.UserID
+	if u, err := h.Q.GetUser(r.Context(), db.GetUserParams{ID: req.UserID, GroupID: claims.GroupID}); err == nil {
+		assigneeName = u.Name
+	}
+	meta, _ := json.Marshal(map[string]string{"user_id": req.UserID, "user_name": assigneeName, "action": "added"})
 	h.Q.CreateIssueEvent(r.Context(), db.CreateIssueEventParams{
 		IssueID:   id,
 		GroupID:   claims.GroupID,
@@ -514,7 +518,11 @@ func (h *IssueHandler) RemoveAssignee(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	meta, _ := json.Marshal(map[string]string{"user_id": userID, "action": "removed"})
+	removedName := userID
+	if u, err := h.Q.GetUser(r.Context(), db.GetUserParams{ID: userID, GroupID: claims.GroupID}); err == nil {
+		removedName = u.Name
+	}
+	meta, _ := json.Marshal(map[string]string{"user_id": userID, "user_name": removedName, "action": "removed"})
 	h.Q.CreateIssueEvent(r.Context(), db.CreateIssueEventParams{
 		IssueID:   id,
 		GroupID:   claims.GroupID,

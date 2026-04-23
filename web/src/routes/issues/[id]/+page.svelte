@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { createApiClient, type IssueDetail } from '$lib/api/client';
+	import { createApiClient, type IssueDetail, type GroupMember } from '$lib/api/client';
 	import { hasRole } from '$lib/user';
 	import { page } from '$app/stores';
 	import { browser } from '$app/environment';
@@ -30,6 +30,52 @@
 
 	let eventsEl = $state<HTMLElement | null>(null);
 	let lightbox: any = null;
+
+	let assignPickerOpen = $state(false);
+	let assignMembers = $state<GroupMember[]>([]);
+	let assignSearch = $state('');
+	let assignLoading = $state(false);
+	let assignError = $state('');
+
+	let assignFiltered = $derived(
+		assignMembers.filter(
+			(m) =>
+				!issue.assignees.some((a) => a.user_id === m.id) &&
+				m.name.toLowerCase().includes(assignSearch.toLowerCase())
+		)
+	);
+
+	async function openAssignPicker() {
+		assignPickerOpen = true;
+		assignSearch = '';
+		if (assignMembers.length > 0) return;
+		assignLoading = true;
+		try {
+			assignMembers = await api.listGroupMembers('trusted,manager');
+		} catch {
+			assignError = 'Kunde inte ladda användare';
+		} finally {
+			assignLoading = false;
+		}
+	}
+
+	async function addAssignee(userId: string) {
+		try {
+			await api.addIssueAssignee(issue.id, userId);
+			issue = await api.getIssue(issue.id);
+		} catch {
+			// assignment failed silently; UI stays open so user can retry
+		}
+	}
+
+	async function removeAssignee(userId: string) {
+		try {
+			await api.removeIssueAssignee(issue.id, userId);
+			issue = await api.getIssue(issue.id);
+		} catch {
+			// removal failed silently
+		}
+	}
 
 	onMount(() => {
 		return () => { lightbox?.destroy(); lightbox = null; };
@@ -95,6 +141,14 @@
 		if (diff < 86400000 && d.getDate() === now.getDate()) return m.page_issue_today();
 		if (diff < 172800000) return m.page_issue_yesterday();
 		return d.toLocaleDateString('sv', { day: 'numeric', month: 'short', year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined });
+	}
+
+	function formatEventVerb(event: IssueDetail['events'][0]): string {
+		const meta = event.metadata ?? {};
+		if (event.event_type === 'assignment' && meta.action) {
+			return msg(`issue_event_type_assignment_${meta.action}`) ?? event.event_type;
+		}
+		return msg(`issue_event_type_${event.event_type}`) ?? event.event_type;
 	}
 
 	function formatEventMeta(event: IssueDetail['events'][0]): string {
@@ -183,14 +237,76 @@
 	{#if issue.assignees.length > 0 || isManager}
 		<div class="mb-4">
 			<p class="text-xs font-medium text-neutral-500 uppercase tracking-wide mb-1">{m.page_issue_assigned_heading()}</p>
-			{#if issue.assignees.length === 0}
-				<p class="text-sm text-neutral-400">{m.page_issue_not_assigned()}</p>
-			{:else}
-				<div class="flex flex-wrap gap-2">
-					{#each issue.assignees as assignee}
+			<div class="flex flex-wrap items-center gap-2">
+				{#if issue.assignees.length === 0 && !isManager}
+					<p class="text-sm text-neutral-400">{m.page_issue_not_assigned()}</p>
+				{/if}
+				{#each issue.assignees as assignee}
+					{#if isManager}
+						<span class="flex items-center gap-1 text-sm bg-neutral-100 rounded px-2 py-1">
+							{assignee.user_name}
+							<button
+								onclick={() => removeAssignee(assignee.user_id)}
+								class="text-neutral-400 hover:text-neutral-700 leading-none ml-0.5"
+								aria-label="Ta bort {assignee.user_name}"
+							>×</button>
+						</span>
+					{:else}
 						<span class="text-sm bg-neutral-100 rounded px-2 py-1">{assignee.user_name}</span>
-					{/each}
-				</div>
+					{/if}
+				{/each}
+				{#if isManager}
+					<div class="relative">
+						<button
+							onclick={openAssignPicker}
+							class="text-sm border border-neutral-300 rounded px-2 py-1 hover:bg-neutral-50"
+						>{m.page_issue_assign_btn()}</button>
+						{#if assignPickerOpen}
+							<!-- svelte-ignore a11y_no_static_element_interactions -->
+							<div
+								class="absolute left-0 top-full mt-1 z-20 bg-white border border-neutral-200 rounded shadow-md w-60"
+								onkeydown={(e) => e.key === 'Escape' && (assignPickerOpen = false)}
+							>
+								<div class="p-2 border-b border-neutral-100">
+									<!-- svelte-ignore a11y_autofocus -->
+									<input
+										type="text"
+										bind:value={assignSearch}
+										placeholder={m.page_issue_assign_search_placeholder()}
+										class="w-full text-sm px-2 py-1 border rounded focus:outline-none focus:ring-1 focus:ring-blue-400"
+										autofocus
+									/>
+								</div>
+								<div class="max-h-48 overflow-y-auto">
+									{#if assignLoading}
+										<p class="text-sm text-neutral-400 px-3 py-2">{m.page_issue_assign_loading()}</p>
+									{:else if assignFiltered.length === 0}
+										<p class="text-sm text-neutral-400 px-3 py-2">{m.page_issue_assign_no_results()}</p>
+									{:else}
+										{#each assignFiltered as member}
+											<button
+												onclick={() => { addAssignee(member.id); assignPickerOpen = false; }}
+												class="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 flex flex-col"
+											>
+												<span>{member.name}</span>
+												<span class="text-xs text-neutral-400">{msg(`team_access_${member.access_level}`) ?? member.access_level}</span>
+											</button>
+										{/each}
+									{/if}
+								</div>
+								<div class="p-2 border-t border-neutral-100">
+									<button
+										onclick={() => (assignPickerOpen = false)}
+										class="text-xs text-neutral-400 hover:text-neutral-600 w-full text-right"
+									>Stäng</button>
+								</div>
+							</div>
+						{/if}
+					</div>
+				{/if}
+			</div>
+			{#if assignError}
+				<p class="text-red-600 text-xs mt-1">{assignError}</p>
 			{/if}
 		</div>
 	{/if}
@@ -211,7 +327,7 @@
 							<div class="flex flex-wrap items-baseline gap-x-1.5">
 								<span class="font-medium">{event.actor_name}</span>
 								{#if event.event_type !== 'comment'}
-									<span class="text-neutral-500">{msg(`issue_event_type_${event.event_type}`) ?? event.event_type}</span>
+									<span class="text-neutral-500">{formatEventVerb(event)}</span>
 									{#if formatEventMeta(event)}
 										<span class="text-neutral-600 font-medium">{formatEventMeta(event)}</span>
 									{/if}
