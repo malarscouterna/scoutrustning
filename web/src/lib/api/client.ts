@@ -151,6 +151,13 @@ export interface IssueAssignee {
 	assigned_at: string;
 }
 
+export interface GroupMember {
+	id: string;
+	name: string;
+	email: string;
+	access_level: string;
+}
+
 export interface IssueEvent {
 	id: string;
 	issue_id: string;
@@ -493,6 +500,12 @@ export function createApiClient(opts: FetchOptions = {}) {
 			requestMut<IssueDetail>(`/issues/${id}/comments`, 'POST', data, opts),
 		replaceIssueAssignees: (id: string, userIds: string[]) =>
 			requestMut<IssueDetail>(`/issues/${id}/assignees`, 'PUT', { user_ids: userIds }, opts),
+		addIssueAssignee: (id: string, userId: string) =>
+			requestMut<void>(`/issues/${id}/assignees`, 'POST', { user_id: userId }, opts),
+		removeIssueAssignee: (id: string, userId: string) =>
+			requestMut<void>(`/issues/${id}/assignees/${userId}`, 'DELETE', undefined, opts),
+		listGroupMembers: (accessLevels?: string) =>
+			request<GroupMember[]>(`/users${accessLevels ? `?access_levels=${accessLevels}` : ''}`, opts),
 		addIssueArticle: (id: string, articleId: string) =>
 			requestMut<IssueDetail>(`/issues/${id}/articles`, 'POST', { article_id: articleId }, opts),
 		removeIssueArticle: (id: string, articleId: string) =>

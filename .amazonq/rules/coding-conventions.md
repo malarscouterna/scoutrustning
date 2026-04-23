@@ -94,7 +94,7 @@ High — follow these unless they conflict with an explicit user instruction.
 - In Svelte files: `import * as m from '$lib/paraglide/messages.js'` for static keys, `import { msg } from '$lib/msg'` for dynamic keys constructed at runtime (e.g. `msg('article_status_' + status)`).
 - Non-translatable style maps (Tailwind classes, colors) live in `web/src/lib/styles.ts`, not in message files.
 - Arrays/objects that contain translatable labels (e.g. status option lists) must use `$derived` so they react to language changes - not `const`.
-- After adding keys to the JSON files, run `pnpm run build` from `web/` (or let Vite HMR pick up the change in dev) to regenerate Paraglide types.
+- After adding keys to the JSON files, run `pnpm run build` from `web/` to regenerate the Paraglide output files (`src/lib/paraglide/messages.js`, `messages/sv.js`, `messages/en.js`). In dev mode, Vite HMR picks up changes automatically — a server restart may be needed if new keys don't appear.
 
 ## Error Handling
 

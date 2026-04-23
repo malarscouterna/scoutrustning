@@ -618,4 +618,10 @@ curl -sf -X POST "$API/api/v0/bookings/$BOOKING8_ID/submit" \
 echo "  Booking 8 (submitted, force-approval): 3x Stormkök, 2x Brandfilt — leader asked for review"
 
 echo ""
+echo "Upserting personas into users table..."
+for PERSONA in manager-equipment project-unit-leader project-leader leader-team-it leader-yggdrasil leader-flaskpost view-only; do
+  curl -sf "$API/api/v0/me" -H "X-Dev-Role-Override: $PERSONA" > /dev/null && echo "  Upserted: $PERSONA" || echo "  Skipped: $PERSONA"
+done
+
+echo ""
 echo "Done."
