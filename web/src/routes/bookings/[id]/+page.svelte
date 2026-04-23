@@ -12,6 +12,7 @@
 	import { msg } from '$lib/msg';
 	import { bookingStatusColors } from '$lib/styles';
 	import * as m from '$lib/paraglide/messages.js';
+	import { translateError } from '$lib/errors';
 
 	let { data }: { data: PageData } = $props();
 
@@ -110,8 +111,8 @@
 			forceApproval = false;
 			setTimeout(() => message = '', 4000);
 			loadEvents();
-		} catch (e: any) {
-			error = e.message;
+		} catch (e) {
+			error = translateError(e);
 		}
 	}
 
@@ -125,8 +126,8 @@
 			} else {
 				booking = { ...booking, status: 'cancelled' };
 			}
-		} catch (e: any) {
-			error = e.message;
+		} catch (e) {
+			error = translateError(e);
 		}
 	}
 
@@ -142,8 +143,8 @@
 			pickupMode = true;
 			message = m.page_booking_pickup_started();
 			setTimeout(() => message = '', 4000);
-		} catch (e: any) {
-			error = e.message;
+		} catch (e) {
+			error = translateError(e);
 		}
 	}
 
@@ -161,8 +162,8 @@
 			returnMode = true;
 			message = m.page_booking_reopened();
 			setTimeout(() => message = '', 4000);
-		} catch (e: any) {
-			error = e.message;
+		} catch (e) {
+			error = translateError(e);
 		}
 	}
 
@@ -188,8 +189,8 @@
 			await api.addBookingNote(booking.id, noteMessage);
 			noteMessage = '';
 			loadEvents();
-		} catch (e: any) {
-			error = e.message;
+		} catch (e) {
+			error = translateError(e);
 		}
 	}
 
@@ -201,8 +202,8 @@
 			approvalMessage = '';
 			setTimeout(() => message = '', 4000);
 			loadEvents();
-		} catch (e: any) {
-			error = e.message;
+		} catch (e) {
+			error = translateError(e);
 		}
 	}
 
@@ -214,8 +215,8 @@
 			approvalMessage = '';
 			setTimeout(() => message = '', 4000);
 			loadEvents();
-		} catch (e: any) {
-			error = e.message;
+		} catch (e) {
+			error = translateError(e);
 		}
 	}
 </script>

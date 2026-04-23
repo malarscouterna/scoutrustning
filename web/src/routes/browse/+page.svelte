@@ -4,6 +4,7 @@
 import type { TeamMembership } from '$lib/user';
 	import { msg } from '$lib/msg';
 	import * as m from '$lib/paraglide/messages.js';
+	import { translateError } from '$lib/errors';
 	import { hasRole, accessAtLeast, canBook } from '$lib/user';
 	import { page } from '$app/stores';
 	import { cart } from '$lib/stores/cart.svelte';
@@ -105,7 +106,7 @@ import type { TeamMembership } from '$lib/user';
 				window.location.reload();
 			}
 		} catch (e: any) {
-			bulkMessage = e.message ?? m.common_error();
+			bulkMessage = translateError(e);
 		} finally {
 			bulkLoading = false;
 		}

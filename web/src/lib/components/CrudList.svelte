@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { ApiError } from '$lib/api/client';
+	import { translateError } from '$lib/errors';
 	import * as m from '$lib/paraglide/messages.js';
 
 	interface Item {
@@ -38,7 +39,7 @@
 			items = [...items, item];
 			newName = '';
 			flash(`${label} ${m.crud_added()}`);
-		} catch (e: any) { error = e.message; }
+		} catch (e: any) { error = translateError(e); }
 	}
 
 	async function save(id: string) {
@@ -49,7 +50,7 @@
 			items = items.map(i => i.id === id ? item : i);
 			editingId = null;
 			flash(`${label} ${m.crud_updated()}`);
-		} catch (e: any) { error = e.message; }
+		} catch (e: any) { error = translateError(e); }
 	}
 
 	async function remove(id: string, name: string) {
@@ -62,7 +63,7 @@
 			if (e instanceof ApiError && e.body?.error === 'has_articles') {
 				error = `${m.crud_delete_error_prefix()}${e.body.count} ${m.crud_delete_error_uses()} ${name.toLowerCase()}. ${m.crud_delete_error_hint()}`;
 			} else {
-				error = e.message;
+				error = translateError(e);
 			}
 		}
 	}

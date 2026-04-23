@@ -3,6 +3,7 @@
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
 	import ReportIssueSheet from '$lib/components/ReportIssueSheet.svelte';
 	import * as m from '$lib/paraglide/messages.js';
+	import { translateError } from '$lib/errors';
 
 	interface Props {
 		bookingId: string;
@@ -136,7 +137,7 @@
 		try {
 			await api.updateItemReturn(bookingId, itemId, { return_status: status, ...extra });
 			await onUpdate(); flash(itemId);
-		} catch (e: any) { error = e.message; }
+		} catch (e) { error = translateError(e); }
 	}
 
 	async function confirmForm(item: BookingItem) {
@@ -167,7 +168,7 @@
 				await api.updateItemReturn(bookingId, unhandled[i].id, { return_status: 'returned_ok' });
 			delete quantityInputs[g.key];
 			await onUpdate(); flash(g.key);
-		} catch (e: any) { error = e.message; }
+		} catch (e) { error = translateError(e); }
 	}
 
 	async function confirmGroupForm(g: QGroup) {
@@ -190,7 +191,7 @@
 			if (severity && unhandled[0]) {
 				issueSheetArticle = { id: unhandled[0].article_id, name: g.name, severity };
 			}
-		} catch (e: any) { error = e.message; }
+		} catch (e) { error = translateError(e); }
 	}
 
 	async function undoGroupRow(row: QRow) {
@@ -198,7 +199,7 @@
 		try {
 			for (const i of row.items) await api.updateItemReturn(bookingId, i.id, { return_status: '' });
 			await onUpdate();
-		} catch (e: any) { error = e.message; }
+		} catch (e) { error = translateError(e); }
 	}
 
 	function openGroupForm(g: QGroup) {
@@ -392,8 +393,8 @@
 				try {
 					await api.returnBooking(bookingId);
 					onBookingReturned();
-				} catch (e: any) {
-					error = e.message;
+				} catch (e) {
+					error = translateError(e);
 				} finally {
 					completing = false;
 				}

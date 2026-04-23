@@ -353,7 +353,7 @@ func (h *BookingHandler) Update(w http.ResponseWriter, r *http.Request) {
 				continue // already returned, skip
 			}
 			if !availSet[item.ArticleID] {
-				WriteError(w, http.StatusConflict, fmt.Sprintf("article %s not available for new dates", item.CommonName))
+				WriteErrorWithParams(w, http.StatusConflict, "article_not_available_for_dates", map[string]string{"name": item.CommonName})
 				return
 			}
 		}
@@ -457,7 +457,7 @@ func (h *BookingHandler) AddItems(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(matching) < req.Quantity {
-		WriteError(w, http.StatusConflict, fmt.Sprintf("only %d available, requested %d", len(matching), req.Quantity))
+		WriteErrorWithParams(w, http.StatusConflict, "insufficient_availability", map[string]string{"available": fmt.Sprintf("%d", len(matching)), "requested": fmt.Sprintf("%d", req.Quantity)})
 		return
 	}
 

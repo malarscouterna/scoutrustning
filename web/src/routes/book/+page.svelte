@@ -8,6 +8,7 @@
 	import type { PageData } from './$types';
 	import { msg } from '$lib/msg';
 	import * as m from '$lib/paraglide/messages.js';
+	import { translateError } from '$lib/errors';
 
 	let { data }: { data: PageData } = $props();
 
@@ -65,8 +66,8 @@
 			});
 			cart.activate(booking.id);
 			goto(`/book?id=${booking.id}`);
-		} catch (e: any) {
-			createError = e.message;
+		} catch (e) {
+			createError = translateError(e);
 		}
 		creating = false;
 	}
@@ -140,8 +141,8 @@
 			if (conflicts.size === 0) {
 				showMessage(m.page_book_changes_saved());
 			}
-		} catch (e: any) {
-			error = e.message;
+		} catch (e) {
+			error = translateError(e);
 		}
 		saving = false;
 	}
@@ -154,8 +155,8 @@
 			const result = await api.getBooking(bookingId);
 			cartItems = result.items;
 			cart.refresh(); // Notify FloatingCart to reload
-		} catch (e: any) {
-			error = e.message;
+		} catch (e) {
+			error = translateError(e);
 		}
 	}
 
@@ -172,8 +173,8 @@
 				next.delete(articleId);
 				conflictingIds = next;
 			}
-		} catch (e: any) {
-			error = e.message;
+		} catch (e) {
+			error = translateError(e);
 		}
 	}
 
@@ -208,8 +209,8 @@
 			cart.clear();
 			submitted = true;
 			message = booking.status === 'confirmed' ? m.page_book_booking_confirmed() : m.page_book_booking_submitted();
-		} catch (e: any) {
-			error = e.message;
+		} catch (e) {
+			error = translateError(e);
 		}
 		submitting = false;
 	}
@@ -221,8 +222,8 @@
 			await api.cancelBooking(bookingId);
 			cart.clear();
 			window.location.href = '/';
-		} catch (e: any) {
-			error = e.message;
+		} catch (e) {
+			error = translateError(e);
 		}
 	}
 </script>

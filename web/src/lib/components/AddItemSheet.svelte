@@ -2,6 +2,7 @@
 <script lang="ts">
 	import { createApiClient, type AvailabilityGroup, type Category } from '$lib/api/client';
 	import * as m from '$lib/paraglide/messages.js';
+	import { translateError } from '$lib/errors';
 
 	interface Props {
 		bookingId: string;
@@ -54,8 +55,8 @@
 		error = '';
 		try {
 			allGroups = await api.checkAvailability(startDate, endDate);
-		} catch (e: any) {
-			error = e.message;
+		} catch (e) {
+			error = translateError(e);
 		} finally {
 			loading = false;
 		}
@@ -82,8 +83,8 @@
 		try {
 			await api.addBookingItems(bookingId, group.commercial_name, qty, group.location_name);
 			await onAdded();
-		} catch (e: any) {
-			error = e.message;
+		} catch (e) {
+			error = translateError(e);
 			adding = false;
 		}
 	}

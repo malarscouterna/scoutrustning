@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
 	import { createApiClient } from '$lib/api/client';
+	import { translateError } from '$lib/errors';
 
 	interface ImageMeta {
 		id: string;
@@ -119,7 +120,7 @@
 			metaMap = next;
 			editingMeta = null;
 		} catch (e: any) {
-			editError = e.message ?? 'Kunde inte spara';
+			editError = translateError(e);
 		} finally {
 			saving = false;
 		}

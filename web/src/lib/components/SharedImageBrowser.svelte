@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
 	import { createApiClient, type SharedImage } from '$lib/api/client';
+	import { translateError } from '$lib/errors';
 
 	interface Props {
 		commercialName: string;
@@ -85,7 +86,7 @@
 			const result = await api.addFromShared(selected.id, commercialName, locationId, title, description);
 			onComplete(result);
 		} catch (e: any) {
-			error = e.message ?? 'Kunde inte lägga till bilden';
+			error = translateError(e);
 		} finally {
 			adding = false;
 		}

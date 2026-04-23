@@ -3,6 +3,7 @@
 	import { createApiClient } from '$lib/api/client';
 	import ArticleForm from '$lib/components/ArticleForm.svelte';
 	import * as m from '$lib/paraglide/messages.js';
+	import { translateError } from '$lib/errors';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -19,8 +20,8 @@
 				await api.createArticle(article);
 			}
 			goto('/browse');
-		} catch (e: any) {
-			error = e.message;
+		} catch (e) {
+			error = translateError(e);
 		}
 		saving = false;
 	}

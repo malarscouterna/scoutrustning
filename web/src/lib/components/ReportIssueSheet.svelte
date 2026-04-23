@@ -2,6 +2,7 @@
 	import { createApiClient, type IssueDetail } from '$lib/api/client';
 	import ImageAttachInput from '$lib/components/ImageAttachInput.svelte';
 	import * as m from '$lib/paraglide/messages.js';
+	import { translateError } from '$lib/errors';
 
 	interface Props {
 		articleId: string;
@@ -65,8 +66,8 @@
 			});
 			onReported?.(issue);
 			close();
-		} catch (e: any) {
-			error = e.message ?? m.common_error();
+		} catch (e) {
+			error = translateError(e);
 		}
 		submitting = false;
 	}

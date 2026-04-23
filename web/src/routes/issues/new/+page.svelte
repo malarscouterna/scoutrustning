@@ -4,6 +4,7 @@
 	import { untrack } from 'svelte';
 	import ImageAttachInput from '$lib/components/ImageAttachInput.svelte';
 	import * as m from '$lib/paraglide/messages.js';
+	import { translateError } from '$lib/errors';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -99,7 +100,7 @@
 			});
 			await goto(`/issues/${issue.id}`);
 		} catch (e: any) {
-			error = e.message ?? m.common_error();
+			error = translateError(e);
 			submitting = false;
 		}
 	}

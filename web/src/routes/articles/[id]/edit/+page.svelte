@@ -8,6 +8,7 @@
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
 	import * as m from '$lib/paraglide/messages.js';
+	import { translateError } from '$lib/errors';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -47,8 +48,8 @@
 			}
 
 			goto('/browse');
-		} catch (e: any) {
-			error = e.message;
+		} catch (e) {
+			error = translateError(e);
 			saving = false;
 		}
 	}
@@ -58,8 +59,8 @@
 		try {
 			await api.deleteArticle(data.article.id);
 			goto('/browse');
-		} catch (e: any) {
-			error = e.message;
+		} catch (e) {
+			error = translateError(e);
 		}
 	}
 </script>

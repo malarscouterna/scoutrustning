@@ -22,6 +22,10 @@ func WriteError(w http.ResponseWriter, status int, msg string) {
 	WriteJSON(w, status, map[string]string{"error": msg})
 }
 
+func WriteErrorWithParams(w http.ResponseWriter, status int, key string, params map[string]string) {
+	WriteJSON(w, status, map[string]any{"error": key, "params": params})
+}
+
 // LogArticleEvent is a fire-and-forget helper for recording article history.
 func LogArticleEvent(ctx context.Context, q *db.Queries, claims auth.Claims, articleID pgtype.UUID, eventType, description string, meta map[string]string) {
 	LogArticleEventWithImages(ctx, q, claims, articleID, eventType, description, meta, nil)

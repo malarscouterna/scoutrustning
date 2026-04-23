@@ -147,7 +147,7 @@ func (h *GroupSettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
 			*val = permDefaults[key]
 		}
 		if !ValidatePermissionLevel(key, *val) {
-			WriteError(w, http.StatusBadRequest, "invalid "+key)
+			WriteErrorWithParams(w, http.StatusBadRequest, "invalid_setting", map[string]string{"field": key})
 			return
 		}
 	}

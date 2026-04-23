@@ -6,6 +6,7 @@
 	import { onMount, untrack } from 'svelte';
 	import ImageAttachInput from '$lib/components/ImageAttachInput.svelte';
 	import * as m from '$lib/paraglide/messages.js';
+	import { translateError } from '$lib/errors';
 	import type { PageData } from './$types';
 	import { msg } from '$lib/msg';
 	import { issueStatusColors, issueSeverityColors } from '$lib/styles';
@@ -66,7 +67,7 @@
 			commentImageIds = [];
 			lightbox?.destroy(); lightbox = null;
 		} catch (e: any) {
-			commentError = e.message ?? m.common_error();
+			commentError = translateError(e);
 		}
 		submittingComment = false;
 	}
@@ -81,7 +82,7 @@
 			});
 			statusComment = '';
 		} catch (e: any) {
-			statusError = e.message ?? m.common_error();
+			statusError = translateError(e);
 		}
 		updatingStatus = false;
 		statusAction = '';

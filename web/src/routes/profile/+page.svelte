@@ -5,6 +5,7 @@
 	import type { PageData } from './$types';
 	import { msg } from '$lib/msg';
 	import * as m from '$lib/paraglide/messages.js';
+	import { translateError } from '$lib/errors';
 
 	let { data }: { data: PageData } = $props();
 	let user = $derived(data.user);
@@ -45,7 +46,7 @@
 		try {
 			const updated = await api.updateTeam(teamId, { access_level: newLevel });
 			allTeams = allTeams.map(t => t.id === teamId ? { ...t, ...updated } : t);
-		} catch (e: any) { teamError = e.message; }
+		} catch (e) { teamError = translateError(e); }
 	}
 
 	async function renameTeam(teamId: string) {
@@ -55,7 +56,7 @@
 			const updated = await api.updateTeam(teamId, { name: editingTeamName.trim() });
 			allTeams = allTeams.map(t => t.id === teamId ? { ...t, ...updated } : t);
 			editingTeamId = null;
-		} catch (e: any) { teamError = e.message; }
+		} catch (e) { teamError = translateError(e); }
 	}
 
 	async function addTeam() {
@@ -72,7 +73,7 @@
 			allTeams = [...allTeams, created];
 			newTeam = { name: '', type: 'troop', access_level: 'book', claim_scope: 'troop', claim_id: '' };
 			showAddTeam = false;
-		} catch (e: any) { teamError = e.message; }
+		} catch (e) { teamError = translateError(e); }
 	}
 
 	async function deleteTeam(teamId: string, teamName: string) {
@@ -81,7 +82,7 @@
 		try {
 			await api.deleteTeam(teamId);
 			allTeams = allTeams.filter(t => t.id !== teamId);
-		} catch (e: any) { teamError = e.message; }
+		} catch (e) { teamError = translateError(e); }
 	}
 
 	let editingMyImage = $state<typeof myImages[0] | null>(null);
@@ -115,7 +116,7 @@
 			myImages = myImages.map(i => i.id === editingMyImage!.id ? { ...i, title: editMyTitle, description: editMyDescription, shared: editMyShared } : i);
 			editingMyImage = null;
 		} catch (e: any) {
-			editMyError = e.message ?? m.common_error();
+			editMyError = translateError(e);
 		} finally {
 			editMySaving = false;
 		}
@@ -176,7 +177,7 @@
 			myImages = myImages.filter(i => i.id !== img.id);
 			if (expandedImageId === img.id) expandedImageId = null;
 		} catch (e: any) {
-			alert(e.message ?? m.common_error());
+			alert(translateError(e));
 		}
 	}
 
@@ -259,7 +260,7 @@
 			permMessage = m.common_saved();
 			setTimeout(() => permMessage = '', 3000);
 		} catch (e: any) {
-			permMessage = m.page_profile_error_prefix() + e.message;
+			permMessage = m.page_profile_error_prefix() + translateError(e);
 		}
 		permSaving = false;
 	}
@@ -291,7 +292,7 @@
 		try {
 			importResult = await api.importArticles(importFile);
 		} catch (e: any) {
-			importError = e.message;
+			importError = translateError(e);
 		}
 		importLoading = false;
 	}
@@ -311,7 +312,7 @@
 			document.cookie = `paraglide_lang=${userLanguage}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
 			location.reload();
 		} catch (e: any) {
-			languageMessage = m.page_profile_error_prefix() + e.message;
+			languageMessage = m.page_profile_error_prefix() + translateError(e);
 			languageSaving = false;
 		}
 	}
@@ -328,7 +329,7 @@
 			groupSettings = await api.updateGroupSettings({ default_language: groupLanguage });
 			flash(v => groupLanguageMessage = v, m.common_saved());
 		} catch (e: any) {
-			groupLanguageMessage = m.page_profile_error_prefix() + e.message;
+			groupLanguageMessage = m.page_profile_error_prefix() + translateError(e);
 		}
 	}
 
@@ -348,7 +349,7 @@
 			settingsForm.smtp_key = '';
 			flash(v => settingsMessage = v, m.page_profile_settings_saved());
 		} catch (e: any) {
-			settingsError = e.message;
+			settingsError = translateError(e);
 		}
 	}
 </script>

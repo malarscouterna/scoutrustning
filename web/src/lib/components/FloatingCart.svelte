@@ -3,6 +3,7 @@
 	import { createApiClient, type Booking, type BookingItem } from '$lib/api/client';
 	import { goto } from '$app/navigation';
 	import * as m from '$lib/paraglide/messages.js';
+	import { translateError } from '$lib/errors';
 
 	const api = createApiClient();
 
@@ -149,8 +150,8 @@
 		try {
 			await api.addBookingItems(cart.id, commercialName, 1, locationName);
 			await loadSilent();
-		} catch (e: any) {
-			error = e.message;
+		} catch (e) {
+			error = translateError(e);
 		}
 	}
 
@@ -171,8 +172,8 @@
 		try {
 			await api.removeBookingItem(cart.id, itemId);
 			await loadSilent();
-		} catch (e: any) {
-			error = e.message;
+		} catch (e) {
+			error = translateError(e);
 		}
 	}
 
@@ -184,8 +185,8 @@
 				await api.removeBookingItem(cart.id, id);
 			}
 			await loadSilent();
-		} catch (e: any) {
-			error = e.message;
+		} catch (e) {
+			error = translateError(e);
 		}
 	}
 
@@ -199,8 +200,8 @@
 			cart.clear();
 			open = false;
 			goto(`/bookings/${id}`);
-		} catch (e: any) {
-			error = e.message;
+		} catch (e) {
+			error = translateError(e);
 		}
 		submitting = false;
 	}

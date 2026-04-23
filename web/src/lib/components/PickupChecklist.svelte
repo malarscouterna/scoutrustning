@@ -3,6 +3,7 @@
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
 	import ReportIssueSheet from '$lib/components/ReportIssueSheet.svelte';
 	import * as m from '$lib/paraglide/messages.js';
+	import { translateError } from '$lib/errors';
 
 	interface Props {
 		bookingId: string;
@@ -135,8 +136,8 @@
 		try {
 			await api.updateItemPickup(bookingId, itemId, status);
 			await onUpdate();
-		} catch (e: any) {
-			error = e.message;
+		} catch (e) {
+			error = translateError(e);
 		}
 	}
 
@@ -163,8 +164,8 @@
 				}
 				await onUpdate();
 			}
-		} catch (e: any) {
-			error = e.message;
+		} catch (e) {
+			error = translateError(e);
 		}
 	}
 
@@ -175,8 +176,8 @@
 				if (item.pickup_status) await api.updateItemPickup(bookingId, item.id, '');
 			}
 			await onUpdate();
-		} catch (e: any) {
-			error = e.message;
+		} catch (e) {
+			error = translateError(e);
 		}
 	}
 
@@ -188,8 +189,8 @@
 				await api.removeBookingItem(bookingId, item.id);
 			}
 			await onUpdate();
-		} catch (e: any) {
-			error = e.message;
+		} catch (e) {
+			error = translateError(e);
 		} finally {
 			loading = false;
 		}
@@ -225,8 +226,8 @@
 				is_current: true
 			};
 			swapCandidates = [current, ...available];
-		} catch (e: any) {
-			error = e.message;
+		} catch (e) {
+			error = translateError(e);
 			swappingItemId = null;
 		}
 	}
@@ -249,8 +250,8 @@
 			}
 			await onUpdate();
 			cancelSwap();
-		} catch (e: any) {
-			error = e.message;
+		} catch (e) {
+			error = translateError(e);
 		} finally {
 			loading = false;
 		}

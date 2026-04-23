@@ -2,6 +2,7 @@
 	import { createApiClient, type AvailabilityGroup, type BookingItem, type Category, type Location } from '$lib/api/client';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
 	import * as m from '$lib/paraglide/messages.js';
+	import { translateError } from '$lib/errors';
 	import { msg } from '$lib/msg';
 
 	interface Props {
@@ -124,8 +125,8 @@
 					return freshMap.get(key) ?? { ...g, available_count: 0 };
 				});
 			}
-		} catch (e: any) {
-			error = e.message;
+		} catch (e) {
+			error = translateError(e);
 		}
 	}
 
@@ -153,8 +154,8 @@
 			quantities[key] = 1;
 			await loadAvailability();
 			onItemsChanged();
-		} catch (e: any) {
-			error = e.message;
+		} catch (e) {
+			error = translateError(e);
 		}
 	}
 </script>

@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import ImageCropDialog from './ImageCropDialog.svelte';
 	import { createApiClient } from '$lib/api/client';
+	import { translateError } from '$lib/errors';
 
 	interface Props {
 		commercialName: string;
@@ -84,7 +85,7 @@
 			});
 			onComplete(result);
 		} catch (e: any) {
-			error = e.message ?? 'Uppladdning misslyckades';
+			error = translateError(e);
 		} finally {
 			uploading = false;
 		}
