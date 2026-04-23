@@ -97,6 +97,15 @@ INSERT INTO issue_assignees (issue_id, user_id, group_id)
 VALUES (@issue_id, @user_id, @group_id)
 ON CONFLICT DO NOTHING;
 
+-- name: InsertIssueAssignee :exec
+-- Like AddIssueAssignee but errors on duplicate (for 409 response).
+INSERT INTO issue_assignees (issue_id, user_id, group_id)
+VALUES (@issue_id, @user_id, @group_id);
+
+-- name: DeleteIssueAssignee :exec
+DELETE FROM issue_assignees
+WHERE issue_id = @issue_id AND user_id = @user_id AND group_id = @group_id;
+
 -- name: DeriveArticleStatus :one
 -- Re-derives article status from its open issues.
 -- Returns the new status that should be stored.

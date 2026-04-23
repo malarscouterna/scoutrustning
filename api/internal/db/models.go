@@ -123,6 +123,11 @@ type GroupSetting struct {
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 	DefaultLanguage       string             `json:"default_language"`
+	SmtpHost              string             `json:"smtp_host"`
+	SmtpPort              int32              `json:"smtp_port"`
+	SmtpTls               string             `json:"smtp_tls"`
+	SmtpUser              string             `json:"smtp_user"`
+	NotificationDefaults  json.RawMessage    `json:"notification_defaults"`
 }
 
 type IssueArticle struct {
@@ -167,6 +172,18 @@ type Location struct {
 	GroupID   string             `json:"group_id"`
 	Name      string             `json:"name"`
 	SortOrder int32              `json:"sort_order"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+type NotificationLog struct {
+	ID        pgtype.UUID        `json:"id"`
+	GroupID   string             `json:"group_id"`
+	UserID    string             `json:"user_id"`
+	EventType string             `json:"event_type"`
+	EntityID  pgtype.UUID        `json:"entity_id"`
+	Channel   string             `json:"channel"`
+	Status    string             `json:"status"`
+	Error     pgtype.Text        `json:"error"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
@@ -234,4 +251,6 @@ type User struct {
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 	Language            pgtype.Text        `json:"language"`
+	MaxAccessLevel      string             `json:"max_access_level"`
+	NotificationPrefs   json.RawMessage    `json:"notification_prefs"`
 }

@@ -21,10 +21,11 @@ func UpsertUserMiddleware(queries *db.Queries) func(http.Handler) http.Handler {
 			}
 
 			_, err := queries.UpsertUser(r.Context(), db.UpsertUserParams{
-				ID:      claims.MemberID,
-				GroupID: claims.GroupID,
-				Name:    claims.Name,
-				Email:   claims.Email,
+				ID:             claims.MemberID,
+				GroupID:        claims.GroupID,
+				Name:           claims.Name,
+				Email:          claims.Email,
+				MaxAccessLevel: claims.MaxAccess,
 			})
 			if err != nil {
 				if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23503" && strings.Contains(pgErr.ConstraintName, "group_id") {

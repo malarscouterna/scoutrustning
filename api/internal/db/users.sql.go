@@ -12,7 +12,7 @@ import (
 )
 
 const getUser = `-- name: GetUser :one
-SELECT id, group_id, name, email, notification_channel, gchat_webhook_url, active_group_id, created_at, updated_at, language FROM users
+SELECT id, group_id, name, email, notification_channel, gchat_webhook_url, active_group_id, created_at, updated_at, language, max_access_level, notification_prefs FROM users
 WHERE id = $1 AND group_id = $2
 `
 
@@ -35,8 +35,54 @@ func (q *Queries) GetUser(ctx context.Context, arg GetUserParams) (User, error) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Language,
+		&i.MaxAccessLevel,
+		&i.NotificationPrefs,
 	)
 	return i, err
+}
+
+const listUsersByGroup = `-- name: ListUsersByGroup :many
+SELECT id, name, email, max_access_level FROM users
+WHERE group_id = $1
+  AND (cardinality($2::text[]) = 0 OR max_access_level = ANY($2::text[]))
+ORDER BY name
+`
+
+type ListUsersByGroupParams struct {
+	GroupID      string   `json:"group_id"`
+	AccessLevels []string `json:"access_levels"`
+}
+
+type ListUsersByGroupRow struct {
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	Email          string `json:"email"`
+	MaxAccessLevel string `json:"max_access_level"`
+}
+
+func (q *Queries) ListUsersByGroup(ctx context.Context, arg ListUsersByGroupParams) ([]ListUsersByGroupRow, error) {
+	rows, err := q.db.Query(ctx, listUsersByGroup, arg.GroupID, arg.AccessLevels)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUsersByGroupRow{}
+	for rows.Next() {
+		var i ListUsersByGroupRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Email,
+			&i.MaxAccessLevel,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const updateUserLanguage = `-- name: UpdateUserLanguage :exec
@@ -55,20 +101,22 @@ func (q *Queries) UpdateUserLanguage(ctx context.Context, arg UpdateUserLanguage
 }
 
 const upsertUser = `-- name: UpsertUser :one
-INSERT INTO users (id, group_id, name, email)
-VALUES ($1, $2, $3, $4)
+INSERT INTO users (id, group_id, name, email, max_access_level)
+VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (id) DO UPDATE SET
     name = EXCLUDED.name,
     email = EXCLUDED.email,
+    max_access_level = EXCLUDED.max_access_level,
     updated_at = now()
-RETURNING id, group_id, name, email, notification_channel, gchat_webhook_url, active_group_id, created_at, updated_at, language
+RETURNING id, group_id, name, email, notification_channel, gchat_webhook_url, active_group_id, created_at, updated_at, language, max_access_level, notification_prefs
 `
 
 type UpsertUserParams struct {
-	ID      string `json:"id"`
-	GroupID string `json:"group_id"`
-	Name    string `json:"name"`
-	Email   string `json:"email"`
+	ID             string `json:"id"`
+	GroupID        string `json:"group_id"`
+	Name           string `json:"name"`
+	Email          string `json:"email"`
+	MaxAccessLevel string `json:"max_access_level"`
 }
 
 func (q *Queries) UpsertUser(ctx context.Context, arg UpsertUserParams) (User, error) {
@@ -77,6 +125,7 @@ func (q *Queries) UpsertUser(ctx context.Context, arg UpsertUserParams) (User, e
 		arg.GroupID,
 		arg.Name,
 		arg.Email,
+		arg.MaxAccessLevel,
 	)
 	var i User
 	err := row.Scan(
@@ -90,6 +139,8 @@ func (q *Queries) UpsertUser(ctx context.Context, arg UpsertUserParams) (User, e
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Language,
+		&i.MaxAccessLevel,
+		&i.NotificationPrefs,
 	)
 	return i, err
 }

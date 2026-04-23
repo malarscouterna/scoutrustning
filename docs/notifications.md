@@ -1,0 +1,423 @@
+# Notifications
+
+Email notifications for booking lifecycle events, issue reports, and reminders. The architecture supports additional channels (e.g. chat tools) per group — only email is implemented in Phase 3.
+
+## SMTP configuration
+
+Uses [wneessen/go-mail](https://github.com/wneessen/go-mail) for sending. One-shot `DialAndSend` per notification (no persistent connection — volume does not justify the complexity). Dial timeout: 10 s.
+
+SMTP credentials are configured at two levels:
+
+### System-wide default
+
+A fallback SMTP configuration for groups that have not set their own. Stored as environment variables (not in the database):
+
+```
+SMTP_DEFAULT_FROM=noreply@example.com
+SMTP_DEFAULT_HOST=smtp.example.com
+SMTP_DEFAULT_PORT=587
+SMTP_DEFAULT_TLS=starttls          # starttls | tls (implicit). Default: starttls
+SMTP_DEFAULT_USER=apikey
+SMTP_DEFAULT_KEY=<plaintext, never logged>
+```
+
+Auth method: PLAIN (covers Gmail app passwords, SendGrid, Mailgun, Brevo, and similar providers). Not configurable — no realistic use case for alternatives.
+
+`SETTINGS_ENCRYPTION_KEY` (already required for other encrypted fields) is also used here. **`gen-env.sh` must be updated to include both `SETTINGS_ENCRYPTION_KEY` and the `SMTP_DEFAULT_*` vars** (with `CHANGEME` placeholders for demo/prod modes; omitted in dev mode since SMTP is a no-op there).
+
+The system-wide default is managed by the server operator, not by any scout group.
+
+### Per-group override
+
+Each group can configure their own SMTP sender in group settings. All fields except `smtp_key_encrypted` are stored in plain text — only the password is sensitive.
+
+| Field | Stored as | Notes |
+|---|---|---|
+| `notification_email_from` | plain text | e.g. `utrustning@malarscouterna.se` |
+| `smtp_host` | plain text | e.g. `smtp.gmail.com` |
+| `smtp_port` | integer | e.g. `587` |
+| `smtp_tls` | plain text | `starttls` \| `tls`. Defaults to `starttls` if unset |
+| `smtp_user` | plain text | e.g. `apikey` (SendGrid) or a Gmail address |
+| `smtp_key_encrypted` | AES-256-GCM encrypted bytes | Same `crypto.Encrypt`/`crypto.Decrypt` pattern, keyed by `SETTINGS_ENCRYPTION_KEY` |
+
+When sending, the API checks for a per-group SMTP key first. If none is set, it falls back to the system-wide env config. If neither is configured, notification sending fails gracefully (logged, not returned as an error to the caller).
+
+The `smtp_key_encrypted` field is never returned in API responses. The group settings endpoint returns `smtp_key_set: bool` and `smtp_key_masked: string` (first 3 + last 4 chars), exactly as today. All other per-group SMTP fields are returned as-is.
+
+## Notification events
+
+Each event has a recipient class (who gets it) and a trigger condition.
+
+### Booking events
+
+| Event key | Trigger | Default recipients |
+|---|---|---|
+| `booking_needs_approval` | Booking submitted and ≥1 item requires approval, or `force_approval` set | Managers (off by default for non-managers) |
+| `booking_submitted_no_approval` | Booking submitted and auto-confirms (no approval needed) | Opt-in only — managers who want full visibility |
+| `booking_confirmed` | Status transitions to `confirmed` (auto or after approval) | Booking creator + used-by team members |
+| `booking_rejected` | Manager rejects booking | Booking creator |
+| `booking_cancelled` | Booking cancelled by any party | Booking creator + used-by team members |
+| `booking_reminder` | 1 day before `start_date` for `confirmed`/`picked_up` bookings | Booking creator + used-by team members |
+| `booking_overdue` | `end_date` has passed and booking is still `picked_up` | Booking creator + team members + managers (opt-in) |
+| `booking_any_created` | Any booking created (draft or submitted) | Opt-in only — managers who want full group visibility |
+
+### Issue events
+
+| Event key | Trigger | Default recipients |
+|---|---|---|
+| `issue_created` | Any new issue report | Managers (opt-in for others) |
+| `issue_assigned_to_me` | User added as assignee | That user |
+| `issue_resolved` | Status transitions to `resolved` | Reporter + all assignees |
+| `issue_commented` | New `comment` event on the issue | Reporter + all assignees |
+
+## Per-user notification preferences
+
+Preferences are stored per **(user, group, event_type, channel)**. This means:
+- A user can enable email but not another channel for `booking_confirmed`, or vice versa.
+- Adding a new channel does not require changing the table structure.
+- A user in multiple groups has independent preferences per group.
+
+Missing rows fall back to the **group default**, which falls back to the **system default** (hardcoded). "Restore to defaults" deletes all rows for `(user_id, group_id)`.
+
+### System defaults (hardcoded)
+
+| Event key | email default (non-manager) | email default (manager) |
+|---|---|---|
+| `booking_needs_approval` | `false` | `true` |
+| `booking_submitted_no_approval` | `false` | `false` |
+| `booking_confirmed` | `true` | `true` |
+| `booking_rejected` | `true` | `true` |
+| `booking_cancelled` | `true` | `true` |
+| `booking_reminder` | `true` | `true` |
+| `booking_overdue` | `true` | `true` |
+| `booking_any_created` | `false` | `false` |
+| `issue_created` | `false` | `true` |
+| `issue_assigned_to_me` | `true` | `true` |
+| `issue_resolved` | `true` | `true` |
+| `issue_commented` | `true` | `true` |
+
+### Group-configurable defaults
+
+Equipment managers can set group-level defaults in group settings. These override the system defaults for all users in the group who have not set their own preference for that `(event_type, channel)`. Stored in `group_notification_defaults`.
+
+Use case: a group decides all members should receive `booking_reminder` via email — they set the group default to `true`. Individual users can still override it.
+
+### API
+
+```
+GET    /api/v0/me/notification-prefs
+PUT    /api/v0/me/notification-prefs
+DELETE /api/v0/me/notification-prefs
+
+GET    /api/v0/group-settings/notification-defaults   (manager only)
+PUT    /api/v0/group-settings/notification-defaults   (manager only)
+```
+
+`GET /me/notification-prefs` returns the *effective* (merged) value per event+channel, plus a flag indicating whether it was user-set or inherited:
+
+```json
+{
+  "prefs": {
+    "booking_confirmed":   { "email": { "enabled": true,  "source": "user" } },
+    "issue_created":       { "email": { "enabled": false, "source": "group_default" } },
+    "booking_any_created": { "email": { "enabled": false, "source": "system_default" } }
+  }
+}
+```
+
+`PUT /me/notification-prefs` is a partial update — only keys present are changed:
+
+```json
+{
+  "booking_confirmed": { "email": true },
+  "issue_created":     { "email": true }
+}
+```
+
+`DELETE /me/notification-prefs` removes all user-level rows for the active group, reverting everything to group/system defaults.
+
+The group defaults endpoints use the same shapes, without the `source` field.
+
+The existing `GET /api/v0/group-settings` response gains a `notification_channels` field — the ordered list of channel identifiers active for this group (e.g. `["email"]`). The frontend uses this to determine which columns to render in the preference table. Managed by the server operator for now (derived from which `Notifier` implementations are wired up); not editable by group managers in Phase 3.
+
+The frontend shows these on the profile page (`/profile`) under a "Notiser" section. Layout: a semantic `<table>` where rows are notification event types and columns are channels. Event types are grouped into Bokningar and Ärenden using `<tbody>` sections with a spanning group-header row.
+
+**Column rendering**: columns are driven by `notification_channels` from the group settings response (e.g. `["email"]`). Only configured channels appear — no placeholder columns for future channels. When a group adds a new channel, it appears automatically.
+
+**Row behaviour**:
+- Rows irrelevant to the user's role (`booking_needs_approval`, `issue_created` for non-managers) are absent, not grayed out.
+- `issue_assigned_to_me` is rendered as a non-toggle informational row (lock icon, tooltip: "Du får alltid notiser när du tilldelas ett ärende").
+- All other rows show a toggle per channel.
+
+**Inheritance hint**: the `source` field drives a small "(gruppstandard)" or "(systemstandard)" label under the event name when the value is not user-set. One hint per row — all channels in that row share the same source.
+
+A "Återställ till standard" button calls `DELETE /me/notification-prefs` and reverts all rows to group/system defaults.
+
+## Issue assignees
+
+Issues can be assigned to one or more users via the `issue_assignees` table (already in schema). Assignment is done by managers from the issue detail page.
+
+### Group members API
+
+Required for the assignee picker. Returns all users who have ever logged in to the group.
+
+```
+GET /api/v0/users?min_access_level=trusted   (manager only)
+```
+
+Query params:
+- `access_levels` — comma-separated list of access levels to include, e.g. `trusted,manager`. Filters to users whose highest team access level is one of the listed values. Default: no filter (returns all). The assignee picker passes `trusted,manager` so that only managers and trusted users appear — keeping responses light for large groups and the list meaningful for assignment. Other callers (e.g. a future "Medlemmar" settings page) can omit the param or pass a different set.
+
+Response: `[{ "id": "string", "name": "string", "email": "string", "access_level": "trusted" }]`
+
+`access_level` is the user's highest effective access level in the group (derived from their team memberships). This is shown in the assignee picker UI so managers can see at a glance who they're assigning to.
+
+In demo mode (`DEMO_MODE=true`), returns the configured personas from `dev-personas.json` instead of real users, with access levels from the persona definitions.
+
+### Assignee picker UI
+
+Inline on the issue detail page. Managers see current assignees as chips with remove buttons, plus a "Tilldela" button that opens a searchable dropdown of group members. Non-managers see the assignee list read-only.
+
+### Assignee API endpoints
+
+```
+POST   /api/v0/issues/{id}/assignees            body: { "user_id": "..." }   (manager only)
+DELETE /api/v0/issues/{id}/assignees/{userId}                                (manager only)
+```
+
+Adding an assignee inserts into `issue_assignees` and creates an `issue_events` row: `event_type = "assignment"`, `metadata = { "user_id": "...", "action": "added" }`. Returns 409 if already assigned. Removal creates the same event with `"action": "removed"`.
+
+The existing `GET /api/v0/issues/{id}` response includes `assignees: [{ "id", "name" }]`.
+
+### Assignment notification
+
+On insert, if the assignee's effective `issue_assigned_to_me` preference is enabled for the channel, a notification is sent. No notification on removal.
+
+## Scheduled notifications
+
+Two jobs run in a single daily scheduler goroutine started at server startup.
+
+### Start reminder
+
+- **When**: daily at `NOTIFICATION_REMINDER_TIME` (default `08:00`, in server local time / `TZ` env var)
+- **What**: `confirmed`/`picked_up` bookings where `start_date = tomorrow`
+- **Recipients**: creator + all members of the used-by team, filtered by effective `booking_reminder` preference
+
+### Overdue check
+
+- **When**: same daily run
+- **What**: `picked_up` bookings where `end_date < today`
+- **Recipients**: creator + team members filtered by `booking_overdue`; plus managers opted into `booking_overdue`
+- **Deduplication**: send once per `(booking_id, user_id, channel)` — tracked via `notification_log`
+
+## Data model additions
+
+### users.notification_prefs
+
+JSONB column on `users`. Shape: `{"booking_confirmed": {"email": true}, ...}`. Missing keys fall back to `group_settings.notification_defaults`, then system defaults. Written via `PUT /me/notification-prefs`; deleted (reset to `{}`) by `DELETE /me/notification-prefs`.
+
+```sql
+ALTER TABLE users ADD COLUMN notification_prefs jsonb NOT NULL DEFAULT '{}';
+```
+
+### users.max_access_level
+
+Denormalized highest access level for the user, updated on every login via `UpsertUser`. Enables `GET /api/v0/users?access_levels=trusted,manager` filtering without rejoining through OIDC claim mappings.
+
+```sql
+ALTER TABLE users ADD COLUMN max_access_level text NOT NULL DEFAULT 'book';
+```
+
+### group_settings SMTP fields + notification_defaults
+
+New plain-text SMTP fields and a JSONB notification defaults column added to `group_settings`. Same shape as `users.notification_prefs`, but keyed by `(event_type, channel)` only — applies to all users in the group who have no user-level preference.
+
+```sql
+ALTER TABLE group_settings ADD COLUMN smtp_host             text    NOT NULL DEFAULT '';
+ALTER TABLE group_settings ADD COLUMN smtp_port             integer NOT NULL DEFAULT 587;
+ALTER TABLE group_settings ADD COLUMN smtp_tls              text    NOT NULL DEFAULT 'starttls';
+ALTER TABLE group_settings ADD COLUMN smtp_user             text    NOT NULL DEFAULT '';
+ALTER TABLE group_settings ADD COLUMN notification_defaults jsonb   NOT NULL DEFAULT '{}';
+```
+
+### notification_log
+
+Prevents duplicate sends for scheduled jobs and records delivery status.
+
+```sql
+CREATE TABLE notification_log (
+    id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    group_id    text NOT NULL REFERENCES groups(id),
+    user_id     text NOT NULL REFERENCES users(id),
+    event_type  text NOT NULL,
+    entity_id   uuid NOT NULL,   -- booking_id or issue_id
+    channel     text NOT NULL,   -- 'email'
+    status      text NOT NULL,   -- 'sent', 'failed', 'skipped'
+    error       text,
+    created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX ON notification_log (entity_id, event_type, user_id);
+```
+
+Scheduled jobs check this table before sending: if a `sent` row exists for `(entity_id, event_type, user_id, channel)`, skip.
+
+## Implementation notes
+
+### Sending email
+
+Uses `wneessen/go-mail`. One-shot `DialAndSend` per notification, 10 s dial timeout.
+
+```go
+type Notifier interface {
+    Send(ctx context.Context, msg Message) error
+}
+
+type Message struct {
+    To      string
+    Subject string
+    Body    string // HTML
+}
+```
+
+`SMTPNotifier` resolves config: per-group fields (`smtp_host`, `smtp_port`, `smtp_tls`, `smtp_user`, `crypto.Decrypt(smtp_key_encrypted)`) → system env vars (`SMTP_DEFAULT_*`). TLS mode maps to go-mail's `mail.TLSOpportunistic` (STARTTLS) or `mail.TLSMandatory` (implicit TLS). Auth is always PLAIN. `NoopNotifier` is used in tests.
+
+### Fire and forget
+
+Notifications fire after the primary DB write succeeds, in a goroutine. Failure is logged but never propagates to the caller.
+
+```go
+go h.Notifier.SendBookingConfirmed(ctx, booking)
+```
+
+### Preference resolution
+
+```go
+func ResolvePrefs(ctx context.Context, q *db.Queries, userID, groupID, channel string, isManager bool) (map[string]bool, error)
+```
+
+Queries `user_notification_prefs` and `group_notification_defaults`, merges with hardcoded system defaults. Called before every send; returns early if the preference is off.
+
+### Email templates
+
+Go `html/template` files under `api/internal/notifications/templates/`. One template per event type, `_sv.html` and `_en.html` suffix. Language resolves: recipient user language → group default language → `sv`.
+
+### Adding a new channel
+
+The `channel` dimension in `user_notification_prefs` and `group_notification_defaults` makes new channels additive: add the channel identifier to `notification_channels` in group settings, implement a new `Notifier`, add rows for the new channel in the defaults tables. No schema changes needed. The preference UI picks up the new column automatically.
+
+## Implementation plan
+
+Each step is independently testable. Steps 1–3 are backend prerequisites. Steps 4–7 add visible functionality. Steps 8–9 are scheduled jobs and manager defaults UI.
+
+### Step 1: Migration
+
+Add the three new tables (`user_notification_prefs`, `group_notification_defaults`, `notification_log`) in a single goose migration.
+
+**Test**: Migration runs up and down cleanly. Integration test harness picks it up automatically.
+
+### Step 2: Group members API
+
+`GET /api/v0/users` — manager only, returns all users who have logged into the group. In demo mode returns personas from `dev-personas.json`. Add `ListUsersByGroup` sqlc query.
+
+**Test** (`TestUsers_GroupMembers`):
+- Manager gets full user list with `access_level` field; leader gets 403
+- `access_levels=trusted,manager` filters out `view`/`book` users; omitting returns all
+- Group isolation: group B users not visible to group A manager
+- Demo mode returns personas with access levels instead of DB rows
+
+### Step 3: Issue assignee API
+
+Add/remove assignees. Both endpoints manager-only.
+
+- `POST /api/v0/issues/{id}/assignees` — inserts into `issue_assignees`, creates `assignment` event, returns 409 if already assigned
+- `DELETE /api/v0/issues/{id}/assignees/{userId}` — removes, creates `assignment` event
+- `GET /api/v0/issues/{id}` includes `assignees: [{ "id", "name" }]`
+
+**Test** (`TestIssues_Assignees`):
+- Manager can add and remove; reflected in issue detail
+- 409 on duplicate add
+- Leader gets 403
+- User from different group returns 404
+- Issue events created for both actions
+
+### Step 4: Assignee picker UI
+
+Assignee section on `/issues/[id]`. Manager: chips + remove buttons + "Tilldela" button opening searchable dropdown (calls `GET /api/v0/users`). Non-manager: read-only list.
+
+**Test**: SSR smoke test. Manager sees controls; leader sees read-only list.
+
+### Step 5: Notification preference data layer + API
+
+- `api/internal/notifications/prefs.go` — `ResolvePrefs` with 3-level fallback
+- sqlc queries for `user_notification_prefs` and `group_notification_defaults`
+- `GET/PUT/DELETE /api/v0/me/notification-prefs`
+- `GET/PUT /api/v0/group-settings/notification-defaults` (manager only)
+
+**Test** (`TestNotificationPrefs`):
+- GET returns system defaults when no rows exist; manager and non-manager get different defaults for `booking_needs_approval` and `issue_created`
+- PUT overrides a pref; GET shows `source: "user"`
+- DELETE reverts; GET shows `source: "group_default"` or `"system_default"`
+- Group defaults override system defaults for users with no user-level rows
+- Group defaults endpoint: manager can read/write; leader gets 403
+
+### Step 6: Notification preferences UI
+
+"Notiser" section on `/profile`. Semantic `<table>`: rows = event types grouped into Bokningar/Ärenden, columns = channels from `group_settings.notification_channels`. Columns render dynamically — no hardcoded channel names. `booking_needs_approval` and `issue_created` absent for non-managers. `issue_assigned_to_me` is a non-toggle informational row. `source` shown as hint under the event label when inherited. "Återställ till standard" calls `DELETE /me/notification-prefs`.
+
+**Test**: SSR smoke test. Toggles and restore button work for both leader and manager personas.
+
+### Step 7: Notification infrastructure + event-triggered sends
+
+- `api/internal/notifications/notifier.go` — `Notifier` interface, `NoopNotifier`
+- `api/internal/notifications/smtp.go` — `SMTPNotifier` (group key → env vars fallback)
+- `api/internal/notifications/templates/` — one `html/template` per event, `_sv.html` / `_en.html`
+- `api/internal/notifications/send.go` — typed send functions, language resolution, preference check
+
+Wire into handlers (fire-and-forget goroutines):
+1. `booking_needs_approval` — submit handler, when approval is required
+2. `booking_submitted_no_approval` — submit handler, auto-confirm path
+3. `booking_confirmed` — approve handler + auto-confirm path
+4. `booking_rejected` — reject handler
+5. `booking_cancelled` — cancel handler
+6. `issue_created` — create issue handler
+7. `issue_assigned_to_me` — add assignee handler (Step 3)
+8. `issue_resolved` — issue status update, `resolved` transition
+9. `issue_commented` — issue event create, `comment` type
+
+**Test** (`TestNotifications_EventTriggered`): inject `CapturingNotifier` that records messages. For each event: perform the action via HTTP, assert correct To/Subject. Assert no send when preference is off. Assert action still succeeds (200) when SMTP is not configured.
+
+### Step 8: Scheduled jobs
+
+`api/internal/notifications/scheduler.go` — goroutine started in `main.go` that fires daily at `NOTIFICATION_REMINDER_TIME`.
+
+- `SendReminders`: bookings with `start_date = tomorrow` and status `confirmed`/`picked_up`. Recipients: creator + team members. Deduplicates via `notification_log`.
+- `SendOverdueAlerts`: `picked_up` bookings with `end_date < today`. Recipients: creator + team members + opted-in managers. Once-only per `(booking_id, user_id, channel)`.
+
+**Test** (`TestNotifications_Scheduled`): call `SendReminders` and `SendOverdueAlerts` directly (not via timer). Assert correct recipients. Run twice — assert no duplicates. User with preference off — no message. Wrong date — not included.
+
+### Step 9: Group notification defaults UI + SMTP settings UI
+
+Two additions to group settings (manager only):
+
+**"Standardinställningar för notiser"** — same toggle layout as Step 6. Saves via `PUT /api/v0/group-settings/notification-defaults`. Explanatory text: "Dessa värden gäller för användare som inte har egna inställningar."
+
+**"SMTP-inställningar"** — form with fields: Från-adress, SMTP-server, Port, TLS-läge (dropdown: `STARTTLS` / `Implicit TLS`), Användarnamn, Lösenord. Password field shows masked value (`smtp_key_masked`) when set; submitting an empty password field leaves the existing key unchanged. Saves via `PUT /api/v0/group-settings` (extends existing endpoint). A "Ta bort SMTP-nyckel" button clears only the key. The form is hidden when `SMTP_DEFAULT_*` env vars are not configured (i.e. no system fallback exists), since a broken per-group config with no fallback silently drops notifications.
+
+**Test**: SSR smoke test. Manager updates a notification default; a user with no personal prefs sees `source: "group_default"` with the new value on `GET /me/notification-prefs`. SMTP form saves and returns masked key.
+
+### Step order summary
+
+| Step | Deliverable | Prerequisites |
+|---|---|---|
+| 1 | Migration | — |
+| 2 | Group members API | 1 |
+| 3 | Issue assignee API | 1, 2 |
+| 4 | Assignee picker UI | 3 |
+| 5 | Preference data layer + API | 1 |
+| 6 | Preference UI | 5 |
+| 7 | Notifier + event sends | 1, 3, 5 |
+| 8 | Scheduled jobs | 7 |
+| 9 | Group defaults UI | 5, 6 |
+
+Steps 3 and 5 can run in parallel after Step 1. Steps 4, 6, and 9 are frontend-only and can overlap with later backend steps once their APIs exist.
