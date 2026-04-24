@@ -1,40 +1,72 @@
 # ms-utrustning
 
-Equipment booking service for scout groups. Book tents, stoves, and other gear - track inventory, handle pickups and returns with checklists, report issues.
+Equipment booking service for scout groups. Leaders book scouting gear (tents, stoves, knives, etc.), pick it up with a checklist, and return it. Equipment managers run the inventory, approve bookings, and handle issue reports.
+
+Built for Mälarscouterna and designed from the start to support multiple scout groups in the same deployment.
 
 See [docs/SPEC.md](docs/SPEC.md) for the full specification and [docs/API.md](docs/API.md) for the API reference.
 
-## Status
+## What it does
 
-Pre-release (`v0`). Breaking changes expected. Currently implements:
-- Dashboard landing page with booking and issue overview, quick action CTAs
-- Floating cart (FAB): active booking accessible from any page, inline +/- controls, direct submit
-- Article inventory with CSV import (including approval level per article)
-- Article browsing with category/location/search filters, cart-aware availability mode
-- Approval level badges on browse groups (none/low/high with role-aware labels)
-- Booking flow: create draft, browse and add items via cart, submit, cancel, copy
-- Three-level approval: none (free), low (trusted teams auto-approve), high (always needs manager approval)
-- Approval conversation thread with booking events (submit/reject/resubmit/approve with messages)
-- Force-approval option for users who want manager review on freely bookable items
-- Availability calculation with double-booking prevention
-- Location-scoped availability (same product in different locations shown separately)
-- Pickup and return checklists with swap support
-- Issue reporting with per-article event history and image attachments
-- Product images with crop, sharing, and attribution
-- Configurable per-team access levels (view, book, trusted, manager)
-- Auto-discovery of troops/roles from OIDC claims
-- Multi-tenancy (group-scoped, ready for multiple organizations)
-- Internationalization: Swedish and English, switchable per user or group
+A leader visits the site, picks dates, browses available gear, adds items to a cart, and submits. If the gear requires approval, a manager reviews it; otherwise the booking auto-confirms. At pickup, the leader works through a checklist that shows which specific items to collect and where to find them. On return, each item is ticked off individually — broken or missing items trigger an issue report. Any user can file an issue at any time; managers track and resolve them.
+
+Managers get a full inventory UI: create and edit articles, bulk-move items between locations, manage categories and locations, upload product images, approve or reject bookings, and handle the issue queue.
+
+## Key concepts
+
+**Articles** come in two kinds. *Individually tracked* items each have their own name and identity (e.g. "Sibley 1", "Sibley 2") — the pickup checklist tells you exactly which one to grab and where. *Quantity-tracked* items are interchangeable units of the same type (e.g. "Tältlampa LED") where you just grab the right count. Both are stored the same way internally; the UI groups and presents them differently.
+
+**Article status** describes physical condition (`ok`, `reported_usable`, `reported_unusable`, `under_repair`, `incoming`, `archived`) and is separate from booking state (reserved, loaned out, returned). Availability is always computed from condition + overlapping bookings — never stored as a column. This means the same item can be "available now, reserved next week, available again in August."
+
+**Approval levels** control whether a booking needs manager review. Each article has a level: `none` (freely bookable), `low` (trusted teams auto-approve, others need a manager), or `high` (always needs a manager, even managers booking for themselves). If any item in a booking requires approval for that team, the whole booking waits. When waiting for approval, all items are reserved in the system.
+
+**Teams** are the unit of access control. Every team has an access level: `view` (browse and report issues only), `book` (standard), `trusted` (auto-approves `low` items), `manager` (full access). Teams come from OIDC claims at login and are auto-created on first login, or pre-created by managers. The access level is configurable per team.
+
+**Issues** are tracked as their own objects, not just a flag on an article. Any user can file an issue on any article from the browse page, the article detail page, or the return checklist. Each issue has a severity (`usable` — still bookable but flagged; `unusable` — taken out of circulation; `missing`), a lifecycle (`open` → `in_progress` → `resolved`), assignees, a comment thread, and optional image attachments. Article condition is derived from open issues: the worst-severity open issue determines the article's status, and when all issues are resolved the article automatically returns to `ok`.
+
+**Images** are stored per product type and location — all physical articles of the same type at the same location share one image gallery. Who can upload is configurable per group (any user, leaders only, trusted, or managers only). Uploaders use a crop UI with selectable format (landscape, portrait, or square) and can add photographer attribution. Images can be marked as *shared*, making them browsable by equipment managers in other groups who can then reuse the same photo for their own inventory without re-uploading.
+
+## Scope and limitations
+
+The system is built around the way Swedish scout organizations are structured. A few things reflect that context and would need work before the service is usable outside it:
+
+- **Authentication is ScoutID-only.** Login goes through Keycloak with a specific claim format used by Scoutnet (`group:766:material_responsible`, `troop:17443:vice_leader`). There is no local username/password option. Deploying for a non-Swedish organization would require either connecting to a compatible Keycloak/OIDC provider or adding an alternative auth path.
+- **UI components are from @scouterna/ui-webc.** The design system (`@scouterna/ui-webc`, `@scouterna/tailwind-theme`) is the Swedish scouting design system. The components work well but carry Scouternas visual identity. Swapping them out is possible but non-trivial.
+- **The UI is Swedish-first.** Swedish is the default language and all user-visible strings exist in Swedish. English is fully supported and can be set per user or per group, but the default experience is Swedish.
+
+The data model and multi-tenancy architecture are not tied to Sweden — multiple groups with different access configurations can run in the same deployment — but the auth and UI layers reflect the original context.
+
+## What's implemented
+
+- Full booking flow: draft → submit → approve/reject → confirm → pickup checklist → return checklist
+- Three-level approval with per-team access levels and approval conversation history
+- Double-booking prevention (availability computed at query time, not stored)
+- Pickup checklist with swap support; partial returns; issue reporting on return
+- Inventory management: article CRUD, bulk status/location changes, quantity-tracked group editing, shared field propagation
+- Issue reports with event history, assignees, comments, and image attachments
+- Product images with crop UI, gallery viewer, shared image browser, and photographer attribution
+- Group settings: locations, categories, CSV import, SMTP, approval defaults, language
+- Notification preferences: per-user and per-group defaults with event-level granularity (email column; channel infrastructure supports more)
+- OIDC login via ScoutID (Keycloak); JWT validation in Go; teams auto-created from claims
+- Swedish and English UI; language switchable per user or group
+- Multi-tenancy: every table is scoped by `group_id`; multiple groups can share a deployment
+
+### What's not yet done
+
+- **Notification sending** — the preference system and data model are in place, but emails are not sent yet. No scheduled reminders or overdue alerts.
+- **CSV import preview** — import runs immediately with no dry-run step.
+- **CSV export and print view** — no export from the browse page; no print-friendly checklist.
+- **Packages** — predefined article sets that populate the cart (designed but not built).
+- **Playwright E2E tests** — integration tests and smoke tests exist; browser automation is not set up.
 
 ## Stack
 
-- **API**: Go 1.26 (Chi v5, pgx v5, sqlc, govips) - `/api/v0/*`
+- **API**: Go 1.26 (Chi v5, pgx v5, sqlc, govips)
 - **Frontend**: SvelteKit 2 + Svelte 5 + @scouterna/ui-webc 3
 - **Styling**: Tailwind CSS 4 + @scouterna/tailwind-theme
 - **Database**: PostgreSQL 17
-- **Auth**: Auth.js (@auth/sveltekit) with Keycloak OIDC, JWT validation in Go API
+- **Auth**: Auth.js (@auth/sveltekit) with Keycloak OIDC, JWT validation in Go
 - **Migrations**: goose v3
-- **Deployment**: Docker Compose
 
 ## Development
 
@@ -45,240 +77,70 @@ Pre-release (`v0`). Breaking changes expected. Currently implements:
 # Start everything with hot reload (Go API + SvelteKit + Postgres)
 docker compose up
 
-# In another terminal, seed the database (import inventory + create teams)
+# In another terminal, seed the database
 ./dev-seed.sh
 ```
 
-Code changes auto-reload:
-- **Go API**: [air](https://github.com/air-verse/air) watches `.go` and `.sql` files, rebuilds and restarts (~1-2s)
-- **SvelteKit**: Vite dev server with HMR (near-instant)
+In dev mode, no login is required. Use the persona switcher (floating panel) to switch between preconfigured roles. See `dev-personas.json` for available personas.
 
-You still need `docker compose up --build` when:
-- Adding new Go or Node dependencies
-- Changing a Dockerfile
-
-The seed script imports from `docs/import-example.csv` by default. Pass a different path as an argument:
-```bash
-./dev-seed.sh path/to/other.csv
-```
-
-In dev mode (`DEV_MODE=true`), use the `X-Dev-Role-Override` header to switch personas. See `dev-personas.json` for available personas.
+You still need `docker compose up --build` when adding Go or Node dependencies, or changing a Dockerfile.
 
 ### Running tests
 
 **Prerequisites**: libvips is required for image processing tests.
 ```bash
-sudo apt install libvips-dev   # Ubuntu/Debian
+sudo apt install libvips-dev
 ```
 
 ```bash
-# Full test suite (requires Docker for testcontainers + docker compose up + ./dev-seed.sh)
 cd api && go test ./internal/handler/tests/ -timeout 180s -count=1 2>&1 && bash ../smoke-test.sh
 ```
 
-API tests use testcontainers-go and run against a real Postgres instance. A single shared container is reused across all tests for speed.
+API tests use testcontainers-go against a real Postgres instance. The smoke test curls every page through SvelteKit and checks for 500 errors.
 
-The smoke test curls every page through SvelteKit and asserts no 500 errors. Catches SSR crashes that are silent on client-side navigation but break on page reload.
-
-## Environment modes
-
-All differences between dev, demo, and production are controlled via `.env`. Generate it with:
-
-```bash
-./gen-env.sh dev    # Local development
-./gen-env.sh demo   # Demo deployment
-./gen-env.sh prod   # Production
-```
-
-Flags:
-- `--force` - overwrite existing `.env` (preserves user-edited values like `ORIGIN` and `AUTH_KEYCLOAK_SECRET`)
-- `--local` - use local image names, localhost origin, and static Postgres password (for testing demo/prod modes on a dev machine). No effect on `dev` mode which is already local.
+### Environment modes
 
 | | Dev | Demo | Production |
 |---|---|---|---|
 | `DEV_MODE` | `true` | `true` | `false` |
 | `DEMO_MODE` | `false` | `true` | `false` |
-| `BUILD_TARGET` | `dev` | `production` | `production` |
-| `AUTH_SECRET` | static | generated | generated |
-| `POSTGRES_PASSWORD` | static | generated | generated |
+| Hot reload | yes | no | no |
+| Login required | no | yes (ScoutID) | yes (ScoutID) |
+| Persona switcher | yes | yes (post-login) | no |
 
-- **Dev**: hot reload, persona switcher, auto-fallback to default persona (no login required), Postgres exposed
-- **Demo**: production builds, OIDC login required (ScoutID), persona switcher available after login, demo banner shown
-- **Production**: production builds, OIDC login required, no persona switcher, no demo banner
-
-The generated `.env` includes a `COMPOSE_FILE` variable that controls which compose files are loaded. Dev includes `docker-compose.override.yml` (local builds, source mounts, Postgres port). Demo and prod use only `docker-compose.yml` (pre-built images, no source needed). Switch modes on the same machine with:
-
-```bash
-./gen-env.sh demo --force
-docker compose up -d --build
-```
-
-The `--build` is needed when switching modes to rebuild images with the correct Dockerfile target. After the first build, `docker compose up -d` is enough for restarts.
-
-### Security model
-
-- The Go API port (8080) is bound to `127.0.0.1` - only reachable from the host machine, not from the network. The SvelteKit app proxies `/api/*` requests internally via the Docker network.
-- The proxy **strips** `X-Dev-Role-Override` and `Authorization` headers from incoming browser requests before forwarding. Identity is injected server-side from the OIDC session or persona cookie - users cannot forge it.
-- `DEV_MODE=true` in demo is safe because the persona override header only reaches the Go API through the SvelteKit proxy, which controls it. Direct access to the API container is blocked from the network.
-- Postgres is not exposed to the host in demo/prod (no `docker-compose.override.yml`). Password is randomly generated.
-- Your reverse proxy should only forward traffic to the SvelteKit port (3000). Never expose the API port (8080) directly.
+Generate `.env` for any mode with `./gen-env.sh dev|demo|prod`. Switch modes with `./gen-env.sh <mode> --force && docker compose up -d --build`.
 
 ## Deployment
 
-### Prerequisites
-
-- A VPS with Docker and Docker Compose installed
-- A reverse proxy (nginx, Caddy, Traefik) handling TLS and forwarding to port 3000
-- A Keycloak client configured for the app (client ID: `ms-utrustning`, redirect URI: `https://your-domain/auth/callback/keycloak`)
-
-### Files needed on the server
-
-You don't need the full repo. Copy these files to your deployment directory:
-
-```
-ms-utrustning/
-├── docker-compose.yml
-├── gen-env.sh
-├── dev-seed.sh
-├── dev-personas.json       # Persona definitions (needed for demo mode)
-└── docs/
-    ├── import-example.csv  # Or your real inventory CSV
-    ├── seed-images/        # Product images uploaded during seeding
-    └── guide.md            # User guide (shown in the UI)
-```
-
-Do **not** copy `docker-compose.override.yml` - that file enables dev-only features (local builds, source mounts, exposed Postgres port).
-
-### Demo deployment
+Requires Docker, Docker Compose, a reverse proxy (nginx, Caddy, Traefik) for TLS, and a Keycloak client. The reverse proxy forwards to the SvelteKit container (port 3000). The Go API port (8080) is bound to localhost only and never exposed directly.
 
 ```bash
-# 1. Generate environment
-./gen-env.sh demo
-
-# 2. Fill in the CHANGEME values in .env:
-#    ORIGIN=https://your-demo-domain.example.com
-#    AUTH_KEYCLOAK_SECRET=<your keycloak client secret>
-
-# 3. Authenticate with GitHub Container Registry (one-time)
-echo "YOUR_GITHUB_PAT" | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
-
-# 4. Pull images and start
-docker compose pull
-docker compose up -d
-
-# 5. Bootstrap the group (first time only)
-docker compose exec api /bin/server init-group \
-  --group-id 766 --group-name "Mälarscouterna" \
-  --manager-claim "group:766:material_responsible" --team-name "Utrustningsgruppen"
-
-# 6. Seed the database with inventory and sample bookings
-./dev-seed.sh
-```
-
-### Production deployment
-
-```bash
-# 1. Generate environment
 ./gen-env.sh prod
-
-# 2. Fill in the CHANGEME values in .env
-
-# 3. Pull images and start
-docker compose pull
-docker compose up -d
-
-# 4. Bootstrap the group
+# Fill in ORIGIN and AUTH_KEYCLOAK_SECRET in .env
+docker compose pull && docker compose up -d
 docker compose exec api /bin/server init-group \
   --group-id YOUR_ORG_ID --group-name "Your Scout Group" \
-  --manager-claim "group:YOUR_ORG_ID:material_responsible" --team-name "Equipment Managers"
-
-# 5. Import your inventory
+  --manager-claim "group:YOUR_ORG_ID:material_responsible" \
+  --team-name "Equipment Managers"
 ./dev-seed.sh path/to/your-inventory.csv
 ```
 
-The `init-group` command creates the group, default settings, and the first manager team with its OIDC claim mapping. It's idempotent - running it twice is safe. Additional teams are auto-created when users log in, or can be pre-created by managers in the settings UI.
+Updates: `docker compose pull && docker compose up -d`. Migrations run automatically on startup.
 
-### Reverse proxy setup
-
-The reverse proxy forwards traffic to the SvelteKit container (port 3000). If your reverse proxy runs in Docker (e.g. Caddy), the `web` service needs to be on the same Docker network. Create a `docker-compose.caddy.yml` alongside the main compose file:
-
-```yaml
-services:
-  web:
-    networks:
-      - default
-      - caddy
-
-networks:
-  caddy:
-    external: true
-    name: your-caddy-network-name
-```
-
-Then add it to `COMPOSE_FILE` in `.env`:
-
-```
-COMPOSE_FILE=docker-compose.yml:docker-compose.caddy.yml
-```
-
-If your reverse proxy runs directly on the host (not in Docker), no extra network config is needed - it connects to `localhost:3000` (or whatever `WEB_PORT` is set to).
-
-### Updating
-
-```bash
-docker compose pull
-docker compose up -d
-```
-
-The API runs database migrations automatically on startup. No manual migration step needed.
-
-### Re-seeding
-
-To reset the demo data (or re-seed after a schema change):
-
-```bash
-./dev-seed.sh
-```
-
-The seed script clears existing data before importing. It requires `DEV_MODE=true` on the API (dev and demo modes). In production (`DEV_MODE=false`), the seed script will refuse to run.
+For full deployment details, security model, and reverse proxy setup see the [Deployment section in the old README](docs/SPEC.md) or `docker-compose.yml` and `gen-env.sh`.
 
 ## License
 
 Copyright © 2025 Teo Elmfeldt (<teo.elmfeldt@malarscouterna.se>)
 
-This project is licensed under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).
-
-The AGPL was chosen as a starting point to ensure all derivatives remain open source, including modifications deployed as network services. In the future there might be reason to relicense under a more permissive open-source license as the project matures. Starting with AGPL preserves that option - going the other direction (permissive → copyleft) is much harder once external contributions exist.
+Licensed under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).
 
 ## Contributing
 
-### Developer Certificate of Origin (DCO)
-
-All contributions must be signed off under the [Developer Certificate of Origin](DCO) (DCO v1.1). This certifies that you have the right to submit the contribution under the project's license.
-
-Add a sign-off line to every commit:
-
-```
-Signed-off-by: Your Name <your.email@example.com>
-```
-
-Git can do this automatically:
+All contributions must include a [Developer Certificate of Origin](DCO) sign-off:
 
 ```bash
 git commit -s -m "feat: add new feature"
 ```
 
-Pull requests with unsigned commits will not be accepted.
-
-### AI-assisted contributions
-
-Contributors are welcome to use AI tools (code assistants, generators, etc.) when writing contributions. You are responsible for ensuring that any code you submit - regardless of what tools were used to produce it - is something you have the right to contribute under the DCO.
-
-### How to contribute
-
-1. Fork the repository and create a branch from `main`.
-2. Make your changes. Follow the conventions in the existing codebase.
-3. Sign off all commits (`git commit -s`).
-4. Open a pull request with a clear description of what and why.
-
-For bug reports and feature requests, open an issue first.
+PRs with unsigned commits will not be accepted. AI-assisted contributions are welcome; you are responsible for what you submit.
