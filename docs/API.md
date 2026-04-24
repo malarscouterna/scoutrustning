@@ -527,12 +527,24 @@ Add a comment (with optional images). Any authenticated user.
 
 **Response** `201` (full issue detail) | `400` | `404`
 
+### `POST /api/v0/issues/{id}/assignees`
+Add a single assignee. Manager only.
+
+**Body** `{"user_id": "string"}`
+
+**Response** `201` (full issue detail) | `400` | `403` | `404` | `409` (`already_assigned`)
+
+### `DELETE /api/v0/issues/{id}/assignees/{userId}`
+Remove an assignee. Manager only.
+
+**Response** `204` | `403` | `404`
+
 ### `PUT /api/v0/issues/{id}/assignees`
-Replace the assignee list. Manager only.
+Replace the full assignee list. Manager only.
 
 **Body** `{"user_ids": ["string"]}`
 
-**Response** `200` (full issue detail) | `403` | `404`
+**Response** `200` (array of assignees) | `403` | `404`
 
 ### `POST /api/v0/issues/{id}/articles`
 Add an article to the issue. Manager only.
@@ -737,6 +749,22 @@ Convert and serve as JPEG (quality 85) with `Content-Disposition: attachment` fo
 
 ---
 
+## Users
+
+### 🔒 `GET /api/v0/users`
+Returns users who have logged into the group. Manager only.
+
+**Query params**: `access_levels` - comma-separated list (`trusted,manager`). Filters by the user's highest effective access level. Default: no filter.
+
+In demo mode, returns only configured personas; real user records are hidden.
+
+**Response** `200`
+```json
+[{"id": "string", "name": "string", "email": "string", "access_level": "trusted"}]
+```
+
+---
+
 ## User
 
 ### `GET /api/v0/me`
@@ -774,6 +802,51 @@ Set the user's personal language preference.
 
 **Response** `204` | `400` (unsupported language) | `401`
 
+### `GET /api/v0/me/notification-prefs`
+Returns the effective (merged) notification preferences for the active group. Resolution order: user overrides - group defaults - system defaults.
+
+**Response** `200`
+```json
+{
+  "prefs": {
+    "booking_confirmed":   {"email": {"enabled": true,  "source": "user"}},
+    "issue_created":       {"email": {"enabled": false, "source": "group_default"}},
+    "booking_any_created": {"email": {"enabled": false, "source": "system_default"}}
+  }
+}
+```
+`source`: `"user"` | `"group_default"` | `"system_default"`.
+
+### `PUT /api/v0/me/notification-prefs`
+Partial update - only keys present in the body are changed.
+
+**Body**
+```json
+{"booking_confirmed": {"email": true}, "issue_created": {"email": false}}
+```
+
+**Response** `204` | `400`
+
+### `DELETE /api/v0/me/notification-prefs`
+Resets all user-level preferences for the active group. Subsequent `GET` returns group/system defaults.
+
+**Response** `204`
+
+### 🔒 `GET /api/v0/group-settings/notification-defaults`
+Returns group-level notification defaults. Manager only.
+
+**Response** `200`
+```json
+{"defaults": {"booking_confirmed": {"email": true}}}
+```
+
+### 🔒 `PUT /api/v0/group-settings/notification-defaults`
+Full replacement of group notification defaults. Manager only.
+
+**Body** Same shape as the `defaults` field above.
+
+**Response** `204` | `400` | `403`
+
 ---
 
 ## Group Settings
@@ -795,9 +868,11 @@ Returns group settings. SMTP key is returned masked.
   "default_access_troop": "book",
   "default_access_role": "book",
   "image_upload_role": "book",
-  "default_language": "sv"
+  "default_language": "sv",
+  "notification_channels": ["email"]
 }
 ```
+`notification_channels`: ordered list of active channel identifiers for this group. Currently always `["email"]`. Used by the frontend to determine which columns to render in the notification prefs table.
 
 ### 🔒 `PUT /api/v0/group-settings`
 ```json

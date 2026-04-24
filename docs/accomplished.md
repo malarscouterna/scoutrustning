@@ -8,6 +8,28 @@ Newest first.
 
 ---
 
+## 2026-04-24
+
+### Notifications - Steps 1-6
+
+See [notifications.md](notifications.md) for the full design.
+
+Steps 1-6 of the notification system are complete. Steps 7+ (actual sending, scheduled jobs, group defaults UI) are pending.
+
+**Step 1 - Migration**: `users.max_access_level`, `users.notification_prefs` (JSONB), `group_settings.smtp_host/port/tls/user`, `group_settings.notification_defaults` (JSONB), `notification_log` table. (`migrations/00005_notifications.sql`)
+
+**Step 2 - Group members API**: `GET /api/v0/users?access_levels=trusted,manager` - manager only. Demo mode protection: only persona IDs returned when `DEMO_MODE=true`. `GET /group-settings` now includes `notification_channels: ["email"]`.
+
+**Step 3 - Issue assignee API**: `POST /api/v0/issues/{id}/assignees` and `DELETE /api/v0/issues/{id}/assignees/{userId}`. Assignment and removal each create an `issue_events` row with `event_type = "assignment"` and `metadata.action = "added"|"removed"`. Returns 409 on duplicate assignment.
+
+**Step 4 - Assignee picker UI**: Issue detail page. Managers see chips with remove buttons plus a searchable "Tilldela" dropdown loaded from `GET /users`. Non-managers see read-only chip list. Access level shown in Swedish below each name.
+
+**Step 5 - Preference data layer + API**: `internal/notifications/prefs.go` - event key constants, `systemDefaults`, `ResolvePrefs`, `IsEnabled`. Five endpoints: `GET/PUT/DELETE /me/notification-prefs` and `GET/PUT /group-settings/notification-defaults`. Partial merge on user PUT; full replacement on group PUT. `source` field (`user`|`group_default`|`system_default`) returned on GET.
+
+**Step 6 - Preference UI**: "Notiser" section on the profile page. Semantic table with Bokningar/Ärenden groups. Columns driven by `notification_channels` from group settings (auto-adds new channels). Manager-only rows hidden for non-managers. `issue_assigned_to_me` is a locked informational row. Inheritance hint shown when source is not `user`. "Återställ till standard" resets and re-fetches. Toggles update immediately via `PUT /me/notification-prefs`.
+
+---
+
 ## 2026-04-20
 
 ### Pickup / return flow revamp

@@ -135,7 +135,15 @@ export interface GroupSettings {
 	issue_resolve_role: string;
 	manager_notes_role: string;
 	default_language: string;
+	notification_channels: string[];
 }
+
+export interface ChannelPref {
+	enabled: boolean;
+	source: 'user' | 'group_default' | 'system_default';
+}
+
+export type NotificationPrefs = Record<string, Record<string, ChannelPref>>;
 
 export interface IssueArticle {
 	id: string;
@@ -357,6 +365,12 @@ export function createApiClient(opts: FetchOptions = {}) {
 			requestMut<GroupSettings>('/group-settings', 'PUT', data, opts),
 		updateLanguage: (language: string | null) =>
 			requestMut<void>('/me/language', 'PUT', { language }, opts),
+		getNotificationPrefs: () =>
+			request<{ prefs: NotificationPrefs }>('/me/notification-prefs', opts),
+		updateNotificationPrefs: (data: Record<string, Record<string, boolean>>) =>
+			requestMut<void>('/me/notification-prefs', 'PUT', data, opts),
+		resetNotificationPrefs: () =>
+			requestMut<void>('/me/notification-prefs', 'DELETE', undefined, opts),
 
 		// Article CRUD
 		getArticle: (id: string) => request<Article>(`/articles/${id}`, opts),
