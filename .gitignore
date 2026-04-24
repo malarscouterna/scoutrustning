@@ -1,6 +1,7 @@
 # Go
 api/bin/
 api/tmp/
+api/server
 api/dev-personas.json
 api/role-mapping.json
 
