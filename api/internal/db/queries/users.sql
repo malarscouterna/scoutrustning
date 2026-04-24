@@ -21,3 +21,15 @@ WHERE id = @id AND group_id = @group_id;
 -- name: UpdateUserLanguage :exec
 UPDATE users SET language = @language, updated_at = now()
 WHERE id = @id;
+
+-- name: GetUserNotificationPrefs :one
+SELECT notification_prefs FROM users
+WHERE id = @id AND group_id = @group_id;
+
+-- name: SetUserNotificationPrefs :exec
+UPDATE users SET notification_prefs = @notification_prefs, updated_at = now()
+WHERE id = @id AND group_id = @group_id;
+
+-- name: ClearUserNotificationPrefs :exec
+UPDATE users SET notification_prefs = '{}', updated_at = now()
+WHERE id = @id AND group_id = @group_id;

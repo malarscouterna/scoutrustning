@@ -172,7 +172,7 @@ Response: `[{ "id": "string", "name": "string", "email": "string", "access_level
 
 `access_level` is the user's highest effective access level in the group (derived from their team memberships). This is shown in the assignee picker UI so managers can see at a glance who they're assigning to.
 
-In demo mode (`DEMO_MODE=true`), returns the configured personas from `dev-personas.json` instead of real users, with access levels from the persona definitions.
+In demo mode (`DEMO_MODE=true`), only personas from `dev-personas.json` are returned — real user records are filtered out to prevent exposing personal details. Personas are seeded into the DB (via `dev-seed.sh`), so their access levels come from the DB as normal. In dev mode (`DEV_MODE=true`, no `DEMO_MODE`), both real logged-in users and seeded personas are returned — enabling full local testing.
 
 ### Assignee picker UI
 
@@ -310,56 +310,78 @@ The `channel` dimension in `user_notification_prefs` and `group_notification_def
 
 Each step is independently testable. Steps 1–3 are backend prerequisites. Steps 4–7 add visible functionality. Steps 8–9 are scheduled jobs and manager defaults UI.
 
-### Step 1: Migration
+### Step order summary
 
-Add the three new tables (`user_notification_prefs`, `group_notification_defaults`, `notification_log`) in a single goose migration.
+| Step | Deliverable | Status | Prerequisites |
+|---|---|---|---|
+| 1 | Migration | ✅ done | — |
+| 2 | Group members API | ✅ done | 1 |
+| 3 | Issue assignee API | ✅ done | 1, 2 |
+| 4 | Assignee picker UI | ✅ done | 3 |
+| 5 | Preference data layer + API | ✅ done | 1 |
+| 6 | Preference UI | — | 5 |
+| 7 | Notifier + event sends | — | 1, 3, 5 |
+| 8 | Scheduled jobs | — | 7 |
+| 9 | Group defaults UI + SMTP UI | — | 5, 6 |
 
-**Test**: Migration runs up and down cleanly. Integration test harness picks it up automatically.
+Steps 3 and 5 can run in parallel after Step 1. Steps 4, 6, and 9 are frontend-only and can overlap with later backend steps once their APIs exist.
 
-### Step 2: Group members API
+---
 
-`GET /api/v0/users` — manager only, returns all users who have logged into the group. In demo mode returns personas from `dev-personas.json`. Add `ListUsersByGroup` sqlc query.
+### Step 1: Migration ✅
 
-**Test** (`TestUsers_GroupMembers`):
-- Manager gets full user list with `access_level` field; leader gets 403
-- `access_levels=trusted,manager` filters out `view`/`book` users; omitting returns all
-- Group isolation: group B users not visible to group A manager
-- Demo mode returns personas with access levels instead of DB rows
+Added in `migrations/00005_notifications.sql`:
+- `users.max_access_level` — denormalized highest access level, updated on every login via `UpsertUser`
+- `users.notification_prefs` — JSONB, per-user pref overrides
+- `group_settings.smtp_host/port/tls/user` — plain-text SMTP fields
+- `group_settings.notification_defaults` — JSONB, per-group pref overrides
+- `notification_log` — deduplication table for scheduled jobs
 
-### Step 3: Issue assignee API
+Note: prefs are stored as JSONB on the parent rows rather than a separate `user_notification_prefs` table. This avoids extra joins for the common read path and keeps preference resolution entirely in Go code.
 
-Add/remove assignees. Both endpoints manager-only.
+### Step 2: Group members API ✅
 
-- `POST /api/v0/issues/{id}/assignees` — inserts into `issue_assignees`, creates `assignment` event, returns 409 if already assigned
-- `DELETE /api/v0/issues/{id}/assignees/{userId}` — removes, creates `assignment` event
+`GET /api/v0/users` — manager only. Returns all users who have logged into the group, optionally filtered by `access_levels` query param.
+
+**Demo mode protection**: in `DEMO_MODE=true`, results are filtered to only persona IDs (read from `dev-personas.json` at startup). Real user records that accumulated in the DB are hidden. In `DEV_MODE=true` (local dev, no demo mode), both seeded personas and real logged-in developers are returned — enabling full local testing. `UserHandler` receives a `PersonaIDs map[string]bool` that is nil in non-demo mode (filter bypassed).
+
+`GET /group-settings` now includes `notification_channels: ["email"]` — the ordered list of active channel identifiers. The frontend uses this to determine which columns to render in the preference table. Hard-wired to `["email"]` for Phase 3; adding a channel means adding a `Notifier` implementation and the identifier appears in the response automatically.
+
+### Step 3: Issue assignee API ✅
+
+- `POST /api/v0/issues/{id}/assignees` — manager only, returns 409 if already assigned
+- `DELETE /api/v0/issues/{id}/assignees/{userId}` — manager only
+- Both create an `issue_events` row with `event_type = "assignment"` and `metadata = { "user_id", "user_name", "action" }`
 - `GET /api/v0/issues/{id}` includes `assignees: [{ "id", "name" }]`
 
-**Test** (`TestIssues_Assignees`):
-- Manager can add and remove; reflected in issue detail
-- 409 on duplicate add
-- Leader gets 403
-- User from different group returns 404
-- Issue events created for both actions
+`user_name` is stored in event metadata at write time so that the event log can display a name even after a user is removed or renamed.
 
-### Step 4: Assignee picker UI
+### Step 4: Assignee picker UI ✅
 
-Assignee section on `/issues/[id]`. Manager: chips + remove buttons + "Tilldela" button opening searchable dropdown (calls `GET /api/v0/users`). Non-manager: read-only list.
+Assignee section on `/issues/[id]`. Manager: chips with remove buttons + "Tilldela" button opening a searchable dropdown. Group members are fetched once on first open and filtered client-side. Access level shown in Swedish below the name. Non-manager: read-only chip list.
 
-**Test**: SSR smoke test. Manager sees controls; leader sees read-only list.
+Assignment event log renders "tilldelade / tog bort tilldelning för [name]" rather than a generic label.
 
-### Step 5: Notification preference data layer + API
+`dev-seed.sh` upserts all personas so they appear in `GET /users` without requiring a prior login in the dev environment.
 
-- `api/internal/notifications/prefs.go` — `ResolvePrefs` with 3-level fallback
-- sqlc queries for `user_notification_prefs` and `group_notification_defaults`
-- `GET/PUT/DELETE /api/v0/me/notification-prefs`
-- `GET/PUT /api/v0/group-settings/notification-defaults` (manager only)
+### Step 5: Notification preference data layer + API ✅
 
-**Test** (`TestNotificationPrefs`):
-- GET returns system defaults when no rows exist; manager and non-manager get different defaults for `booking_needs_approval` and `issue_created`
-- PUT overrides a pref; GET shows `source: "user"`
-- DELETE reverts; GET shows `source: "group_default"` or `"system_default"`
-- Group defaults override system defaults for users with no user-level rows
-- Group defaults endpoint: manager can read/write; leader gets 403
+**Files added:**
+- `internal/notifications/prefs.go` — event key constants, `systemDefaults`, `ResolvePrefs` (full map for API responses), `IsEnabled` (fast single-pair lookup for send functions in Step 7)
+- `internal/handler/notification_prefs.go` — 5 endpoints
+- `internal/handler/me.go` — `MeHandler` consolidating `GET /me`, `PUT /me/language`, and `/me/notification-prefs` sub-routes (refactored out of inline closures in `main.go`)
+- sqlc queries: `GetUserNotificationPrefs`, `SetUserNotificationPrefs`, `ClearUserNotificationPrefs`, `GetGroupNotificationDefaults`, `SetGroupNotificationDefaults`
+
+**Endpoints:**
+- `GET /me/notification-prefs` — merged effective prefs with `source` field (`"user"` | `"group_default"` | `"system_default"`)
+- `PUT /me/notification-prefs` — partial update; only keys present are changed
+- `DELETE /me/notification-prefs` — resets `notification_prefs` to `{}`, reverting to group/system defaults
+- `GET /group-settings/notification-defaults` — manager only, returns raw group overrides
+- `PUT /group-settings/notification-defaults` — manager only, full replacement
+
+**Design decisions:**
+- `PUT /me/notification-prefs` is a partial merge (only supplied keys change). `PUT /group-settings/notification-defaults` is a full replacement — matches the group settings page UX where the whole table is saved at once.
+- `activeNotificationChannels` is a package-level var in the handler package (`["email"]`), shared between `NotificationPrefsHandler` and `GroupSettingsHandler` so `notification_channels` in the group settings response stays in sync with the columns rendered in the prefs table.
 
 ### Step 6: Notification preferences UI
 
@@ -372,7 +394,7 @@ Assignee section on `/issues/[id]`. Manager: chips + remove buttons + "Tilldela"
 - `api/internal/notifications/notifier.go` — `Notifier` interface, `NoopNotifier`
 - `api/internal/notifications/smtp.go` — `SMTPNotifier` (group key → env vars fallback)
 - `api/internal/notifications/templates/` — one `html/template` per event, `_sv.html` / `_en.html`
-- `api/internal/notifications/send.go` — typed send functions, language resolution, preference check
+- `api/internal/notifications/send.go` — typed send functions, language resolution, preference check via `IsEnabled`
 
 Wire into handlers (fire-and-forget goroutines):
 1. `booking_needs_approval` — submit handler, when approval is required
@@ -405,19 +427,3 @@ Two additions to group settings (manager only):
 **"SMTP-inställningar"** — form with fields: Från-adress, SMTP-server, Port, TLS-läge (dropdown: `STARTTLS` / `Implicit TLS`), Användarnamn, Lösenord. Password field shows masked value (`smtp_key_masked`) when set; submitting an empty password field leaves the existing key unchanged. Saves via `PUT /api/v0/group-settings` (extends existing endpoint). A "Ta bort SMTP-nyckel" button clears only the key. The form is hidden when `SMTP_DEFAULT_*` env vars are not configured (i.e. no system fallback exists), since a broken per-group config with no fallback silently drops notifications.
 
 **Test**: SSR smoke test. Manager updates a notification default; a user with no personal prefs sees `source: "group_default"` with the new value on `GET /me/notification-prefs`. SMTP form saves and returns masked key.
-
-### Step order summary
-
-| Step | Deliverable | Prerequisites |
-|---|---|---|
-| 1 | Migration | — |
-| 2 | Group members API | 1 |
-| 3 | Issue assignee API | 1, 2 |
-| 4 | Assignee picker UI | 3 |
-| 5 | Preference data layer + API | 1 |
-| 6 | Preference UI | 5 |
-| 7 | Notifier + event sends | 1, 3, 5 |
-| 8 | Scheduled jobs | 7 |
-| 9 | Group defaults UI | 5, 6 |
-
-Steps 3 and 5 can run in parallel after Step 1. Steps 4, 6, and 9 are frontend-only and can overlap with later backend steps once their APIs exist.

@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -81,6 +82,18 @@ func (q *Queries) CreateGroupSettingsDefaults(ctx context.Context, groupID strin
 	return i, err
 }
 
+const getGroupNotificationDefaults = `-- name: GetGroupNotificationDefaults :one
+SELECT notification_defaults FROM group_settings
+WHERE group_id = $1
+`
+
+func (q *Queries) GetGroupNotificationDefaults(ctx context.Context, groupID string) (json.RawMessage, error) {
+	row := q.db.QueryRow(ctx, getGroupNotificationDefaults, groupID)
+	var notification_defaults json.RawMessage
+	err := row.Scan(&notification_defaults)
+	return notification_defaults, err
+}
+
 const getGroupSettings = `-- name: GetGroupSettings :one
 SELECT group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults FROM group_settings
 WHERE group_id = $1
@@ -113,6 +126,21 @@ func (q *Queries) GetGroupSettings(ctx context.Context, groupID string) (GroupSe
 		&i.NotificationDefaults,
 	)
 	return i, err
+}
+
+const setGroupNotificationDefaults = `-- name: SetGroupNotificationDefaults :exec
+UPDATE group_settings SET notification_defaults = $1, updated_at = now()
+WHERE group_id = $2
+`
+
+type SetGroupNotificationDefaultsParams struct {
+	NotificationDefaults json.RawMessage `json:"notification_defaults"`
+	GroupID              string          `json:"group_id"`
+}
+
+func (q *Queries) SetGroupNotificationDefaults(ctx context.Context, arg SetGroupNotificationDefaultsParams) error {
+	_, err := q.db.Exec(ctx, setGroupNotificationDefaults, arg.NotificationDefaults, arg.GroupID)
+	return err
 }
 
 const upsertGroupSettings = `-- name: UpsertGroupSettings :one

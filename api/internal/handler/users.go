@@ -11,7 +11,9 @@ import (
 )
 
 type UserHandler struct {
-	Q *db.Queries
+	Q          *db.Queries
+	DemoMode   bool
+	PersonaIDs map[string]bool // non-nil only in demo mode
 }
 
 func (h *UserHandler) Routes() chi.Router {
@@ -49,14 +51,17 @@ func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
 		AccessLevel string `json:"access_level"`
 	}
 
-	result := make([]userResponse, len(users))
-	for i, u := range users {
-		result[i] = userResponse{
+	result := make([]userResponse, 0, len(users))
+	for _, u := range users {
+		if h.DemoMode && !h.PersonaIDs[u.ID] {
+			continue
+		}
+		result = append(result, userResponse{
 			ID:          u.ID,
 			Name:        u.Name,
 			Email:       u.Email,
 			AccessLevel: u.MaxAccessLevel,
-		}
+		})
 	}
 
 	WriteJSON(w, http.StatusOK, result)
