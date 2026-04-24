@@ -253,4 +253,5 @@ type User struct {
 	Language            pgtype.Text        `json:"language"`
 	MaxAccessLevel      string             `json:"max_access_level"`
 	NotificationPrefs   json.RawMessage    `json:"notification_prefs"`
+	TeamIds             []pgtype.UUID      `json:"team_ids"`
 }

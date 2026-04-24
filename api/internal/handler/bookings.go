@@ -13,10 +13,12 @@ import (
 
 	"github.com/malarscouterna/ms-utrustning/api/internal/auth"
 	"github.com/malarscouterna/ms-utrustning/api/internal/db"
+	"github.com/malarscouterna/ms-utrustning/api/internal/notifications"
 )
 
 type BookingHandler struct {
-	Q *db.Queries
+	Q        *db.Queries
+	Notifier notifications.Notifier
 }
 
 func (h *BookingHandler) Routes() chi.Router {
@@ -609,6 +611,18 @@ func (h *BookingHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	if h.Notifier != nil {
+		b := updated
+		n := h.Notifier
+		q := h.Q
+		if newStatus == "submitted" {
+			go notifications.SendBookingNeedsApproval(context.Background(), q, n, b)
+		} else {
+			go notifications.SendBookingConfirmed(context.Background(), q, n, b)
+			go notifications.SendBookingSubmittedNoApproval(context.Background(), q, n, b)
+		}
+	}
+
 	WriteJSON(w, http.StatusOK, updated)
 }
 
@@ -643,6 +657,11 @@ func (h *BookingHandler) Approve(w http.ResponseWriter, r *http.Request) {
 		Message: req.Message,
 	})
 
+	if h.Notifier != nil {
+		b, n, q := updated, h.Notifier, h.Q
+		go notifications.SendBookingConfirmed(context.Background(), q, n, b)
+	}
+
 	WriteJSON(w, http.StatusOK, updated)
 }
 
@@ -676,6 +695,11 @@ func (h *BookingHandler) Reject(w http.ResponseWriter, r *http.Request) {
 			Metadata: []byte("{}"),
 		Message: req.Message,
 	})
+
+	if h.Notifier != nil {
+		b, n, q := updated, h.Notifier, h.Q
+		go notifications.SendBookingRejected(context.Background(), q, n, b)
+	}
 
 	WriteJSON(w, http.StatusOK, updated)
 }
@@ -780,6 +804,12 @@ func (h *BookingHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusInternalServerError, "failed to cancel booking")
 		return
 	}
+
+	if h.Notifier != nil {
+		b, n, q := updated, h.Notifier, h.Q
+		go notifications.SendBookingCancelled(context.Background(), q, n, b)
+	}
+
 	WriteJSON(w, http.StatusOK, updated)
 }
 

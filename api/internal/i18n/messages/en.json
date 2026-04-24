@@ -478,5 +478,17 @@
   "notif_issue_created": "New issue reported",
   "notif_issue_assigned_to_me": "Assigned to an issue",
   "notif_issue_resolved": "Issue resolved",
-  "notif_issue_commented": "New comment on issue"
+  "notif_issue_commented": "New comment on issue",
+
+  "email_subject_booking_needs_approval": "Booking awaiting approval",
+  "email_subject_booking_submitted_no_approval": "New booking confirmed automatically",
+  "email_subject_booking_confirmed": "Your booking is confirmed",
+  "email_subject_booking_rejected": "Your booking was rejected",
+  "email_subject_booking_cancelled": "Booking cancelled",
+  "email_subject_booking_reminder": "Reminder: booking starts tomorrow",
+  "email_subject_booking_overdue": "Booking is overdue",
+  "email_subject_issue_created": "New issue: {title}",
+  "email_subject_issue_assigned_to_me": "You have been assigned an issue: {title}",
+  "email_subject_issue_resolved": "Issue resolved: {title}",
+  "email_subject_issue_commented": "New comment on issue: {title}"
 }

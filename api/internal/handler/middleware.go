@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/malarscouterna/ms-utrustning/api/internal/auth"
 	"github.com/malarscouterna/ms-utrustning/api/internal/db"
@@ -20,12 +21,21 @@ func UpsertUserMiddleware(queries *db.Queries) func(http.Handler) http.Handler {
 				return
 			}
 
+			teamIDs := make([]pgtype.UUID, 0, len(claims.Teams))
+			for _, t := range claims.Teams {
+				var uid pgtype.UUID
+				if err := uid.Scan(t.TeamID); err == nil {
+					teamIDs = append(teamIDs, uid)
+				}
+			}
+
 			_, err := queries.UpsertUser(r.Context(), db.UpsertUserParams{
 				ID:             claims.MemberID,
 				GroupID:        claims.GroupID,
 				Name:           claims.Name,
 				Email:          claims.Email,
 				MaxAccessLevel: claims.MaxAccess,
+				TeamIds:        teamIDs,
 			})
 			if err != nil {
 				if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23503" && strings.Contains(pgErr.ConstraintName, "group_id") {

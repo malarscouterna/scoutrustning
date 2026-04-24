@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -13,11 +14,13 @@ import (
 	"github.com/malarscouterna/ms-utrustning/api/internal/auth"
 	"github.com/malarscouterna/ms-utrustning/api/internal/db"
 	"github.com/malarscouterna/ms-utrustning/api/internal/i18n"
+	"github.com/malarscouterna/ms-utrustning/api/internal/notifications"
 )
 
 type IssueHandler struct {
-	Q     *db.Queries
-	Perms *PermissionCache
+	Q        *db.Queries
+	Perms    *PermissionCache
+	Notifier notifications.Notifier
 }
 
 func (h *IssueHandler) Routes() chi.Router {
@@ -227,6 +230,11 @@ func (h *IssueHandler) Create(w http.ResponseWriter, r *http.Request) {
 		GroupID: claims.GroupID,
 	})
 
+	if h.Notifier != nil {
+		iss, n, q := issue, h.Notifier, h.Q
+		go notifications.SendIssueCreated(context.Background(), q, n, iss)
+	}
+
 	issueDetail, _ := h.buildIssueDetail(r, claims, issue.ID)
 	WriteJSON(w, http.StatusCreated, issueDetail)
 }
@@ -327,6 +335,17 @@ func (h *IssueHandler) Update(w http.ResponseWriter, r *http.Request) {
 				h.reapplyDerivedStatus(r, claims, artID)
 			}
 		}
+
+		if h.Notifier != nil && *req.Status == "resolved" {
+			if iss, err := h.Q.GetIssue(r.Context(), db.GetIssueParams{ID: id, GroupID: claims.GroupID}); err == nil {
+				issue := db.IssueReport{
+					ID: iss.ID, GroupID: iss.GroupID, Title: iss.Title,
+					ReporterID: iss.ReporterID, Status: iss.Status,
+				}
+				n, q := h.Notifier, h.Q
+				go notifications.SendIssueResolved(context.Background(), q, n, issue)
+			}
+		}
 	}
 
 	detail, _ := h.buildIssueDetail(r, claims, id)
@@ -370,6 +389,14 @@ func (h *IssueHandler) AddComment(w http.ResponseWriter, r *http.Request) {
 
 	// Touch updated_at
 	h.Q.UpdateIssue(r.Context(), db.UpdateIssueParams{ID: id, GroupID: claims.GroupID})
+
+	if h.Notifier != nil {
+		if iss, err := h.Q.GetIssue(r.Context(), db.GetIssueParams{ID: id, GroupID: claims.GroupID}); err == nil {
+			issue := db.IssueReport{ID: iss.ID, GroupID: iss.GroupID, Title: iss.Title, ReporterID: iss.ReporterID}
+			n, q := h.Notifier, h.Q
+			go notifications.SendIssueCommented(context.Background(), q, n, issue)
+		}
+	}
 
 	detail, _ := h.buildIssueDetail(r, claims, id)
 	WriteJSON(w, http.StatusCreated, detail)
@@ -486,6 +513,14 @@ func (h *IssueHandler) AddAssignee(w http.ResponseWriter, r *http.Request) {
 		Metadata:  meta,
 	})
 	h.Q.UpdateIssue(r.Context(), db.UpdateIssueParams{ID: id, GroupID: claims.GroupID})
+
+	if h.Notifier != nil {
+		if iss, err := h.Q.GetIssue(r.Context(), db.GetIssueParams{ID: id, GroupID: claims.GroupID}); err == nil {
+			issue := db.IssueReport{ID: iss.ID, GroupID: iss.GroupID, Title: iss.Title, ReporterID: iss.ReporterID}
+			assigneeID, n, q := req.UserID, h.Notifier, h.Q
+			go notifications.SendIssueAssignedToMe(context.Background(), q, n, issue, assigneeID)
+		}
+	}
 
 	detail, _ := h.buildIssueDetail(r, claims, id)
 	WriteJSON(w, http.StatusCreated, detail)

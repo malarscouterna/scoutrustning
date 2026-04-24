@@ -22,6 +22,7 @@ import (
 	"github.com/malarscouterna/ms-utrustning/api/internal/db"
 	"github.com/malarscouterna/ms-utrustning/api/internal/handler"
 	"github.com/malarscouterna/ms-utrustning/api/internal/images"
+	"github.com/malarscouterna/ms-utrustning/api/internal/notifications"
 )
 
 func main() {
@@ -87,10 +88,12 @@ func main() {
 		articles := &handler.ArticleHandler{Q: queries, Perms: permCache}
 		locations := &handler.LocationHandler{Q: queries}
 		categories := &handler.CategoryHandler{Q: queries}
-		bookings := &handler.BookingHandler{Q: queries}
+		notifier := notifications.Notifier(&notifications.SMTPNotifier{Q: queries})
+
+		bookings := &handler.BookingHandler{Q: queries, Notifier: notifier}
 		teams := &handler.TeamHandler{Q: queries}
 		groupSettings := &handler.GroupSettingsHandler{Q: queries, Perms: permCache}
-		issueHandler := &handler.IssueHandler{Q: queries, Perms: permCache}
+		issueHandler := &handler.IssueHandler{Q: queries, Perms: permCache, Notifier: notifier}
 		imageHandler := &images.Handler{Q: queries, ImageDir: imageDir}
 		userHandler := &handler.UserHandler{Q: queries, DemoMode: demoMode, PersonaIDs: buildPersonaIDs(demoMode, getenv("DEV_PERSONAS_PATH", "dev-personas.json"))}
 

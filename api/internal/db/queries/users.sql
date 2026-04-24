@@ -1,10 +1,11 @@
 -- name: UpsertUser :one
-INSERT INTO users (id, group_id, name, email, max_access_level)
-VALUES (@id, @group_id, @name, @email, @max_access_level)
+INSERT INTO users (id, group_id, name, email, max_access_level, team_ids)
+VALUES (@id, @group_id, @name, @email, @max_access_level, @team_ids::uuid[])
 ON CONFLICT (id) DO UPDATE SET
     name = EXCLUDED.name,
     email = EXCLUDED.email,
     max_access_level = EXCLUDED.max_access_level,
+    team_ids = EXCLUDED.team_ids,
     updated_at = now()
 RETURNING *;
 
@@ -33,3 +34,13 @@ WHERE id = @id AND group_id = @group_id;
 -- name: ClearUserNotificationPrefs :exec
 UPDATE users SET notification_prefs = '{}', updated_at = now()
 WHERE id = @id AND group_id = @group_id;
+
+-- name: GetTeamMembersWithEmails :many
+SELECT id, name, email, language, max_access_level, notification_prefs FROM users
+WHERE group_id = @group_id AND @team_id::uuid = ANY(team_ids)
+ORDER BY name;
+
+-- name: GetGroupManagers :many
+SELECT id, name, email, language, max_access_level, notification_prefs FROM users
+WHERE group_id = @group_id AND max_access_level = 'manager'
+ORDER BY name;

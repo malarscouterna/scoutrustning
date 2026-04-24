@@ -478,5 +478,17 @@
   "notif_issue_created": "Nytt ärende rapporterat",
   "notif_issue_assigned_to_me": "Tilldelad ett ärende",
   "notif_issue_resolved": "Ärende löst",
-  "notif_issue_commented": "Ny kommentar på ärende"
+  "notif_issue_commented": "Ny kommentar på ärende",
+
+  "email_subject_booking_needs_approval": "Bokning väntar på godkännande",
+  "email_subject_booking_submitted_no_approval": "Ny bokning bekräftad automatiskt",
+  "email_subject_booking_confirmed": "Din bokning är bekräftad",
+  "email_subject_booking_rejected": "Din bokning nekades",
+  "email_subject_booking_cancelled": "Bokning avbokad",
+  "email_subject_booking_reminder": "Påminnelse: bokning startar imorgon",
+  "email_subject_booking_overdue": "Bokning är försenad",
+  "email_subject_issue_created": "Nytt ärende: {title}",
+  "email_subject_issue_assigned_to_me": "Du har tilldelats ett ärende: {title}",
+  "email_subject_issue_resolved": "Ärende löst: {title}",
+  "email_subject_issue_commented": "Ny kommentar på ärende: {title}"
 }
