@@ -228,6 +228,38 @@ Denormalized highest access level for the user, updated on every login via `Upse
 ALTER TABLE users ADD COLUMN max_access_level text NOT NULL DEFAULT 'book';
 ```
 
+### users.team_ids
+
+Denormalized list of team UUIDs the user belongs to, updated on every login via `UpsertUser`. The auth middleware already resolves `Claims.Teams []TeamMembership` (each with a `TeamID`) at login — this column persists that resolution so notification send functions can query "all members of team X" without rejoining through OIDC claim mappings.
+
+```sql
+ALTER TABLE users ADD COLUMN team_ids uuid[] NOT NULL DEFAULT '{}';
+```
+
+Added in migration `00006_user_team_ids.sql`. `UpsertUser` is updated to accept and store `team_ids` (full replacement on every login). `UpsertUserMiddleware` extracts `TeamID` from each entry in `claims.Teams` and passes the slice.
+
+Staleness caveat: if a user's team membership changes, `team_ids` reflects the old state until their next login. Acceptable for this system since login is a prerequisite to booking activity.
+
+Dev seed: `dev-seed.sh` inserts users directly and must include the correct team UUIDs; otherwise seeded personas have `team_ids = '{}'` and won't receive team-scoped notifications.
+
+New sqlc queries added alongside this:
+- `GetTeamMembersWithEmails(team_id uuid, group_id text)` — `WHERE @team_id = ANY(team_ids)` — booking recipient resolution (used-by team members).
+- `GetGroupManagers(group_id text)` — `WHERE max_access_level = 'manager'` — manager-recipient events (`booking_needs_approval`, `issue_created`).
+
+### users.team_ids
+
+Denormalized list of team UUIDs the user belongs to, updated on every login via `UpsertUser`. The auth middleware already resolves `Claims.Teams []TeamMembership` (each with a `TeamID`) — this column simply persists that resolution so notification send functions can query "all members of team X" without rejoining through OIDC claim mappings.
+
+```sql
+ALTER TABLE users ADD COLUMN team_ids uuid[] NOT NULL DEFAULT '{}';
+```
+
+Added in migration `00006_user_team_ids.sql`. `UpsertUser` is updated to accept and store `team_ids`. `UpsertUserMiddleware` extracts `TeamID` from each entry in `claims.Teams` and passes the slice.
+
+New sqlc queries:
+- `GetTeamMembersWithEmails(team_id uuid, group_id text)` — `WHERE team_id = ANY(team_ids)` — used for booking recipient resolution (creator + team members).
+- `GetGroupManagers(group_id text)` — `WHERE max_access_level = 'manager'` — used for manager-recipient events (`booking_needs_approval`, `issue_created`).
+
 ### group_settings SMTP fields + notification_defaults
 
 New plain-text SMTP fields and a JSONB notification defaults column added to `group_settings`. Same shape as `users.notification_prefs`, but keyed by `(event_type, channel)` only — applies to all users in the group who have no user-level preference.
@@ -274,33 +306,39 @@ type Notifier interface {
 }
 
 type Message struct {
+    GroupID string
     To      string
     Subject string
     Body    string // HTML
 }
 ```
 
-`SMTPNotifier` resolves config: per-group fields (`smtp_host`, `smtp_port`, `smtp_tls`, `smtp_user`, `crypto.Decrypt(smtp_key_encrypted)`) → system env vars (`SMTP_DEFAULT_*`). TLS mode maps to go-mail's `mail.TLSOpportunistic` (STARTTLS) or `mail.TLSMandatory` (implicit TLS). Auth is always PLAIN. `NoopNotifier` is used in tests.
+`GroupID` is set by `send.go` before calling `Notifier.Send` so the notifier can look up per-group SMTP config without needing a separate constructor argument.
+
+`SMTPNotifier` resolves config per-send: per-group fields (`smtp_host`, `smtp_port`, `smtp_tls`, `smtp_user`, `crypto.Decrypt(smtp_key_encrypted)`) → system env vars (`SMTP_DEFAULT_*`). TLS mode maps to go-mail's `mail.TLSOpportunistic` (STARTTLS) or `mail.TLSMandatory` (implicit TLS). Auth is always PLAIN. `NoopNotifier` discards silently; `CapturingNotifier` (mutex-safe) records messages for tests.
 
 ### Fire and forget
 
 Notifications fire after the primary DB write succeeds, in a goroutine. Failure is logged but never propagates to the caller.
 
 ```go
-go h.Notifier.SendBookingConfirmed(ctx, booking)
+if h.Notifier != nil {
+    b, n, q := updated, h.Notifier, h.Q
+    go notifications.SendBookingConfirmed(context.Background(), q, n, b)
+}
 ```
 
 ### Preference resolution
 
 ```go
-func ResolvePrefs(ctx context.Context, q *db.Queries, userID, groupID, channel string, isManager bool) (map[string]bool, error)
+func IsEnabled(ctx context.Context, q *db.Queries, userID, groupID, event, channel string, isManager bool) bool
 ```
 
-Queries `user_notification_prefs` and `group_notification_defaults`, merges with hardcoded system defaults. Called before every send; returns early if the preference is off.
+Fast single-pair lookup used by send functions. Queries user prefs → group defaults → system defaults in order; returns on first match. `isManager` is derived from `user.max_access_level == "manager"`.
 
-### Email templates
+### Email bodies
 
-Go `html/template` files under `api/internal/notifications/templates/`. One template per event type, `_sv.html` and `_en.html` suffix. Language resolves: recipient user language → group default language → `sv`.
+Minimal stub HTML built inline in `send.go` using i18n keys (`email_subject_*` in sv.json/en.json). Language resolves: recipient `users.language` → `sv`. Bodies will be replaced with proper templates in a later pass.
 
 ### Adding a new channel
 
@@ -320,7 +358,9 @@ Each step is independently testable. Steps 1–3 are backend prerequisites. Step
 | 4 | Assignee picker UI | ✅ done | 3 |
 | 5 | Preference data layer + API | ✅ done | 1 |
 | 6 | Preference UI | ✅ done | 5 |
-| 7 | Notifier + event sends | — | 1, 3, 5 |
+| 6.5 | users.team_ids migration + UpsertUser update | ✅ done | — |
+| 7 | Notifier + event sends | ✅ done | 1, 3, 5, 6.5 |
+| 7.5 | Demo mode protection + test email button | — | 7 |
 | 8 | Scheduled jobs | — | 7 |
 | 9 | Group defaults UI + SMTP UI | — | 5, 6 |
 
@@ -390,25 +430,60 @@ Assignment event log renders "tilldelade / tog bort tilldelning för [name]" rat
 **Test**: SSR smoke test. Toggles and restore button work for both leader and manager personas.
 TODO: when changing back to the default setting, once again indicate that we are no the default setting.
 
-### Step 7: Notification infrastructure + event-triggered sends
+### Step 7: Notification infrastructure + event-triggered sends ✅
 
-- `api/internal/notifications/notifier.go` — `Notifier` interface, `NoopNotifier`
-- `api/internal/notifications/smtp.go` — `SMTPNotifier` (group key → env vars fallback)
-- `api/internal/notifications/templates/` — one `html/template` per event, `_sv.html` / `_en.html`
+**Files added:**
+- `api/internal/notifications/notifier.go` — `Notifier` interface, `NoopNotifier`, `CapturingNotifier` (mutex-safe, for tests)
+- `api/internal/notifications/smtp.go` — `SMTPNotifier` (per-group SMTP config → env vars fallback, GroupID from `Message`)
 - `api/internal/notifications/send.go` — typed send functions, language resolution, preference check via `IsEnabled`
 
-Wire into handlers (fire-and-forget goroutines):
+Email bodies are minimal stub HTML built inline with i18n keys. Visual polish deferred to a later pass.
+
+**Wired into handlers** (fire-and-forget goroutines, nil-guarded):
 1. `booking_needs_approval` — submit handler, when approval is required
 2. `booking_submitted_no_approval` — submit handler, auto-confirm path
 3. `booking_confirmed` — approve handler + auto-confirm path
 4. `booking_rejected` — reject handler
 5. `booking_cancelled` — cancel handler
 6. `issue_created` — create issue handler
-7. `issue_assigned_to_me` — add assignee handler (Step 3)
+7. `issue_assigned_to_me` — add assignee handler
 8. `issue_resolved` — issue status update, `resolved` transition
-9. `issue_commented` — issue event create, `comment` type
+9. `issue_commented` — add comment handler
 
-**Test** (`TestNotifications_EventTriggered`): inject `CapturingNotifier` that records messages. For each event: perform the action via HTTP, assert correct To/Subject. Assert no send when preference is off. Assert action still succeeds (200) when SMTP is not configured.
+**`BookingHandler`** and **`IssueHandler`** both gain a `Notifier notifications.Notifier` field. `main.go` wires `&notifications.SMTPNotifier{Q: queries}`.
+
+**Test** (`TestNotifications_EventTriggered`): injects `CapturingNotifier`. Covers needs_approval, confirmed (after approve), rejected, cancelled, issue_created, and action-succeeds-without-SMTP. Goroutine synchronization via timed poll with `time.Sleep`.
+
+### Step 7.5: Demo mode protection + test email
+
+**Demo mode protection:**
+
+In `DEMO_MODE=true`, event-triggered notifications must not reach real email addresses. `main.go` wires `NoopNotifier` instead of `SMTPNotifier` when `DEMO_MODE=true`. This means all booking/issue events are silently suppressed in demo — no code changes needed in handlers or send.go.
+
+**Test email endpoint:**
+
+```
+POST /api/v0/me/test-email
+```
+
+Sends a single test email to the authenticated user's own email address. Lets users (and demo visitors) verify that SMTP is correctly configured and see what a notification looks like.
+
+- **Personas** (detected via `PersonaIDs` set): return `{"skipped": true}` with 200 — no send attempted. Persona emails are fictitious and would either bounce or reach unintended inboxes.
+- **Real users**: send one test email via the same `SMTPNotifier` resolution (per-group → env fallback). If SMTP is not configured, return a clear error.
+- **Demo mode**: the endpoint sends even in `DEMO_MODE=true` — this is intentional. The notifier wired on handlers is `NoopNotifier`, but the test email endpoint has its own direct `SMTPNotifier` call. This is the designated way for demo visitors to see a real notification.
+- **Dev mode**: works if `SMTP_DEFAULT_*` is set. Using a relay (SendGrid, Brevo, etc.) from localhost over port 587 with STARTTLS is fine — no localhost TLS issue.
+
+Frontend: small "Skicka testnotis" button in the Notiser section on `/profile`, below the preference table. Disabled for personas (or hidden entirely since personas can't reach that page in a meaningful way). Shows a success/error toast on completion.
+
+**API response:**
+
+```json
+{ "skipped": true }          // persona — no send
+{ "sent": true }             // sent successfully
+{ "error": "no smtp config"} // SMTP not configured (4xx)
+```
+
+**Test**: assert sent to real user's email. Assert skipped for persona. Assert demo mode sends (using CapturingNotifier injected into the endpoint for that test).
 
 ### Step 8: Scheduled jobs
 
