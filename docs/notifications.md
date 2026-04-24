@@ -319,7 +319,7 @@ Each step is independently testable. Steps 1–3 are backend prerequisites. Step
 | 3 | Issue assignee API | ✅ done | 1, 2 |
 | 4 | Assignee picker UI | ✅ done | 3 |
 | 5 | Preference data layer + API | ✅ done | 1 |
-| 6 | Preference UI | — | 5 |
+| 6 | Preference UI | ✅ done | 5 |
 | 7 | Notifier + event sends | — | 1, 3, 5 |
 | 8 | Scheduled jobs | — | 7 |
 | 9 | Group defaults UI + SMTP UI | — | 5, 6 |
@@ -383,11 +383,12 @@ Assignment event log renders "tilldelade / tog bort tilldelning för [name]" rat
 - `PUT /me/notification-prefs` is a partial merge (only supplied keys change). `PUT /group-settings/notification-defaults` is a full replacement — matches the group settings page UX where the whole table is saved at once.
 - `activeNotificationChannels` is a package-level var in the handler package (`["email"]`), shared between `NotificationPrefsHandler` and `GroupSettingsHandler` so `notification_channels` in the group settings response stays in sync with the columns rendered in the prefs table.
 
-### Step 6: Notification preferences UI
+### Step 6: Notification preferences UI ✅
 
 "Notiser" section on `/profile`. Semantic `<table>`: rows = event types grouped into Bokningar/Ärenden, columns = channels from `group_settings.notification_channels`. Columns render dynamically — no hardcoded channel names. `booking_needs_approval` and `issue_created` absent for non-managers. `issue_assigned_to_me` is a non-toggle informational row. `source` shown as hint under the event label when inherited. "Återställ till standard" calls `DELETE /me/notification-prefs`.
 
 **Test**: SSR smoke test. Toggles and restore button work for both leader and manager personas.
+TODO: when changing back to the default setting, once again indicate that we are no the default setting.
 
 ### Step 7: Notification infrastructure + event-triggered sends
 

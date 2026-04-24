@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { createApiClient, type Location, type Category, type GroupSettings, type Team } from '$lib/api/client';
+	import { createApiClient, type Location, type Category, type GroupSettings, type Team, type NotificationPrefs } from '$lib/api/client';
 	import { browser } from '$app/environment';
 	import CrudList from '$lib/components/CrudList.svelte';
 	import type { PageData } from './$types';
@@ -297,6 +297,67 @@
 		importLoading = false;
 	}
 
+	// --- Notification preferences ---
+	type EventRow = { key: string; label: () => string; locked?: boolean };
+	const bookingEvents: EventRow[] = [
+		{ key: 'booking_needs_approval', label: m.notif_booking_needs_approval },
+		{ key: 'booking_submitted_no_approval', label: m.notif_booking_submitted_no_approval },
+		{ key: 'booking_confirmed', label: m.notif_booking_confirmed },
+		{ key: 'booking_rejected', label: m.notif_booking_rejected },
+		{ key: 'booking_cancelled', label: m.notif_booking_cancelled },
+		{ key: 'booking_reminder', label: m.notif_booking_reminder },
+		{ key: 'booking_overdue', label: m.notif_booking_overdue },
+		{ key: 'booking_any_created', label: m.notif_booking_any_created },
+	];
+	const issueEvents: EventRow[] = [
+		{ key: 'issue_created', label: m.notif_issue_created },
+		{ key: 'issue_assigned_to_me', label: m.notif_issue_assigned_to_me, locked: true },
+		{ key: 'issue_resolved', label: m.notif_issue_resolved },
+		{ key: 'issue_commented', label: m.notif_issue_commented },
+	];
+
+	let notifPrefs = $state<NotificationPrefs | null>(null);
+	$effect(() => { notifPrefs = data.notificationPrefs; });
+
+	// channels from group settings, fallback to ['email']
+	let notifChannels = $derived(data.groupSettings?.notification_channels ?? ['email']);
+
+	// Manager-only rows hidden for non-managers
+	const managerOnlyKeys = new Set(['booking_needs_approval', 'booking_submitted_no_approval', 'booking_any_created', 'issue_created']);
+
+	function notifEnabled(key: string, ch: string): boolean {
+		return notifPrefs?.[key]?.[ch]?.enabled ?? false;
+	}
+	function notifSource(key: string): string | null {
+		// All channels in a row share the same source — use first channel
+		const ch = notifChannels[0];
+		if (!ch || !notifPrefs?.[key]?.[ch]) return null;
+		const s = notifPrefs[key][ch].source;
+		if (s === 'user') return null;
+		if (s === 'group_default') return m.page_profile_notifs_source_group();
+		return m.page_profile_notifs_source_system();
+	}
+
+	async function toggleNotif(key: string, ch: string, value: boolean) {
+		try {
+			await api.updateNotificationPrefs({ [key]: { [ch]: value } });
+			const result = await api.getNotificationPrefs();
+			notifPrefs = result.prefs;
+		} catch { /* ignore */ }
+	}
+
+	let notifRestoring = $state(false);
+	async function restoreNotifDefaults() {
+		notifRestoring = true;
+		try {
+			await api.resetNotificationPrefs();
+			const result = await api.getNotificationPrefs();
+			notifPrefs = result.prefs;
+		} catch { /* ignore */ } finally {
+			notifRestoring = false;
+		}
+	}
+
 	// --- User language preference ---
 	let userLanguage = $state<string>('sv');
 	$effect(() => { userLanguage = data.user?.language ?? 'sv'; });
@@ -419,6 +480,88 @@
 			</div>
 			<p class="text-xs text-neutral-400 mt-2">{m.page_profile_language_hint()}</p>
 		</section>
+
+		<!-- Notification preferences -->
+		{#if notifPrefs}
+		<section class="mb-6 border rounded-lg p-4">
+			<h2 class="font-medium mb-3">{m.page_profile_notifs_heading()}</h2>
+			<table class="w-full text-sm border-collapse">
+				<thead>
+					<tr>
+						<th class="text-left py-1 pr-3 font-normal text-neutral-500 w-full"></th>
+						{#each notifChannels as ch}
+							<th class="text-center py-1 px-3 font-normal text-neutral-500 whitespace-nowrap">
+								{ch === 'email' ? m.page_profile_notifs_channel_email() : ch}
+							</th>
+						{/each}
+					</tr>
+				</thead>
+				<tbody>
+					<tr>
+						<td colspan={notifChannels.length + 1} class="py-1.5 text-xs font-semibold text-neutral-500 uppercase tracking-wide">{m.page_profile_notifs_bookings_group()}</td>
+					</tr>
+					{#each bookingEvents as row}
+						{#if !managerOnlyKeys.has(row.key) || mgr}
+						<tr class="border-t border-neutral-100">
+							<td class="py-1.5 pr-3">
+								<span>{row.label()}</span>
+								{#if notifSource(row.key)}
+									<span class="text-xs text-neutral-400 ml-1">{notifSource(row.key)}</span>
+								{/if}
+							</td>
+							{#each notifChannels as ch}
+								<td class="py-1.5 px-3 text-center">
+									<input
+										type="checkbox"
+										checked={notifEnabled(row.key, ch)}
+										onchange={(e) => toggleNotif(row.key, ch, e.currentTarget.checked)}
+										class="h-4 w-4 accent-blue-700"
+									/>
+								</td>
+							{/each}
+						</tr>
+						{/if}
+					{/each}
+					<tr>
+						<td colspan={notifChannels.length + 1} class="pt-3 pb-1.5 text-xs font-semibold text-neutral-500 uppercase tracking-wide">{m.page_profile_notifs_issues_group()}</td>
+					</tr>
+					{#each issueEvents as row}
+						{#if !managerOnlyKeys.has(row.key) || mgr}
+						<tr class="border-t border-neutral-100">
+							<td class="py-1.5 pr-3">
+								<span>{row.label()}</span>
+								{#if row.locked}
+									<span class="text-xs text-neutral-400 ml-1" title={m.page_profile_notifs_assigned_locked()}>🔒</span>
+								{:else if notifSource(row.key)}
+									<span class="text-xs text-neutral-400 ml-1">{notifSource(row.key)}</span>
+								{/if}
+							</td>
+							{#each notifChannels as ch}
+								<td class="py-1.5 px-3 text-center">
+									{#if row.locked}
+										<input type="checkbox" checked disabled class="h-4 w-4 accent-blue-700 opacity-50 cursor-not-allowed" />
+									{:else}
+										<input
+											type="checkbox"
+											checked={notifEnabled(row.key, ch)}
+											onchange={(e) => toggleNotif(row.key, ch, e.currentTarget.checked)}
+											class="h-4 w-4 accent-blue-700"
+										/>
+									{/if}
+								</td>
+							{/each}
+						</tr>
+						{/if}
+					{/each}
+				</tbody>
+			</table>
+			<div class="mt-3">
+				<button onclick={restoreNotifDefaults} disabled={notifRestoring} class="text-sm text-neutral-500 underline disabled:opacity-50">
+					{m.page_profile_notifs_restore()}
+				</button>
+			</div>
+		</section>
+		{/if}
 
 		<section class="mb-6 border rounded-lg p-4">
 			<h2 class="font-medium mb-3">{m.page_profile_images_heading()}</h2>

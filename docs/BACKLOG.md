@@ -6,16 +6,6 @@ Deferred work items - things to grab when there's time, smaller tasks set aside 
 
 `docs/guide.md` is the source for the in-app guide page and is currently written in Swedish only. An English version is needed once the English UI is fully rolled out. Deferred — low priority until there are actual English-speaking users.
 
-## Group members API + assignee picker
-
-Add `GET /api/v0/users` (manager only) that returns all users who have ever logged in to the group. Used by:
-1. The issue detail page assignee picker - managers can add/remove assignees by selecting group members.
-2. A new "Medlemmar" section on the group settings page so managers can see who has accounts in the group.
-
-In demo mode (`DEMO_MODE=true`), the endpoint should return the configured personas from `dev-personas.json` instead of real users, so demo environments do not expose real member data.
-
-Response shape: `[{ "id": "string", "name": "string", "email": "string" }]`
-
 ## Auth redirect loop - remove debug logging
 
 `hooks.server.ts` logs `[auth] redirect to login` and `[auth] stale session cookie detected` on every unauthenticated request. Once the fix has been confirmed stable in production, remove these `console.log` calls or gate them behind a `DEBUG_AUTH` env flag.
@@ -35,7 +25,7 @@ Remaining from the original item:
 
 ## Mention users in issue comments
 
-Ability to add another user (manager or trusted) to an issue by mentioning them in a comment. Requires `GET /api/v0/users` (blocked on Group members API above) and notification infrastructure.
+Ability to add another user (manager or trusted) to an issue by mentioning them in a comment. Requires notification infrastructure (Step 7+).
 
 ## Date change conflict UX
 
