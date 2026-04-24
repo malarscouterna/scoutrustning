@@ -7,9 +7,25 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const clearUserNotificationPrefs = `-- name: ClearUserNotificationPrefs :exec
+UPDATE users SET notification_prefs = '{}', updated_at = now()
+WHERE id = $1 AND group_id = $2
+`
+
+type ClearUserNotificationPrefsParams struct {
+	ID      string `json:"id"`
+	GroupID string `json:"group_id"`
+}
+
+func (q *Queries) ClearUserNotificationPrefs(ctx context.Context, arg ClearUserNotificationPrefsParams) error {
+	_, err := q.db.Exec(ctx, clearUserNotificationPrefs, arg.ID, arg.GroupID)
+	return err
+}
 
 const getUser = `-- name: GetUser :one
 SELECT id, group_id, name, email, notification_channel, gchat_webhook_url, active_group_id, created_at, updated_at, language, max_access_level, notification_prefs FROM users
@@ -39,6 +55,23 @@ func (q *Queries) GetUser(ctx context.Context, arg GetUserParams) (User, error) 
 		&i.NotificationPrefs,
 	)
 	return i, err
+}
+
+const getUserNotificationPrefs = `-- name: GetUserNotificationPrefs :one
+SELECT notification_prefs FROM users
+WHERE id = $1 AND group_id = $2
+`
+
+type GetUserNotificationPrefsParams struct {
+	ID      string `json:"id"`
+	GroupID string `json:"group_id"`
+}
+
+func (q *Queries) GetUserNotificationPrefs(ctx context.Context, arg GetUserNotificationPrefsParams) (json.RawMessage, error) {
+	row := q.db.QueryRow(ctx, getUserNotificationPrefs, arg.ID, arg.GroupID)
+	var notification_prefs json.RawMessage
+	err := row.Scan(&notification_prefs)
+	return notification_prefs, err
 }
 
 const listUsersByGroup = `-- name: ListUsersByGroup :many
@@ -83,6 +116,22 @@ func (q *Queries) ListUsersByGroup(ctx context.Context, arg ListUsersByGroupPara
 		return nil, err
 	}
 	return items, nil
+}
+
+const setUserNotificationPrefs = `-- name: SetUserNotificationPrefs :exec
+UPDATE users SET notification_prefs = $1, updated_at = now()
+WHERE id = $2 AND group_id = $3
+`
+
+type SetUserNotificationPrefsParams struct {
+	NotificationPrefs json.RawMessage `json:"notification_prefs"`
+	ID                string          `json:"id"`
+	GroupID           string          `json:"group_id"`
+}
+
+func (q *Queries) SetUserNotificationPrefs(ctx context.Context, arg SetUserNotificationPrefsParams) error {
+	_, err := q.db.Exec(ctx, setUserNotificationPrefs, arg.NotificationPrefs, arg.ID, arg.GroupID)
+	return err
 }
 
 const updateUserLanguage = `-- name: UpdateUserLanguage :exec

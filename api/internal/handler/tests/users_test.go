@@ -17,6 +17,12 @@ func mountUserRoutes(env *testutil.TestEnv) {
 	})
 }
 
+func mountUserRoutesDemo(env *testutil.TestEnv, personaIDs map[string]bool) {
+	env.V1(func(r chi.Router) {
+		r.Mount("/users", (&handler.UserHandler{Q: env.Queries, DemoMode: true, PersonaIDs: personaIDs}).Routes())
+	})
+}
+
 func TestUsers_GroupMembers(t *testing.T) {
 	env := testutil.SetupTestEnv(t)
 	mountUserRoutes(env)
@@ -98,6 +104,53 @@ func TestUsers_GroupMembers(t *testing.T) {
 			if u["email"] == "vera@example.com" {
 				t.Error("view-only user should not appear in trusted,manager filter")
 			}
+		}
+	})
+
+	t.Run("demo mode: only persona IDs are returned, real users excluded", func(t *testing.T) {
+		demoEnv := testutil.SetupTestEnv(t)
+		// Seed one persona ID and one "real" user ID into the same group.
+		ctx2 := t.Context()
+		_, err2 := demoEnv.Pool.Exec(ctx2, `
+			INSERT INTO users (id, group_id, name, email, max_access_level) VALUES
+				('persona-1',  '766', 'Persona One',  'persona@example.com', 'manager'),
+				('real-user',  '766', 'Real Person',  'real@example.com',    'book')
+		`)
+		if err2 != nil {
+			t.Fatalf("seed demo users: %v", err2)
+		}
+		personaIDs := map[string]bool{"persona-1": true}
+		mountUserRoutesDemo(demoEnv, personaIDs)
+		demoManager := demoEnv.ClientAs("manager-equipment")
+
+		resp, err := demoManager.Get("/api/v0/users")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("expected 200, got %d", resp.StatusCode)
+		}
+
+		var users []map[string]any
+		json.NewDecoder(resp.Body).Decode(&users)
+
+		// Every returned user must be in the persona ID set.
+		for _, u := range users {
+			id, _ := u["id"].(string)
+			if !personaIDs[id] {
+				t.Errorf("demo mode: non-persona user %q (%v) leaked into response", id, u["email"])
+			}
+		}
+		// The seeded persona must be present.
+		found := false
+		for _, u := range users {
+			if u["id"] == "persona-1" {
+				found = true
+			}
+		}
+		if !found {
+			t.Error("demo mode: persona should appear in response")
 		}
 	})
 

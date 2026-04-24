@@ -25,20 +25,21 @@ func (h *GroupSettingsHandler) Routes() chi.Router {
 }
 
 type groupSettingsResponse struct {
-	NotificationEmailFrom string `json:"notification_email_from"`
-	SmtpKeySet            bool   `json:"smtp_key_set"`
-	SmtpKeyMasked         string `json:"smtp_key_masked"`
-	GchatWebhookURL       string `json:"gchat_webhook_url"`
-	DefaultApprovalLevel  string `json:"default_approval_level"`
-	DefaultAccessUnknown  string `json:"default_access_unknown"`
-	DefaultAccessTroop    string `json:"default_access_troop"`
-	DefaultAccessRole     string `json:"default_access_role"`
-	ImageUploadRole       string `json:"image_upload_role"`
-	BookingRole           string `json:"booking_role"`
-	ArticleEditRole       string `json:"article_edit_role"`
-	IssueResolveRole      string `json:"issue_resolve_role"`
-	ManagerNotesRole      string `json:"manager_notes_role"`
-	DefaultLanguage       string `json:"default_language"`
+	NotificationEmailFrom string   `json:"notification_email_from"`
+	SmtpKeySet            bool     `json:"smtp_key_set"`
+	SmtpKeyMasked         string   `json:"smtp_key_masked"`
+	GchatWebhookURL       string   `json:"gchat_webhook_url"`
+	DefaultApprovalLevel  string   `json:"default_approval_level"`
+	DefaultAccessUnknown  string   `json:"default_access_unknown"`
+	DefaultAccessTroop    string   `json:"default_access_troop"`
+	DefaultAccessRole     string   `json:"default_access_role"`
+	ImageUploadRole       string   `json:"image_upload_role"`
+	BookingRole           string   `json:"booking_role"`
+	ArticleEditRole       string   `json:"article_edit_role"`
+	IssueResolveRole      string   `json:"issue_resolve_role"`
+	ManagerNotesRole      string   `json:"manager_notes_role"`
+	DefaultLanguage       string   `json:"default_language"`
+	NotificationChannels  []string `json:"notification_channels"`
 }
 
 func (h *GroupSettingsHandler) Get(w http.ResponseWriter, r *http.Request) {
@@ -58,6 +59,7 @@ func (h *GroupSettingsHandler) Get(w http.ResponseWriter, r *http.Request) {
 			IssueResolveRole:     "manager",
 			ManagerNotesRole:     "manager",
 			DefaultLanguage:      "sv",
+			NotificationChannels: activeNotificationChannels,
 		})
 		return
 	}
@@ -231,6 +233,7 @@ func settingsToResponse(s db.GroupSetting) groupSettingsResponse {
 		ManagerNotesRole:      s.ManagerNotesRole,
 		DefaultLanguage:       s.DefaultLanguage,
 		SmtpKeySet:            len(s.SmtpKeyEncrypted) > 0,
+		NotificationChannels:  activeNotificationChannels,
 	}
 	if len(s.SmtpKeyEncrypted) > 0 {
 		decrypted, err := crypto.Decrypt(s.SmtpKeyEncrypted)
