@@ -32,6 +32,17 @@ ON CONFLICT (group_id) DO UPDATE SET
     updated_at = now()
 RETURNING *;
 
+-- name: UpdateSmtpSettings :one
+UPDATE group_settings SET
+    notification_email_from = @notification_email_from,
+    smtp_host = @smtp_host,
+    smtp_port = @smtp_port,
+    smtp_tls = @smtp_tls,
+    smtp_user = @smtp_user,
+    updated_at = now()
+WHERE group_id = @group_id
+RETURNING *;
+
 -- name: CreateGroupSettingsDefaults :one
 INSERT INTO group_settings (group_id)
 VALUES (@group_id)

@@ -36,6 +36,88 @@ func waitForMessages(notifier *notifications.CapturingNotifier, n int) {
 	}
 }
 
+func mountTestEmailRoutes(env *testutil.TestEnv, notifier *notifications.CapturingNotifier, personaIDs map[string]bool) {
+	notifPrefs := &handler.NotificationPrefsHandler{Q: env.Queries}
+	me := &handler.MeHandler{
+		Q:          env.Queries,
+		Perms:      handler.NewPermissionCache(env.Queries),
+		NotifPrefs: notifPrefs,
+		Notifier:   notifier,
+		PersonaIDs: personaIDs,
+	}
+	env.V1(func(r chi.Router) {
+		r.Mount("/me", me.Routes())
+	})
+}
+
+func TestNotifications_TestEmail(t *testing.T) {
+	t.Run("real user receives test email", func(t *testing.T) {
+		env := testutil.SetupTestEnv(t)
+		notifier := &notifications.CapturingNotifier{}
+		mountTestEmailRoutes(env, notifier, nil)
+
+		leader := env.ClientAs("leader-yggdrasil")
+		resp, _ := leader.Post("/api/v0/me/test-email", nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("expected 200, got %d", resp.StatusCode)
+		}
+		var body map[string]any
+		json.NewDecoder(resp.Body).Decode(&body)
+		if body["sent"] != true {
+			t.Errorf("expected sent:true, got %v", body)
+		}
+		msgs := notifier.Messages()
+		if len(msgs) == 0 {
+			t.Fatal("expected one captured message, got none")
+		}
+		if msgs[0].To == "" {
+			t.Error("expected To to be set")
+		}
+	})
+
+	t.Run("persona is skipped", func(t *testing.T) {
+		env := testutil.SetupTestEnv(t)
+		notifier := &notifications.CapturingNotifier{}
+		// Mark leader-yggdrasil's member_id as a persona.
+		personaIDs := map[string]bool{"3000005": true}
+		mountTestEmailRoutes(env, notifier, personaIDs)
+
+		leader := env.ClientAs("leader-yggdrasil")
+		resp, _ := leader.Post("/api/v0/me/test-email", nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("expected 200, got %d", resp.StatusCode)
+		}
+		var body map[string]any
+		json.NewDecoder(resp.Body).Decode(&body)
+		if body["skipped"] != true {
+			t.Errorf("expected skipped:true, got %v", body)
+		}
+		if len(notifier.Messages()) != 0 {
+			t.Error("expected no messages sent for persona")
+		}
+	})
+
+	t.Run("demo mode: notifier still sends via injected notifier", func(t *testing.T) {
+		env := testutil.SetupTestEnv(t)
+		// Simulate demo mode: event handlers would use NoopNotifier, but
+		// MeHandler.Notifier is a real (capturing) notifier.
+		notifier := &notifications.CapturingNotifier{}
+		mountTestEmailRoutes(env, notifier, nil) // no personaIDs → not a persona
+
+		leader := env.ClientAs("leader-yggdrasil")
+		resp, _ := leader.Post("/api/v0/me/test-email", nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("expected 200, got %d", resp.StatusCode)
+		}
+		if len(notifier.Messages()) == 0 {
+			t.Fatal("expected test email to be sent even in demo mode")
+		}
+	})
+}
+
 func TestNotifications_EventTriggered(t *testing.T) {
 	env := testutil.SetupTestEnv(t)
 	notifier := &notifications.CapturingNotifier{}

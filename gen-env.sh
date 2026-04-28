@@ -62,6 +62,7 @@ case "$MODE" in
     ORIGIN="http://localhost:3000"
     AUTH_KEYCLOAK_SECRET=""
     POSTGRES_PASSWORD="utrustning"
+    SETTINGS_ENCRYPTION_KEY=""
     API_IMAGE="ms-utrustning-api"
     WEB_IMAGE="ms-utrustning-web"
     ;;
@@ -74,6 +75,7 @@ case "$MODE" in
     ORIGIN="CHANGEME_https://your-demo-domain.example.com"
     AUTH_KEYCLOAK_SECRET="CHANGEME_keycloak-client-secret"
     POSTGRES_PASSWORD=$(random_password)
+    SETTINGS_ENCRYPTION_KEY=$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | xxd -p)
     API_IMAGE="ghcr.io/malarscouterna/ms-utrustning-api:latest"
     WEB_IMAGE="ghcr.io/malarscouterna/ms-utrustning-web:latest"
     ;;
@@ -86,6 +88,7 @@ case "$MODE" in
     ORIGIN="CHANGEME_https://your-domain.example.com"
     AUTH_KEYCLOAK_SECRET="CHANGEME_keycloak-client-secret"
     POSTGRES_PASSWORD=$(random_password)
+    SETTINGS_ENCRYPTION_KEY=$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | xxd -p)
     API_IMAGE="ghcr.io/malarscouterna/ms-utrustning-api:latest"
     WEB_IMAGE="ghcr.io/malarscouterna/ms-utrustning-web:latest"
     ;;
@@ -158,6 +161,25 @@ AUTH_KEYCLOAK_ISSUER=https://dev.id.scouterna.se/realms/scoutnet
 API_IMAGE=$API_IMAGE
 WEB_IMAGE=$WEB_IMAGE
 EOF
+
+# Append encryption key and SMTP config for demo/prod
+if [[ "$MODE" != "dev" ]]; then
+  cat >> .env << EOF
+
+# ── Encryption ────────────────────────────────────────────
+# 64-char hex key (256 bits). Auto-generated — do not lose.
+SETTINGS_ENCRYPTION_KEY=$SETTINGS_ENCRYPTION_KEY
+
+# ── System-wide SMTP (fallback when group has no own config) ──
+# Used for all notification emails. Per-group SMTP can override this.
+SMTP_DEFAULT_FROM=CHANGEME_noreply@example.com
+SMTP_DEFAULT_HOST=CHANGEME_smtp.example.com
+SMTP_DEFAULT_PORT=587
+SMTP_DEFAULT_TLS=starttls
+SMTP_DEFAULT_USER=CHANGEME_apikey
+SMTP_DEFAULT_KEY=CHANGEME_your-smtp-api-key
+EOF
+fi
 
 echo "Generated .env for: $MODE$([ "$LOCAL" = true ] && echo " (local)")"
 

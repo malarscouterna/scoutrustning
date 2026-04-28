@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -10,6 +11,7 @@ import (
 	"github.com/malarscouterna/ms-utrustning/api/internal/auth"
 	"github.com/malarscouterna/ms-utrustning/api/internal/db"
 	"github.com/malarscouterna/ms-utrustning/api/internal/i18n"
+	"github.com/malarscouterna/ms-utrustning/api/internal/notifications"
 )
 
 type MeHandler struct {
@@ -17,12 +19,18 @@ type MeHandler struct {
 	Perms *PermissionCache
 	// NotifPrefs handles /me/notification-prefs sub-routes.
 	NotifPrefs *NotificationPrefsHandler
+	// Notifier is used exclusively by the test-email endpoint. Always SMTPNotifier
+	// in production (even in demo mode), so demo visitors can verify SMTP works.
+	Notifier   notifications.Notifier
+	// PersonaIDs is non-nil in demo mode. Persona users are skipped by test-email.
+	PersonaIDs map[string]bool
 }
 
 func (h *MeHandler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Get("/", h.Get)
 	r.Put("/language", h.PutLanguage)
+	r.Post("/test-email", h.PostTestEmail)
 	r.Mount("/notification-prefs", h.NotifPrefs.MeRoutes())
 	return r
 }
@@ -67,6 +75,39 @@ func (h *MeHandler) Get(w http.ResponseWriter, r *http.Request) {
 			"manager_notes": perms.ManagerNotes,
 		},
 	})
+}
+
+func (h *MeHandler) PostTestEmail(w http.ResponseWriter, r *http.Request) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		WriteError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if h.PersonaIDs != nil && h.PersonaIDs[claims.MemberID] {
+		WriteJSON(w, http.StatusOK, map[string]any{"skipped": true})
+		return
+	}
+	if h.Notifier == nil {
+		WriteError(w, http.StatusServiceUnavailable, "no smtp config")
+		return
+	}
+	lang := "sv"
+	if user, err := h.Q.GetUser(r.Context(), db.GetUserParams{ID: claims.MemberID, GroupID: claims.GroupID}); err == nil {
+		if user.Language.Valid && i18n.Supported(user.Language.String) {
+			lang = user.Language.String
+		}
+	}
+	msg := notifications.Message{
+		GroupID: claims.GroupID,
+		To:      claims.Email,
+		Subject: i18n.T(lang, "email_subject_test_email"),
+		Body:    fmt.Sprintf(`<!DOCTYPE html><html><body><p>%s</p></body></html>`, i18n.T(lang, "notif_test_email")),
+	}
+	if err := h.Notifier.Send(r.Context(), msg); err != nil {
+		WriteError(w, http.StatusServiceUnavailable, err.Error())
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"sent": true})
 }
 
 func (h *MeHandler) PutLanguage(w http.ResponseWriter, r *http.Request) {

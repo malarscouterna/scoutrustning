@@ -41,8 +41,8 @@ var AllEvents = []EventKey{
 	EventIssueCommented,
 }
 
-// systemDefaults returns the hardcoded default for (eventKey, channel, isManager).
-func systemDefaults(isManager bool) map[EventKey]map[string]bool {
+// SystemDefaults returns the hardcoded default for (eventKey, channel, isManager).
+func SystemDefaults(isManager bool) map[EventKey]map[string]bool {
 	d := map[EventKey]map[string]bool{
 		EventBookingNeedsApproval:       {"email": isManager},
 		EventBookingSubmittedNoApproval: {"email": false},
@@ -70,9 +70,12 @@ const (
 )
 
 // ChannelPref is the effective value for one (event, channel) pair.
+// DefaultEnabled is the group/system default regardless of any user override —
+// used by the UI to show a "(standard)" hint when the user's value matches the default.
 type ChannelPref struct {
-	Enabled bool       `json:"enabled"`
-	Source  PrefSource `json:"source"`
+	Enabled        bool       `json:"enabled"`
+	Source         PrefSource `json:"source"`
+	DefaultEnabled bool       `json:"default_enabled"`
 }
 
 // ResolvedPrefs maps event key → channel → effective pref.
@@ -81,7 +84,7 @@ type ResolvedPrefs map[EventKey]map[string]ChannelPref
 // ResolvePrefs returns the merged effective preferences for a user across all
 // known events and the given channels. Resolution order: user → group → system.
 func ResolvePrefs(ctx context.Context, q *db.Queries, userID, groupID string, channels []string, isManager bool) (ResolvedPrefs, error) {
-	sysDefaults := systemDefaults(isManager)
+	sysDefaults := SystemDefaults(isManager)
 
 	// Load user prefs (may be empty if never set).
 	userPrefsRaw, _ := q.GetUserNotificationPrefs(ctx, db.GetUserNotificationPrefsParams{
@@ -99,16 +102,18 @@ func ResolvePrefs(ctx context.Context, q *db.Queries, userID, groupID string, ch
 	for _, event := range AllEvents {
 		result[event] = make(map[string]ChannelPref, len(channels))
 		for _, ch := range channels {
+			// Compute the non-user default (group → system).
+			defaultEnabled := sysDefaults[event][ch]
+			if gp, ok := groupDefaults[event][ch]; ok {
+				defaultEnabled = gp
+			}
+
 			if up, ok := userPrefs[event][ch]; ok {
-				result[event][ch] = ChannelPref{Enabled: up, Source: SourceUser}
+				result[event][ch] = ChannelPref{Enabled: up, Source: SourceUser, DefaultEnabled: defaultEnabled}
 			} else if gp, ok := groupDefaults[event][ch]; ok {
-				result[event][ch] = ChannelPref{Enabled: gp, Source: SourceGroupDefault}
+				result[event][ch] = ChannelPref{Enabled: gp, Source: SourceGroupDefault, DefaultEnabled: defaultEnabled}
 			} else {
-				sys := false
-				if sd, ok := sysDefaults[event]; ok {
-					sys = sd[ch]
-				}
-				result[event][ch] = ChannelPref{Enabled: sys, Source: SourceSystemDefault}
+				result[event][ch] = ChannelPref{Enabled: defaultEnabled, Source: SourceSystemDefault, DefaultEnabled: defaultEnabled}
 			}
 		}
 	}
@@ -138,7 +143,7 @@ func IsEnabled(ctx context.Context, q *db.Queries, userID, groupID, event, chann
 		}
 	}
 
-	sd := systemDefaults(isManager)
+	sd := SystemDefaults(isManager)
 	if ev, ok := sd[event]; ok {
 		return ev[channel]
 	}

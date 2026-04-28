@@ -46,6 +46,8 @@ func (h *NotificationPrefsHandler) GetMe(w http.ResponseWriter, r *http.Request)
 }
 
 // PUT /me/notification-prefs — partial update; only keys present are changed.
+// Redundant overrides (value matches group/system default) are pruned so that
+// source correctly reverts to "group_default" or "system_default".
 func (h *NotificationPrefsHandler) PutMe(w http.ResponseWriter, r *http.Request) {
 	claims, _ := auth.ClaimsFromContext(r.Context())
 
@@ -98,19 +100,40 @@ func (h *NotificationPrefsHandler) DeleteMe(w http.ResponseWriter, r *http.Reque
 }
 
 // GET /group-settings/notification-defaults — manager only.
+// Returns effective defaults: system defaults merged with group overrides.
+// Managers see what group members will actually receive by default.
 func (h *NotificationPrefsHandler) GetGroupDefaults(w http.ResponseWriter, r *http.Request) {
 	claims, _ := auth.ClaimsFromContext(r.Context())
-	raw, err := h.Q.GetGroupNotificationDefaults(r.Context(), claims.GroupID)
-	if err != nil {
-		WriteJSON(w, http.StatusOK, map[string]any{"defaults": map[string]any{}})
-		return
+
+	var groupOverrides map[string]map[string]bool
+	raw, _ := h.Q.GetGroupNotificationDefaults(r.Context(), claims.GroupID)
+	json.Unmarshal(raw, &groupOverrides) //nolint:errcheck
+
+	// Merge: start from system defaults (manager=true since this is a manager view),
+	// then overlay any group overrides.
+	effective := map[string]map[string]bool{}
+	for event, channels := range notifications.SystemDefaults(true) {
+		effective[event] = make(map[string]bool, len(channels))
+		for ch, v := range channels {
+			effective[event][ch] = v
+		}
 	}
-	var defaults map[string]map[string]bool
-	json.Unmarshal(raw, &defaults) //nolint:errcheck
-	if defaults == nil {
-		defaults = map[string]map[string]bool{}
+	for event, channels := range groupOverrides {
+		if _, ok := effective[event]; !ok {
+			effective[event] = map[string]bool{}
+		}
+		for ch, v := range channels {
+			effective[event][ch] = v
+		}
 	}
-	WriteJSON(w, http.StatusOK, map[string]any{"defaults": defaults})
+
+	// Also return system defaults so the frontend can show a "(standard)" hint
+	// when a group override matches the system default.
+	sysDefaults := notifications.SystemDefaults(true)
+	WriteJSON(w, http.StatusOK, map[string]any{
+		"defaults":        effective,
+		"system_defaults": sysDefaults,
+	})
 }
 
 // PUT /group-settings/notification-defaults — manager only, full replacement.
