@@ -122,8 +122,14 @@ export interface AvailabilityGroup {
 
 export interface GroupSettings {
 	notification_email_from: string;
+	smtp_host: string;
+	smtp_port: number;
+	smtp_tls: string;
+	smtp_user: string;
 	smtp_key_set: boolean;
 	smtp_key_masked: string;
+	system_smtp_configured: boolean;
+	system_smtp_from: string;
 	gchat_webhook_url: string;
 	default_approval_level: string;
 	default_access_unknown: string;
@@ -141,6 +147,7 @@ export interface GroupSettings {
 export interface ChannelPref {
 	enabled: boolean;
 	source: 'user' | 'group_default' | 'system_default';
+	default_enabled: boolean;
 }
 
 export type NotificationPrefs = Record<string, Record<string, ChannelPref>>;
@@ -361,7 +368,7 @@ export function createApiClient(opts: FetchOptions = {}) {
 
 		// Group settings
 		getGroupSettings: () => request<GroupSettings>('/group-settings', opts),
-		updateGroupSettings: (data: { notification_email_from?: string; smtp_key?: string | null; gchat_webhook_url?: string; default_approval_level?: string; default_language?: string }) =>
+		updateGroupSettings: (data: { notification_email_from?: string; smtp_host?: string; smtp_port?: number; smtp_tls?: string; smtp_user?: string; smtp_key?: string | null; gchat_webhook_url?: string; default_approval_level?: string; default_language?: string }) =>
 			requestMut<GroupSettings>('/group-settings', 'PUT', data, opts),
 		updateLanguage: (language: string | null) =>
 			requestMut<void>('/me/language', 'PUT', { language }, opts),
@@ -371,6 +378,12 @@ export function createApiClient(opts: FetchOptions = {}) {
 			requestMut<void>('/me/notification-prefs', 'PUT', data, opts),
 		resetNotificationPrefs: () =>
 			requestMut<void>('/me/notification-prefs', 'DELETE', undefined, opts),
+		sendTestEmail: () =>
+			requestMut<{ sent?: boolean; skipped?: boolean }>('/me/test-email', 'POST', undefined, opts),
+		getGroupNotificationDefaults: () =>
+			request<{ defaults: Record<string, Record<string, boolean>>; system_defaults: Record<string, Record<string, boolean>> }>('/group-settings/notification-defaults', opts),
+		updateGroupNotificationDefaults: (data: Record<string, Record<string, boolean>>) =>
+			requestMut<void>('/group-settings/notification-defaults', 'PUT', data, opts),
 
 		// Article CRUD
 		getArticle: (id: string) => request<Article>(`/articles/${id}`, opts),

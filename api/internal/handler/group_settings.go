@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"os"
 
 	"github.com/go-chi/chi/v5"
 
@@ -26,8 +27,14 @@ func (h *GroupSettingsHandler) Routes() chi.Router {
 
 type groupSettingsResponse struct {
 	NotificationEmailFrom string   `json:"notification_email_from"`
+	SmtpHost              string   `json:"smtp_host"`
+	SmtpPort              int32    `json:"smtp_port"`
+	SmtpTls               string   `json:"smtp_tls"`
+	SmtpUser              string   `json:"smtp_user"`
 	SmtpKeySet            bool     `json:"smtp_key_set"`
 	SmtpKeyMasked         string   `json:"smtp_key_masked"`
+	SystemSmtpConfigured  bool     `json:"system_smtp_configured"`
+	SystemSmtpFrom        string   `json:"system_smtp_from"`
 	GchatWebhookURL       string   `json:"gchat_webhook_url"`
 	DefaultApprovalLevel  string   `json:"default_approval_level"`
 	DefaultAccessUnknown  string   `json:"default_access_unknown"`
@@ -64,21 +71,15 @@ func (h *GroupSettingsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := settingsToResponse(settings)
-
-	if len(settings.SmtpKeyEncrypted) > 0 {
-		resp.SmtpKeySet = true
-		decrypted, err := crypto.Decrypt(settings.SmtpKeyEncrypted)
-		if err == nil {
-			resp.SmtpKeyMasked = crypto.MaskKey(string(decrypted))
-		}
-	}
-
-	WriteJSON(w, http.StatusOK, resp)
+	WriteJSON(w, http.StatusOK, settingsToResponse(settings))
 }
 
 type groupSettingsRequest struct {
 	NotificationEmailFrom string  `json:"notification_email_from"`
+	SmtpHost              string  `json:"smtp_host"`
+	SmtpPort              int32   `json:"smtp_port"`
+	SmtpTls               string  `json:"smtp_tls"`
+	SmtpUser              string  `json:"smtp_user"`
 	SmtpKey               *string `json:"smtp_key"`
 	GchatWebhookURL       string  `json:"gchat_webhook_url"`
 	DefaultApprovalLevel  string  `json:"default_approval_level"`
@@ -184,7 +185,7 @@ func (h *GroupSettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	settings, err := h.Q.UpsertGroupSettings(r.Context(), db.UpsertGroupSettingsParams{
+	if _, err := h.Q.UpsertGroupSettings(r.Context(), db.UpsertGroupSettingsParams{
 		GroupID:               claims.GroupID,
 		NotificationEmailFrom: req.NotificationEmailFrom,
 		SmtpKeyEncrypted:      smtpKeyEncrypted,
@@ -199,28 +200,47 @@ func (h *GroupSettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		IssueResolveRole:      req.IssueResolveRole,
 		ManagerNotesRole:      req.ManagerNotesRole,
 		DefaultLanguage:       defaultLanguage,
+	}); err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to save settings")
+		return
+	}
+
+	smtpPort := req.SmtpPort
+	if smtpPort == 0 {
+		smtpPort = 587
+	}
+	smtpTls := req.SmtpTls
+	if smtpTls == "" {
+		smtpTls = "starttls"
+	}
+	settings, err := h.Q.UpdateSmtpSettings(r.Context(), db.UpdateSmtpSettingsParams{
+		GroupID:               claims.GroupID,
+		NotificationEmailFrom: req.NotificationEmailFrom,
+		SmtpHost:              req.SmtpHost,
+		SmtpPort:              smtpPort,
+		SmtpTls:               smtpTls,
+		SmtpUser:              req.SmtpUser,
 	})
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, "failed to save settings")
+		WriteError(w, http.StatusInternalServerError, "failed to save smtp settings")
 		return
 	}
 
 	h.Perms.Invalidate(claims.GroupID)
 
-	resp := settingsToResponse(settings)
-	if len(settings.SmtpKeyEncrypted) > 0 {
-		decrypted, err := crypto.Decrypt(settings.SmtpKeyEncrypted)
-		if err == nil {
-			resp.SmtpKeyMasked = crypto.MaskKey(string(decrypted))
-		}
-	}
-
-	WriteJSON(w, http.StatusOK, resp)
+	WriteJSON(w, http.StatusOK, settingsToResponse(settings))
 }
 
 func settingsToResponse(s db.GroupSetting) groupSettingsResponse {
 	resp := groupSettingsResponse{
 		NotificationEmailFrom: s.NotificationEmailFrom,
+		SmtpHost:              s.SmtpHost,
+		SmtpPort:              s.SmtpPort,
+		SmtpTls:               s.SmtpTls,
+		SmtpUser:              s.SmtpUser,
+		SmtpKeySet:            len(s.SmtpKeyEncrypted) > 0,
+		SystemSmtpConfigured:  os.Getenv("SMTP_DEFAULT_HOST") != "",
+		SystemSmtpFrom:        os.Getenv("SMTP_DEFAULT_FROM"),
 		GchatWebhookURL:       s.GchatWebhookUrl,
 		DefaultApprovalLevel:  s.DefaultApprovalLevel,
 		DefaultAccessUnknown:  s.DefaultAccessUnknown,
@@ -232,7 +252,6 @@ func settingsToResponse(s db.GroupSetting) groupSettingsResponse {
 		IssueResolveRole:      s.IssueResolveRole,
 		ManagerNotesRole:      s.ManagerNotesRole,
 		DefaultLanguage:       s.DefaultLanguage,
-		SmtpKeySet:            len(s.SmtpKeyEncrypted) > 0,
 		NotificationChannels:  activeNotificationChannels,
 	}
 	if len(s.SmtpKeyEncrypted) > 0 {

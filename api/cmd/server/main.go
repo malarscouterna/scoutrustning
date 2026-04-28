@@ -82,20 +82,30 @@ func main() {
 
 		permCache := handler.NewPermissionCache(queries)
 
+		personaIDs := buildPersonaIDs(demoMode, getenv("DEV_PERSONAS_PATH", "dev-personas.json"))
+		smtpNotifier := &notifications.SMTPNotifier{Q: queries}
+
+		// In demo mode, event sends from handlers are suppressed via NoopNotifier.
+		// The test-email endpoint always uses smtpNotifier directly so demo visitors
+		// can verify SMTP config is working.
+		var eventNotifier notifications.Notifier = smtpNotifier
+		if demoMode {
+			eventNotifier = notifications.NoopNotifier{}
+		}
+
 		notifPrefsHandler := &handler.NotificationPrefsHandler{Q: queries}
-		meHandler := &handler.MeHandler{Q: queries, Perms: permCache, NotifPrefs: notifPrefsHandler}
+		meHandler := &handler.MeHandler{Q: queries, Perms: permCache, NotifPrefs: notifPrefsHandler, Notifier: smtpNotifier, PersonaIDs: personaIDs}
 
 		articles := &handler.ArticleHandler{Q: queries, Perms: permCache}
 		locations := &handler.LocationHandler{Q: queries}
 		categories := &handler.CategoryHandler{Q: queries}
-		notifier := notifications.Notifier(&notifications.SMTPNotifier{Q: queries})
 
-		bookings := &handler.BookingHandler{Q: queries, Notifier: notifier}
+		bookings := &handler.BookingHandler{Q: queries, Notifier: eventNotifier}
 		teams := &handler.TeamHandler{Q: queries}
 		groupSettings := &handler.GroupSettingsHandler{Q: queries, Perms: permCache}
-		issueHandler := &handler.IssueHandler{Q: queries, Perms: permCache, Notifier: notifier}
+		issueHandler := &handler.IssueHandler{Q: queries, Perms: permCache, Notifier: eventNotifier}
 		imageHandler := &images.Handler{Q: queries, ImageDir: imageDir}
-		userHandler := &handler.UserHandler{Q: queries, DemoMode: demoMode, PersonaIDs: buildPersonaIDs(demoMode, getenv("DEV_PERSONAS_PATH", "dev-personas.json"))}
+		userHandler := &handler.UserHandler{Q: queries, DemoMode: demoMode, PersonaIDs: personaIDs}
 
 		r.Mount("/me", meHandler.Routes())
 		r.Mount("/articles", articles.Routes())

@@ -143,6 +143,63 @@ func (q *Queries) SetGroupNotificationDefaults(ctx context.Context, arg SetGroup
 	return err
 }
 
+const updateSmtpSettings = `-- name: UpdateSmtpSettings :one
+UPDATE group_settings SET
+    notification_email_from = $1,
+    smtp_host = $2,
+    smtp_port = $3,
+    smtp_tls = $4,
+    smtp_user = $5,
+    updated_at = now()
+WHERE group_id = $6
+RETURNING group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults
+`
+
+type UpdateSmtpSettingsParams struct {
+	NotificationEmailFrom string `json:"notification_email_from"`
+	SmtpHost              string `json:"smtp_host"`
+	SmtpPort              int32  `json:"smtp_port"`
+	SmtpTls               string `json:"smtp_tls"`
+	SmtpUser              string `json:"smtp_user"`
+	GroupID               string `json:"group_id"`
+}
+
+func (q *Queries) UpdateSmtpSettings(ctx context.Context, arg UpdateSmtpSettingsParams) (GroupSetting, error) {
+	row := q.db.QueryRow(ctx, updateSmtpSettings,
+		arg.NotificationEmailFrom,
+		arg.SmtpHost,
+		arg.SmtpPort,
+		arg.SmtpTls,
+		arg.SmtpUser,
+		arg.GroupID,
+	)
+	var i GroupSetting
+	err := row.Scan(
+		&i.GroupID,
+		&i.NotificationEmailFrom,
+		&i.SmtpKeyEncrypted,
+		&i.GchatWebhookUrl,
+		&i.DefaultApprovalLevel,
+		&i.DefaultAccessUnknown,
+		&i.DefaultAccessTroop,
+		&i.DefaultAccessRole,
+		&i.ImageUploadRole,
+		&i.BookingRole,
+		&i.ArticleEditRole,
+		&i.IssueResolveRole,
+		&i.ManagerNotesRole,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DefaultLanguage,
+		&i.SmtpHost,
+		&i.SmtpPort,
+		&i.SmtpTls,
+		&i.SmtpUser,
+		&i.NotificationDefaults,
+	)
+	return i, err
+}
+
 const upsertGroupSettings = `-- name: UpsertGroupSettings :one
 INSERT INTO group_settings (
     group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url,

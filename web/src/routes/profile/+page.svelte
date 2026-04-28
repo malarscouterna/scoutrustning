@@ -198,8 +198,13 @@
 		categories = data.categories;
 		groupSettings = data.groupSettings;
 		if (data.groupSettings) {
-			settingsForm.notification_email_from = data.groupSettings.notification_email_from;
-			settingsForm.gchat_webhook_url = data.groupSettings.gchat_webhook_url;
+			const gs = data.groupSettings;
+			settingsForm.notification_email_from = gs.notification_email_from;
+			settingsForm.smtp_host = gs.smtp_host ?? '';
+			settingsForm.smtp_port = gs.smtp_port ?? 587;
+			settingsForm.smtp_tls = gs.smtp_tls ?? 'starttls';
+			settingsForm.smtp_user = gs.smtp_user ?? '';
+			useGroupSmtp = !!(gs.smtp_host);
 		}
 	});
 
@@ -210,9 +215,13 @@
 	let importError = $state('');
 
 	// Group notification settings
+	let useGroupSmtp = $state(false);
 	let settingsForm = $state({
 		notification_email_from: '',
-		gchat_webhook_url: '',
+		smtp_host: '',
+		smtp_port: 587,
+		smtp_tls: 'starttls',
+		smtp_user: '',
 		smtp_key: ''
 	});
 
@@ -329,12 +338,13 @@
 		return notifPrefs?.[key]?.[ch]?.enabled ?? false;
 	}
 	function notifSource(key: string): string | null {
-		// All channels in a row share the same source — use first channel
+		// Show "(standard)" when the effective value matches the non-user default,
+		// regardless of whether source is 'user', 'group_default', or 'system_default'.
 		const ch = notifChannels[0];
 		if (!ch || !notifPrefs?.[key]?.[ch]) return null;
-		const s = notifPrefs[key][ch].source;
-		if (s === 'user') return null;
-		if (s === 'group_default') return m.page_profile_notifs_source_group();
+		const pref = notifPrefs[key][ch];
+		if (pref.enabled !== pref.default_enabled) return null;
+		if (pref.source === 'group_default') return m.page_profile_notifs_source_group();
 		return m.page_profile_notifs_source_system();
 	}
 
@@ -355,6 +365,27 @@
 			notifPrefs = result.prefs;
 		} catch { /* ignore */ } finally {
 			notifRestoring = false;
+		}
+	}
+
+	let testEmailSending = $state(false);
+	let testEmailMessage = $state('');
+	let testEmailError = $state(false);
+	async function sendTestEmail() {
+		testEmailSending = true;
+		testEmailMessage = '';
+		testEmailError = false;
+		try {
+			const result = await api.sendTestEmail();
+			testEmailMessage = result.skipped
+				? m.page_profile_notifs_send_test_skipped()
+				: m.page_profile_notifs_send_test_sent();
+		} catch {
+			testEmailMessage = m.page_profile_notifs_send_test_error();
+			testEmailError = true;
+		} finally {
+			testEmailSending = false;
+			setTimeout(() => testEmailMessage = '', 5000);
 		}
 	}
 
@@ -400,17 +431,55 @@
 		try {
 			const payload: Record<string, any> = {
 				notification_email_from: settingsForm.notification_email_from,
-				gchat_webhook_url: settingsForm.gchat_webhook_url,
-				default_approval_level: 'none'
+				smtp_host: useGroupSmtp ? settingsForm.smtp_host : '',
+				smtp_port: useGroupSmtp ? settingsForm.smtp_port : 587,
+				smtp_tls: useGroupSmtp ? settingsForm.smtp_tls : 'starttls',
+				smtp_user: useGroupSmtp ? settingsForm.smtp_user : '',
 			};
-			if (settingsForm.smtp_key) {
+			if (useGroupSmtp && settingsForm.smtp_key) {
 				payload.smtp_key = settingsForm.smtp_key;
+			} else if (!useGroupSmtp) {
+				payload.smtp_key = '';  // clear key when disabling group SMTP
 			}
 			groupSettings = await api.updateGroupSettings(payload);
 			settingsForm.smtp_key = '';
 			flash(v => settingsMessage = v, m.page_profile_settings_saved());
 		} catch (e: any) {
 			settingsError = translateError(e);
+		}
+	}
+
+	// --- Group notification defaults ---
+	let groupNotifDefaults = $state<Record<string, Record<string, boolean>>>({});
+	let groupSystemDefaults = $state<Record<string, Record<string, boolean>>>({});
+	let groupNotifDefaultsMessage = $state('');
+	let groupNotifDefaultsError = $state(false);
+
+	async function loadGroupNotifDefaults() {
+		try {
+			const result = await api.getGroupNotificationDefaults();
+			groupNotifDefaults = result.defaults ?? {};
+			groupSystemDefaults = result.system_defaults ?? {};
+		} catch {}
+	}
+
+	$effect(() => {
+		if (mgr) loadGroupNotifDefaults();
+	});
+
+	async function toggleGroupDefault(key: string, ch: string, value: boolean) {
+		const updated = {
+			...groupNotifDefaults,
+			[key]: { ...(groupNotifDefaults[key] ?? {}), [ch]: value }
+		};
+		try {
+			await api.updateGroupNotificationDefaults(updated);
+			groupNotifDefaults = updated;
+			groupNotifDefaultsError = false;
+			flash(v => groupNotifDefaultsMessage = v, m.common_saved());
+		} catch (e: any) {
+			groupNotifDefaultsError = true;
+			groupNotifDefaultsMessage = m.page_profile_error_prefix() + translateError(e);
 		}
 	}
 </script>
@@ -922,7 +991,7 @@
 			</div>
 		</section>
 
-		<!-- Notifications -->
+		<!-- SMTP settings -->
 		<section class="mb-6 border rounded-lg p-4">
 			<h3 class="font-medium mb-2">{m.page_profile_notifications_heading()}</h3>
 			{#if settingsMessage}
@@ -934,8 +1003,39 @@
 			<div class="space-y-3">
 				<label class="block">
 					<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_email_from()}</span>
-					<input type="email" bind:value={settingsForm.notification_email_from} placeholder="utrustning@example.com" class="border rounded px-2 py-1 text-sm w-full" />
+					<input type="email" bind:value={settingsForm.notification_email_from} placeholder="utrustning@example.com" class="border rounded px-2 py-1 text-sm w-full max-w-sm" />
 				</label>
+				<label class="flex items-center gap-2 text-sm cursor-pointer">
+					<input type="checkbox" bind:checked={useGroupSmtp} class="h-4 w-4 accent-blue-700" />
+					{m.page_profile_smtp_use_group()}
+				</label>
+				{#if !useGroupSmtp && groupSettings?.system_smtp_configured}
+					<p class="text-xs text-neutral-500">
+						{m.page_profile_smtp_system_sender()}: <span class="font-mono">{groupSettings.system_smtp_from}</span>
+					</p>
+				{/if}
+				{#if useGroupSmtp}
+				<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+					<label class="block">
+						<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_smtp_host()}</span>
+						<input type="text" bind:value={settingsForm.smtp_host} placeholder="smtp.example.com" class="border rounded px-2 py-1 text-sm w-full" />
+					</label>
+					<label class="block">
+						<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_smtp_user()}</span>
+						<input type="text" bind:value={settingsForm.smtp_user} placeholder="apikey" class="border rounded px-2 py-1 text-sm w-full" />
+					</label>
+					<label class="block">
+						<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_smtp_port()}</span>
+						<input type="number" bind:value={settingsForm.smtp_port} min="1" max="65535" class="border rounded px-2 py-1 text-sm w-full" />
+					</label>
+					<label class="block">
+						<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_smtp_tls()}</span>
+						<select bind:value={settingsForm.smtp_tls} class="border rounded px-2 py-1 text-sm w-full">
+							<option value="starttls">{m.page_profile_smtp_tls_starttls()}</option>
+							<option value="tls">{m.page_profile_smtp_tls_tls()}</option>
+						</select>
+					</label>
+				</div>
 				<label class="block">
 					<span class="text-sm text-neutral-600 block mb-1">
 						{m.page_profile_smtp_key()}
@@ -943,14 +1043,89 @@
 							<span class="text-neutral-400 ml-1">({groupSettings.smtp_key_masked})</span>
 						{/if}
 					</span>
-					<input type="password" bind:value={settingsForm.smtp_key} placeholder={groupSettings?.smtp_key_set ? m.page_profile_leave_blank() : m.page_profile_smtp_enter()} class="border rounded px-2 py-1 text-sm w-full" />
+					<input type="password" bind:value={settingsForm.smtp_key} placeholder={groupSettings?.smtp_key_set ? m.page_profile_leave_blank() : m.page_profile_smtp_enter()} class="border rounded px-2 py-1 text-sm w-full max-w-sm" />
 				</label>
-				<label class="block">
-					<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_webhook_url()}</span>
-					<input type="url" bind:value={settingsForm.gchat_webhook_url} placeholder="https://chat.googleapis.com/v1/spaces/..." class="border rounded px-2 py-1 text-sm w-full" />
-				</label>
+				{/if}
 				<button onclick={saveSettings} class="text-sm bg-blue-700 text-white px-4 py-2 rounded">{m.btn_save()}</button>
+				<div class="pt-2 border-t flex flex-wrap items-center gap-3">
+					<button onclick={sendTestEmail} disabled={testEmailSending} class="text-sm text-blue-700 border border-blue-200 bg-blue-50 rounded px-3 py-1 hover:bg-blue-100 disabled:opacity-50">
+						{testEmailSending ? m.page_profile_notifs_send_test_sending() : m.page_profile_notifs_send_test()}
+					</button>
+					<span class="text-xs text-neutral-400">{user.email}</span>
+					{#if testEmailMessage}
+						<span class="text-sm {testEmailError ? 'text-red-600' : 'text-green-600'}">{testEmailMessage}</span>
+					{/if}
+				</div>
 			</div>
+		</section>
+
+		<!-- Group notification defaults -->
+		<section class="mb-6 border rounded-lg p-4">
+			<h3 class="font-medium mb-1">{m.page_profile_notif_defaults_heading()}</h3>
+			<p class="text-xs text-neutral-500 mb-3">{m.page_profile_notif_defaults_help()}</p>
+			{#if groupNotifDefaultsMessage}
+				<p class="text-sm mb-2 {groupNotifDefaultsError ? 'text-red-600' : 'text-green-600'}">{groupNotifDefaultsMessage}</p>
+			{/if}
+			<table class="w-full text-sm border-collapse">
+				<thead>
+					<tr>
+						<th class="text-left py-1 pr-3 font-normal text-neutral-500 w-full"></th>
+						{#each notifChannels as ch}
+							<th class="text-center py-1 px-3 font-normal text-neutral-500 whitespace-nowrap">
+								{ch === 'email' ? m.page_profile_notifs_channel_email() : ch}
+							</th>
+						{/each}
+					</tr>
+				</thead>
+				<tbody>
+					<tr>
+						<td colspan={notifChannels.length + 1} class="py-1.5 text-xs font-semibold text-neutral-500 uppercase tracking-wide">{m.page_profile_notifs_bookings_group()}</td>
+					</tr>
+					{#each bookingEvents as row}
+					<tr class="border-t border-neutral-100">
+						<td class="py-1.5 pr-3">
+							<span>{row.label()}</span>
+							{#if notifChannels[0] && groupNotifDefaults[row.key]?.[notifChannels[0]] === groupSystemDefaults[row.key]?.[notifChannels[0]]}
+								<span class="text-xs text-neutral-400 ml-1">{m.page_profile_notifs_source_system()}</span>
+							{/if}
+						</td>
+						{#each notifChannels as ch}
+							<td class="py-1.5 px-3 text-center">
+								<input
+									type="checkbox"
+									checked={groupNotifDefaults[row.key]?.[ch] ?? false}
+									onchange={(e) => toggleGroupDefault(row.key, ch, e.currentTarget.checked)}
+									class="h-4 w-4 accent-blue-700"
+								/>
+							</td>
+						{/each}
+					</tr>
+					{/each}
+					<tr>
+						<td colspan={notifChannels.length + 1} class="pt-3 pb-1.5 text-xs font-semibold text-neutral-500 uppercase tracking-wide">{m.page_profile_notifs_issues_group()}</td>
+					</tr>
+					{#each issueEvents as row}
+					<tr class="border-t border-neutral-100">
+						<td class="py-1.5 pr-3">
+							<span>{row.label()}</span>
+							{#if notifChannels[0] && groupNotifDefaults[row.key]?.[notifChannels[0]] === groupSystemDefaults[row.key]?.[notifChannels[0]]}
+								<span class="text-xs text-neutral-400 ml-1">{m.page_profile_notifs_source_system()}</span>
+							{/if}
+						</td>
+						{#each notifChannels as ch}
+							<td class="py-1.5 px-3 text-center">
+								<input
+									type="checkbox"
+									checked={groupNotifDefaults[row.key]?.[ch] ?? false}
+									onchange={(e) => toggleGroupDefault(row.key, ch, e.currentTarget.checked)}
+									class="h-4 w-4 accent-blue-700"
+								/>
+							</td>
+						{/each}
+					</tr>
+					{/each}
+				</tbody>
+			</table>
 		</section>
 	{/if}
 </div>

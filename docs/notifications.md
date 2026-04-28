@@ -360,9 +360,9 @@ Each step is independently testable. Steps 1–3 are backend prerequisites. Step
 | 6 | Preference UI | ✅ done | 5 |
 | 6.5 | users.team_ids migration + UpsertUser update | ✅ done | — |
 | 7 | Notifier + event sends | ✅ done | 1, 3, 5, 6.5 |
-| 7.5 | Demo mode protection + test email button | — | 7 |
+| 7.5 | Demo mode protection + test email button | ✅ done | 7 |
 | 8 | Scheduled jobs | — | 7 |
-| 9 | Group defaults UI + SMTP UI | — | 5, 6 |
+| 9 | Group defaults UI + SMTP UI | ✅ done | 5, 6 |
 
 Steps 3 and 5 can run in parallel after Step 1. Steps 4, 6, and 9 are frontend-only and can overlap with later backend steps once their APIs exist.
 
@@ -454,11 +454,11 @@ Email bodies are minimal stub HTML built inline with i18n keys. Visual polish de
 
 **Test** (`TestNotifications_EventTriggered`): injects `CapturingNotifier`. Covers needs_approval, confirmed (after approve), rejected, cancelled, issue_created, and action-succeeds-without-SMTP. Goroutine synchronization via timed poll with `time.Sleep`.
 
-### Step 7.5: Demo mode protection + test email
+### Step 7.5: Demo mode protection + test email ✅
 
 **Demo mode protection:**
 
-In `DEMO_MODE=true`, event-triggered notifications must not reach real email addresses. `main.go` wires `NoopNotifier` instead of `SMTPNotifier` when `DEMO_MODE=true`. This means all booking/issue events are silently suppressed in demo — no code changes needed in handlers or send.go.
+In `DEMO_MODE=true`, `main.go` wires `NoopNotifier` for all handler event sends. The test-email endpoint always uses `SMTPNotifier` directly regardless of mode, so demo visitors can verify SMTP config.
 
 **Test email endpoint:**
 
@@ -466,24 +466,19 @@ In `DEMO_MODE=true`, event-triggered notifications must not reach real email add
 POST /api/v0/me/test-email
 ```
 
-Sends a single test email to the authenticated user's own email address. Lets users (and demo visitors) verify that SMTP is correctly configured and see what a notification looks like.
+- **Personas**: returns `{"skipped": true}` 200 — no send.
+- **Real users**: sends via `SMTPNotifier` (per-group → env fallback). Returns `{"sent": true}` or 503 if SMTP not configured.
+- **Demo mode**: sends — intentional, designated way for demo visitors to verify email.
 
-- **Personas** (detected via `PersonaIDs` set): return `{"skipped": true}` with 200 — no send attempted. Persona emails are fictitious and would either bounce or reach unintended inboxes.
-- **Real users**: send one test email via the same `SMTPNotifier` resolution (per-group → env fallback). If SMTP is not configured, return a clear error.
-- **Demo mode**: the endpoint sends even in `DEMO_MODE=true` — this is intentional. The notifier wired on handlers is `NoopNotifier`, but the test email endpoint has its own direct `SMTPNotifier` call. This is the designated way for demo visitors to see a real notification.
-- **Dev mode**: works if `SMTP_DEFAULT_*` is set. Using a relay (SendGrid, Brevo, etc.) from localhost over port 587 with STARTTLS is fine — no localhost TLS issue.
-
-Frontend: small "Skicka testnotis" button in the Notiser section on `/profile`, below the preference table. Disabled for personas (or hidden entirely since personas can't reach that page in a meaningful way). Shows a success/error toast on completion.
+Frontend: "Skicka testnotis" button in the Aviseringar section of the group settings tab on `/profile`. Shows success/error inline. Button and endpoint both live in `MeHandler`.
 
 **API response:**
-
 ```json
-{ "skipped": true }          // persona — no send
-{ "sent": true }             // sent successfully
-{ "error": "no smtp config"} // SMTP not configured (4xx)
+{ "skipped": true }   // persona
+{ "sent": true }      // sent
 ```
 
-**Test**: assert sent to real user's email. Assert skipped for persona. Assert demo mode sends (using CapturingNotifier injected into the endpoint for that test).
+**Tests** (`TestNotifications_TestEmail`): real user receives email, persona is skipped, demo mode sends via injected `CapturingNotifier`.
 
 ### Step 8: Scheduled jobs
 
@@ -494,12 +489,30 @@ Frontend: small "Skicka testnotis" button in the Notiser section on `/profile`, 
 
 **Test** (`TestNotifications_Scheduled`): call `SendReminders` and `SendOverdueAlerts` directly (not via timer). Assert correct recipients. Run twice — assert no duplicates. User with preference off — no message. Wrong date — not included.
 
-### Step 9: Group notification defaults UI + SMTP settings UI
+### Step 9: Group notification defaults UI + SMTP settings UI ✅
 
-Two additions to group settings (manager only):
+Both live in the group settings tab of `/profile` (manager only).
 
-**"Standardinställningar för notiser"** — same toggle layout as Step 6. Saves via `PUT /api/v0/group-settings/notification-defaults`. Explanatory text: "Dessa värden gäller för användare som inte har egna inställningar."
+**SMTP settings section ("Aviseringar"):**
 
-**"SMTP-inställningar"** — form with fields: Från-adress, SMTP-server, Port, TLS-läge (dropdown: `STARTTLS` / `Implicit TLS`), Användarnamn, Lösenord. Password field shows masked value (`smtp_key_masked`) when set; submitting an empty password field leaves the existing key unchanged. Saves via `PUT /api/v0/group-settings` (extends existing endpoint). A "Ta bort SMTP-nyckel" button clears only the key. The form is hidden when `SMTP_DEFAULT_*` env vars are not configured (i.e. no system fallback exists), since a broken per-group config with no fallback silently drops notifications.
+A checkbox "Använd egna SMTP-inställningar" controls whether the group overrides the system SMTP. When unchecked, the system sender address (`SMTP_DEFAULT_FROM`) is shown as informational text. When checked, a form appears with: Från-adress, SMTP-server, Port, TLS-läge (STARTTLS / Implicit TLS), Användarnamn, Lösenord. Saving with the checkbox unchecked clears all per-group SMTP fields. The password field leaves the existing key unchanged when left blank (nil vs empty string pattern already in use).
 
-**Test**: SSR smoke test. Manager updates a notification default; a user with no personal prefs sees `source: "group_default"` with the new value on `GET /me/notification-prefs`. SMTP form saves and returns masked key.
+`GET /api/v0/group-settings` response gains two new fields:
+- `system_smtp_configured: bool` — whether `SMTP_DEFAULT_HOST` env var is set
+- `system_smtp_from: string` — value of `SMTP_DEFAULT_FROM`
+
+`PUT /api/v0/group-settings` now accepts and stores `smtp_host`, `smtp_port`, `smtp_tls`, `smtp_user` in addition to the existing fields. Implementation: `UpsertGroupSettings` (handles key + all non-smtp fields) followed by `UpdateSmtpSettings` (handles smtp_host/port/tls/user), using the existing generated queries.
+
+`gen-env.sh` updated: `SETTINGS_ENCRYPTION_KEY` (auto-generated 256-bit hex) and `SMTP_DEFAULT_*` block appended for demo/prod modes; omitted for dev (SMTP is a no-op in dev).
+
+**Group notification defaults section ("Standardinställningar för notiser"):**
+
+Toggle table with the same layout as the user prefs table. `GET /api/v0/group-settings/notification-defaults` returns:
+- `defaults` — effective values: system defaults merged with group overrides (what group members actually receive by default)
+- `system_defaults` — raw system defaults, used by the frontend to show a "(standard)" hint when the group value matches the system default
+
+`PUT /api/v0/group-settings/notification-defaults` stores the full incoming map as-is (no pruning — intentional group overrides are preserved even if they happen to match the system default).
+
+**`ChannelPref` extended** (user prefs response): gains `default_enabled bool` — the group/system default value for that event+channel, independent of any user override. The user prefs table uses `enabled === default_enabled` to decide whether to show the "(standard)" hint, so the hint reappears when a user toggles back to the default value and disappears when they differ from it — regardless of whether `source` is `"user"`, `"group_default"`, or `"system_default"`.
+
+`notifications.SystemDefaults` exported (was `systemDefaults`) so the handler package can use it for merging.
