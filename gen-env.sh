@@ -62,7 +62,7 @@ case "$MODE" in
     ORIGIN="http://localhost:3000"
     AUTH_KEYCLOAK_SECRET=""
     POSTGRES_PASSWORD="utrustning"
-    SETTINGS_ENCRYPTION_KEY=""
+    SETTINGS_ENCRYPTION_KEY=$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | xxd -p)
     API_IMAGE="ms-utrustning-api"
     WEB_IMAGE="ms-utrustning-web"
     ;;
@@ -162,8 +162,26 @@ API_IMAGE=$API_IMAGE
 WEB_IMAGE=$WEB_IMAGE
 EOF
 
-# Append encryption key and SMTP config for demo/prod
-if [[ "$MODE" != "dev" ]]; then
+# Append encryption key and SMTP config
+if [[ "$MODE" == "dev" ]]; then
+  cat >> .env << EOF
+
+# ── Encryption ────────────────────────────────────────────
+# Auto-generated for dev. Safe to regenerate (no encrypted data persists).
+SETTINGS_ENCRYPTION_KEY=$SETTINGS_ENCRYPTION_KEY
+
+# ── System-wide SMTP ──────────────────────────────────────
+# Optional in dev — leave blank to skip email sending entirely.
+# Fill in real SMTP credentials to test against a live provider, or use a
+# local catch-all like Mailpit (see README § Testing emails in dev).
+SMTP_DEFAULT_FROM=dev@localhost
+SMTP_DEFAULT_HOST=mailpit
+SMTP_DEFAULT_PORT=1025
+SMTP_DEFAULT_TLS=starttls
+SMTP_DEFAULT_USER=
+SMTP_DEFAULT_KEY=
+EOF
+else
   cat >> .env << EOF
 
 # ── Encryption ────────────────────────────────────────────

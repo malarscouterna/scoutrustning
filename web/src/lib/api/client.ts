@@ -381,8 +381,13 @@ export function createApiClient(opts: FetchOptions = {}) {
 		sendTestEmail: () =>
 			requestMut<{ sent?: boolean; skipped?: boolean }>('/me/test-email', 'POST', undefined, opts),
 		getGroupNotificationDefaults: () =>
-			request<{ defaults: Record<string, Record<string, boolean>>; system_defaults: Record<string, Record<string, boolean>> }>('/group-settings/notification-defaults', opts),
-		updateGroupNotificationDefaults: (data: Record<string, Record<string, boolean>>) =>
+			request<{
+				user: Record<string, Record<string, boolean>>;
+				manager: Record<string, Record<string, boolean>>;
+				system_defaults_user: Record<string, Record<string, boolean>>;
+				system_defaults_manager: Record<string, Record<string, boolean>>;
+			}>('/group-settings/notification-defaults', opts),
+		updateGroupNotificationDefaults: (data: { user: Record<string, Record<string, boolean>>; manager: Record<string, Record<string, boolean>> }) =>
 			requestMut<void>('/group-settings/notification-defaults', 'PUT', data, opts),
 
 		// Article CRUD

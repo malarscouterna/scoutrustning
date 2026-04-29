@@ -19,7 +19,6 @@ web/guide.md
 .env
 
 # Docker
-docker-compose.override.yml
 
 # Real inventory data (not for git)
 docs/*.xlsx

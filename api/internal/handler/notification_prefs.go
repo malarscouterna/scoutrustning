@@ -100,47 +100,43 @@ func (h *NotificationPrefsHandler) DeleteMe(w http.ResponseWriter, r *http.Reque
 }
 
 // GET /group-settings/notification-defaults — manager only.
-// Returns effective defaults: system defaults merged with group overrides.
-// Managers see what group members will actually receive by default.
+// Returns effective defaults per role (user/manager), merged with system defaults.
 func (h *NotificationPrefsHandler) GetGroupDefaults(w http.ResponseWriter, r *http.Request) {
 	claims, _ := auth.ClaimsFromContext(r.Context())
 
-	var groupOverrides map[string]map[string]bool
 	raw, _ := h.Q.GetGroupNotificationDefaults(r.Context(), claims.GroupID)
-	json.Unmarshal(raw, &groupOverrides) //nolint:errcheck
+	groupDefaults := notifications.ParseGroupDefaults(raw)
 
-	// Merge: start from system defaults (manager=true since this is a manager view),
-	// then overlay any group overrides.
-	effective := map[string]map[string]bool{}
-	for event, channels := range notifications.SystemDefaults(true) {
-		effective[event] = make(map[string]bool, len(channels))
-		for ch, v := range channels {
-			effective[event][ch] = v
+	mergeRole := func(isManager bool) map[string]map[string]bool {
+		sys := notifications.SystemDefaults(isManager)
+		out := make(map[string]map[string]bool, len(notifications.AllEvents))
+		for _, event := range notifications.AllEvents {
+			out[event] = make(map[string]bool)
+			for ch, sv := range sys[event] {
+				if gv, ok := groupDefaults.Lookup(event, ch, isManager); ok {
+					out[event][ch] = gv
+				} else {
+					out[event][ch] = sv
+				}
+			}
 		}
-	}
-	for event, channels := range groupOverrides {
-		if _, ok := effective[event]; !ok {
-			effective[event] = map[string]bool{}
-		}
-		for ch, v := range channels {
-			effective[event][ch] = v
-		}
+		return out
 	}
 
-	// Also return system defaults so the frontend can show a "(standard)" hint
-	// when a group override matches the system default.
-	sysDefaults := notifications.SystemDefaults(true)
 	WriteJSON(w, http.StatusOK, map[string]any{
-		"defaults":        effective,
-		"system_defaults": sysDefaults,
+		"user":                   mergeRole(false),
+		"manager":                mergeRole(true),
+		"system_defaults_user":   notifications.SystemDefaults(false),
+		"system_defaults_manager": notifications.SystemDefaults(true),
 	})
 }
 
 // PUT /group-settings/notification-defaults — manager only, full replacement.
+// Body: { "user": {event: {ch: bool}}, "manager": {event: {ch: bool}} }
 func (h *NotificationPrefsHandler) PutGroupDefaults(w http.ResponseWriter, r *http.Request) {
 	claims, _ := auth.ClaimsFromContext(r.Context())
 
-	var incoming map[string]map[string]bool
+	var incoming notifications.GroupNotificationDefaults
 	if err := json.NewDecoder(r.Body).Decode(&incoming); err != nil {
 		WriteError(w, http.StatusBadRequest, "invalid request body")
 		return

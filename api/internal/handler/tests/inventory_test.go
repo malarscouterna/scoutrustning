@@ -78,6 +78,80 @@ func TestInventoryManagement(t *testing.T) {
 		}
 	})
 
+	t.Run("SMTP settings save and mask", func(t *testing.T) {
+		// Encryption key must be set for smtp_key to be accepted.
+		t.Setenv("SETTINGS_ENCRYPTION_KEY", "0000000000000000000000000000000000000000000000000000000000000001")
+
+		body := map[string]any{
+			"notification_email_from": "utrustning@example.com",
+			"smtp_host":               "smtp.example.com",
+			"smtp_port":               587,
+			"smtp_tls":                "starttls",
+			"smtp_user":               "apikey",
+			"smtp_key":                "secret-api-key",
+		}
+		b, _ := json.Marshal(body)
+		resp, _ := manager.Put("/api/v0/group-settings", bytes.NewReader(b))
+		if resp.StatusCode != http.StatusOK {
+			respBody, _ := io.ReadAll(resp.Body)
+			t.Fatalf("expected 200, got %d: %s", resp.StatusCode, respBody)
+		}
+		var settings map[string]any
+		json.NewDecoder(resp.Body).Decode(&settings)
+		resp.Body.Close()
+
+		if settings["smtp_host"] != "smtp.example.com" {
+			t.Errorf("expected smtp_host smtp.example.com, got %v", settings["smtp_host"])
+		}
+		if settings["smtp_key_set"] != true {
+			t.Errorf("expected smtp_key_set true, got %v", settings["smtp_key_set"])
+		}
+		if settings["smtp_key_masked"] == "" {
+			t.Errorf("expected smtp_key_masked to be set")
+		}
+
+		// Saving without smtp_key (nil) must preserve the existing key.
+		body2 := map[string]any{
+			"smtp_host": "smtp.example.com",
+			"smtp_port": 587,
+			"smtp_tls":  "starttls",
+			"smtp_user": "apikey",
+		}
+		b2, _ := json.Marshal(body2)
+		resp, _ = manager.Put("/api/v0/group-settings", bytes.NewReader(b2))
+		if resp.StatusCode != http.StatusOK {
+			respBody, _ := io.ReadAll(resp.Body)
+			t.Fatalf("expected 200 on key-preserve, got %d: %s", resp.StatusCode, respBody)
+		}
+		var settings2 map[string]any
+		json.NewDecoder(resp.Body).Decode(&settings2)
+		resp.Body.Close()
+		if settings2["smtp_key_set"] != true {
+			t.Errorf("expected smtp_key_set to be preserved, got %v", settings2["smtp_key_set"])
+		}
+
+		// Clearing SMTP (disabling group SMTP) must clear the key.
+		body3 := map[string]any{
+			"smtp_host": "",
+			"smtp_port": 587,
+			"smtp_tls":  "starttls",
+			"smtp_user": "",
+			"smtp_key":  "",
+		}
+		b3, _ := json.Marshal(body3)
+		resp, _ = manager.Put("/api/v0/group-settings", bytes.NewReader(b3))
+		if resp.StatusCode != http.StatusOK {
+			respBody, _ := io.ReadAll(resp.Body)
+			t.Fatalf("expected 200 on key-clear, got %d: %s", resp.StatusCode, respBody)
+		}
+		var settings3 map[string]any
+		json.NewDecoder(resp.Body).Decode(&settings3)
+		resp.Body.Close()
+		if settings3["smtp_key_set"] != false {
+			t.Errorf("expected smtp_key_set false after clear, got %v", settings3["smtp_key_set"])
+		}
+	})
+
 	t.Run("leader cannot access group settings", func(t *testing.T) {
 		resp, _ := leader.Get("/api/v0/group-settings")
 		if resp.StatusCode != http.StatusForbidden {

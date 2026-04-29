@@ -45,14 +45,21 @@ func (s *SMTPNotifier) Send(ctx context.Context, msg Message) error {
 	m.Subject(msg.Subject)
 	m.SetBodyString(mail.TypeTextHTML, msg.Body)
 
-	c, err := mail.NewClient(cfg.host,
+	opts := []mail.Option{
 		mail.WithPort(cfg.port),
 		mail.WithTLSPolicy(cfg.tlsMode),
-		mail.WithSMTPAuth(mail.SMTPAuthPlain),
-		mail.WithUsername(cfg.user),
-		mail.WithPassword(cfg.password),
-		mail.WithTimeout(10*time.Second),
-	)
+		mail.WithTimeout(10 * time.Second),
+	}
+	if cfg.user != "" {
+		opts = append(opts,
+			mail.WithSMTPAuth(mail.SMTPAuthPlain),
+			mail.WithUsername(cfg.user),
+			mail.WithPassword(cfg.password),
+		)
+	} else {
+		opts = append(opts, mail.WithSMTPAuth(mail.SMTPAuthNoAuth))
+	}
+	c, err := mail.NewClient(cfg.host, opts...)
 	if err != nil {
 		return err
 	}
