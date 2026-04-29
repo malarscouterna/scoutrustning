@@ -14,6 +14,7 @@ import (
 // recipient is a minimal view of a user needed to send a notification.
 type recipient struct {
 	id             string
+	name           string
 	email          string
 	lang           string
 	maxAccessLevel string
@@ -25,7 +26,7 @@ func fromGetGroupManagersRow(r db.GetGroupManagersRow) recipient {
 	if r.Language.Valid {
 		lang = r.Language.String
 	}
-	return recipient{id: r.ID, email: r.Email, lang: lang, maxAccessLevel: r.MaxAccessLevel, notifPrefs: r.NotificationPrefs}
+	return recipient{id: r.ID, name: r.Name, email: r.Email, lang: lang, maxAccessLevel: r.MaxAccessLevel, notifPrefs: r.NotificationPrefs}
 }
 
 func fromGetTeamMembersRow(r db.GetTeamMembersWithEmailsRow) recipient {
@@ -33,7 +34,7 @@ func fromGetTeamMembersRow(r db.GetTeamMembersWithEmailsRow) recipient {
 	if r.Language.Valid {
 		lang = r.Language.String
 	}
-	return recipient{id: r.ID, email: r.Email, lang: lang, maxAccessLevel: r.MaxAccessLevel, notifPrefs: r.NotificationPrefs}
+	return recipient{id: r.ID, name: r.Name, email: r.Email, lang: lang, maxAccessLevel: r.MaxAccessLevel, notifPrefs: r.NotificationPrefs}
 }
 
 func fromGetUserRow(r db.User) recipient {
@@ -41,7 +42,7 @@ func fromGetUserRow(r db.User) recipient {
 	if r.Language.Valid {
 		lang = r.Language.String
 	}
-	return recipient{id: r.ID, email: r.Email, lang: lang, maxAccessLevel: r.MaxAccessLevel, notifPrefs: r.NotificationPrefs}
+	return recipient{id: r.ID, name: r.Name, email: r.Email, lang: lang, maxAccessLevel: r.MaxAccessLevel, notifPrefs: r.NotificationPrefs}
 }
 
 // sendTo sends msg to r if their effective preference for event+channel is enabled.
@@ -107,38 +108,51 @@ func dedup(recipients []recipient) []recipient {
 	return out
 }
 
-// simpleBody returns a minimal HTML body for stub emails.
-func simpleBody(lang, bodyText string) string {
-	return fmt.Sprintf(`<!DOCTYPE html><html><body><p>%s</p></body></html>`, bodyText)
+// bookingMsg builds a Message for a booking event for a specific recipient.
+func bookingMsg(ctx context.Context, q *db.Queries, b db.Booking, event, baseURL string, r recipient) Message {
+	data := fetchBookingEmailData(ctx, q, b, event, r.lang, r.name, baseURL)
+	htmlBody, textBody := renderBookingEmail(data)
+	return Message{
+		To:       r.email,
+		Subject:  i18n.T(r.lang, "email_subject_"+event),
+		Body:     htmlBody,
+		TextBody: textBody,
+	}
+}
+
+// issueMsg builds a Message for an issue event for a specific recipient.
+func issueMsg(ctx context.Context, q *db.Queries, issue db.IssueReport, event, baseURL string, r recipient) Message {
+	data := fetchIssueEmailData(ctx, q, issue, event, r.lang, r.name, baseURL)
+	htmlBody, textBody := renderIssueEmail(data)
+	return Message{
+		To:       r.email,
+		Subject:  i18n.T(r.lang, "email_subject_"+event),
+		Body:     htmlBody,
+		TextBody: textBody,
+	}
 }
 
 // --- Booking events ---
 
-func SendBookingNeedsApproval(ctx context.Context, q *db.Queries, n Notifier, b db.Booking) {
+func SendBookingNeedsApproval(ctx context.Context, q *db.Queries, n Notifier, b db.Booking, baseURL string) {
 	for _, r := range groupManagers(ctx, q, b.GroupID) {
+		r := r
 		sendTo(ctx, q, n, b.GroupID, r, EventBookingNeedsApproval, "email", func(lang string) Message {
-			return Message{
-				To:      r.email,
-				Subject: i18n.T(lang, "email_subject_booking_needs_approval"),
-				Body:    simpleBody(lang, i18n.T(lang, "notif_booking_needs_approval")),
-			}
+			return bookingMsg(ctx, q, b, EventBookingNeedsApproval, baseURL, r)
 		})
 	}
 }
 
-func SendBookingSubmittedNoApproval(ctx context.Context, q *db.Queries, n Notifier, b db.Booking) {
+func SendBookingSubmittedNoApproval(ctx context.Context, q *db.Queries, n Notifier, b db.Booking, baseURL string) {
 	for _, r := range groupManagers(ctx, q, b.GroupID) {
+		r := r
 		sendTo(ctx, q, n, b.GroupID, r, EventBookingSubmittedNoApproval, "email", func(lang string) Message {
-			return Message{
-				To:      r.email,
-				Subject: i18n.T(lang, "email_subject_booking_submitted_no_approval"),
-				Body:    simpleBody(lang, i18n.T(lang, "notif_booking_submitted_no_approval")),
-			}
+			return bookingMsg(ctx, q, b, EventBookingSubmittedNoApproval, baseURL, r)
 		})
 	}
 }
 
-func SendBookingConfirmed(ctx context.Context, q *db.Queries, n Notifier, b db.Booking) {
+func SendBookingConfirmed(ctx context.Context, q *db.Queries, n Notifier, b db.Booking, baseURL string) {
 	recipients := dedup(append(
 		func() []recipient {
 			if r, ok := bookingCreator(ctx, q, b.GroupID, b.CreatedBy); ok {
@@ -149,31 +163,24 @@ func SendBookingConfirmed(ctx context.Context, q *db.Queries, n Notifier, b db.B
 		teamMembers(ctx, q, b.GroupID, b.UsedByTeamID)...,
 	))
 	for _, r := range recipients {
+		r := r
 		sendTo(ctx, q, n, b.GroupID, r, EventBookingConfirmed, "email", func(lang string) Message {
-			return Message{
-				To:      r.email,
-				Subject: i18n.T(lang, "email_subject_booking_confirmed"),
-				Body:    simpleBody(lang, i18n.T(lang, "notif_booking_confirmed")),
-			}
+			return bookingMsg(ctx, q, b, EventBookingConfirmed, baseURL, r)
 		})
 	}
 }
 
-func SendBookingRejected(ctx context.Context, q *db.Queries, n Notifier, b db.Booking) {
+func SendBookingRejected(ctx context.Context, q *db.Queries, n Notifier, b db.Booking, baseURL string) {
 	r, ok := bookingCreator(ctx, q, b.GroupID, b.CreatedBy)
 	if !ok {
 		return
 	}
 	sendTo(ctx, q, n, b.GroupID, r, EventBookingRejected, "email", func(lang string) Message {
-		return Message{
-			To:      r.email,
-			Subject: i18n.T(lang, "email_subject_booking_rejected"),
-			Body:    simpleBody(lang, i18n.T(lang, "notif_booking_rejected")),
-		}
+		return bookingMsg(ctx, q, b, EventBookingRejected, baseURL, r)
 	})
 }
 
-func SendBookingCancelled(ctx context.Context, q *db.Queries, n Notifier, b db.Booking) {
+func SendBookingCancelled(ctx context.Context, q *db.Queries, n Notifier, b db.Booking, baseURL string) {
 	recipients := dedup(append(
 		func() []recipient {
 			if r, ok := bookingCreator(ctx, q, b.GroupID, b.CreatedBy); ok {
@@ -184,47 +191,36 @@ func SendBookingCancelled(ctx context.Context, q *db.Queries, n Notifier, b db.B
 		teamMembers(ctx, q, b.GroupID, b.UsedByTeamID)...,
 	))
 	for _, r := range recipients {
+		r := r
 		sendTo(ctx, q, n, b.GroupID, r, EventBookingCancelled, "email", func(lang string) Message {
-			return Message{
-				To:      r.email,
-				Subject: i18n.T(lang, "email_subject_booking_cancelled"),
-				Body:    simpleBody(lang, i18n.T(lang, "notif_booking_cancelled")),
-			}
+			return bookingMsg(ctx, q, b, EventBookingCancelled, baseURL, r)
 		})
 	}
 }
 
 // --- Issue events ---
 
-func SendIssueCreated(ctx context.Context, q *db.Queries, n Notifier, issue db.IssueReport) {
+func SendIssueCreated(ctx context.Context, q *db.Queries, n Notifier, issue db.IssueReport, baseURL string) {
 	for _, r := range groupManagers(ctx, q, issue.GroupID) {
+		r := r
 		sendTo(ctx, q, n, issue.GroupID, r, EventIssueCreated, "email", func(lang string) Message {
-			return Message{
-				To:      r.email,
-				Subject: i18n.T(lang, "email_subject_issue_created", map[string]string{"title": issue.Title}),
-				Body:    simpleBody(lang, i18n.T(lang, "notif_issue_created")),
-			}
+			return issueMsg(ctx, q, issue, EventIssueCreated, baseURL, r)
 		})
 	}
 }
 
-func SendIssueAssignedToMe(ctx context.Context, q *db.Queries, n Notifier, issue db.IssueReport, assigneeID string) {
+func SendIssueAssignedToMe(ctx context.Context, q *db.Queries, n Notifier, issue db.IssueReport, assigneeID, baseURL string) {
 	u, err := q.GetUser(ctx, db.GetUserParams{ID: assigneeID, GroupID: issue.GroupID})
 	if err != nil {
 		return
 	}
 	r := fromGetUserRow(u)
 	sendTo(ctx, q, n, issue.GroupID, r, EventIssueAssignedToMe, "email", func(lang string) Message {
-		return Message{
-			To:      r.email,
-			Subject: i18n.T(lang, "email_subject_issue_assigned_to_me", map[string]string{"title": issue.Title}),
-			Body:    simpleBody(lang, i18n.T(lang, "notif_issue_assigned_to_me")),
-		}
+		return issueMsg(ctx, q, issue, EventIssueAssignedToMe, baseURL, r)
 	})
 }
 
-func SendIssueResolved(ctx context.Context, q *db.Queries, n Notifier, issue db.IssueReport) {
-	// Notify reporter + all assignees.
+func SendIssueResolved(ctx context.Context, q *db.Queries, n Notifier, issue db.IssueReport, baseURL string) {
 	reporter, err := q.GetUser(ctx, db.GetUserParams{ID: issue.ReporterID, GroupID: issue.GroupID})
 	if err != nil {
 		return
@@ -238,17 +234,14 @@ func SendIssueResolved(ctx context.Context, q *db.Queries, n Notifier, issue db.
 		}
 	}
 	for _, r := range dedup(recipients) {
+		r := r
 		sendTo(ctx, q, n, issue.GroupID, r, EventIssueResolved, "email", func(lang string) Message {
-			return Message{
-				To:      r.email,
-				Subject: i18n.T(lang, "email_subject_issue_resolved", map[string]string{"title": issue.Title}),
-				Body:    simpleBody(lang, i18n.T(lang, "notif_issue_resolved")),
-			}
+			return issueMsg(ctx, q, issue, EventIssueResolved, baseURL, r)
 		})
 	}
 }
 
-func SendIssueCommented(ctx context.Context, q *db.Queries, n Notifier, issue db.IssueReport) {
+func SendIssueCommented(ctx context.Context, q *db.Queries, n Notifier, issue db.IssueReport, baseURL string) {
 	reporter, err := q.GetUser(ctx, db.GetUserParams{ID: issue.ReporterID, GroupID: issue.GroupID})
 	if err != nil {
 		return
@@ -262,12 +255,20 @@ func SendIssueCommented(ctx context.Context, q *db.Queries, n Notifier, issue db
 		}
 	}
 	for _, r := range dedup(recipients) {
+		r := r
 		sendTo(ctx, q, n, issue.GroupID, r, EventIssueCommented, "email", func(lang string) Message {
-			return Message{
-				To:      r.email,
-				Subject: i18n.T(lang, "email_subject_issue_commented", map[string]string{"title": issue.Title}),
-				Body:    simpleBody(lang, i18n.T(lang, "notif_issue_commented")),
-			}
+			return issueMsg(ctx, q, issue, EventIssueCommented, baseURL, r)
 		})
 	}
+}
+
+// sendTestEmail sends a test email directly to the given address using SMTPNotifier.
+// Used by the test-email endpoint; not subject to preference checks.
+func sendTestEmail(ctx context.Context, q *db.Queries, n Notifier, groupID, to, recipientName, lang, baseURL string) error {
+	group, _ := q.GetGroup(ctx, groupID)
+	subject := i18n.T(lang, "email_subject_test_email")
+	body := fmt.Sprintf("<p>%s</p>", i18n.T(lang, "notif_test_email"))
+	text := i18n.T(lang, "notif_test_email")
+	_ = group // may be used in future template
+	return n.Send(ctx, Message{GroupID: groupID, To: to, Subject: subject, Body: body, TextBody: text})
 }

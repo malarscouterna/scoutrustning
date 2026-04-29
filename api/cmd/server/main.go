@@ -100,10 +100,11 @@ func main() {
 		locations := &handler.LocationHandler{Q: queries}
 		categories := &handler.CategoryHandler{Q: queries}
 
-		bookings := &handler.BookingHandler{Q: queries, Notifier: eventNotifier}
+		appBaseURL := getenv("APP_BASE_URL", "http://localhost:5173")
+		bookings := &handler.BookingHandler{Q: queries, Notifier: eventNotifier, BaseURL: appBaseURL}
 		teams := &handler.TeamHandler{Q: queries}
 		groupSettings := &handler.GroupSettingsHandler{Q: queries, Perms: permCache}
-		issueHandler := &handler.IssueHandler{Q: queries, Perms: permCache, Notifier: eventNotifier}
+		issueHandler := &handler.IssueHandler{Q: queries, Perms: permCache, Notifier: eventNotifier, BaseURL: appBaseURL}
 		imageHandler := &images.Handler{Q: queries, ImageDir: imageDir}
 		userHandler := &handler.UserHandler{Q: queries, DemoMode: demoMode, PersonaIDs: personaIDs}
 

@@ -363,7 +363,7 @@ Each step is independently testable. Steps 1–3 are backend prerequisites. Step
 | 7.5 | Demo mode protection + test email button | ✅ done | 7 |
 | 8 | Scheduled jobs | — | 7 |
 | 9 | Group defaults UI + SMTP UI | ✅ done | 5, 6 |
-| 10 | Email body templates | — | 7 |
+| 10 | Email body templates | 🚧 in progress | 7 |
 
 Steps 3 and 5 can run in parallel after Step 1. Steps 4, 6, and 9 are frontend-only and can overlap with later backend steps once their APIs exist.
 
@@ -518,14 +518,25 @@ Toggle table with the same layout as the user prefs table. `GET /api/v0/group-se
 
 `notifications.SystemDefaults` exported (was `systemDefaults`) so the handler package can use it for merging.
 
-### Step 10: Email body templates
+### Step 10: Email body templates 🚧
 
-Replace `simpleBody` in `send.go` with proper HTML email templates. Each event gets a template that includes:
-- A greeting (recipient name if available)
-- Contextual detail (booking dates, item names, issue title, commenter name, etc.)
-- A direct link back to the relevant booking or issue in the app
-- Plain footer (group name, unsubscribe hint pointing to `/profile`)
+Full design in `docs/email-templates.md`.
 
-**String locations**: subject lines and body copy live in `api/internal/i18n/messages/sv.json` and `en.json` under the `email_subject_*` and `notif_*` key namespaces. The HTML layout (wrapper, button styles, colors) can be a Go template file or built inline — keep it simple enough to render correctly in common mail clients without a full framework.
+**Toolchain**: MJML source templates (`web/src/lib/emails/booking.mjml`, `issue.mjml`) compiled to HTML via `pnpm compile-emails` (uses `web/scripts/compile-emails.ts`). Generated HTML is committed to `api/internal/notifications/templates/` and embedded in the Go binary via `//go:embed`.
 
-**Test**: extend `TestNotifications_EventTriggered` to assert that captured message bodies contain the booking/issue link and relevant context (dates, title). Visual review via Mailpit (included in dev Compose stack, `http://localhost:8025`).
+**Architecture**:
+- `template.go` - embed, `renderBookingEmail` / `renderIssueEmail`, `fetchBookingEmailData` / `fetchIssueEmailData`, string-replacement renderer, plain-text builder
+- `send.go` - all send functions updated: `simpleBody` removed, `baseURL string` param added, recipient `name` field populated, `TextBody` set on all messages
+- `notifier.go` - `Message.TextBody string` added
+- `smtp.go` - `AddAlternativeString(TypeTextPlain, msg.TextBody)` added
+
+**Visual design**: branded header (blue-700), event banner (color-coded per event tone — orange/green/red/blue), booking card showing dates + team + status badge + full item list, CTA button (color follows event tone), plain footer with unsubscribe link. Mirrors `BookingCard` and `IssueCard` color maps from `styles.ts`.
+
+**New env var**: `APP_BASE_URL` (default `http://localhost:5173` in dev) — used for booking/issue links and unsubscribe URL. Set in `gen-env.sh` and `docker-compose.yml`.
+
+**Still remaining**:
+- i18n keys: `email_banner_*`, `email_intro_*`, `email_cta_*`, `email_items_heading`, `email_notes_heading`, `email_footer_unsubscribe`, `email_personal_booking`, `email_reporter_line`
+- `docker-compose.yml` env block: add `APP_BASE_URL`
+- `MeHandler` test-email: pass `BaseURL` (currently uses `sendTestEmail` without it)
+- Extend `TestNotifications_EventTriggered` to assert body contains booking URL, dates, item list
+- Visual review via Mailpit (`http://localhost:8025`)

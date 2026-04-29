@@ -1,0 +1,101 @@
+<mjml>
+  <mj-head>
+    <mj-title>EMAIL_BANNER_LABEL</mj-title>
+    <mj-preview>EMAIL_BANNER_LABEL</mj-preview>
+    <mj-attributes>
+      <mj-all font-family="Arial, sans-serif" />
+      <mj-text font-size="15px" line-height="1.5" color="#131d24" />
+    </mj-attributes>
+  </mj-head>
+
+  <mj-body background-color="#ebf1f7">
+
+    <!-- Header -->
+    <mj-section background-color="#003660" padding="20px 32px">
+      <mj-column>
+        <mj-text font-size="18px" font-weight="bold" color="#ffffff">
+          EMAIL_GROUP_NAME
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- Event banner -->
+    <mj-section background-color="EMAIL_BANNER_BG" padding="14px 32px">
+      <mj-column>
+        <mj-text font-size="16px" font-weight="bold" color="EMAIL_BANNER_FG" padding="0">
+          EMAIL_BANNER_LABEL
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- Content card -->
+    <mj-section background-color="#ffffff" padding="24px 32px 8px" border-radius="0">
+      <mj-column>
+        <mj-text padding-bottom="16px">
+          Hej EMAIL_RECIPIENT_NAME,
+        </mj-text>
+        <mj-text padding-bottom="24px">
+          EMAIL_INTRO
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- Booking meta: dates + team + status -->
+    <mj-section background-color="#ffffff" padding="0 32px 0">
+      <mj-column border="1px solid #d7e4f0" border-radius="6px" padding="16px">
+        <mj-text font-size="18px" font-weight="bold" color="#003660" padding-bottom="8px">
+          EMAIL_START_DATE &ndash; EMAIL_END_DATE
+        </mj-text>
+        <mj-text padding-bottom="0" padding-top="0">
+          <span style="display:inline-block;background:EMAIL_TEAM_BG;color:EMAIL_TEAM_FG;font-size:12px;padding:2px 8px;border-radius:4px;margin-right:6px">EMAIL_TEAM_LABEL</span><span style="display:inline-block;background:EMAIL_STATUS_BG;color:EMAIL_STATUS_FG;font-size:12px;padding:2px 8px;border-radius:4px">EMAIL_STATUS</span>
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- Items list -->
+    <mj-section background-color="#ffffff" padding="0 32px 0">
+      <mj-column padding-top="20px">
+        <mj-text font-weight="bold" color="#374b5a" padding-bottom="6px">
+          EMAIL_ITEMS_HEADING
+        </mj-text>
+        <mj-text padding-top="0" color="#374b5a">
+          EMAIL_ITEMS_HTML
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- Notes (hidden when empty via zero-height trick) -->
+    <mj-section background-color="#ffffff" padding="0 32px 0" css-class="notes-section">
+      <mj-column padding-top="16px">
+        <mj-text font-weight="bold" color="#374b5a" padding-bottom="4px">
+          EMAIL_NOTES_HEADING
+        </mj-text>
+        <mj-text padding-top="0" color="#608199">
+          EMAIL_NOTES
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- CTA -->
+    <mj-section background-color="#ffffff" padding="24px 32px 32px">
+      <mj-column>
+        <mj-button background-color="EMAIL_CTA_BG" color="#ffffff" border-radius="6px" font-size="15px" font-weight="bold" padding="12px 28px" href="EMAIL_CTA_URL">
+          EMAIL_CTA_LABEL
+        </mj-button>
+      </mj-column>
+    </mj-section>
+
+    <!-- Footer -->
+    <mj-section background-color="#ebf1f7" padding="16px 32px">
+      <mj-column>
+        <mj-text font-size="12px" color="#608199" padding-bottom="4px">
+          EMAIL_GROUP_NAME
+        </mj-text>
+        <mj-text font-size="12px" color="#608199" padding-top="0">
+          <a href="EMAIL_UNSUBSCRIBE_URL" style="color:#608199">EMAIL_FOOTER_UNSUBSCRIBE</a>
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+  </mj-body>
+</mjml>

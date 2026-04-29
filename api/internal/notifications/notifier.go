@@ -7,10 +7,11 @@ import (
 
 // Message is a single outbound notification.
 type Message struct {
-	GroupID string
-	To      string
-	Subject string
-	Body    string // HTML
+	GroupID  string
+	To       string
+	Subject  string
+	Body     string // HTML
+	TextBody string // plain text fallback
 }
 
 // Notifier sends a notification message on a specific channel.

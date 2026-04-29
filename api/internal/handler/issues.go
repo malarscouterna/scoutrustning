@@ -21,6 +21,7 @@ type IssueHandler struct {
 	Q        *db.Queries
 	Perms    *PermissionCache
 	Notifier notifications.Notifier
+	BaseURL  string
 }
 
 func (h *IssueHandler) Routes() chi.Router {
@@ -232,7 +233,7 @@ func (h *IssueHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	if h.Notifier != nil {
 		iss, n, q := issue, h.Notifier, h.Q
-		go notifications.SendIssueCreated(context.Background(), q, n, iss)
+		go notifications.SendIssueCreated(context.Background(), q, n, iss, h.BaseURL)
 	}
 
 	issueDetail, _ := h.buildIssueDetail(r, claims, issue.ID)
@@ -343,7 +344,7 @@ func (h *IssueHandler) Update(w http.ResponseWriter, r *http.Request) {
 					ReporterID: iss.ReporterID, Status: iss.Status,
 				}
 				n, q := h.Notifier, h.Q
-				go notifications.SendIssueResolved(context.Background(), q, n, issue)
+				go notifications.SendIssueResolved(context.Background(), q, n, issue, h.BaseURL)
 			}
 		}
 	}
@@ -394,7 +395,7 @@ func (h *IssueHandler) AddComment(w http.ResponseWriter, r *http.Request) {
 		if iss, err := h.Q.GetIssue(r.Context(), db.GetIssueParams{ID: id, GroupID: claims.GroupID}); err == nil {
 			issue := db.IssueReport{ID: iss.ID, GroupID: iss.GroupID, Title: iss.Title, ReporterID: iss.ReporterID}
 			n, q := h.Notifier, h.Q
-			go notifications.SendIssueCommented(context.Background(), q, n, issue)
+			go notifications.SendIssueCommented(context.Background(), q, n, issue, h.BaseURL)
 		}
 	}
 
@@ -518,7 +519,7 @@ func (h *IssueHandler) AddAssignee(w http.ResponseWriter, r *http.Request) {
 		if iss, err := h.Q.GetIssue(r.Context(), db.GetIssueParams{ID: id, GroupID: claims.GroupID}); err == nil {
 			issue := db.IssueReport{ID: iss.ID, GroupID: iss.GroupID, Title: iss.Title, ReporterID: iss.ReporterID}
 			assigneeID, n, q := req.UserID, h.Notifier, h.Q
-			go notifications.SendIssueAssignedToMe(context.Background(), q, n, issue, assigneeID)
+			go notifications.SendIssueAssignedToMe(context.Background(), q, n, issue, assigneeID, h.BaseURL)
 		}
 	}
 
