@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -104,6 +105,7 @@ func (h *MeHandler) PostTestEmail(w http.ResponseWriter, r *http.Request) {
 		Body:    fmt.Sprintf(`<!DOCTYPE html><html><body><p>%s</p></body></html>`, i18n.T(lang, "notif_test_email")),
 	}
 	if err := h.Notifier.Send(r.Context(), msg); err != nil {
+		slog.Error("test email failed", "to", claims.Email, "group", claims.GroupID, "err", err)
 		WriteError(w, http.StatusServiceUnavailable, err.Error())
 		return
 	}

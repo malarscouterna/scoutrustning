@@ -430,7 +430,7 @@
 		settingsError = '';
 		try {
 			const payload: Record<string, any> = {
-				notification_email_from: settingsForm.notification_email_from,
+				notification_email_from: useGroupSmtp ? settingsForm.notification_email_from : '',
 				smtp_host: useGroupSmtp ? settingsForm.smtp_host : '',
 				smtp_port: useGroupSmtp ? settingsForm.smtp_port : 587,
 				smtp_tls: useGroupSmtp ? settingsForm.smtp_tls : 'starttls',
@@ -450,16 +450,21 @@
 	}
 
 	// --- Group notification defaults ---
-	let groupNotifDefaults = $state<Record<string, Record<string, boolean>>>({});
-	let groupSystemDefaults = $state<Record<string, Record<string, boolean>>>({});
+	type RoleDefaults = Record<string, Record<string, boolean>>;
+	let groupNotifUser = $state<RoleDefaults>({});
+	let groupNotifManager = $state<RoleDefaults>({});
+	let groupSysUser = $state<RoleDefaults>({});
+	let groupSysManager = $state<RoleDefaults>({});
 	let groupNotifDefaultsMessage = $state('');
 	let groupNotifDefaultsError = $state(false);
 
 	async function loadGroupNotifDefaults() {
 		try {
 			const result = await api.getGroupNotificationDefaults();
-			groupNotifDefaults = result.defaults ?? {};
-			groupSystemDefaults = result.system_defaults ?? {};
+			groupNotifUser = result.user ?? {};
+			groupNotifManager = result.manager ?? {};
+			groupSysUser = result.system_defaults_user ?? {};
+			groupSysManager = result.system_defaults_manager ?? {};
 		} catch {}
 	}
 
@@ -467,14 +472,17 @@
 		if (mgr) loadGroupNotifDefaults();
 	});
 
-	async function toggleGroupDefault(key: string, ch: string, value: boolean) {
-		const updated = {
-			...groupNotifDefaults,
-			[key]: { ...(groupNotifDefaults[key] ?? {}), [ch]: value }
-		};
+	async function toggleGroupDefault(role: 'user' | 'manager', key: string, ch: string, value: boolean) {
+		const updatedUser = role === 'user'
+			? { ...groupNotifUser, [key]: { ...(groupNotifUser[key] ?? {}), [ch]: value } }
+			: groupNotifUser;
+		const updatedManager = role === 'manager'
+			? { ...groupNotifManager, [key]: { ...(groupNotifManager[key] ?? {}), [ch]: value } }
+			: groupNotifManager;
 		try {
-			await api.updateGroupNotificationDefaults(updated);
-			groupNotifDefaults = updated;
+			await api.updateGroupNotificationDefaults({ user: updatedUser, manager: updatedManager });
+			groupNotifUser = updatedUser;
+			groupNotifManager = updatedManager;
 			groupNotifDefaultsError = false;
 			flash(v => groupNotifDefaultsMessage = v, m.common_saved());
 		} catch (e: any) {
@@ -1000,52 +1008,56 @@
 			{#if settingsError}
 				<div class="bg-red-50 border border-red-200 rounded p-2 mb-2 text-red-800 text-sm">{settingsError}</div>
 			{/if}
-			<div class="space-y-3">
-				<label class="block">
-					<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_email_from()}</span>
-					<input type="email" bind:value={settingsForm.notification_email_from} placeholder="utrustning@example.com" class="border rounded px-2 py-1 text-sm w-full max-w-sm" />
-				</label>
-				<label class="flex items-center gap-2 text-sm cursor-pointer">
-					<input type="checkbox" bind:checked={useGroupSmtp} class="h-4 w-4 accent-blue-700" />
-					{m.page_profile_smtp_use_group()}
-				</label>
-				{#if !useGroupSmtp && groupSettings?.system_smtp_configured}
-					<p class="text-xs text-neutral-500">
-						{m.page_profile_smtp_system_sender()}: <span class="font-mono">{groupSettings.system_smtp_from}</span>
-					</p>
-				{/if}
-				{#if useGroupSmtp}
-				<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-					<label class="block">
-						<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_smtp_host()}</span>
-						<input type="text" bind:value={settingsForm.smtp_host} placeholder="smtp.example.com" class="border rounded px-2 py-1 text-sm w-full" />
+				<div class="space-y-3">
+					<label class="flex items-center gap-2 text-sm cursor-pointer">
+						<input type="checkbox" bind:checked={useGroupSmtp} class="h-4 w-4 accent-blue-700" />
+						{m.page_profile_smtp_use_group()}
 					</label>
-					<label class="block">
-						<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_smtp_user()}</span>
-						<input type="text" bind:value={settingsForm.smtp_user} placeholder="apikey" class="border rounded px-2 py-1 text-sm w-full" />
-					</label>
-					<label class="block">
-						<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_smtp_port()}</span>
-						<input type="number" bind:value={settingsForm.smtp_port} min="1" max="65535" class="border rounded px-2 py-1 text-sm w-full" />
-					</label>
-					<label class="block">
-						<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_smtp_tls()}</span>
-						<select bind:value={settingsForm.smtp_tls} class="border rounded px-2 py-1 text-sm w-full">
-							<option value="starttls">{m.page_profile_smtp_tls_starttls()}</option>
-							<option value="tls">{m.page_profile_smtp_tls_tls()}</option>
-						</select>
-					</label>
-				</div>
-				<label class="block">
-					<span class="text-sm text-neutral-600 block mb-1">
-						{m.page_profile_smtp_key()}
-						{#if groupSettings?.smtp_key_set}
-							<span class="text-neutral-400 ml-1">({groupSettings.smtp_key_masked})</span>
+					{#if !useGroupSmtp}
+						{#if groupSettings?.system_smtp_from}
+							<p class="text-sm text-neutral-600">
+								{m.page_profile_smtp_system_sender()}: <span class="font-mono">{groupSettings.system_smtp_from}</span>
+							</p>
+						{:else}
+							<p class="text-sm text-amber-700">{m.page_profile_smtp_system_not_configured()}</p>
 						{/if}
-					</span>
-					<input type="password" bind:value={settingsForm.smtp_key} placeholder={groupSettings?.smtp_key_set ? m.page_profile_leave_blank() : m.page_profile_smtp_enter()} class="border rounded px-2 py-1 text-sm w-full max-w-sm" />
-				</label>
-				{/if}
+					{/if}
+					{#if useGroupSmtp}
+					<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+						<label class="block sm:col-span-2">
+							<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_email_from()}</span>
+							<input type="email" bind:value={settingsForm.notification_email_from} placeholder="utrustning@example.com" class="border rounded px-2 py-1 text-sm w-full max-w-sm" />
+						</label>
+						<label class="block">
+							<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_smtp_host()}</span>
+							<input type="text" bind:value={settingsForm.smtp_host} placeholder="smtp.example.com" class="border rounded px-2 py-1 text-sm w-full" />
+						</label>
+						<label class="block">
+							<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_smtp_user()}</span>
+							<input type="text" bind:value={settingsForm.smtp_user} placeholder="apikey" class="border rounded px-2 py-1 text-sm w-full" />
+						</label>
+						<label class="block">
+							<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_smtp_port()}</span>
+							<input type="number" bind:value={settingsForm.smtp_port} min="1" max="65535" class="border rounded px-2 py-1 text-sm w-full" />
+						</label>
+						<label class="block">
+							<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_smtp_tls()}</span>
+							<select bind:value={settingsForm.smtp_tls} class="border rounded px-2 py-1 text-sm w-full">
+								<option value="starttls">{m.page_profile_smtp_tls_starttls()}</option>
+								<option value="tls">{m.page_profile_smtp_tls_tls()}</option>
+							</select>
+						</label>
+					</div>
+					<label class="block">
+						<span class="text-sm text-neutral-600 block mb-1">
+							{m.page_profile_smtp_key()}
+							{#if groupSettings?.smtp_key_set}
+								<span class="text-neutral-400 ml-1">({groupSettings.smtp_key_masked})</span>
+							{/if}
+						</span>
+						<input type="password" bind:value={settingsForm.smtp_key} placeholder={groupSettings?.smtp_key_set ? m.page_profile_leave_blank() : m.page_profile_smtp_enter()} class="border rounded px-2 py-1 text-sm w-full max-w-sm" />
+					</label>
+					{/if}
 				<button onclick={saveSettings} class="text-sm bg-blue-700 text-white px-4 py-2 rounded">{m.btn_save()}</button>
 				<div class="pt-2 border-t flex flex-wrap items-center gap-3">
 					<button onclick={sendTestEmail} disabled={testEmailSending} class="text-sm text-blue-700 border border-blue-200 bg-blue-50 rounded px-3 py-1 hover:bg-blue-100 disabled:opacity-50">
@@ -1059,74 +1071,77 @@
 			</div>
 		</section>
 
-		<!-- Group notification defaults -->
-		<section class="mb-6 border rounded-lg p-4">
-			<h3 class="font-medium mb-1">{m.page_profile_notif_defaults_heading()}</h3>
-			<p class="text-xs text-neutral-500 mb-3">{m.page_profile_notif_defaults_help()}</p>
-			{#if groupNotifDefaultsMessage}
-				<p class="text-sm mb-2 {groupNotifDefaultsError ? 'text-red-600' : 'text-green-600'}">{groupNotifDefaultsMessage}</p>
-			{/if}
-			<table class="w-full text-sm border-collapse">
-				<thead>
-					<tr>
-						<th class="text-left py-1 pr-3 font-normal text-neutral-500 w-full"></th>
-						{#each notifChannels as ch}
-							<th class="text-center py-1 px-3 font-normal text-neutral-500 whitespace-nowrap">
-								{ch === 'email' ? m.page_profile_notifs_channel_email() : ch}
-							</th>
-						{/each}
-					</tr>
-				</thead>
-				<tbody>
-					<tr>
-						<td colspan={notifChannels.length + 1} class="py-1.5 text-xs font-semibold text-neutral-500 uppercase tracking-wide">{m.page_profile_notifs_bookings_group()}</td>
-					</tr>
-					{#each bookingEvents as row}
-					<tr class="border-t border-neutral-100">
-						<td class="py-1.5 pr-3">
-							<span>{row.label()}</span>
-							{#if notifChannels[0] && groupNotifDefaults[row.key]?.[notifChannels[0]] === groupSystemDefaults[row.key]?.[notifChannels[0]]}
-								<span class="text-xs text-neutral-400 ml-1">{m.page_profile_notifs_source_system()}</span>
-							{/if}
-						</td>
-						{#each notifChannels as ch}
-							<td class="py-1.5 px-3 text-center">
-								<input
-									type="checkbox"
-									checked={groupNotifDefaults[row.key]?.[ch] ?? false}
-									onchange={(e) => toggleGroupDefault(row.key, ch, e.currentTarget.checked)}
-									class="h-4 w-4 accent-blue-700"
-								/>
+			<!-- Group notification defaults -->
+			<section class="mb-6 border rounded-lg p-4">
+				<h3 class="font-medium mb-1">{m.page_profile_notif_defaults_heading()}</h3>
+				<p class="text-xs text-neutral-500 mb-3">{m.page_profile_notif_defaults_help()}</p>
+				{#if groupNotifDefaultsMessage}
+					<p class="text-sm mb-2 {groupNotifDefaultsError ? 'text-red-600' : 'text-green-600'}">{groupNotifDefaultsMessage}</p>
+				{/if}
+				<table class="w-full text-sm border-collapse">
+					<thead>
+						<tr>
+							<th class="text-left py-1 pr-3 font-normal text-neutral-500 w-full"></th>
+							{#each notifChannels as ch}
+								<th class="text-center py-1 px-2 font-normal text-neutral-500 whitespace-nowrap" colspan="2">
+									{ch === 'email' ? m.page_profile_notifs_channel_email() : ch}
+								</th>
+							{/each}
+						</tr>
+						<tr>
+							<th class="text-left py-1 pr-3 font-normal text-neutral-400 w-full text-xs"></th>
+							{#each notifChannels as _ch}
+								<th class="text-center py-1 px-2 font-normal text-neutral-400 text-xs whitespace-nowrap">{m.page_profile_notifs_role_user()}</th>
+								<th class="text-center py-1 px-2 font-normal text-neutral-400 text-xs whitespace-nowrap">{m.page_profile_notifs_role_manager()}</th>
+							{/each}
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td colspan={notifChannels.length * 2 + 1} class="py-1.5 text-xs font-semibold text-neutral-500 uppercase tracking-wide">{m.page_profile_notifs_bookings_group()}</td>
+						</tr>
+						{#each bookingEvents as row}
+						<tr class="border-t border-neutral-100">
+							<td class="py-1.5 pr-3">
+								<span>{row.label()}</span>
+								{#if notifChannels[0] && groupNotifUser[row.key]?.[notifChannels[0]] === groupSysUser[row.key]?.[notifChannels[0]] && groupNotifManager[row.key]?.[notifChannels[0]] === groupSysManager[row.key]?.[notifChannels[0]]}
+									<span class="text-xs text-neutral-400 ml-1">{m.page_profile_notifs_source_system()}</span>
+								{/if}
 							</td>
+							{#each notifChannels as ch}
+								<td class="py-1.5 px-2 text-center">
+									<input type="checkbox" checked={groupNotifUser[row.key]?.[ch] ?? false} onchange={(e) => toggleGroupDefault('user', row.key, ch, e.currentTarget.checked)} class="h-4 w-4 accent-blue-700" />
+								</td>
+								<td class="py-1.5 px-2 text-center">
+									<input type="checkbox" checked={groupNotifManager[row.key]?.[ch] ?? false} onchange={(e) => toggleGroupDefault('manager', row.key, ch, e.currentTarget.checked)} class="h-4 w-4 accent-blue-700" />
+								</td>
+							{/each}
+						</tr>
 						{/each}
-					</tr>
-					{/each}
-					<tr>
-						<td colspan={notifChannels.length + 1} class="pt-3 pb-1.5 text-xs font-semibold text-neutral-500 uppercase tracking-wide">{m.page_profile_notifs_issues_group()}</td>
-					</tr>
-					{#each issueEvents as row}
-					<tr class="border-t border-neutral-100">
-						<td class="py-1.5 pr-3">
-							<span>{row.label()}</span>
-							{#if notifChannels[0] && groupNotifDefaults[row.key]?.[notifChannels[0]] === groupSystemDefaults[row.key]?.[notifChannels[0]]}
-								<span class="text-xs text-neutral-400 ml-1">{m.page_profile_notifs_source_system()}</span>
-							{/if}
-						</td>
-						{#each notifChannels as ch}
-							<td class="py-1.5 px-3 text-center">
-								<input
-									type="checkbox"
-									checked={groupNotifDefaults[row.key]?.[ch] ?? false}
-									onchange={(e) => toggleGroupDefault(row.key, ch, e.currentTarget.checked)}
-									class="h-4 w-4 accent-blue-700"
-								/>
+						<tr>
+							<td colspan={notifChannels.length * 2 + 1} class="pt-3 pb-1.5 text-xs font-semibold text-neutral-500 uppercase tracking-wide">{m.page_profile_notifs_issues_group()}</td>
+						</tr>
+						{#each issueEvents as row}
+						<tr class="border-t border-neutral-100">
+							<td class="py-1.5 pr-3">
+								<span>{row.label()}</span>
+								{#if notifChannels[0] && groupNotifUser[row.key]?.[notifChannels[0]] === groupSysUser[row.key]?.[notifChannels[0]] && groupNotifManager[row.key]?.[notifChannels[0]] === groupSysManager[row.key]?.[notifChannels[0]]}
+									<span class="text-xs text-neutral-400 ml-1">{m.page_profile_notifs_source_system()}</span>
+								{/if}
 							</td>
+							{#each notifChannels as ch}
+								<td class="py-1.5 px-2 text-center">
+									<input type="checkbox" checked={groupNotifUser[row.key]?.[ch] ?? false} onchange={(e) => toggleGroupDefault('user', row.key, ch, e.currentTarget.checked)} class="h-4 w-4 accent-blue-700" />
+								</td>
+								<td class="py-1.5 px-2 text-center">
+									<input type="checkbox" checked={groupNotifManager[row.key]?.[ch] ?? false} onchange={(e) => toggleGroupDefault('manager', row.key, ch, e.currentTarget.checked)} class="h-4 w-4 accent-blue-700" />
+								</td>
+							{/each}
+						</tr>
 						{/each}
-					</tr>
-					{/each}
-				</tbody>
-			</table>
-		</section>
+					</tbody>
+				</table>
+			</section>
 	{/if}
 </div>
 {/if}

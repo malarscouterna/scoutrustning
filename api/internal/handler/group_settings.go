@@ -67,6 +67,8 @@ func (h *GroupSettingsHandler) Get(w http.ResponseWriter, r *http.Request) {
 			ManagerNotesRole:     "manager",
 			DefaultLanguage:      "sv",
 			NotificationChannels: activeNotificationChannels,
+			SystemSmtpConfigured: os.Getenv("SMTP_DEFAULT_HOST") != "",
+			SystemSmtpFrom:       os.Getenv("SMTP_DEFAULT_FROM"),
 		})
 		return
 	}

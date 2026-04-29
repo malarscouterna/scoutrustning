@@ -28,6 +28,10 @@ Längst upp på alla sidor finns en menyrad med logotypen till vänster och län
   - [Hantera ärenden](#hantera-ärenden)
   - [Artikelstatus](#artikelstatus)
   - [Hantera bilder](#hantera-bilder)
+- [Del 3: Notifieringar](#del-3-notifieringar)
+  - [Personliga notifieringsinställningar](#personliga-notifieringsinställningar)
+  - [Standardinställningar för gruppen](#standardinställningar-för-gruppen)
+  - [E-postinställningar](#e-postinställningar)
 
 ---
 
@@ -225,12 +229,56 @@ Vem som får ladda upp bilder styrs av inställningen "Vem kan ladda upp bilder?
 
 ---
 
+---
+
+## Del 3: Notifieringar
+
+Systemet skickar e-postnotifieringar vid händelser i bokningar och ärenden. Du styr själv vad du vill få — och utrustningsansvariga kan sätta standardvärden för hela gruppen.
+
+### Personliga notifieringsinställningar
+
+Under **Profil → Notiseringar** finns en tabell med alla händelsetyper, grupperade under Bokningar och Ärenden. Varje rad har en kryssruta per kanal (just nu enbart e-post).
+
+| Händelse | Vem får det som standard |
+|---|---|
+| Bokningsförfrågan väntar på godkännande | Utrustningsansvariga |
+| Bokning bekräftad | Bokaren + teammedlemmar |
+| Bokning nekad | Bokaren |
+| Bokning avbokad | Bokaren + teammedlemmar |
+| Påminnelse dagen före start | Bokaren + teammedlemmar |
+| Bokning försenad | Bokaren + teammedlemmar |
+| Ärende skapat | Utrustningsansvariga |
+| Tilldelad till ärende | Den tilldelade (kan inte stängas av) |
+| Ärende löst | Rapportören + tilldelade |
+| Kommentar på ärende | Rapportören + tilldelade |
+
+Rader som inte är relevanta för din roll visas inte alls. Händelsen "Tilldelad till ärende" är alltid aktiv och kan inte stängas av.
+
+Under tabellen visas om ett värde är ärvet från gruppstandarden eller systemstandarden. Knappen **Återställ till standard** tar bort alla dina personliga val och återgår till gruppens standardvärden.
+
+### Standardinställningar för gruppen
+
+*(Kräver utrustningsansvarig)*
+
+Under **Profil → Gruppinställningar → Standardinställningar för notiser** kan du ställa in standardvärden separat för vanliga **användare** och **utrustningsansvariga**. Tabellen har två kolumner per kanal — en för vardera rollen. Ändringarna påverkar bara de som inte har satt egna preferenser.
+
+### E-postinställningar
+
+*(Kräver utrustningsansvarig)*
+
+Under **Profil → Gruppinställningar → Aviseringar** väljer du om gruppen ska använda egna SMTP-inställningar eller systemets standardavsändare.
+
+- **Utan eget SMTP**: systemets avsändaradress visas som informationstext. Om ingen systemstandard är konfigurerad visas en varning.
+- **Med eget SMTP**: markera kryssrutan för att visa formuläret. Fyll i från-adress, host, port, TLS-läge, användarnamn och lösenord för din e-postleverantör (t.ex. SendGrid, Gmail med applösenord, Mailgun). Lösenordet lagras krypterat. Lämna lösenordsfältet tomt för att behålla det befintliga.
+
+Knappen **Skicka testnotis** skickar ett testmeddelande till din egen e-postadress så att du kan kontrollera att konfigurationen fungerar.
+
 ## På gång
 
 Funktioner som planeras men inte är byggda ännu:
 
 - Paket: färdiga utrustningsset för vanliga scenarier (t.ex. "hajk för 8 utmanare")
-- Notifieringar via e-post och Google Chat
+- Schemalagda notifieringar (påminnelser och förseningsvarningar skickas ännu inte automatiskt)
 - Artikelbilder vid felrapportering (med nedladdning som JPEG)
 - Inventariehantering i appen (skapa/redigera artiklar, bulk-åtgärder, CSV-import/-export)
 - Utskriftsvänlig hämtlista

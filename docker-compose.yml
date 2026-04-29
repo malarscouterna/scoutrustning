@@ -27,6 +27,13 @@ services:
       JWKS_URL: ${JWKS_URL}
       DEV_PERSONAS_PATH: /config/dev-personas.json
       IMAGE_DIR: /data/images
+      SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY:-}
+      SMTP_DEFAULT_FROM: ${SMTP_DEFAULT_FROM:-}
+      SMTP_DEFAULT_HOST: ${SMTP_DEFAULT_HOST:-}
+      SMTP_DEFAULT_PORT: ${SMTP_DEFAULT_PORT:-587}
+      SMTP_DEFAULT_TLS: ${SMTP_DEFAULT_TLS:-starttls}
+      SMTP_DEFAULT_USER: ${SMTP_DEFAULT_USER:-}
+      SMTP_DEFAULT_KEY: ${SMTP_DEFAULT_KEY:-}
     volumes:
       - ./dev-personas.json:/config/dev-personas.json:ro
       - images:/data/images

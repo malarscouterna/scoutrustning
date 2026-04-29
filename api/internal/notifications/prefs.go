@@ -81,6 +81,32 @@ type ChannelPref struct {
 // ResolvedPrefs maps event key → channel → effective pref.
 type ResolvedPrefs map[EventKey]map[string]ChannelPref
 
+// GroupNotificationDefaults is the parsed form of group_settings.notification_defaults.
+// Shape: { "user": { event: { channel: bool } }, "manager": { event: { channel: bool } } }
+type GroupNotificationDefaults struct {
+	User    map[string]map[string]bool `json:"user"`
+	Manager map[string]map[string]bool `json:"manager"`
+}
+
+func ParseGroupDefaults(raw []byte) GroupNotificationDefaults {
+	var d GroupNotificationDefaults
+	json.Unmarshal(raw, &d) //nolint:errcheck — missing keys are nil maps, treated as no override
+	return d
+}
+
+func (d GroupNotificationDefaults) Lookup(event, channel string, isManager bool) (bool, bool) {
+	m := d.User
+	if isManager {
+		m = d.Manager
+	}
+	if ev, ok := m[event]; ok {
+		if v, ok := ev[channel]; ok {
+			return v, true
+		}
+	}
+	return false, false
+}
+
 // ResolvePrefs returns the merged effective preferences for a user across all
 // known events and the given channels. Resolution order: user → group → system.
 func ResolvePrefs(ctx context.Context, q *db.Queries, userID, groupID string, channels []string, isManager bool) (ResolvedPrefs, error) {
@@ -95,8 +121,7 @@ func ResolvePrefs(ctx context.Context, q *db.Queries, userID, groupID string, ch
 
 	// Load group defaults (may be empty).
 	groupDefaultsRaw, _ := q.GetGroupNotificationDefaults(ctx, groupID)
-	var groupDefaults map[string]map[string]bool
-	json.Unmarshal(groupDefaultsRaw, &groupDefaults) //nolint:errcheck
+	groupDefaults := ParseGroupDefaults(groupDefaultsRaw)
 
 	result := make(ResolvedPrefs, len(AllEvents))
 	for _, event := range AllEvents {
@@ -104,14 +129,14 @@ func ResolvePrefs(ctx context.Context, q *db.Queries, userID, groupID string, ch
 		for _, ch := range channels {
 			// Compute the non-user default (group → system).
 			defaultEnabled := sysDefaults[event][ch]
-			if gp, ok := groupDefaults[event][ch]; ok {
-				defaultEnabled = gp
+			if gv, ok := groupDefaults.Lookup(event, ch, isManager); ok {
+				defaultEnabled = gv
 			}
 
 			if up, ok := userPrefs[event][ch]; ok {
 				result[event][ch] = ChannelPref{Enabled: up, Source: SourceUser, DefaultEnabled: defaultEnabled}
-			} else if gp, ok := groupDefaults[event][ch]; ok {
-				result[event][ch] = ChannelPref{Enabled: gp, Source: SourceGroupDefault, DefaultEnabled: defaultEnabled}
+			} else if gv, ok := groupDefaults.Lookup(event, ch, isManager); ok {
+				result[event][ch] = ChannelPref{Enabled: gv, Source: SourceGroupDefault, DefaultEnabled: defaultEnabled}
 			} else {
 				result[event][ch] = ChannelPref{Enabled: defaultEnabled, Source: SourceSystemDefault, DefaultEnabled: defaultEnabled}
 			}
@@ -135,12 +160,9 @@ func IsEnabled(ctx context.Context, q *db.Queries, userID, groupID, event, chann
 	}
 
 	groupDefaultsRaw, _ := q.GetGroupNotificationDefaults(ctx, groupID)
-	var groupDefaults map[string]map[string]bool
-	json.Unmarshal(groupDefaultsRaw, &groupDefaults) //nolint:errcheck
-	if gp, ok := groupDefaults[event]; ok {
-		if v, ok := gp[channel]; ok {
-			return v
-		}
+	groupDefaults := ParseGroupDefaults(groupDefaultsRaw)
+	if gv, ok := groupDefaults.Lookup(event, channel, isManager); ok {
+		return gv
 	}
 
 	sd := SystemDefaults(isManager)

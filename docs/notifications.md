@@ -338,7 +338,7 @@ Fast single-pair lookup used by send functions. Queries user prefs → group def
 
 ### Email bodies
 
-Minimal stub HTML built inline in `send.go` using i18n keys (`email_subject_*` in sv.json/en.json). Language resolves: recipient `users.language` → `sv`. Bodies will be replaced with proper templates in a later pass.
+Minimal stub HTML built inline in `send.go` using i18n keys (`email_subject_*` and `notif_*` in `api/internal/i18n/messages/sv.json` and `en.json`). Language resolves: recipient `users.language` → `sv`. The HTML wrapper is `simpleBody` in `send.go` — currently just a bare `<p>` tag with no context, greeting, or link back to the booking/issue. Bodies will be replaced with proper templates in a later pass (Step 10).
 
 ### Adding a new channel
 
@@ -363,6 +363,7 @@ Each step is independently testable. Steps 1–3 are backend prerequisites. Step
 | 7.5 | Demo mode protection + test email button | ✅ done | 7 |
 | 8 | Scheduled jobs | — | 7 |
 | 9 | Group defaults UI + SMTP UI | ✅ done | 5, 6 |
+| 10 | Email body templates | — | 7 |
 
 Steps 3 and 5 can run in parallel after Step 1. Steps 4, 6, and 9 are frontend-only and can overlap with later backend steps once their APIs exist.
 
@@ -516,3 +517,15 @@ Toggle table with the same layout as the user prefs table. `GET /api/v0/group-se
 **`ChannelPref` extended** (user prefs response): gains `default_enabled bool` — the group/system default value for that event+channel, independent of any user override. The user prefs table uses `enabled === default_enabled` to decide whether to show the "(standard)" hint, so the hint reappears when a user toggles back to the default value and disappears when they differ from it — regardless of whether `source` is `"user"`, `"group_default"`, or `"system_default"`.
 
 `notifications.SystemDefaults` exported (was `systemDefaults`) so the handler package can use it for merging.
+
+### Step 10: Email body templates
+
+Replace `simpleBody` in `send.go` with proper HTML email templates. Each event gets a template that includes:
+- A greeting (recipient name if available)
+- Contextual detail (booking dates, item names, issue title, commenter name, etc.)
+- A direct link back to the relevant booking or issue in the app
+- Plain footer (group name, unsubscribe hint pointing to `/profile`)
+
+**String locations**: subject lines and body copy live in `api/internal/i18n/messages/sv.json` and `en.json` under the `email_subject_*` and `notif_*` key namespaces. The HTML layout (wrapper, button styles, colors) can be a Go template file or built inline — keep it simple enough to render correctly in common mail clients without a full framework.
+
+**Test**: extend `TestNotifications_EventTriggered` to assert that captured message bodies contain the booking/issue link and relevant context (dates, title). Visual review via Mailpit (included in dev Compose stack, `http://localhost:8025`).

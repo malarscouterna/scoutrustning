@@ -53,7 +53,7 @@ The data model and multi-tenancy architecture are not tied to Sweden — multipl
 
 ### What's not yet done
 
-- **Notification sending** — the preference system and data model are in place, but emails are not sent yet. No scheduled reminders or overdue alerts.
+- **Scheduled notifications** — booking reminders and overdue alerts are not yet sent automatically (scheduled jobs not implemented).
 - **CSV import preview** — import runs immediately with no dry-run step.
 - **CSV export and print view** — no export from the browse page; no print-friendly checklist.
 - **Packages** — predefined article sets that populate the cart (designed but not built).
@@ -82,6 +82,14 @@ docker compose up
 ```
 
 In dev mode, no login is required. Use the persona switcher (floating panel) to switch between preconfigured roles. See `dev-personas.json` for available personas.
+
+### Testing emails in dev
+
+[Mailpit](https://mailpit.axllent.org/) is included in the dev Compose stack — it starts automatically with `docker compose up`. It catches all outgoing email and shows it in a web UI at `http://localhost:8025`. No configuration needed; the generated `.env` already points at it (`SMTP_DEFAULT_HOST=mailpit`).
+
+To test against a real provider instead, set `SMTP_DEFAULT_*` in `.env` to your mail provider credentials (SendGrid, Mailgun, a Gmail app password, etc.) and restart the API container.
+
+Use the **Skicka testnotis** button on your profile page (group settings tab) to send a test email without triggering a booking event.
 
 You still need `docker compose up --build` when adding Go or Node dependencies, or changing a Dockerfile.
 
