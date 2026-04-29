@@ -180,6 +180,7 @@ SMTP_DEFAULT_PORT=1025
 SMTP_DEFAULT_TLS=starttls
 SMTP_DEFAULT_USER=
 SMTP_DEFAULT_KEY=
+APP_BASE_URL=http://localhost:5173
 EOF
 else
   cat >> .env << EOF
@@ -196,6 +197,7 @@ SMTP_DEFAULT_PORT=587
 SMTP_DEFAULT_TLS=starttls
 SMTP_DEFAULT_USER=CHANGEME_apikey
 SMTP_DEFAULT_KEY=CHANGEME_your-smtp-api-key
+APP_BASE_URL=CHANGEME_https://utrustning.yourscoutgroup.se
 EOF
 fi
 

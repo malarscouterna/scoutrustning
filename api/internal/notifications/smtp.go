@@ -44,6 +44,9 @@ func (s *SMTPNotifier) Send(ctx context.Context, msg Message) error {
 	}
 	m.Subject(msg.Subject)
 	m.SetBodyString(mail.TypeTextHTML, msg.Body)
+	if msg.TextBody != "" {
+		m.AddAlternativeString(mail.TypeTextPlain, msg.TextBody)
+	}
 
 	opts := []mail.Option{
 		mail.WithPort(cfg.port),

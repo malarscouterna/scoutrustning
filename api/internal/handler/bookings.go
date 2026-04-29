@@ -19,6 +19,7 @@ import (
 type BookingHandler struct {
 	Q        *db.Queries
 	Notifier notifications.Notifier
+	BaseURL  string
 }
 
 func (h *BookingHandler) Routes() chi.Router {
@@ -612,14 +613,12 @@ func (h *BookingHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.Notifier != nil {
-		b := updated
-		n := h.Notifier
-		q := h.Q
+		b, n, q, u := updated, h.Notifier, h.Q, h.BaseURL
 		if newStatus == "submitted" {
-			go notifications.SendBookingNeedsApproval(context.Background(), q, n, b)
+			go notifications.SendBookingNeedsApproval(context.Background(), q, n, b, u)
 		} else {
-			go notifications.SendBookingConfirmed(context.Background(), q, n, b)
-			go notifications.SendBookingSubmittedNoApproval(context.Background(), q, n, b)
+			go notifications.SendBookingConfirmed(context.Background(), q, n, b, u)
+			go notifications.SendBookingSubmittedNoApproval(context.Background(), q, n, b, u)
 		}
 	}
 
@@ -658,8 +657,8 @@ func (h *BookingHandler) Approve(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if h.Notifier != nil {
-		b, n, q := updated, h.Notifier, h.Q
-		go notifications.SendBookingConfirmed(context.Background(), q, n, b)
+		b, n, q, u := updated, h.Notifier, h.Q, h.BaseURL
+		go notifications.SendBookingConfirmed(context.Background(), q, n, b, u)
 	}
 
 	WriteJSON(w, http.StatusOK, updated)
@@ -697,8 +696,8 @@ func (h *BookingHandler) Reject(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if h.Notifier != nil {
-		b, n, q := updated, h.Notifier, h.Q
-		go notifications.SendBookingRejected(context.Background(), q, n, b)
+		b, n, q, u := updated, h.Notifier, h.Q, h.BaseURL
+		go notifications.SendBookingRejected(context.Background(), q, n, b, u)
 	}
 
 	WriteJSON(w, http.StatusOK, updated)
@@ -806,8 +805,8 @@ func (h *BookingHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.Notifier != nil {
-		b, n, q := updated, h.Notifier, h.Q
-		go notifications.SendBookingCancelled(context.Background(), q, n, b)
+		b, n, q, u := updated, h.Notifier, h.Q, h.BaseURL
+		go notifications.SendBookingCancelled(context.Background(), q, n, b, u)
 	}
 
 	WriteJSON(w, http.StatusOK, updated)

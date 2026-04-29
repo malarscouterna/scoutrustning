@@ -10,6 +10,19 @@ High — follow these unless they conflict with an explicit user instruction.
 
 ## Instructions
 
+### Generated files
+
+Never edit generated files directly - always edit the source and regenerate:
+
+| Generated file(s) | Source | Regenerate with | Committed |
+|---|---|---|---|
+| `api/internal/db/*.sql.go`, `api/internal/db/models.go` | `api/internal/db/queries/*.sql` + `api/sqlc.yaml` | `cd api && sqlc generate` | yes |
+| `api/internal/notifications/templates/*.html` | `web/src/lib/emails/*.mjml` | `cd web && pnpm compile-emails` | yes |
+| `web/src/lib/paraglide/` | `api/internal/i18n/messages/{sv,en}.json` | `cd web && pnpm build` (or Vite HMR in dev) | no (gitignored) |
+| `web/.svelte-kit/` | SvelteKit routes and config | `cd web && pnpm build` | no (gitignored) |
+
+Committed generated files must never be edited by hand - always edit the source and regenerate. Gitignored generated files are rebuilt automatically during `pnpm build` or dev mode.
+
 ### Go (api/)
 
 - Use stdlib `net/http` types in handlers. Chi for routing only.
