@@ -2,8 +2,9 @@
   <mj-head>
     <mj-title>EMAIL_BANNER_LABEL</mj-title>
     <mj-preview>EMAIL_BANNER_LABEL</mj-preview>
+    <mj-font name="Source Sans 3" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&display=swap" />
     <mj-attributes>
-      <mj-all font-family="Arial, sans-serif" />
+      <mj-all font-family="'Source Sans 3', Arial, sans-serif" />
       <mj-text font-size="15px" line-height="1.5" color="#131d24" />
     </mj-attributes>
   </mj-head>
@@ -54,6 +55,18 @@
         </mj-text>
         <mj-text padding-top="8px" color="#608199" font-size="12px">
           EMAIL_REPORTER_LINE
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- Event history -->
+    <mj-section background-color="#ffffff" padding="0 32px 0">
+      <mj-column padding-top="20px" border-top="1px solid #d7e4f0">
+        <mj-text font-weight="bold" color="#374b5a" padding-bottom="8px">
+          EMAIL_EVENTS_HEADING
+        </mj-text>
+        <mj-text padding-top="0" color="#374b5a" font-size="14px" line-height="1.6">
+          EMAIL_EVENTS_HTML
         </mj-text>
       </mj-column>
     </mj-section>

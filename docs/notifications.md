@@ -344,6 +344,10 @@ Minimal stub HTML built inline in `send.go` using i18n keys (`email_subject_*` a
 
 The `channel` dimension in `user_notification_prefs` and `group_notification_defaults` makes new channels additive: add the channel identifier to `notification_channels` in group settings, implement a new `Notifier`, add rows for the new channel in the defaults tables. No schema changes needed. The preference UI picks up the new column automatically.
 
+## Backlog
+
+- **Group logo in email header** — groups should be able to upload a logo that replaces the text-only group name in the email header. Stored as an image (similar to article images). The MJML header section currently renders `EMAIL_GROUP_NAME` as bold white text; when a logo is configured, replace it with an `<mj-image>` pointing to a public URL for that image.
+
 ## Implementation plan
 
 Each step is independently testable. Steps 1–3 are backend prerequisites. Steps 4–7 add visible functionality. Steps 8–9 are scheduled jobs and manager defaults UI.
@@ -535,8 +539,6 @@ Full design in `docs/email-templates.md`.
 **New env var**: `APP_BASE_URL` (default `http://localhost:5173` in dev) — used for booking/issue links and unsubscribe URL. Set in `gen-env.sh` and `docker-compose.yml`.
 
 **Still remaining**:
-- i18n keys: `email_banner_*`, `email_intro_*`, `email_cta_*`, `email_items_heading`, `email_notes_heading`, `email_footer_unsubscribe`, `email_personal_booking`, `email_reporter_line`
-- `docker-compose.yml` env block: add `APP_BASE_URL`
-- `MeHandler` test-email: pass `BaseURL` (currently uses `sendTestEmail` without it)
+- Visual review via Mailpit
 - Extend `TestNotifications_EventTriggered` to assert body contains booking URL, dates, item list
 - Visual review via Mailpit (`http://localhost:8025`)

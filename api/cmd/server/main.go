@@ -94,13 +94,13 @@ func main() {
 		}
 
 		notifPrefsHandler := &handler.NotificationPrefsHandler{Q: queries}
-		meHandler := &handler.MeHandler{Q: queries, Perms: permCache, NotifPrefs: notifPrefsHandler, Notifier: smtpNotifier, PersonaIDs: personaIDs}
+		appBaseURL := getenv("APP_BASE_URL", "http://localhost:5173")
+		meHandler := &handler.MeHandler{Q: queries, Perms: permCache, NotifPrefs: notifPrefsHandler, Notifier: smtpNotifier, PersonaIDs: personaIDs, BaseURL: appBaseURL}
 
 		articles := &handler.ArticleHandler{Q: queries, Perms: permCache}
 		locations := &handler.LocationHandler{Q: queries}
 		categories := &handler.CategoryHandler{Q: queries}
 
-		appBaseURL := getenv("APP_BASE_URL", "http://localhost:5173")
 		bookings := &handler.BookingHandler{Q: queries, Notifier: eventNotifier, BaseURL: appBaseURL}
 		teams := &handler.TeamHandler{Q: queries}
 		groupSettings := &handler.GroupSettingsHandler{Q: queries, Perms: permCache}

@@ -112,9 +112,13 @@ func dedup(recipients []recipient) []recipient {
 func bookingMsg(ctx context.Context, q *db.Queries, b db.Booking, event, baseURL string, r recipient) Message {
 	data := fetchBookingEmailData(ctx, q, b, event, r.lang, r.name, baseURL)
 	htmlBody, textBody := renderBookingEmail(data)
+	subject := i18n.T(r.lang, "email_subject_"+event)
+	if data.TeamName != "" {
+		subject = data.TeamName + ": " + subject
+	}
 	return Message{
 		To:       r.email,
-		Subject:  i18n.T(r.lang, "email_subject_"+event),
+		Subject:  subject,
 		Body:     htmlBody,
 		TextBody: textBody,
 	}
@@ -126,7 +130,7 @@ func issueMsg(ctx context.Context, q *db.Queries, issue db.IssueReport, event, b
 	htmlBody, textBody := renderIssueEmail(data)
 	return Message{
 		To:       r.email,
-		Subject:  i18n.T(r.lang, "email_subject_"+event),
+		Subject:  i18n.T(r.lang, "email_subject_"+event, map[string]string{"title": issue.Title}),
 		Body:     htmlBody,
 		TextBody: textBody,
 	}

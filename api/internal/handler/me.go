@@ -25,6 +25,7 @@ type MeHandler struct {
 	Notifier   notifications.Notifier
 	// PersonaIDs is non-nil in demo mode. Persona users are skipped by test-email.
 	PersonaIDs map[string]bool
+	BaseURL    string
 }
 
 func (h *MeHandler) Routes() chi.Router {
@@ -98,11 +99,18 @@ func (h *MeHandler) PostTestEmail(w http.ResponseWriter, r *http.Request) {
 			lang = user.Language.String
 		}
 	}
+	baseURL := h.BaseURL
+	if baseURL == "" {
+		baseURL = "http://localhost:5173"
+	}
+	bodyText := i18n.T(lang, "notif_test_email")
+	unsubscribeLabel := i18n.T(lang, "email_footer_unsubscribe")
 	msg := notifications.Message{
-		GroupID: claims.GroupID,
-		To:      claims.Email,
-		Subject: i18n.T(lang, "email_subject_test_email"),
-		Body:    fmt.Sprintf(`<!DOCTYPE html><html><body><p>%s</p></body></html>`, i18n.T(lang, "notif_test_email")),
+		GroupID:  claims.GroupID,
+		To:       claims.Email,
+		Subject:  i18n.T(lang, "email_subject_test_email"),
+		Body:     fmt.Sprintf(`<!DOCTYPE html><html><body><p>%s</p><p><a href="%s/profile">%s</a></p></body></html>`, bodyText, baseURL, unsubscribeLabel),
+		TextBody: fmt.Sprintf("%s\n\n%s: %s/profile", bodyText, unsubscribeLabel, baseURL),
 	}
 	if err := h.Notifier.Send(r.Context(), msg); err != nil {
 		slog.Error("test email failed", "to", claims.Email, "group", claims.GroupID, "err", err)

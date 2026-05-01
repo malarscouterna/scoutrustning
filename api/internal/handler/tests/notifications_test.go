@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,8 +21,8 @@ func mountNotifRoutes(env *testutil.TestEnv, notifier *notifications.CapturingNo
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
 		r.Mount("/teams", (&handler.TeamHandler{Q: env.Queries}).Routes())
-		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Notifier: notifier}).Routes())
-		r.Mount("/issues", (&handler.IssueHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries), Notifier: notifier}).Routes())
+		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Notifier: notifier, BaseURL: "http://test.example"}).Routes())
+		r.Mount("/issues", (&handler.IssueHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries), Notifier: notifier, BaseURL: "http://test.example"}).Routes())
 	})
 }
 
@@ -168,13 +169,24 @@ func TestNotifications_EventTriggered(t *testing.T) {
 			t.Fatal("expected at least one notification for booking_needs_approval, got none")
 		}
 		found := false
+		var msg notifications.Message
 		for _, m := range notifier.Messages() {
 			if m.To == "manager@test.example" {
 				found = true
+				msg = m
 			}
 		}
 		if !found {
 			t.Errorf("expected notification to manager@test.example, got: %+v", notifier.Messages())
+		}
+		if !strings.Contains(msg.Body, "http://test.example/bookings/"+bookingID) {
+			t.Errorf("expected body to contain booking URL, got: %s", msg.Body)
+		}
+		if !strings.Contains(msg.Body, "2025-08-01") && !strings.Contains(msg.Body, "1 aug") {
+			t.Errorf("expected body to contain booking dates, got: %s", msg.Body)
+		}
+		if msg.TextBody == "" {
+			t.Error("expected TextBody to be non-empty")
 		}
 	})
 
