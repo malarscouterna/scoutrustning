@@ -16,10 +16,19 @@ Design and implementation document for the HTML email template system introduced
 | Handler structs - `BaseURL` field, all call sites updated | ✅ done |
 | `main.go` - `APP_BASE_URL` env var, wired to handlers | ✅ done |
 | `gen-env.sh` - `APP_BASE_URL` for dev and demo/prod | ✅ done |
-| i18n keys (`email_banner_*`, `email_intro_*`, `email_cta_*`, etc.) | ⏳ pending |
-| `docker-compose.yml` - `APP_BASE_URL` env block | ⏳ pending |
-| `MeHandler` test-email - pass `BaseURL` | ⏳ pending |
-| `TestNotifications_EventTriggered` - body assertions | ⏳ pending |
+| i18n keys (`email_banner_*`, `email_intro_*`, `email_cta_*`, etc.) | ✅ done |
+| `docker-compose.yml` - `APP_BASE_URL` env block | ✅ done |
+| `MeHandler` test-email - pass `BaseURL` | ✅ done |
+| `TestNotifications_EventTriggered` - body assertions | ✅ done |
+| Bug fix: issue severity/status empty in `SendIssueResolved`/`Commented` | ✅ done |
+| Bug fix: `{title}` not substituted in issue email subjects | ✅ done |
+| Issue emails: full event/comment history section | ✅ done |
+| Booking items: grouped by location, card-style with status badges | ✅ done |
+| Booking emails: message thread (shown only when notes exist) | ✅ done |
+| Booking notes block (hidden when empty) | ✅ done |
+| Source Sans 3 font via `<mj-font>` in both templates | ✅ done |
+| Bug fix: issue history shows initial description twice | ✅ done |
+| Booking subject/banner: prepend team name (e.g. "Yggdrasil: Bekräftad") | ✅ done |
 | Mailpit visual review | ⏳ pending |
 
 ## Approach
@@ -299,7 +308,9 @@ This is readable and correct across all email clients. It mirrors the HTML conte
 
 - Default in dev: `http://localhost:5173`
 - Set in `gen-env.sh` for demo/prod with a `CHANGEME` placeholder
-- Read in `main.go`, passed to `BookingHandler.BaseURL` and `IssueHandler.BaseURL`
+- Read in `main.go`, passed to `BookingHandler.BaseURL`, `IssueHandler.BaseURL`, and `MeHandler.BaseURL`
+
+**Future**: allow groups to configure their own base URL (e.g. a custom domain pointing to the same instance). When implemented, add `base_url text DEFAULT ''` to `group_settings`. Send functions resolve: group `base_url` → `APP_BASE_URL` fallback. `Message.GroupID` is already available at send time, so the lookup is straightforward. No `Notifier` interface changes needed.
 
 ## i18n keys to add
 

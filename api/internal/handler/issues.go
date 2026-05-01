@@ -341,7 +341,9 @@ func (h *IssueHandler) Update(w http.ResponseWriter, r *http.Request) {
 			if iss, err := h.Q.GetIssue(r.Context(), db.GetIssueParams{ID: id, GroupID: claims.GroupID}); err == nil {
 				issue := db.IssueReport{
 					ID: iss.ID, GroupID: iss.GroupID, Title: iss.Title,
-					ReporterID: iss.ReporterID, Status: iss.Status,
+					ReporterID: iss.ReporterID, Severity: iss.Severity, Status: iss.Status,
+					Description: iss.Description, BookingID: iss.BookingID,
+					CreatedAt: iss.CreatedAt, UpdatedAt: iss.UpdatedAt,
 				}
 				n, q := h.Notifier, h.Q
 				go notifications.SendIssueResolved(context.Background(), q, n, issue, h.BaseURL)
@@ -393,7 +395,12 @@ func (h *IssueHandler) AddComment(w http.ResponseWriter, r *http.Request) {
 
 	if h.Notifier != nil {
 		if iss, err := h.Q.GetIssue(r.Context(), db.GetIssueParams{ID: id, GroupID: claims.GroupID}); err == nil {
-			issue := db.IssueReport{ID: iss.ID, GroupID: iss.GroupID, Title: iss.Title, ReporterID: iss.ReporterID}
+			issue := db.IssueReport{
+				ID: iss.ID, GroupID: iss.GroupID, Title: iss.Title,
+				ReporterID: iss.ReporterID, Severity: iss.Severity, Status: iss.Status,
+				Description: iss.Description, BookingID: iss.BookingID,
+				CreatedAt: iss.CreatedAt, UpdatedAt: iss.UpdatedAt,
+			}
 			n, q := h.Notifier, h.Q
 			go notifications.SendIssueCommented(context.Background(), q, n, issue, h.BaseURL)
 		}

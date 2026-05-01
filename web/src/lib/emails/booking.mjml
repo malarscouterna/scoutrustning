@@ -2,8 +2,9 @@
   <mj-head>
     <mj-title>EMAIL_BANNER_LABEL</mj-title>
     <mj-preview>EMAIL_BANNER_LABEL</mj-preview>
+    <mj-font name="Source Sans 3" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&display=swap" />
     <mj-attributes>
-      <mj-all font-family="Arial, sans-serif" />
+      <mj-all font-family="'Source Sans 3', Arial, sans-serif" />
       <mj-text font-size="15px" line-height="1.5" color="#131d24" />
     </mj-attributes>
   </mj-head>
@@ -64,14 +65,14 @@
       </mj-column>
     </mj-section>
 
-    <!-- Notes (hidden when empty via zero-height trick) -->
-    <mj-section background-color="#ffffff" padding="0 32px 0" css-class="notes-section">
-      <mj-column padding-top="16px">
-        <mj-text font-weight="bold" color="#374b5a" padding-bottom="4px">
-          EMAIL_NOTES_HEADING
+    <!-- Optional sections: notes and comment thread. Each placeholder renders the full block or empty string. -->
+    <mj-section background-color="#ffffff" padding="0 32px 0">
+      <mj-column padding-top="0">
+        <mj-text padding-top="0" padding-bottom="0" color="#608199">
+          EMAIL_NOTES_BLOCK
         </mj-text>
-        <mj-text padding-top="0" color="#608199">
-          EMAIL_NOTES
+        <mj-text padding-top="0" padding-bottom="0" color="#374b5a" font-size="14px" line-height="1.6">
+          EMAIL_BOOKING_EVENTS_BLOCK
         </mj-text>
       </mj-column>
     </mj-section>

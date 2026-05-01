@@ -86,6 +86,7 @@ type BookingEmailData struct {
 	TeamName      string // empty if personal or external
 	Notes         string
 	Items         []db.ListBookingItemsRow
+	Events        []db.ListBookingEventsRow
 }
 
 // IssueEmailData holds all values needed to render an issue email.
@@ -101,6 +102,7 @@ type IssueEmailData struct {
 	Status       string
 	Description  string
 	ReporterName string
+	Events       []db.ListIssueEventsRow
 }
 
 func renderBookingEmail(d BookingEmailData) (htmlOut, textOut string) {
@@ -115,13 +117,17 @@ func renderBookingEmail(d BookingEmailData) (htmlOut, textOut string) {
 	bookingURL := d.BaseURL + "/bookings/" + uuidString(d.BookingID)
 
 	teamLabel, teamBG, teamFG := teamBadge(d.Lang, d.TeamName)
-	itemsHTML := buildItemsHTML(d.Items)
-	notesHTML := html.EscapeString(d.Notes)
+	itemsHTML := buildItemsHTML(d.Lang, d.Items)
+
+	bannerLabel := i18n.T(d.Lang, "email_banner_"+d.Event)
+	if d.TeamName != "" {
+		bannerLabel = d.TeamName + ": " + bannerLabel
+	}
 
 	replacer := strings.NewReplacer(
 		"EMAIL_RECIPIENT_NAME", html.EscapeString(d.RecipientName),
 		"EMAIL_GROUP_NAME", html.EscapeString(d.GroupName),
-		"EMAIL_BANNER_LABEL", html.EscapeString(i18n.T(d.Lang, "email_banner_"+d.Event)),
+		"EMAIL_BANNER_LABEL", html.EscapeString(bannerLabel),
 		"EMAIL_BANNER_BG", style.bannerBG,
 		"EMAIL_BANNER_FG", style.bannerFG,
 		"EMAIL_INTRO", html.EscapeString(i18n.T(d.Lang, "email_intro_"+d.Event)),
@@ -135,8 +141,8 @@ func renderBookingEmail(d BookingEmailData) (htmlOut, textOut string) {
 		"EMAIL_STATUS_FG", statusBadge.fg,
 		"EMAIL_ITEMS_HEADING", html.EscapeString(i18n.T(d.Lang, "email_items_heading")),
 		"EMAIL_ITEMS_HTML", itemsHTML,
-		"EMAIL_NOTES_HEADING", html.EscapeString(i18n.T(d.Lang, "email_notes_heading")),
-		"EMAIL_NOTES", notesHTML,
+		"EMAIL_NOTES_BLOCK", buildNotesBlock(d.Lang, d.Notes),
+		"EMAIL_BOOKING_EVENTS_BLOCK", buildBookingEventsHTML(d.Lang, d.Events),
 		"EMAIL_CTA_LABEL", html.EscapeString(i18n.T(d.Lang, "email_cta_"+d.Event)),
 		"EMAIL_CTA_URL", bookingURL,
 		"EMAIL_CTA_BG", style.ctaBG,
@@ -145,7 +151,7 @@ func renderBookingEmail(d BookingEmailData) (htmlOut, textOut string) {
 	)
 
 	htmlOut = replacer.Replace(bookingTemplate)
-	textOut = buildBookingText(d, start, end, teamLabel, bookingURL)
+	textOut = buildBookingText(d, bannerLabel, start, end, teamLabel, bookingURL)
 	return
 }
 
@@ -179,6 +185,8 @@ func renderIssueEmail(d IssueEmailData) (htmlOut, textOut string) {
 		"EMAIL_ISSUE_STATUS_FG", stBadge.fg,
 		"EMAIL_DESCRIPTION", html.EscapeString(desc),
 		"EMAIL_REPORTER_LINE", html.EscapeString(i18n.T(d.Lang, "email_reporter_line", map[string]string{"name": d.ReporterName})),
+		"EMAIL_EVENTS_HTML", buildEventsHTML(d.Lang, d.Events),
+		"EMAIL_EVENTS_HEADING", html.EscapeString(i18n.T(d.Lang, "email_events_heading")),
 		"EMAIL_CTA_LABEL", html.EscapeString(i18n.T(d.Lang, "email_cta_"+d.Event)),
 		"EMAIL_CTA_URL", issueURL,
 		"EMAIL_CTA_BG", style.ctaBG,
@@ -203,6 +211,7 @@ func fetchBookingEmailData(ctx context.Context, q *db.Queries, b db.Booking, eve
 	}
 
 	items, _ := q.ListBookingItems(ctx, db.ListBookingItemsParams{BookingID: b.ID, GroupID: b.GroupID})
+	events, _ := q.ListBookingEvents(ctx, db.ListBookingEventsParams{BookingID: b.ID, GroupID: b.GroupID})
 
 	return BookingEmailData{
 		Event:         event,
@@ -217,16 +226,25 @@ func fetchBookingEmailData(ctx context.Context, q *db.Queries, b db.Booking, eve
 		TeamName:      teamName,
 		Notes:         b.Notes,
 		Items:         items,
+		Events:        events,
 	}
 }
 
-// fetchIssueEmailData loads group name and reporter name for an issue.
+// fetchIssueEmailData loads group name, reporter name, and event history for an issue.
 func fetchIssueEmailData(ctx context.Context, q *db.Queries, issue db.IssueReport, event, lang, recipientName, baseURL string) IssueEmailData {
 	group, _ := q.GetGroup(ctx, issue.GroupID)
 
 	var reporterName string
 	if u, err := q.GetUser(ctx, db.GetUserParams{ID: issue.ReporterID, GroupID: issue.GroupID}); err == nil {
 		reporterName = u.Name
+	}
+
+	allEvents, _ := q.ListIssueEvents(ctx, db.ListIssueEventsParams{IssueID: issue.ID, GroupID: issue.GroupID})
+	// The first event is the creation comment, which duplicates issue.Description shown in the card above.
+	// Skip it so the history section only shows subsequent activity.
+	events := allEvents
+	if len(allEvents) > 0 && allEvents[0].EventType == "comment" && allEvents[0].Description == issue.Description {
+		events = allEvents[1:]
 	}
 
 	return IssueEmailData{
@@ -241,6 +259,7 @@ func fetchIssueEmailData(ctx context.Context, q *db.Queries, issue db.IssueRepor
 		Status:        issue.Status,
 		Description:   issue.Description,
 		ReporterName:  reporterName,
+		Events:        events,
 	}
 }
 
@@ -273,37 +292,232 @@ func teamBadge(lang, teamName string) (label, bg, fg string) {
 	return i18n.T(lang, "email_personal_booking"), "#e5e5e6", "#585a5c"
 }
 
-// buildItemsHTML renders the booking item list as HTML lines.
-// Mirrors the grouping logic in IssueCard's articleNames derived value.
-func buildItemsHTML(items []db.ListBookingItemsRow) string {
+// articleStatusBadge returns inline-style colors for an article status badge, matching BookingItemsList.svelte.
+var articleStatusBadge = map[string]badgeColors{
+	"ok":                {"#dcfce7", "#008236"},
+	"reported_usable":   {"#fef3c7", "#c2410c"},
+	"reported_unusable": {"#ffe2e2", "#c10007"},
+	"incoming":          {"#e6eeff", "#003660"},
+	"under_repair":      {"#f4f4f5", "#52525b"},
+	"lost":              {"#ffe2e2", "#c10007"},
+	"archived":          {"#f4f4f5", "#52525b"},
+}
+
+// itemGroup holds the items sharing a commercial name within a location.
+type itemGroup struct {
+	commercialName      string
+	individuallyTracked bool
+	items               []db.ListBookingItemsRow
+}
+
+// buildItemsHTML renders the booking item list as card-style HTML, mirroring BookingItemsList.svelte.
+// Layout: location label → per-commercial-name card (neutral header + rows).
+// For individually tracked: one row per item showing common_name + place.
+// For quantity tracked: colored status badge rows with counts.
+func buildItemsHTML(lang string, items []db.ListBookingItemsRow) string {
 	if len(items) == 0 {
 		return ""
 	}
-	type qtKey struct{ name, loc string }
-	qtCounts := map[qtKey]int{}
-	var lines []string
 
-	for _, it := range items {
-		if it.IndividuallyTracked {
-			name := html.EscapeString(it.CommercialName)
-			if it.CommonName != "" {
-				name += " &ndash; " + html.EscapeString(it.CommonName)
+	// Build location → groups structure, preserving DB order.
+	type locKey = string
+	var locOrder []string
+	locGroups := map[locKey][]*itemGroup{}
+	groupIndex := map[string]*itemGroup{} // key = commercialName+"||"+locationName
+
+	for i := range items {
+		it := &items[i]
+		gKey := it.CommercialName + "||" + it.LocationName
+		g, ok := groupIndex[gKey]
+		if !ok {
+			g = &itemGroup{commercialName: it.CommercialName, individuallyTracked: it.IndividuallyTracked}
+			groupIndex[gKey] = g
+			if _, seen := locGroups[it.LocationName]; !seen {
+				locOrder = append(locOrder, it.LocationName)
 			}
-			lines = append(lines, name)
-		} else {
-			k := qtKey{it.CommercialName, it.LocationName}
-			qtCounts[k]++
+			locGroups[it.LocationName] = append(locGroups[it.LocationName], g)
 		}
-	}
-	for k, count := range qtCounts {
-		if count > 1 {
-			lines = append(lines, fmt.Sprintf("%s (%d st)", html.EscapeString(k.name), count))
-		} else {
-			lines = append(lines, html.EscapeString(k.name))
-		}
+		g.items = append(g.items, *it)
 	}
 
-	return strings.Join(lines, "<br>")
+	var b strings.Builder
+	for li, loc := range locOrder {
+		if li > 0 {
+			b.WriteString(`<div style="height:12px"></div>`)
+		}
+		// Location header
+		fmt.Fprintf(&b,
+			`<div style="font-size:11px;font-weight:700;color:#608199;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">%s</div>`,
+			html.EscapeString(loc),
+		)
+		for _, g := range locGroups[loc] {
+			count := len(g.items)
+			// Card
+			b.WriteString(`<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #d7e4f0;margin-bottom:6px;border-collapse:collapse">`)
+			// Card header
+			fmt.Fprintf(&b,
+				`<tr><td style="background:#f0f4f8;padding:6px 10px;font-weight:600;color:#131d24;font-size:14px">%s`+
+					`<span style="float:right;color:#608199;font-size:13px;font-weight:400">%d st</span></td></tr>`,
+				html.EscapeString(g.commercialName), count,
+			)
+			if g.individuallyTracked {
+				for j, it := range g.items {
+					borderStyle := ""
+					if j > 0 {
+						borderStyle = "border-top:1px solid #eef2f7;"
+					}
+					commonName := html.EscapeString(it.CommonName)
+					place := ""
+					if it.Place != "" {
+						place = fmt.Sprintf(`<span style="color:#608199;margin-left:10px;font-size:13px">%s</span>`, html.EscapeString(it.Place))
+					}
+					fmt.Fprintf(&b,
+						`<tr><td style="padding:5px 10px;font-size:14px;%s">%s%s</td></tr>`,
+						borderStyle, commonName, place,
+					)
+				}
+			} else {
+				// Group by article_status
+				statusCount := map[string]int{}
+				var statusOrder []string
+				for _, it := range g.items {
+					if _, seen := statusCount[it.ArticleStatus]; !seen {
+						statusOrder = append(statusOrder, it.ArticleStatus)
+					}
+					statusCount[it.ArticleStatus]++
+				}
+				b.WriteString(`<tr><td style="padding:7px 10px">`)
+				for si, st := range statusOrder {
+					if si > 0 {
+						b.WriteString(" ")
+					}
+					colors, ok := articleStatusBadge[st]
+					if !ok {
+						colors = badgeColors{bg: "#f4f4f5", fg: "#52525b"}
+					}
+					label := i18n.T(lang, "article_status_"+st)
+					fmt.Fprintf(&b,
+						`<span style="background:%s;color:%s;font-size:12px;padding:2px 7px;border-radius:4px">&times;%d %s</span>`,
+						colors.bg, colors.fg, statusCount[st], html.EscapeString(label),
+					)
+				}
+				b.WriteString(`</td></tr>`)
+			}
+			b.WriteString(`</table>`)
+		}
+	}
+	return b.String()
+}
+
+// buildEventsHTML renders the issue event history as HTML.
+func buildEventsHTML(lang string, events []db.ListIssueEventsRow) string {
+	if len(events) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	for _, ev := range events {
+		var ts string
+		if ev.CreatedAt.Valid {
+			ts = ev.CreatedAt.Time.Format("2 jan 2006 15:04")
+		}
+		header := fmt.Sprintf(
+			`<span style="color:#608199;font-size:12px">%s &mdash; %s</span>`,
+			html.EscapeString(ts),
+			html.EscapeString(ev.ActorName),
+		)
+
+		var label string
+		switch ev.EventType {
+		case "comment":
+			label = ""
+		default:
+			label = i18n.T(lang, "issue_event_type_"+ev.EventType)
+			if label == "issue_event_type_"+ev.EventType {
+				label = ev.EventType // fallback to raw value
+			}
+			label = `<span style="font-size:13px;font-style:italic;color:#374b5a">` + html.EscapeString(label) + `</span><br>`
+		}
+
+		b.WriteString(header)
+		b.WriteString("<br>")
+		if label != "" {
+			b.WriteString(label)
+		}
+		if ev.Description != "" {
+			b.WriteString(html.EscapeString(ev.Description))
+			b.WriteString("<br>")
+		}
+		b.WriteString("<br>")
+	}
+	return strings.TrimSuffix(b.String(), "<br>")
+}
+
+// buildNotesBlock renders the notes section as a self-contained HTML block, or empty string.
+func buildNotesBlock(lang, notes string) string {
+	if notes == "" {
+		return ""
+	}
+	heading := html.EscapeString(i18n.T(lang, "email_notes_heading"))
+	return fmt.Sprintf(
+		`<div style="padding-top:16px;border-top:1px solid #d7e4f0;margin-top:8px"><span style="font-weight:600;color:#374b5a">%s</span><br><span style="color:#608199">%s</span></div>`,
+		heading, html.EscapeString(notes),
+	)
+}
+
+// hasNotes reports whether events contains at least one user-written note.
+func hasNotes(events []db.ListBookingEventsRow) bool {
+	for _, ev := range events {
+		if ev.EventType == "note" {
+			return true
+		}
+	}
+	return false
+}
+
+// buildBookingEventsHTML renders the full booking event thread block (heading + events) as HTML,
+// or empty string when there are no user notes.
+func buildBookingEventsHTML(lang string, events []db.ListBookingEventsRow) string {
+	if !hasNotes(events) {
+		return ""
+	}
+	heading := html.EscapeString(i18n.T(lang, "email_booking_events_heading"))
+	var b strings.Builder
+	fmt.Fprintf(&b,
+		`<div style="padding-top:16px;border-top:1px solid #d7e4f0;margin-top:8px"><span style="font-weight:600;color:#374b5a">%s</span></div>`,
+		heading,
+	)
+	for _, ev := range events {
+		var ts string
+		if ev.CreatedAt.Valid {
+			ts = ev.CreatedAt.Time.Format("2 jan 2006 15:04")
+		}
+		header := fmt.Sprintf(
+			`<span style="color:#608199;font-size:12px">%s &mdash; %s</span>`,
+			html.EscapeString(ts),
+			html.EscapeString(ev.ActorName),
+		)
+		b.WriteString(header)
+		b.WriteString("<br>")
+		if ev.EventType == "note" {
+			b.WriteString(html.EscapeString(ev.Message))
+			b.WriteString("<br>")
+		} else {
+			label := i18n.T(lang, "page_booking_event_"+ev.EventType)
+			if label == "page_booking_event_"+ev.EventType {
+				label = ev.EventType
+			}
+			fmt.Fprintf(&b,
+				`<span style="font-size:13px;font-style:italic;color:#374b5a">%s</span><br>`,
+				html.EscapeString(label),
+			)
+			if ev.Message != "" {
+				b.WriteString(html.EscapeString(ev.Message))
+				b.WriteString("<br>")
+			}
+		}
+		b.WriteString("<br>")
+	}
+	return strings.TrimSuffix(b.String(), "<br>")
 }
 
 func truncate(s string, max int) string {
@@ -315,30 +529,58 @@ func truncate(s string, max int) string {
 }
 
 // buildBookingText constructs the plain-text version of a booking email.
-func buildBookingText(d BookingEmailData, start, end, teamLabel, bookingURL string) string {
+func buildBookingText(d BookingEmailData, bannerLabel, start, end, teamLabel, bookingURL string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s\n\n", i18n.T(d.Lang, "email_banner_"+d.Event))
+	fmt.Fprintf(&b, "%s\n\n", bannerLabel)
 	fmt.Fprintf(&b, "Hej %s,\n\n", d.RecipientName)
 	fmt.Fprintf(&b, "%s\n\n", i18n.T(d.Lang, "email_intro_"+d.Event))
 	fmt.Fprintf(&b, "%s - %s\n", start, end)
 	fmt.Fprintf(&b, "%s  |  %s\n\n", teamLabel, i18n.T(d.Lang, "booking_status_"+d.Status))
 	if len(d.Items) > 0 {
 		fmt.Fprintf(&b, "%s\n", i18n.T(d.Lang, "email_items_heading"))
+		curLoc := ""
 		for _, it := range d.Items {
+			if it.LocationName != curLoc {
+				curLoc = it.LocationName
+				fmt.Fprintf(&b, "  [%s]\n", it.LocationName)
+			}
 			if it.IndividuallyTracked {
+				name := it.CommercialName
 				if it.CommonName != "" {
-					fmt.Fprintf(&b, "- %s - %s\n", it.CommercialName, it.CommonName)
-				} else {
-					fmt.Fprintf(&b, "- %s\n", it.CommercialName)
+					name += " – " + it.CommonName
 				}
+				if it.Place != "" {
+					name += " (" + it.Place + ")"
+				}
+				fmt.Fprintf(&b, "  - %s\n", name)
 			} else {
-				fmt.Fprintf(&b, "- %s\n", it.CommercialName)
+				fmt.Fprintf(&b, "  - %s\n", it.CommercialName)
 			}
 		}
 		b.WriteString("\n")
 	}
 	if d.Notes != "" {
 		fmt.Fprintf(&b, "%s\n%s\n\n", i18n.T(d.Lang, "email_notes_heading"), d.Notes)
+	}
+	if hasNotes(d.Events) {
+		fmt.Fprintf(&b, "%s\n", i18n.T(d.Lang, "email_booking_events_heading"))
+		for _, ev := range d.Events {
+			var ts string
+			if ev.CreatedAt.Valid {
+				ts = ev.CreatedAt.Time.Format("2 jan 2006 15:04")
+			}
+			if ev.EventType == "note" {
+				fmt.Fprintf(&b, "  %s — %s\n  %s\n\n", ts, ev.ActorName, ev.Message)
+			} else {
+				label := i18n.T(d.Lang, "page_booking_event_"+ev.EventType)
+				fmt.Fprintf(&b, "  %s — %s: %s\n", ts, ev.ActorName, label)
+				if ev.Message != "" {
+					fmt.Fprintf(&b, "  %s\n", ev.Message)
+				}
+				b.WriteString("\n")
+			}
+		}
+		b.WriteString("\n")
 	}
 	fmt.Fprintf(&b, "%s: %s\n\n", i18n.T(d.Lang, "email_cta_"+d.Event), bookingURL)
 	fmt.Fprintf(&b, "---\n%s\n%s: %s\n", d.GroupName, i18n.T(d.Lang, "email_footer_unsubscribe"), d.BaseURL+"/profile")
@@ -357,6 +599,26 @@ func buildIssueText(d IssueEmailData, desc, issueURL string) string {
 		fmt.Fprintf(&b, "%s\n\n", desc)
 	}
 	fmt.Fprintf(&b, "%s\n\n", i18n.T(d.Lang, "email_reporter_line", map[string]string{"name": d.ReporterName}))
+	if len(d.Events) > 0 {
+		fmt.Fprintf(&b, "%s\n", i18n.T(d.Lang, "email_events_heading"))
+		for _, ev := range d.Events {
+			var ts string
+			if ev.CreatedAt.Valid {
+				ts = ev.CreatedAt.Time.Format("2 jan 2006 15:04")
+			}
+			if ev.EventType == "comment" {
+				fmt.Fprintf(&b, "  %s — %s\n  %s\n\n", ts, ev.ActorName, ev.Description)
+			} else {
+				label := i18n.T(d.Lang, "issue_event_type_"+ev.EventType)
+				fmt.Fprintf(&b, "  %s — %s: %s\n", ts, ev.ActorName, label)
+				if ev.Description != "" {
+					fmt.Fprintf(&b, "  %s\n", ev.Description)
+				}
+				b.WriteString("\n")
+			}
+		}
+		b.WriteString("\n")
+	}
 	fmt.Fprintf(&b, "%s: %s\n\n", i18n.T(d.Lang, "email_cta_"+d.Event), issueURL)
 	fmt.Fprintf(&b, "---\n%s\n%s: %s\n", d.GroupName, i18n.T(d.Lang, "email_footer_unsubscribe"), d.BaseURL+"/profile")
 	return b.String()
