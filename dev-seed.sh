@@ -96,6 +96,39 @@ curl -sf -X POST "$API/api/v0/teams" \
   -H "X-Dev-Role-Override: other-kar-leader" -H "Content-Type: application/json" \
   -d '{"name":"Avdelning 1","type":"troop","access_level":"book","claim_scope":"troop","claim_id":"99901"}' > /dev/null && echo "  Created: Avdelning 1 (book, test group)" || echo "  Exists: Avdelning 1"
 
+echo "Configuring team notification emails..."
+# Fetch all team IDs by name in one call
+TEAMS_JSON=$(curl -s "$API/api/v0/teams" -H "$HEADER")
+get_team_id() { echo "$TEAMS_JSON" | python3 -c "import json,sys; ts=[t for t in json.load(sys.stdin) if t['name']=='$1']; print(ts[0]['id'] if ts else '')" ; }
+
+YGGDRASIL_ID=$(get_team_id "Yggdrasil")
+FLASKPOST_ID=$(get_team_id "Flaskpostorné")
+VALBORG_ID_SEED=$(get_team_id "Valborgskommittén")
+
+# Yggdrasil: broadcast email + individual notifications on (default)
+if [ -n "$YGGDRASIL_ID" ]; then
+  curl -sf -X PUT "$API/api/v0/teams/$YGGDRASIL_ID/notification-settings" \
+    -H "$HEADER" -H "Content-Type: application/json" \
+    -d '{"notification_email":"yggdrasil@malarscouterna.example.com"}' > /dev/null \
+    && echo "  Yggdrasil: notification_email set" || echo "  Yggdrasil: FAILED"
+fi
+
+# Flaskpostorné: broadcast email + individual notifications suppressed by default
+if [ -n "$FLASKPOST_ID" ]; then
+  curl -sf -X PUT "$API/api/v0/teams/$FLASKPOST_ID/notification-settings" \
+    -H "$HEADER" -H "Content-Type: application/json" \
+    -d '{"notification_email":"flaskpost@malarscouterna.example.com","individual_notifications_enabled":false}' > /dev/null \
+    && echo "  Flaskpostorné: notification_email set, individual suppressed" || echo "  Flaskpostorné: FAILED"
+fi
+
+# Valborgskommittén: broadcast email only, no individual suppression
+if [ -n "$VALBORG_ID_SEED" ]; then
+  curl -sf -X PUT "$API/api/v0/teams/$VALBORG_ID_SEED/notification-settings" \
+    -H "$HEADER" -H "Content-Type: application/json" \
+    -d '{"notification_email":"valborg@malarscouterna.example.com"}' > /dev/null \
+    && echo "  Valborgskommittén: notification_email set" || echo "  Valborgskommittén: FAILED"
+fi
+
 # Report issues on some quantity-tracked articles to demo status mix
 echo ""
 echo "Uploading product images..."
