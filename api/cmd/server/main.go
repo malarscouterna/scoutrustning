@@ -117,6 +117,7 @@ func main() {
 		r.Mount("/teams", teams.Routes())
 		r.Mount("/group-settings", groupSettings.Routes())
 		r.Mount("/group-settings/notification-defaults", notifPrefsHandler.GroupRoutes())
+		r.Mount("/group-settings/force-notification-defaults", notifPrefsHandler.ForceDefaultsRoute())
 		r.Mount("/group-settings/logo", logoHandler.Routes())
 		r.Mount("/issues", issueHandler.Routes())
 		r.Mount("/images", imageHandler.Routes())

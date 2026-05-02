@@ -60,7 +60,7 @@ const createGroupSettingsDefaults = `-- name: CreateGroupSettingsDefaults :one
 INSERT INTO group_settings (group_id)
 VALUES ($1)
 ON CONFLICT (group_id) DO NOTHING
-RETURNING group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults, logo_file_id
+RETURNING group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults, logo_file_id, enabled_channels
 `
 
 func (q *Queries) CreateGroupSettingsDefaults(ctx context.Context, groupID string) (GroupSetting, error) {
@@ -89,6 +89,7 @@ func (q *Queries) CreateGroupSettingsDefaults(ctx context.Context, groupID strin
 		&i.SmtpUser,
 		&i.NotificationDefaults,
 		&i.LogoFileID,
+		&i.EnabledChannels,
 	)
 	return i, err
 }
@@ -117,7 +118,7 @@ func (q *Queries) GetGroupNotificationDefaults(ctx context.Context, groupID stri
 }
 
 const getGroupSettings = `-- name: GetGroupSettings :one
-SELECT group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults, logo_file_id FROM group_settings
+SELECT group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults, logo_file_id, enabled_channels FROM group_settings
 WHERE group_id = $1
 `
 
@@ -147,6 +148,7 @@ func (q *Queries) GetGroupSettings(ctx context.Context, groupID string) (GroupSe
 		&i.SmtpUser,
 		&i.NotificationDefaults,
 		&i.LogoFileID,
+		&i.EnabledChannels,
 	)
 	return i, err
 }
@@ -190,7 +192,7 @@ UPDATE group_settings SET
     smtp_user = $5,
     updated_at = now()
 WHERE group_id = $6
-RETURNING group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults, logo_file_id
+RETURNING group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults, logo_file_id, enabled_channels
 `
 
 type UpdateSmtpSettingsParams struct {
@@ -235,6 +237,7 @@ func (q *Queries) UpdateSmtpSettings(ctx context.Context, arg UpdateSmtpSettings
 		&i.SmtpUser,
 		&i.NotificationDefaults,
 		&i.LogoFileID,
+		&i.EnabledChannels,
 	)
 	return i, err
 }
@@ -267,7 +270,7 @@ ON CONFLICT (group_id) DO UPDATE SET
     manager_notes_role = $13,
     default_language = $14,
     updated_at = now()
-RETURNING group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults, logo_file_id
+RETURNING group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults, logo_file_id, enabled_channels
 `
 
 type UpsertGroupSettingsParams struct {
@@ -328,6 +331,7 @@ func (q *Queries) UpsertGroupSettings(ctx context.Context, arg UpsertGroupSettin
 		&i.SmtpUser,
 		&i.NotificationDefaults,
 		&i.LogoFileID,
+		&i.EnabledChannels,
 	)
 	return i, err
 }

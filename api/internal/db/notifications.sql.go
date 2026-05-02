@@ -11,6 +11,65 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const getBroadcastThreadMessageID = `-- name: GetBroadcastThreadMessageID :one
+SELECT message_id FROM notification_log
+WHERE thread_key = $1
+  AND channel = $2
+  AND user_id LIKE 'broadcast:%'
+  AND message_id IS NOT NULL
+ORDER BY created_at ASC
+LIMIT 1
+`
+
+type GetBroadcastThreadMessageIDParams struct {
+	ThreadKey pgtype.Text `json:"thread_key"`
+	Channel   string      `json:"channel"`
+}
+
+// Returns the stored Message-ID for the first broadcast to a given thread+channel.
+func (q *Queries) GetBroadcastThreadMessageID(ctx context.Context, arg GetBroadcastThreadMessageIDParams) (pgtype.Text, error) {
+	row := q.db.QueryRow(ctx, getBroadcastThreadMessageID, arg.ThreadKey, arg.Channel)
+	var message_id pgtype.Text
+	err := row.Scan(&message_id)
+	return message_id, err
+}
+
+const getGroupEnabledChannels = `-- name: GetGroupEnabledChannels :one
+SELECT enabled_channels FROM group_settings WHERE group_id = $1
+`
+
+func (q *Queries) GetGroupEnabledChannels(ctx context.Context, groupID string) ([]string, error) {
+	row := q.db.QueryRow(ctx, getGroupEnabledChannels, groupID)
+	var enabled_channels []string
+	err := row.Scan(&enabled_channels)
+	return enabled_channels, err
+}
+
+const getThreadMessageID = `-- name: GetThreadMessageID :one
+SELECT message_id FROM notification_log
+WHERE thread_key = $1
+  AND user_id = $2
+  AND channel = $3
+  AND message_id IS NOT NULL
+ORDER BY created_at ASC
+LIMIT 1
+`
+
+type GetThreadMessageIDParams struct {
+	ThreadKey pgtype.Text `json:"thread_key"`
+	UserID    string      `json:"user_id"`
+	Channel   string      `json:"channel"`
+}
+
+// Returns the stored email Message-ID for the first notification in a thread,
+// so follow-up sends can set In-Reply-To headers for email threading.
+func (q *Queries) GetThreadMessageID(ctx context.Context, arg GetThreadMessageIDParams) (pgtype.Text, error) {
+	row := q.db.QueryRow(ctx, getThreadMessageID, arg.ThreadKey, arg.UserID, arg.Channel)
+	var message_id pgtype.Text
+	err := row.Scan(&message_id)
+	return message_id, err
+}
+
 const hasNotificationBeenSent = `-- name: HasNotificationBeenSent :one
 SELECT EXISTS (
     SELECT 1 FROM notification_log
@@ -42,8 +101,8 @@ func (q *Queries) HasNotificationBeenSent(ctx context.Context, arg HasNotificati
 }
 
 const logNotification = `-- name: LogNotification :exec
-INSERT INTO notification_log (group_id, user_id, event_type, entity_id, channel, status, error)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO notification_log (group_id, user_id, event_type, entity_id, channel, status, error, thread_key, message_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 `
 
 type LogNotificationParams struct {
@@ -54,6 +113,8 @@ type LogNotificationParams struct {
 	Channel   string      `json:"channel"`
 	Status    string      `json:"status"`
 	Error     pgtype.Text `json:"error"`
+	ThreadKey pgtype.Text `json:"thread_key"`
+	MessageID pgtype.Text `json:"message_id"`
 }
 
 func (q *Queries) LogNotification(ctx context.Context, arg LogNotificationParams) error {
@@ -65,6 +126,8 @@ func (q *Queries) LogNotification(ctx context.Context, arg LogNotificationParams
 		arg.Channel,
 		arg.Status,
 		arg.Error,
+		arg.ThreadKey,
+		arg.MessageID,
 	)
 	return err
 }

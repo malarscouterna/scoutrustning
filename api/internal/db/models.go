@@ -129,6 +129,7 @@ type GroupSetting struct {
 	SmtpUser              string             `json:"smtp_user"`
 	NotificationDefaults  json.RawMessage    `json:"notification_defaults"`
 	LogoFileID            pgtype.UUID        `json:"logo_file_id"`
+	EnabledChannels       []string           `json:"enabled_channels"`
 }
 
 type IssueArticle struct {
@@ -186,6 +187,8 @@ type NotificationLog struct {
 	Status    string             `json:"status"`
 	Error     pgtype.Text        `json:"error"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	ThreadKey pgtype.Text        `json:"thread_key"`
+	MessageID pgtype.Text        `json:"message_id"`
 }
 
 type Package struct {
@@ -223,13 +226,16 @@ type ProductImage struct {
 }
 
 type Team struct {
-	ID              pgtype.UUID        `json:"id"`
-	GroupID         string             `json:"group_id"`
-	Name            string             `json:"name"`
-	Type            string             `json:"type"`
-	AccessLevel     string             `json:"access_level"`
-	GchatWebhookUrl pgtype.Text        `json:"gchat_webhook_url"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	ID                             pgtype.UUID        `json:"id"`
+	GroupID                        string             `json:"group_id"`
+	Name                           string             `json:"name"`
+	Type                           string             `json:"type"`
+	AccessLevel                    string             `json:"access_level"`
+	GchatWebhookUrl                pgtype.Text        `json:"gchat_webhook_url"`
+	CreatedAt                      pgtype.Timestamptz `json:"created_at"`
+	NotificationEmail              pgtype.Text        `json:"notification_email"`
+	NotificationPrefs              json.RawMessage    `json:"notification_prefs"`
+	IndividualNotificationsEnabled bool               `json:"individual_notifications_enabled"`
 }
 
 type TeamClaimMapping struct {

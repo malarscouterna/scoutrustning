@@ -47,6 +47,13 @@ func (s *SMTPNotifier) Send(ctx context.Context, msg Message) error {
 	if msg.TextBody != "" {
 		m.AddAlternativeString(mail.TypeTextPlain, msg.TextBody)
 	}
+	if msg.MessageID != "" {
+		m.SetMessageIDWithValue(msg.MessageID)
+	}
+	if msg.InReplyTo != "" {
+		m.SetGenHeader("In-Reply-To", "<"+msg.InReplyTo+">")
+		m.SetGenHeader("References", "<"+msg.InReplyTo+">")
+	}
 
 	opts := []mail.Option{
 		mail.WithPort(cfg.port),

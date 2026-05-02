@@ -31,6 +31,19 @@ UPDATE teams SET
 WHERE id = @id AND group_id = @group_id
 RETURNING *;
 
+-- name: UpdateTeamNotificationSettings :one
+UPDATE teams SET
+    notification_email = @notification_email,
+    notification_prefs = @notification_prefs,
+    individual_notifications_enabled = @individual_notifications_enabled
+WHERE id = @id AND group_id = @group_id
+RETURNING *;
+
+-- name: GetTeamNotificationSettings :one
+SELECT notification_email, notification_prefs, individual_notifications_enabled
+FROM teams
+WHERE id = @id AND group_id = @group_id;
+
 -- name: DeleteTeam :exec
 DELETE FROM teams
 WHERE id = @id AND group_id = @group_id;

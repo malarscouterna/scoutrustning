@@ -72,7 +72,7 @@ func sendReminderForBooking(ctx context.Context, q *db.Queries, n Notifier, b db
 	recipients := bookingRecipients(ctx, q, b.GroupID, b.CreatedBy, b.UsedByTeamID)
 	for _, r := range recipients {
 		r := r
-		sendTo(ctx, q, n, b.GroupID, r, EventBookingReminder, "email", func(lang string) Message {
+		sendTo(ctx, q, n, b.GroupID, teamIDStr(b.UsedByTeamID), r, EventBookingReminder, "email", b.ID, "booking_"+teamIDStr(b.ID), func(lang string) Message {
 			booking := db.Booking{
 				ID:           b.ID,
 				GroupID:      b.GroupID,
@@ -121,7 +121,7 @@ func sendOverdueForBooking(ctx context.Context, q *db.Queries, n Notifier, b db.
 		if err != nil || sent {
 			continue
 		}
-		if !IsEnabled(ctx, q, r.id, b.GroupID, EventBookingOverdue, "email", r.maxAccessLevel == "manager") {
+		if !IsEnabled(ctx, q, r.id, b.GroupID, teamIDStr(b.UsedByTeamID), EventBookingOverdue, "email", r.maxAccessLevel == "manager") {
 			continue
 		}
 		booking := db.Booking{
@@ -133,8 +133,26 @@ func sendOverdueForBooking(ctx context.Context, q *db.Queries, n Notifier, b db.
 			EndDate:      b.EndDate,
 			Status:       "picked_up",
 		}
+		tk := "booking_" + teamIDStr(b.ID)
+		idSuffix := r.id
+		if len(idSuffix) > 8 {
+			idSuffix = idSuffix[:8]
+		}
+		newMsgID := tk + "-" + idSuffix
 		msg := bookingMsg(ctx, q, booking, EventBookingOverdue, baseURL, r)
 		msg.GroupID = b.GroupID
+		prior, err := q.GetThreadMessageID(ctx, db.GetThreadMessageIDParams{
+			ThreadKey: pgtype.Text{String: tk, Valid: true},
+			UserID:    r.id,
+			Channel:   "email",
+		})
+		logMsgID := pgtype.Text{}
+		if err == nil && prior.Valid {
+			msg.InReplyTo = prior.String
+		} else {
+			msg.MessageID = newMsgID
+			logMsgID = pgtype.Text{String: newMsgID, Valid: true}
+		}
 		sendErr := n.Send(ctx, msg)
 
 		status := "sent"
@@ -152,6 +170,8 @@ func sendOverdueForBooking(ctx context.Context, q *db.Queries, n Notifier, b db.
 			Channel:   "email",
 			Status:    status,
 			Error:     pgText(errStr),
+			ThreadKey: pgtype.Text{String: tk, Valid: true},
+			MessageID: logMsgID,
 		})
 	}
 }

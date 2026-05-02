@@ -208,6 +208,22 @@ func (q *Queries) ListUsersByGroup(ctx context.Context, arg ListUsersByGroupPara
 	return items, nil
 }
 
+const resetAllNotificationPrefs = `-- name: ResetAllNotificationPrefs :one
+WITH updated AS (
+  UPDATE users SET notification_prefs = '{}', updated_at = now()
+  WHERE group_id = $1
+  RETURNING id
+)
+SELECT count(*) AS reset_count FROM updated
+`
+
+func (q *Queries) ResetAllNotificationPrefs(ctx context.Context, groupID string) (int64, error) {
+	row := q.db.QueryRow(ctx, resetAllNotificationPrefs, groupID)
+	var reset_count int64
+	err := row.Scan(&reset_count)
+	return reset_count, err
+}
+
 const setUserNotificationPrefs = `-- name: SetUserNotificationPrefs :exec
 UPDATE users SET notification_prefs = $1, updated_at = now()
 WHERE id = $2 AND group_id = $3

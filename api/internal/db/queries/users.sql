@@ -35,6 +35,14 @@ WHERE id = @id AND group_id = @group_id;
 UPDATE users SET notification_prefs = '{}', updated_at = now()
 WHERE id = @id AND group_id = @group_id;
 
+-- name: ResetAllNotificationPrefs :one
+WITH updated AS (
+  UPDATE users SET notification_prefs = '{}', updated_at = now()
+  WHERE group_id = @group_id
+  RETURNING id
+)
+SELECT count(*) AS reset_count FROM updated;
+
 -- name: GetTeamMembersWithEmails :many
 SELECT id, name, email, language, max_access_level, notification_prefs FROM users
 WHERE group_id = @group_id AND @team_id::uuid = ANY(team_ids)
