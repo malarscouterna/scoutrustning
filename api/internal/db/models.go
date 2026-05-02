@@ -128,6 +128,7 @@ type GroupSetting struct {
 	SmtpTls               string             `json:"smtp_tls"`
 	SmtpUser              string             `json:"smtp_user"`
 	NotificationDefaults  json.RawMessage    `json:"notification_defaults"`
+	LogoFileID            pgtype.UUID        `json:"logo_file_id"`
 }
 
 type IssueArticle struct {

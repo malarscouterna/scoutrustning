@@ -107,6 +107,7 @@ func main() {
 		issueHandler := &handler.IssueHandler{Q: queries, Perms: permCache, Notifier: eventNotifier, BaseURL: appBaseURL}
 		imageHandler := &images.Handler{Q: queries, ImageDir: imageDir}
 		userHandler := &handler.UserHandler{Q: queries, DemoMode: demoMode, PersonaIDs: personaIDs}
+		logoHandler := &handler.LogoHandler{Q: queries, ImageDir: imageDir}
 
 		r.Mount("/me", meHandler.Routes())
 		r.Mount("/articles", articles.Routes())
@@ -116,10 +117,18 @@ func main() {
 		r.Mount("/teams", teams.Routes())
 		r.Mount("/group-settings", groupSettings.Routes())
 		r.Mount("/group-settings/notification-defaults", notifPrefsHandler.GroupRoutes())
+		r.Mount("/group-settings/logo", logoHandler.Routes())
 		r.Mount("/issues", issueHandler.Routes())
 		r.Mount("/images", imageHandler.Routes())
 		r.Mount("/users", userHandler.Routes())
 	})
+
+	// Public endpoints — no authentication required.
+	logoHandler := &handler.LogoHandler{Q: queries, ImageDir: imageDir}
+	r.Mount("/api/v0/public/groups", logoHandler.PublicLogoRoutes())
+
+	// Daily notification scheduler (reminders + overdue alerts).
+	notifications.StartScheduler(queries, &notifications.SMTPNotifier{Q: queries}, getenv("APP_BASE_URL", "http://localhost:5173"))
 
 	addr := getenv("ADDR", ":8080")
 	srv := &http.Server{Addr: addr, Handler: r}

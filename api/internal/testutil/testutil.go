@@ -107,7 +107,7 @@ func SetupTestEnv(t *testing.T) *TestEnv {
 	_, err := shared.pool.Exec(ctx,
 		`TRUNCATE groups, users, teams, team_claim_mappings, categories, locations, articles,
 		 article_events, booking_events, bookings, booking_items, packages, package_items,
-		 audit_log, group_settings, product_images CASCADE`)
+		 audit_log, group_settings, product_images, notification_log CASCADE`)
 	if err != nil {
 		t.Fatalf("failed to truncate tables: %v", err)
 	}

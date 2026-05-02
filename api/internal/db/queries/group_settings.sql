@@ -57,6 +57,17 @@ WHERE group_id = @group_id;
 UPDATE group_settings SET notification_defaults = @notification_defaults, updated_at = now()
 WHERE group_id = @group_id;
 
+-- name: SetGroupLogo :exec
+UPDATE group_settings SET logo_file_id = @logo_file_id, updated_at = now()
+WHERE group_id = @group_id;
+
+-- name: ClearGroupLogo :exec
+UPDATE group_settings SET logo_file_id = NULL, updated_at = now()
+WHERE group_id = @group_id;
+
+-- name: GetGroupLogoFileID :one
+SELECT logo_file_id FROM group_settings WHERE group_id = @group_id;
+
 -- name: CountArticlesForLocation :one
 SELECT count(*) FROM articles
 WHERE group_id = @group_id AND location_id = @location_id;

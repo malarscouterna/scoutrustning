@@ -129,9 +129,9 @@ func TestNotificationPrefs(t *testing.T) {
 	})
 
 	t.Run("group defaults override system defaults for users with no user-level rows", func(t *testing.T) {
-		// Manager sets group default: booking_reminder email = false
+		// Manager sets group default for non-manager users: booking_reminder email = false
 		body, _ := json.Marshal(map[string]any{
-			"booking_reminder": map[string]bool{"email": false},
+			"user": map[string]any{"booking_reminder": map[string]bool{"email": false}},
 		})
 		resp, err := manager.Put("/api/v0/group-settings/notification-defaults", bytes.NewReader(body))
 		if err != nil {
@@ -184,12 +184,12 @@ func TestNotificationPrefs(t *testing.T) {
 			t.Fatalf("expected 200, got %d", resp.StatusCode)
 		}
 		var body struct {
-			Defaults map[string]map[string]bool `json:"defaults"`
+			User map[string]map[string]bool `json:"user"`
 		}
 		json.NewDecoder(resp.Body).Decode(&body)
-		// booking_reminder was set to false in previous subtest
-		if v, ok := body.Defaults["booking_reminder"]["email"]; !ok || v != false {
-			t.Errorf("expected booking_reminder email=false in group defaults, got %v", body.Defaults)
+		// booking_reminder was set to false for user role in previous subtest
+		if v, ok := body.User["booking_reminder"]["email"]; !ok || v != false {
+			t.Errorf("expected booking_reminder email=false in group defaults user, got %v", body.User)
 		}
 	})
 

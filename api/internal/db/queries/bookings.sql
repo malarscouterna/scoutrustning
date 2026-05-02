@@ -1,3 +1,19 @@
+-- name: GetAllBookingsStartingOn :many
+-- Returns confirmed/picked_up bookings across all groups whose start_date equals the given date.
+-- Used by the daily reminder scheduler.
+SELECT id, group_id, created_by, used_by_team_id, start_date, end_date
+FROM bookings
+WHERE status IN ('confirmed', 'picked_up')
+  AND start_date = @date;
+
+-- name: GetAllOverdueBookings :many
+-- Returns picked_up bookings across all groups whose end_date is before the given date.
+-- Used by the daily overdue scheduler; deduplication is handled via notification_log.
+SELECT id, group_id, created_by, used_by_team_id, start_date, end_date
+FROM bookings
+WHERE status = 'picked_up'
+  AND end_date < @date;
+
 -- name: CreateBooking :one
 INSERT INTO bookings (
     group_id, created_by, used_by_team_id, used_by_external,

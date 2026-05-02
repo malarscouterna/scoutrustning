@@ -47,6 +47,7 @@ type groupSettingsResponse struct {
 	ManagerNotesRole      string   `json:"manager_notes_role"`
 	DefaultLanguage       string   `json:"default_language"`
 	NotificationChannels  []string `json:"notification_channels"`
+	LogoURL               string   `json:"logo_url"` // empty string when no logo uploaded
 }
 
 func (h *GroupSettingsHandler) Get(w http.ResponseWriter, r *http.Request) {
@@ -255,6 +256,12 @@ func settingsToResponse(s db.GroupSetting) groupSettingsResponse {
 		ManagerNotesRole:      s.ManagerNotesRole,
 		DefaultLanguage:       s.DefaultLanguage,
 		NotificationChannels:  activeNotificationChannels,
+	}
+	if s.LogoFileID.Valid {
+		id := s.LogoFileID.Bytes
+		groupID := s.GroupID
+		resp.LogoURL = "/api/v0/public/groups/" + groupID + "/logo"
+		_ = id // file_id is resolved server-side by the public endpoint
 	}
 	if len(s.SmtpKeyEncrypted) > 0 {
 		decrypted, err := crypto.Decrypt(s.SmtpKeyEncrypted)

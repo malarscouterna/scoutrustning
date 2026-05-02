@@ -453,6 +453,96 @@ func (q *Queries) DeleteBooking(ctx context.Context, arg DeleteBookingParams) er
 	return err
 }
 
+const getAllBookingsStartingOn = `-- name: GetAllBookingsStartingOn :many
+SELECT id, group_id, created_by, used_by_team_id, start_date, end_date
+FROM bookings
+WHERE status IN ('confirmed', 'picked_up')
+  AND start_date = $1
+`
+
+type GetAllBookingsStartingOnRow struct {
+	ID           pgtype.UUID `json:"id"`
+	GroupID      string      `json:"group_id"`
+	CreatedBy    string      `json:"created_by"`
+	UsedByTeamID pgtype.UUID `json:"used_by_team_id"`
+	StartDate    pgtype.Date `json:"start_date"`
+	EndDate      pgtype.Date `json:"end_date"`
+}
+
+// Returns confirmed/picked_up bookings across all groups whose start_date equals the given date.
+// Used by the daily reminder scheduler.
+func (q *Queries) GetAllBookingsStartingOn(ctx context.Context, date pgtype.Date) ([]GetAllBookingsStartingOnRow, error) {
+	rows, err := q.db.Query(ctx, getAllBookingsStartingOn, date)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetAllBookingsStartingOnRow{}
+	for rows.Next() {
+		var i GetAllBookingsStartingOnRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.GroupID,
+			&i.CreatedBy,
+			&i.UsedByTeamID,
+			&i.StartDate,
+			&i.EndDate,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getAllOverdueBookings = `-- name: GetAllOverdueBookings :many
+SELECT id, group_id, created_by, used_by_team_id, start_date, end_date
+FROM bookings
+WHERE status = 'picked_up'
+  AND end_date < $1
+`
+
+type GetAllOverdueBookingsRow struct {
+	ID           pgtype.UUID `json:"id"`
+	GroupID      string      `json:"group_id"`
+	CreatedBy    string      `json:"created_by"`
+	UsedByTeamID pgtype.UUID `json:"used_by_team_id"`
+	StartDate    pgtype.Date `json:"start_date"`
+	EndDate      pgtype.Date `json:"end_date"`
+}
+
+// Returns picked_up bookings across all groups whose end_date is before the given date.
+// Used by the daily overdue scheduler; deduplication is handled via notification_log.
+func (q *Queries) GetAllOverdueBookings(ctx context.Context, date pgtype.Date) ([]GetAllOverdueBookingsRow, error) {
+	rows, err := q.db.Query(ctx, getAllOverdueBookings, date)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetAllOverdueBookingsRow{}
+	for rows.Next() {
+		var i GetAllOverdueBookingsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.GroupID,
+			&i.CreatedBy,
+			&i.UsedByTeamID,
+			&i.StartDate,
+			&i.EndDate,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getBooking = `-- name: GetBooking :one
 SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.notes, b.created_at, b.updated_at, t.name AS team_name
 FROM bookings b
