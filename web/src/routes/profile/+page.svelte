@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { createApiClient, type Location, type Category, type GroupSettings, type Team, type NotificationPrefs } from '$lib/api/client';
+	import { createApiClient, type Location, type Category, type GroupSettings, type Team, type TeamNotifSettings, type NotificationPrefs } from '$lib/api/client';
 	import { browser } from '$app/environment';
 	import CrudList from '$lib/components/CrudList.svelte';
 	import type { PageData } from './$types';
@@ -338,12 +338,11 @@
 		return notifPrefs?.[key]?.[ch]?.enabled ?? false;
 	}
 	function notifSource(key: string): string | null {
-		// Show "(standard)" when the effective value matches the non-user default,
-		// regardless of whether source is 'user', 'group_default', or 'system_default'.
 		const ch = notifChannels[0];
 		if (!ch || !notifPrefs?.[key]?.[ch]) return null;
 		const pref = notifPrefs[key][ch];
-		if (pref.enabled !== pref.default_enabled) return null;
+		if (pref.source === 'user') return null;
+		if (pref.source === 'team_default') return m.page_profile_notifs_source_team();
 		if (pref.source === 'group_default') return m.page_profile_notifs_source_group();
 		return m.page_profile_notifs_source_system();
 	}
@@ -489,6 +488,62 @@
 			groupNotifDefaultsError = true;
 			groupNotifDefaultsMessage = m.page_profile_error_prefix() + translateError(e);
 		}
+	}
+
+	let forceDefaultsRunning = $state(false);
+	async function forceNotificationDefaults() {
+		if (!confirm(m.page_profile_notif_force_defaults_confirm())) return;
+		forceDefaultsRunning = true;
+		try {
+			const result = await api.forceGroupNotificationDefaults();
+			flash(v => groupNotifDefaultsMessage = v, m.page_profile_notif_force_defaults_done({ count: String(result.reset_count) }));
+			groupNotifDefaultsError = false;
+		} catch (e: any) {
+			groupNotifDefaultsError = true;
+			groupNotifDefaultsMessage = m.page_profile_error_prefix() + translateError(e);
+		} finally {
+			forceDefaultsRunning = false;
+		}
+	}
+
+	// --- Team notification settings ---
+	let teamNotifSettings = $state<TeamNotifSettings | null>(null);
+	let teamNotifSaving = $state(false);
+	let teamNotifMessage = $state('');
+	let teamNotifError = $state(false);
+
+	$effect(() => {
+		if (selectedTeamId && mgr) {
+			teamNotifSettings = null;
+			api.getTeamNotificationSettings(selectedTeamId).then(s => { teamNotifSettings = s; }).catch(() => {});
+		} else {
+			teamNotifSettings = null;
+		}
+	});
+
+	async function saveTeamNotifSettings(patch: Partial<Pick<TeamNotifSettings, 'notification_email' | 'notification_prefs' | 'individual_notifications_enabled'>>) {
+		if (!selectedTeamId) return;
+		teamNotifSaving = true;
+		try {
+			await api.updateTeamNotificationSettings(selectedTeamId, patch);
+			teamNotifSettings = { ...teamNotifSettings!, ...patch };
+			teamNotifError = false;
+			flash(v => teamNotifMessage = v, m.common_saved());
+		} catch (e: any) {
+			teamNotifError = true;
+			teamNotifMessage = m.page_profile_error_prefix() + translateError(e);
+		} finally {
+			teamNotifSaving = false;
+		}
+	}
+
+	async function toggleTeamNotifPref(key: string, ch: string, value: boolean) {
+		if (!teamNotifSettings) return;
+		const updated = {
+			...teamNotifSettings.notification_prefs,
+			[key]: { ...(teamNotifSettings.notification_prefs[key] ?? {}), [ch]: value }
+		};
+		await saveTeamNotifSettings({ notification_prefs: updated });
 	}
 </script>
 
@@ -826,6 +881,107 @@
 								<button onclick={() => deleteTeam(team.id, team.name)} class="text-sm text-red-600 underline">{m.btn_delete()}</button>
 							</div>
 						{/if}
+
+						<!-- Team notification settings -->
+						{#if editingTeamId !== team.id}
+							<div class="border-t pt-3 mt-1">
+								<h4 class="text-sm font-medium mb-2">{m.page_profile_team_notif_heading()}</h4>
+								{#if teamNotifSettings}
+									{#if teamNotifMessage}
+										<p class="text-sm mb-2 {teamNotifError ? 'text-red-600' : 'text-green-600'}">{teamNotifMessage}</p>
+									{/if}
+									<div class="space-y-3">
+										<label class="flex flex-col gap-0.5">
+											<span class="text-xs text-neutral-500">{m.page_profile_team_notif_broadcast_email()}</span>
+											<div class="flex gap-2">
+												<input
+													type="email"
+													value={teamNotifSettings.notification_email}
+													oninput={(e) => { teamNotifSettings = { ...teamNotifSettings!, notification_email: e.currentTarget.value }; }}
+													placeholder="team@example.com"
+													class="border rounded px-2 py-1 text-sm w-full max-w-sm"
+												/>
+												<button
+													onclick={() => saveTeamNotifSettings({ notification_email: teamNotifSettings!.notification_email })}
+													disabled={teamNotifSaving}
+													class="text-sm bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50"
+												>{m.btn_save()}</button>
+											</div>
+											<span class="text-xs text-neutral-400">{m.page_profile_team_notif_broadcast_email_help()}</span>
+										</label>
+
+										<label class="flex items-center gap-2 text-sm cursor-pointer">
+											<input
+												type="checkbox"
+												checked={!teamNotifSettings.individual_notifications_enabled}
+												onchange={(e) => saveTeamNotifSettings({ individual_notifications_enabled: !e.currentTarget.checked })}
+												class="h-4 w-4 accent-blue-700"
+											/>
+											<span>{m.page_profile_team_notif_suppress_individual()}</span>
+										</label>
+										{#if !teamNotifSettings.individual_notifications_enabled}
+											<p class="text-xs text-neutral-400 -mt-1 ml-6">{m.page_profile_team_notif_suppress_hint()}</p>
+										{/if}
+
+										<div>
+											<p class="text-xs text-neutral-500 mb-1.5">{m.page_profile_team_notif_prefs_help()}</p>
+											<table class="w-full text-sm border-collapse">
+												<thead>
+													<tr>
+														<th class="text-left py-1 pr-3 font-normal text-neutral-500 w-full"></th>
+														{#each notifChannels as ch}
+															<th class="text-center py-1 px-2 font-normal text-neutral-500 whitespace-nowrap text-xs">
+																{ch === 'email' ? m.page_profile_notifs_channel_email() : ch}
+															</th>
+														{/each}
+													</tr>
+												</thead>
+												<tbody>
+													<tr>
+														<td colspan={notifChannels.length + 1} class="py-1 text-xs font-semibold text-neutral-400 uppercase tracking-wide">{m.page_profile_notifs_bookings_group()}</td>
+													</tr>
+													{#each bookingEvents as row}
+														<tr class="border-t border-neutral-100">
+															<td class="py-1.5 pr-3 text-sm">{row.label()}</td>
+															{#each notifChannels as ch}
+																<td class="py-1.5 px-2 text-center">
+																	<input
+																		type="checkbox"
+																		checked={teamNotifSettings.notification_prefs[row.key]?.[ch] ?? false}
+																		onchange={(e) => toggleTeamNotifPref(row.key, ch, e.currentTarget.checked)}
+																		class="h-4 w-4 accent-blue-700"
+																	/>
+																</td>
+															{/each}
+														</tr>
+													{/each}
+													<tr>
+														<td colspan={notifChannels.length + 1} class="pt-2 pb-1 text-xs font-semibold text-neutral-400 uppercase tracking-wide">{m.page_profile_notifs_issues_group()}</td>
+													</tr>
+													{#each issueEvents as row}
+														<tr class="border-t border-neutral-100">
+															<td class="py-1.5 pr-3 text-sm">{row.label()}</td>
+															{#each notifChannels as ch}
+																<td class="py-1.5 px-2 text-center">
+																	<input
+																		type="checkbox"
+																		checked={teamNotifSettings.notification_prefs[row.key]?.[ch] ?? false}
+																		onchange={(e) => toggleTeamNotifPref(row.key, ch, e.currentTarget.checked)}
+																		class="h-4 w-4 accent-blue-700"
+																	/>
+																</td>
+															{/each}
+														</tr>
+													{/each}
+												</tbody>
+											</table>
+										</div>
+									</div>
+								{:else}
+									<p class="text-xs text-neutral-400">{m.btn_loading()}</p>
+								{/if}
+							</div>
+						{/if}
 					</div>
 				{/if}
 			{/if}
@@ -1141,6 +1297,14 @@
 						{/each}
 					</tbody>
 				</table>
+				<div class="mt-4 pt-3 border-t flex flex-wrap items-center gap-3">
+					<button
+						onclick={forceNotificationDefaults}
+						disabled={forceDefaultsRunning}
+						class="text-sm text-orange-700 border border-orange-200 bg-orange-50 rounded px-3 py-1.5 hover:bg-orange-100 disabled:opacity-50"
+					>{forceDefaultsRunning ? m.btn_saving() : m.page_profile_notif_force_defaults_btn()}</button>
+					<span class="text-xs text-neutral-400">{m.page_profile_notif_force_defaults_help()}</span>
+				</div>
 			</section>
 	{/if}
 </div>

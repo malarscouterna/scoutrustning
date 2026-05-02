@@ -219,9 +219,9 @@ Response: `{ "reset_count": 42 }`.
 | 3.5a-4 | Broadcast send to `team.notification_email` | ✅ done |
 | 3.5a-5 | `enabled_channels` column + `notification_channels` response derived from DB | ✅ done |
 | 3.5a-6 | `force-notification-defaults` endpoint | ✅ done |
-| 3.5a-7 | Team notification settings UI (team detail page) | — |
-| 3.5a-8 | Update `source` in prefs response / frontend label for `"team_default"` | — |
-| 3.5a-9 | "Force defaults" button in group settings UI | — |
+| 3.5a-7 | Team notification settings UI (team detail page) | ✅ done |
+| 3.5a-8 | Update `source` in prefs response / frontend label for `"team_default"` | ✅ done |
+| 3.5a-9 | "Force defaults" button in group settings UI | ✅ done |
 
 ---
 

@@ -48,6 +48,12 @@ export interface Team {
 	claim_mappings: { claim_scope: string; claim_id: string }[];
 }
 
+export interface TeamNotifSettings {
+	notification_email: string;
+	notification_prefs: Record<string, Record<string, boolean>>;
+	individual_notifications_enabled: boolean;
+}
+
 export interface Booking {
 	id: string;
 	created_by: string;
@@ -146,7 +152,7 @@ export interface GroupSettings {
 
 export interface ChannelPref {
 	enabled: boolean;
-	source: 'user' | 'group_default' | 'system_default';
+	source: 'user' | 'team_default' | 'group_default' | 'system_default';
 	default_enabled: boolean;
 }
 
@@ -389,6 +395,12 @@ export function createApiClient(opts: FetchOptions = {}) {
 			}>('/group-settings/notification-defaults', opts),
 		updateGroupNotificationDefaults: (data: { user: Record<string, Record<string, boolean>>; manager: Record<string, Record<string, boolean>> }) =>
 			requestMut<void>('/group-settings/notification-defaults', 'PUT', data, opts),
+		forceGroupNotificationDefaults: () =>
+			requestMut<{ reset_count: number }>('/group-settings/force-notification-defaults', 'POST', undefined, opts),
+		getTeamNotificationSettings: (id: string) =>
+			request<TeamNotifSettings>(`/teams/${id}/notification-settings`, opts),
+		updateTeamNotificationSettings: (id: string, data: Partial<Pick<TeamNotifSettings, 'notification_email' | 'notification_prefs' | 'individual_notifications_enabled'>>) =>
+			requestMut<void>(`/teams/${id}/notification-settings`, 'PUT', data, opts),
 
 		// Article CRUD
 		getArticle: (id: string) => request<Article>(`/articles/${id}`, opts),
