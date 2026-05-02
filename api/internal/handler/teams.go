@@ -21,6 +21,8 @@ func (h *TeamHandler) Routes() chi.Router {
 	r.With(auth.RequireRole("equipment_manager")).Post("/", h.Create)
 	r.With(auth.RequireRole("equipment_manager")).Put("/{id}", h.Update)
 	r.With(auth.RequireRole("equipment_manager")).Delete("/{id}", h.Delete)
+	r.With(auth.RequireRole("equipment_manager")).Get("/{id}/notification-settings", h.GetNotificationSettings)
+	r.With(auth.RequireRole("equipment_manager")).Put("/{id}/notification-settings", h.UpdateNotificationSettings)
 	return r
 }
 
@@ -188,4 +190,88 @@ func (h *TeamHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 func validAccessLevel(level string) bool {
 	return level == "view" || level == "book" || level == "trusted" || level == "manager"
+}
+
+// GET /teams/{id}/notification-settings
+func (h *TeamHandler) GetNotificationSettings(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	row, err := h.Q.GetTeamNotificationSettings(r.Context(), db.GetTeamNotificationSettingsParams{
+		ID: id, GroupID: claims.GroupID,
+	})
+	if err != nil {
+		WriteError(w, http.StatusNotFound, "team not found")
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{
+		"notification_email":               row.NotificationEmail.String,
+		"notification_prefs":               row.NotificationPrefs,
+		"individual_notifications_enabled": row.IndividualNotificationsEnabled,
+	})
+}
+
+// PUT /teams/{id}/notification-settings
+func (h *TeamHandler) UpdateNotificationSettings(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	var req struct {
+		NotificationEmail              *string                       `json:"notification_email"`
+		NotificationPrefs              map[string]map[string]bool    `json:"notification_prefs"`
+		IndividualNotificationsEnabled *bool                         `json:"individual_notifications_enabled"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	// Load existing to merge partial updates.
+	existing, err := h.Q.GetTeamNotificationSettings(r.Context(), db.GetTeamNotificationSettingsParams{
+		ID: id, GroupID: claims.GroupID,
+	})
+	if err != nil {
+		WriteError(w, http.StatusNotFound, "team not found")
+		return
+	}
+
+	email := existing.NotificationEmail
+	if req.NotificationEmail != nil {
+		email = pgtype.Text{String: *req.NotificationEmail, Valid: *req.NotificationEmail != ""}
+	}
+
+	indivEnabled := existing.IndividualNotificationsEnabled
+	if req.IndividualNotificationsEnabled != nil {
+		indivEnabled = *req.IndividualNotificationsEnabled
+	}
+
+	prefsJSON := existing.NotificationPrefs
+	if req.NotificationPrefs != nil {
+		encoded, err := json.Marshal(req.NotificationPrefs)
+		if err != nil {
+			WriteError(w, http.StatusInternalServerError, "failed to encode prefs")
+			return
+		}
+		prefsJSON = encoded
+	}
+
+	_, err = h.Q.UpdateTeamNotificationSettings(r.Context(), db.UpdateTeamNotificationSettingsParams{
+		ID:                             id,
+		GroupID:                        claims.GroupID,
+		NotificationEmail:              email,
+		NotificationPrefs:              prefsJSON,
+		IndividualNotificationsEnabled: indivEnabled,
+	})
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to update notification settings")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

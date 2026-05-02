@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -44,7 +45,7 @@ func (q *Queries) CountManagerTeams(ctx context.Context, groupID string) (int64,
 const createTeam = `-- name: CreateTeam :one
 INSERT INTO teams (group_id, name, type, access_level)
 VALUES ($1, $2, $3, $4)
-RETURNING id, group_id, name, type, access_level, gchat_webhook_url, created_at
+RETURNING id, group_id, name, type, access_level, gchat_webhook_url, created_at, notification_email, notification_prefs, individual_notifications_enabled
 `
 
 type CreateTeamParams struct {
@@ -70,6 +71,9 @@ func (q *Queries) CreateTeam(ctx context.Context, arg CreateTeamParams) (Team, e
 		&i.AccessLevel,
 		&i.GchatWebhookUrl,
 		&i.CreatedAt,
+		&i.NotificationEmail,
+		&i.NotificationPrefs,
+		&i.IndividualNotificationsEnabled,
 	)
 	return i, err
 }
@@ -90,7 +94,7 @@ func (q *Queries) DeleteTeam(ctx context.Context, arg DeleteTeamParams) error {
 }
 
 const getTeam = `-- name: GetTeam :one
-SELECT id, group_id, name, type, access_level, gchat_webhook_url, created_at FROM teams
+SELECT id, group_id, name, type, access_level, gchat_webhook_url, created_at, notification_email, notification_prefs, individual_notifications_enabled FROM teams
 WHERE id = $1 AND group_id = $2
 `
 
@@ -110,12 +114,15 @@ func (q *Queries) GetTeam(ctx context.Context, arg GetTeamParams) (Team, error) 
 		&i.AccessLevel,
 		&i.GchatWebhookUrl,
 		&i.CreatedAt,
+		&i.NotificationEmail,
+		&i.NotificationPrefs,
+		&i.IndividualNotificationsEnabled,
 	)
 	return i, err
 }
 
 const getTeamByName = `-- name: GetTeamByName :one
-SELECT id, group_id, name, type, access_level, gchat_webhook_url, created_at FROM teams
+SELECT id, group_id, name, type, access_level, gchat_webhook_url, created_at, notification_email, notification_prefs, individual_notifications_enabled FROM teams
 WHERE group_id = $1 AND name = $2
 LIMIT 1
 `
@@ -136,12 +143,39 @@ func (q *Queries) GetTeamByName(ctx context.Context, arg GetTeamByNameParams) (T
 		&i.AccessLevel,
 		&i.GchatWebhookUrl,
 		&i.CreatedAt,
+		&i.NotificationEmail,
+		&i.NotificationPrefs,
+		&i.IndividualNotificationsEnabled,
 	)
 	return i, err
 }
 
+const getTeamNotificationSettings = `-- name: GetTeamNotificationSettings :one
+SELECT notification_email, notification_prefs, individual_notifications_enabled
+FROM teams
+WHERE id = $1 AND group_id = $2
+`
+
+type GetTeamNotificationSettingsParams struct {
+	ID      pgtype.UUID `json:"id"`
+	GroupID string      `json:"group_id"`
+}
+
+type GetTeamNotificationSettingsRow struct {
+	NotificationEmail              pgtype.Text     `json:"notification_email"`
+	NotificationPrefs              json.RawMessage `json:"notification_prefs"`
+	IndividualNotificationsEnabled bool            `json:"individual_notifications_enabled"`
+}
+
+func (q *Queries) GetTeamNotificationSettings(ctx context.Context, arg GetTeamNotificationSettingsParams) (GetTeamNotificationSettingsRow, error) {
+	row := q.db.QueryRow(ctx, getTeamNotificationSettings, arg.ID, arg.GroupID)
+	var i GetTeamNotificationSettingsRow
+	err := row.Scan(&i.NotificationEmail, &i.NotificationPrefs, &i.IndividualNotificationsEnabled)
+	return i, err
+}
+
 const listTeams = `-- name: ListTeams :many
-SELECT t.id, t.group_id, t.name, t.type, t.access_level, t.gchat_webhook_url, t.created_at,
+SELECT t.id, t.group_id, t.name, t.type, t.access_level, t.gchat_webhook_url, t.created_at, t.notification_email, t.notification_prefs, t.individual_notifications_enabled,
     COALESCE(
         (SELECT jsonb_agg(jsonb_build_object('claim_scope', tcm.claim_scope, 'claim_id', tcm.claim_id))
          FROM team_claim_mappings tcm WHERE tcm.team_id = t.id),
@@ -153,14 +187,17 @@ ORDER BY t.name
 `
 
 type ListTeamsRow struct {
-	ID              pgtype.UUID        `json:"id"`
-	GroupID         string             `json:"group_id"`
-	Name            string             `json:"name"`
-	Type            string             `json:"type"`
-	AccessLevel     string             `json:"access_level"`
-	GchatWebhookUrl pgtype.Text        `json:"gchat_webhook_url"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-	ClaimMappings   interface{}        `json:"claim_mappings"`
+	ID                             pgtype.UUID        `json:"id"`
+	GroupID                        string             `json:"group_id"`
+	Name                           string             `json:"name"`
+	Type                           string             `json:"type"`
+	AccessLevel                    string             `json:"access_level"`
+	GchatWebhookUrl                pgtype.Text        `json:"gchat_webhook_url"`
+	CreatedAt                      pgtype.Timestamptz `json:"created_at"`
+	NotificationEmail              pgtype.Text        `json:"notification_email"`
+	NotificationPrefs              json.RawMessage    `json:"notification_prefs"`
+	IndividualNotificationsEnabled bool               `json:"individual_notifications_enabled"`
+	ClaimMappings                  interface{}        `json:"claim_mappings"`
 }
 
 func (q *Queries) ListTeams(ctx context.Context, groupID string) ([]ListTeamsRow, error) {
@@ -180,6 +217,9 @@ func (q *Queries) ListTeams(ctx context.Context, groupID string) ([]ListTeamsRow
 			&i.AccessLevel,
 			&i.GchatWebhookUrl,
 			&i.CreatedAt,
+			&i.NotificationEmail,
+			&i.NotificationPrefs,
+			&i.IndividualNotificationsEnabled,
 			&i.ClaimMappings,
 		); err != nil {
 			return nil, err
@@ -193,7 +233,7 @@ func (q *Queries) ListTeams(ctx context.Context, groupID string) ([]ListTeamsRow
 }
 
 const listTeamsByNames = `-- name: ListTeamsByNames :many
-SELECT id, group_id, name, type, access_level, gchat_webhook_url, created_at FROM teams
+SELECT id, group_id, name, type, access_level, gchat_webhook_url, created_at, notification_email, notification_prefs, individual_notifications_enabled FROM teams
 WHERE group_id = $1 AND name = ANY($2::text[])
 `
 
@@ -219,6 +259,9 @@ func (q *Queries) ListTeamsByNames(ctx context.Context, arg ListTeamsByNamesPara
 			&i.AccessLevel,
 			&i.GchatWebhookUrl,
 			&i.CreatedAt,
+			&i.NotificationEmail,
+			&i.NotificationPrefs,
+			&i.IndividualNotificationsEnabled,
 		); err != nil {
 			return nil, err
 		}
@@ -236,7 +279,7 @@ UPDATE teams SET
     type = $2,
     access_level = $3
 WHERE id = $4 AND group_id = $5
-RETURNING id, group_id, name, type, access_level, gchat_webhook_url, created_at
+RETURNING id, group_id, name, type, access_level, gchat_webhook_url, created_at, notification_email, notification_prefs, individual_notifications_enabled
 `
 
 type UpdateTeamParams struct {
@@ -264,6 +307,50 @@ func (q *Queries) UpdateTeam(ctx context.Context, arg UpdateTeamParams) (Team, e
 		&i.AccessLevel,
 		&i.GchatWebhookUrl,
 		&i.CreatedAt,
+		&i.NotificationEmail,
+		&i.NotificationPrefs,
+		&i.IndividualNotificationsEnabled,
+	)
+	return i, err
+}
+
+const updateTeamNotificationSettings = `-- name: UpdateTeamNotificationSettings :one
+UPDATE teams SET
+    notification_email = $1,
+    notification_prefs = $2,
+    individual_notifications_enabled = $3
+WHERE id = $4 AND group_id = $5
+RETURNING id, group_id, name, type, access_level, gchat_webhook_url, created_at, notification_email, notification_prefs, individual_notifications_enabled
+`
+
+type UpdateTeamNotificationSettingsParams struct {
+	NotificationEmail              pgtype.Text     `json:"notification_email"`
+	NotificationPrefs              json.RawMessage `json:"notification_prefs"`
+	IndividualNotificationsEnabled bool            `json:"individual_notifications_enabled"`
+	ID                             pgtype.UUID     `json:"id"`
+	GroupID                        string          `json:"group_id"`
+}
+
+func (q *Queries) UpdateTeamNotificationSettings(ctx context.Context, arg UpdateTeamNotificationSettingsParams) (Team, error) {
+	row := q.db.QueryRow(ctx, updateTeamNotificationSettings,
+		arg.NotificationEmail,
+		arg.NotificationPrefs,
+		arg.IndividualNotificationsEnabled,
+		arg.ID,
+		arg.GroupID,
+	)
+	var i Team
+	err := row.Scan(
+		&i.ID,
+		&i.GroupID,
+		&i.Name,
+		&i.Type,
+		&i.AccessLevel,
+		&i.GchatWebhookUrl,
+		&i.CreatedAt,
+		&i.NotificationEmail,
+		&i.NotificationPrefs,
+		&i.IndividualNotificationsEnabled,
 	)
 	return i, err
 }

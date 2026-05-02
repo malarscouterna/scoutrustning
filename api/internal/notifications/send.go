@@ -47,12 +47,54 @@ func fromGetUserRow(r db.User) recipient {
 }
 
 // sendTo sends msg to r if their effective preference for event+channel is enabled.
-func sendTo(ctx context.Context, q *db.Queries, n Notifier, groupID string, r recipient, event, channel string, msg func(lang string) Message) {
-	if !IsEnabled(ctx, q, r.id, groupID, event, channel, r.maxAccessLevel == "manager") {
+// teamID is the team context for three-tier pref resolution; pass "" for issue events.
+// entityID and threadKey drive email threading; pass zero UUID / "" to skip threading.
+func sendTo(ctx context.Context, q *db.Queries, n Notifier, groupID, teamID string, r recipient, event, channel string, entityID pgtype.UUID, threadKey string, msg func(lang string) Message) {
+	if !IsEnabled(ctx, q, r.id, groupID, teamID, event, channel, r.maxAccessLevel == "manager") {
 		return
 	}
 	m := msg(r.lang)
 	m.GroupID = groupID
+
+	// Email threading: look up prior Message-ID for this thread, or generate a new one.
+	if channel == "email" && threadKey != "" && entityID.Valid {
+		idSuffix := r.id
+		if len(idSuffix) > 8 {
+			idSuffix = idSuffix[:8]
+		}
+		newMsgID := fmt.Sprintf("%s-%s@notification", threadKey, idSuffix)
+		prior, err := q.GetThreadMessageID(ctx, db.GetThreadMessageIDParams{
+			ThreadKey: pgtype.Text{String: threadKey, Valid: true},
+			UserID:    r.id,
+			Channel:   channel,
+		})
+		if err == nil && prior.Valid {
+			m.InReplyTo = prior.String
+		} else {
+			m.MessageID = newMsgID
+		}
+
+		status := "sent"
+		errText := pgtype.Text{}
+		if sendErr := n.Send(ctx, m); sendErr != nil {
+			slog.Error("notification send failed", "event", event, "to", r.email, "error", sendErr)
+			status = "failed"
+			errText = pgtype.Text{String: sendErr.Error(), Valid: true}
+		}
+		_ = q.LogNotification(ctx, db.LogNotificationParams{
+			GroupID:   groupID,
+			UserID:    r.id,
+			EventType: event,
+			EntityID:  entityID,
+			Channel:   channel,
+			Status:    status,
+			Error:     errText,
+			ThreadKey: pgtype.Text{String: threadKey, Valid: true},
+			MessageID: pgtype.Text{String: newMsgID, Valid: m.MessageID != ""},
+		})
+		return
+	}
+
 	if err := n.Send(ctx, m); err != nil {
 		slog.Error("notification send failed", "event", event, "to", r.email, "error", err)
 	}
@@ -109,6 +151,62 @@ func dedup(recipients []recipient) []recipient {
 	return out
 }
 
+// sendBroadcastEmail sends one email to a team's shared notification_email address if configured
+// and enabled in the team's notification prefs. Uses sentinel user_id "broadcast:<teamID>" in
+// notification_log so threading is independent from personal sends.
+func sendBroadcastEmail(ctx context.Context, q *db.Queries, n Notifier, groupID string, teamID pgtype.UUID, event string, entityID pgtype.UUID, threadKey string, msg Message) {
+	if !teamID.Valid {
+		return
+	}
+	ts, err := q.GetTeamNotificationSettings(ctx, db.GetTeamNotificationSettingsParams{
+		ID: teamID, GroupID: groupID,
+	})
+	if err != nil || !ts.NotificationEmail.Valid || ts.NotificationEmail.String == "" {
+		return
+	}
+	teamPrefs := parseSimplePrefs(ts.NotificationPrefs)
+	if enabled, ok := lookupSimplePrefs(teamPrefs, event, "email"); ok && !enabled {
+		return
+	}
+	// Default: send broadcast unless team prefs explicitly disable it.
+
+	sentinelUserID := "broadcast:" + teamIDStr(teamID)
+	prior, _ := q.GetBroadcastThreadMessageID(ctx, db.GetBroadcastThreadMessageIDParams{
+		ThreadKey: pgtype.Text{String: threadKey, Valid: true},
+		Channel:   "email",
+	})
+
+	msg.To = ts.NotificationEmail.String
+	msg.GroupID = groupID
+	logMsgID := pgtype.Text{}
+	if prior.Valid {
+		msg.InReplyTo = prior.String
+	} else {
+		newMsgID := threadKey + "-broadcast@notification"
+		msg.MessageID = newMsgID
+		logMsgID = pgtype.Text{String: newMsgID, Valid: true}
+	}
+
+	status := "sent"
+	errText := pgtype.Text{}
+	if sendErr := n.Send(ctx, msg); sendErr != nil {
+		slog.Error("broadcast notification failed", "event", event, "to", msg.To, "error", sendErr)
+		status = "failed"
+		errText = pgtype.Text{String: sendErr.Error(), Valid: true}
+	}
+	_ = q.LogNotification(ctx, db.LogNotificationParams{
+		GroupID:   groupID,
+		UserID:    sentinelUserID,
+		EventType: event,
+		EntityID:  entityID,
+		Channel:   "email",
+		Status:    status,
+		Error:     errText,
+		ThreadKey: pgtype.Text{String: threadKey, Valid: true},
+		MessageID: logMsgID,
+	})
+}
+
 // bookingMsg builds a Message for a booking event for a specific recipient.
 func bookingMsg(ctx context.Context, q *db.Queries, b db.Booking, event, baseURL string, r recipient) Message {
 	data := fetchBookingEmailData(ctx, q, b, event, r.lang, r.name, baseURL)
@@ -137,27 +235,49 @@ func issueMsg(ctx context.Context, q *db.Queries, issue db.IssueReport, event, b
 	}
 }
 
+// bookingThreadKey returns the thread key for a booking entity.
+func bookingThreadKey(b db.Booking) string {
+	return "booking_" + teamIDStr(b.ID)
+}
+
+// issueThreadKey returns the thread key for an issue entity.
+func issueThreadKey(issue db.IssueReport) string {
+	return "issue_" + teamIDStr(issue.ID)
+}
+
 // --- Booking events ---
 
 func SendBookingNeedsApproval(ctx context.Context, q *db.Queries, n Notifier, b db.Booking, baseURL string) {
+	tid := teamIDStr(b.UsedByTeamID)
+	tk := bookingThreadKey(b)
+	broadcastMsg := bookingMsg(ctx, q, b, EventBookingNeedsApproval, baseURL, recipient{lang: "sv"})
+	sendBroadcastEmail(ctx, q, n, b.GroupID, b.UsedByTeamID, EventBookingNeedsApproval, b.ID, tk, broadcastMsg)
 	for _, r := range groupManagers(ctx, q, b.GroupID) {
 		r := r
-		sendTo(ctx, q, n, b.GroupID, r, EventBookingNeedsApproval, "email", func(lang string) Message {
+		sendTo(ctx, q, n, b.GroupID, tid, r, EventBookingNeedsApproval, "email", b.ID, tk, func(lang string) Message {
 			return bookingMsg(ctx, q, b, EventBookingNeedsApproval, baseURL, r)
 		})
 	}
 }
 
 func SendBookingSubmittedNoApproval(ctx context.Context, q *db.Queries, n Notifier, b db.Booking, baseURL string) {
+	tid := teamIDStr(b.UsedByTeamID)
+	tk := bookingThreadKey(b)
+	broadcastMsg := bookingMsg(ctx, q, b, EventBookingSubmittedNoApproval, baseURL, recipient{lang: "sv"})
+	sendBroadcastEmail(ctx, q, n, b.GroupID, b.UsedByTeamID, EventBookingSubmittedNoApproval, b.ID, tk, broadcastMsg)
 	for _, r := range groupManagers(ctx, q, b.GroupID) {
 		r := r
-		sendTo(ctx, q, n, b.GroupID, r, EventBookingSubmittedNoApproval, "email", func(lang string) Message {
+		sendTo(ctx, q, n, b.GroupID, tid, r, EventBookingSubmittedNoApproval, "email", b.ID, tk, func(lang string) Message {
 			return bookingMsg(ctx, q, b, EventBookingSubmittedNoApproval, baseURL, r)
 		})
 	}
 }
 
 func SendBookingConfirmed(ctx context.Context, q *db.Queries, n Notifier, b db.Booking, baseURL string) {
+	tid := teamIDStr(b.UsedByTeamID)
+	tk := bookingThreadKey(b)
+	broadcastMsg := bookingMsg(ctx, q, b, EventBookingConfirmed, baseURL, recipient{lang: "sv"})
+	sendBroadcastEmail(ctx, q, n, b.GroupID, b.UsedByTeamID, EventBookingConfirmed, b.ID, tk, broadcastMsg)
 	recipients := dedup(append(
 		func() []recipient {
 			if r, ok := bookingCreator(ctx, q, b.GroupID, b.CreatedBy); ok {
@@ -169,7 +289,7 @@ func SendBookingConfirmed(ctx context.Context, q *db.Queries, n Notifier, b db.B
 	))
 	for _, r := range recipients {
 		r := r
-		sendTo(ctx, q, n, b.GroupID, r, EventBookingConfirmed, "email", func(lang string) Message {
+		sendTo(ctx, q, n, b.GroupID, tid, r, EventBookingConfirmed, "email", b.ID, tk, func(lang string) Message {
 			return bookingMsg(ctx, q, b, EventBookingConfirmed, baseURL, r)
 		})
 	}
@@ -180,12 +300,20 @@ func SendBookingRejected(ctx context.Context, q *db.Queries, n Notifier, b db.Bo
 	if !ok {
 		return
 	}
-	sendTo(ctx, q, n, b.GroupID, r, EventBookingRejected, "email", func(lang string) Message {
+	tid := teamIDStr(b.UsedByTeamID)
+	tk := bookingThreadKey(b)
+	broadcastMsg := bookingMsg(ctx, q, b, EventBookingRejected, baseURL, recipient{lang: "sv"})
+	sendBroadcastEmail(ctx, q, n, b.GroupID, b.UsedByTeamID, EventBookingRejected, b.ID, tk, broadcastMsg)
+	sendTo(ctx, q, n, b.GroupID, tid, r, EventBookingRejected, "email", b.ID, tk, func(lang string) Message {
 		return bookingMsg(ctx, q, b, EventBookingRejected, baseURL, r)
 	})
 }
 
 func SendBookingCancelled(ctx context.Context, q *db.Queries, n Notifier, b db.Booking, baseURL string) {
+	tid := teamIDStr(b.UsedByTeamID)
+	tk := bookingThreadKey(b)
+	broadcastMsg := bookingMsg(ctx, q, b, EventBookingCancelled, baseURL, recipient{lang: "sv"})
+	sendBroadcastEmail(ctx, q, n, b.GroupID, b.UsedByTeamID, EventBookingCancelled, b.ID, tk, broadcastMsg)
 	recipients := dedup(append(
 		func() []recipient {
 			if r, ok := bookingCreator(ctx, q, b.GroupID, b.CreatedBy); ok {
@@ -197,7 +325,7 @@ func SendBookingCancelled(ctx context.Context, q *db.Queries, n Notifier, b db.B
 	))
 	for _, r := range recipients {
 		r := r
-		sendTo(ctx, q, n, b.GroupID, r, EventBookingCancelled, "email", func(lang string) Message {
+		sendTo(ctx, q, n, b.GroupID, tid, r, EventBookingCancelled, "email", b.ID, tk, func(lang string) Message {
 			return bookingMsg(ctx, q, b, EventBookingCancelled, baseURL, r)
 		})
 	}
@@ -206,9 +334,10 @@ func SendBookingCancelled(ctx context.Context, q *db.Queries, n Notifier, b db.B
 // --- Issue events ---
 
 func SendIssueCreated(ctx context.Context, q *db.Queries, n Notifier, issue db.IssueReport, baseURL string) {
+	tk := issueThreadKey(issue)
 	for _, r := range groupManagers(ctx, q, issue.GroupID) {
 		r := r
-		sendTo(ctx, q, n, issue.GroupID, r, EventIssueCreated, "email", func(lang string) Message {
+		sendTo(ctx, q, n, issue.GroupID, "", r, EventIssueCreated, "email", issue.ID, tk, func(lang string) Message {
 			return issueMsg(ctx, q, issue, EventIssueCreated, baseURL, r)
 		})
 	}
@@ -220,7 +349,8 @@ func SendIssueAssignedToMe(ctx context.Context, q *db.Queries, n Notifier, issue
 		return
 	}
 	r := fromGetUserRow(u)
-	sendTo(ctx, q, n, issue.GroupID, r, EventIssueAssignedToMe, "email", func(lang string) Message {
+	tk := issueThreadKey(issue)
+	sendTo(ctx, q, n, issue.GroupID, "", r, EventIssueAssignedToMe, "email", issue.ID, tk, func(lang string) Message {
 		return issueMsg(ctx, q, issue, EventIssueAssignedToMe, baseURL, r)
 	})
 }
@@ -231,6 +361,7 @@ func SendIssueResolved(ctx context.Context, q *db.Queries, n Notifier, issue db.
 		return
 	}
 	assignees, _ := q.ListIssueAssignees(ctx, db.ListIssueAssigneesParams{IssueID: issue.ID, GroupID: issue.GroupID})
+	tk := issueThreadKey(issue)
 
 	recipients := []recipient{fromGetUserRow(reporter)}
 	for _, a := range assignees {
@@ -240,7 +371,7 @@ func SendIssueResolved(ctx context.Context, q *db.Queries, n Notifier, issue db.
 	}
 	for _, r := range dedup(recipients) {
 		r := r
-		sendTo(ctx, q, n, issue.GroupID, r, EventIssueResolved, "email", func(lang string) Message {
+		sendTo(ctx, q, n, issue.GroupID, "", r, EventIssueResolved, "email", issue.ID, tk, func(lang string) Message {
 			return issueMsg(ctx, q, issue, EventIssueResolved, baseURL, r)
 		})
 	}
@@ -252,6 +383,7 @@ func SendIssueCommented(ctx context.Context, q *db.Queries, n Notifier, issue db
 		return
 	}
 	assignees, _ := q.ListIssueAssignees(ctx, db.ListIssueAssigneesParams{IssueID: issue.ID, GroupID: issue.GroupID})
+	tk := issueThreadKey(issue)
 
 	recipients := []recipient{fromGetUserRow(reporter)}
 	for _, a := range assignees {
@@ -261,7 +393,7 @@ func SendIssueCommented(ctx context.Context, q *db.Queries, n Notifier, issue db
 	}
 	for _, r := range dedup(recipients) {
 		r := r
-		sendTo(ctx, q, n, issue.GroupID, r, EventIssueCommented, "email", func(lang string) Message {
+		sendTo(ctx, q, n, issue.GroupID, "", r, EventIssueCommented, "email", issue.ID, tk, func(lang string) Message {
 			return issueMsg(ctx, q, issue, EventIssueCommented, baseURL, r)
 		})
 	}

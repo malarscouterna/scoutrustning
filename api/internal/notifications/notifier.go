@@ -12,6 +12,13 @@ type Message struct {
 	Subject  string
 	Body     string // HTML
 	TextBody string // plain text fallback
+
+	// Threading fields — set by sendTo before calling Notifier.Send.
+	// MessageID is the caller-generated Message-ID for this send (first in thread).
+	// InReplyTo is the Message-ID of the first message in the thread (for follow-ups).
+	// Both are empty strings when threading is not applicable.
+	MessageID string
+	InReplyTo string
 }
 
 // Notifier sends a notification message on a specific channel.

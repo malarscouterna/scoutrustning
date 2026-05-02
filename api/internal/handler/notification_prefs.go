@@ -11,8 +11,8 @@ import (
 	"github.com/malarscouterna/ms-utrustning/api/internal/notifications"
 )
 
-// activeNotificationChannels lists the channels active for all groups in phase 3.
-var activeNotificationChannels = []string{"email"}
+// fallbackChannels is used when group settings cannot be loaded.
+var fallbackChannels = []string{"email"}
 
 type NotificationPrefsHandler struct {
 	Q *db.Queries
@@ -34,10 +34,21 @@ func (h *NotificationPrefsHandler) GroupRoutes() chi.Router {
 	return r
 }
 
+func (h *NotificationPrefsHandler) ForceDefaultsRoute() chi.Router {
+	r := chi.NewRouter()
+	r.Use(auth.RequireRole("equipment_manager"))
+	r.Post("/", h.ForceDefaults)
+	return r
+}
+
 // GET /me/notification-prefs — returns merged effective prefs with source info.
 func (h *NotificationPrefsHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	claims, _ := auth.ClaimsFromContext(r.Context())
-	prefs, err := notifications.ResolvePrefs(r.Context(), h.Q, claims.MemberID, claims.GroupID, activeNotificationChannels, claims.IsManager())
+	channels, err := h.Q.GetGroupEnabledChannels(r.Context(), claims.GroupID)
+	if err != nil || len(channels) == 0 {
+		channels = fallbackChannels
+	}
+	prefs, err := notifications.ResolvePrefs(r.Context(), h.Q, claims.MemberID, claims.GroupID, "", channels, claims.IsManager())
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, "failed to load preferences")
 		return
@@ -129,6 +140,18 @@ func (h *NotificationPrefsHandler) GetGroupDefaults(w http.ResponseWriter, r *ht
 		"system_defaults_user":   notifications.SystemDefaults(false),
 		"system_defaults_manager": notifications.SystemDefaults(true),
 	})
+}
+
+// POST /group-settings/force-notification-defaults — manager only.
+// Resets notification_prefs to '{}' for every user in the group.
+func (h *NotificationPrefsHandler) ForceDefaults(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	count, err := h.Q.ResetAllNotificationPrefs(r.Context(), claims.GroupID)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to reset preferences")
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"reset_count": count})
 }
 
 // PUT /group-settings/notification-defaults — manager only, full replacement.

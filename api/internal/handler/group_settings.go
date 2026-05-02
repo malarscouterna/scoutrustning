@@ -67,7 +67,7 @@ func (h *GroupSettingsHandler) Get(w http.ResponseWriter, r *http.Request) {
 			IssueResolveRole:     "manager",
 			ManagerNotesRole:     "manager",
 			DefaultLanguage:      "sv",
-			NotificationChannels: activeNotificationChannels,
+			NotificationChannels: []string{"email"},
 			SystemSmtpConfigured: os.Getenv("SMTP_DEFAULT_HOST") != "",
 			SystemSmtpFrom:       os.Getenv("SMTP_DEFAULT_FROM"),
 		})
@@ -255,7 +255,7 @@ func settingsToResponse(s db.GroupSetting) groupSettingsResponse {
 		IssueResolveRole:      s.IssueResolveRole,
 		ManagerNotesRole:      s.ManagerNotesRole,
 		DefaultLanguage:       s.DefaultLanguage,
-		NotificationChannels:  activeNotificationChannels,
+		NotificationChannels:  s.EnabledChannels,
 	}
 	if s.LogoFileID.Valid {
 		id := s.LogoFileID.Bytes

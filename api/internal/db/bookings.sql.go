@@ -593,7 +593,7 @@ func (q *Queries) GetBooking(ctx context.Context, arg GetBookingParams) (GetBook
 }
 
 const getTeamByID = `-- name: GetTeamByID :one
-SELECT id, group_id, name, type, access_level, gchat_webhook_url, created_at FROM teams
+SELECT id, group_id, name, type, access_level, gchat_webhook_url, created_at, notification_email, notification_prefs, individual_notifications_enabled FROM teams
 WHERE id = $1 AND group_id = $2
 `
 
@@ -613,6 +613,9 @@ func (q *Queries) GetTeamByID(ctx context.Context, arg GetTeamByIDParams) (Team,
 		&i.AccessLevel,
 		&i.GchatWebhookUrl,
 		&i.CreatedAt,
+		&i.NotificationEmail,
+		&i.NotificationPrefs,
+		&i.IndividualNotificationsEnabled,
 	)
 	return i, err
 }

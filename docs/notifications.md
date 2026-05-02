@@ -399,6 +399,7 @@ Each step is independently testable. Steps 1–3 are backend prerequisites. Step
 | 9 | Group defaults UI + SMTP UI | ✅ done | 5, 6 |
 | 10 | Email body templates | ✅ done | 7 |
 | 11 | Group logo upload | ✅ done | — |
+| 3.5 | Three-tier arch + team broadcast + GChat | 🚧 in progress | — |
 
 Steps 3 and 5 can run in parallel after Step 1. Steps 4, 6, and 9 are frontend-only and can overlap with later backend steps once their APIs exist.
 
