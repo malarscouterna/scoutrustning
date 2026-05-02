@@ -142,15 +142,23 @@ func TestNotifications_EventTriggered(t *testing.T) {
 
 	makeBooking := func() string {
 		b, _ := json.Marshal(map[string]any{
-			"article_ids": []string{articleID},
-			"start_date":  "2025-08-01",
-			"end_date":    "2025-08-05",
+			"start_date": "2025-08-01",
+			"end_date":   "2025-08-05",
 		})
 		resp, _ := leader.Post("/api/v0/bookings", bytes.NewReader(b))
 		var result map[string]any
 		json.NewDecoder(resp.Body).Decode(&result)
 		resp.Body.Close()
-		return result["id"].(string)
+		id := result["id"].(string)
+		// Add an item so the email body contains the article name.
+		itemBody, _ := json.Marshal(map[string]any{
+			"commercial_name": "NotifTestTält",
+			"location_name":   "Kammaren",
+			"quantity":        1,
+		})
+		addResp, _ := leader.Post("/api/v0/bookings/"+id+"/items", bytes.NewReader(itemBody))
+		addResp.Body.Close()
+		return id
 	}
 
 	t.Run("booking_needs_approval sends to managers", func(t *testing.T) {
@@ -164,7 +172,8 @@ func TestNotifications_EventTriggered(t *testing.T) {
 			t.Fatalf("submit: got %d", resp.StatusCode)
 		}
 
-		waitForMessages(notifier, 1)
+		// Two managers exist: mgr-1 and the manager-equipment persona user.
+		waitForMessages(notifier, 2)
 		if len(notifier.Messages()) == 0 {
 			t.Fatal("expected at least one notification for booking_needs_approval, got none")
 		}
@@ -184,6 +193,9 @@ func TestNotifications_EventTriggered(t *testing.T) {
 		}
 		if !strings.Contains(msg.Body, "2025-08-01") && !strings.Contains(msg.Body, "1 aug") {
 			t.Errorf("expected body to contain booking dates, got: %s", msg.Body)
+		}
+		if !strings.Contains(msg.Body, "NotifTestTält") {
+			t.Errorf("expected body to contain item name, got: %s", msg.Body)
 		}
 		if msg.TextBody == "" {
 			t.Error("expected TextBody to be non-empty")
@@ -242,6 +254,7 @@ func TestNotifications_EventTriggered(t *testing.T) {
 
 		resp, _ := leader.Post("/api/v0/bookings/"+bookingID+"/submit", nil)
 		resp.Body.Close()
+		waitForMessages(notifier, 2) // drain needs_approval goroutines before reset
 		notifier.Reset()
 
 		resp, _ = leader.Post("/api/v0/bookings/"+bookingID+"/cancel", nil)
@@ -267,7 +280,8 @@ func TestNotifications_EventTriggered(t *testing.T) {
 			t.Fatalf("create issue: got %d", resp.StatusCode)
 		}
 
-		waitForMessages(notifier, 1)
+		// Two managers exist: mgr-1 and the manager-equipment persona user.
+		waitForMessages(notifier, 2)
 		if len(notifier.Messages()) == 0 {
 			t.Fatal("expected notification for issue_created, got none")
 		}

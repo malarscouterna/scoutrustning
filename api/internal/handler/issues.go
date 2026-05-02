@@ -524,7 +524,7 @@ func (h *IssueHandler) AddAssignee(w http.ResponseWriter, r *http.Request) {
 
 	if h.Notifier != nil {
 		if iss, err := h.Q.GetIssue(r.Context(), db.GetIssueParams{ID: id, GroupID: claims.GroupID}); err == nil {
-			issue := db.IssueReport{ID: iss.ID, GroupID: iss.GroupID, Title: iss.Title, ReporterID: iss.ReporterID}
+			issue := db.IssueReport{ID: iss.ID, GroupID: iss.GroupID, Title: iss.Title, ReporterID: iss.ReporterID, Severity: iss.Severity, Status: iss.Status}
 			assigneeID, n, q := req.UserID, h.Notifier, h.Q
 			go notifications.SendIssueAssignedToMe(context.Background(), q, n, issue, assigneeID, h.BaseURL)
 		}

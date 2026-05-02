@@ -78,6 +78,7 @@ type BookingEmailData struct {
 	Lang          string
 	RecipientName string
 	GroupName     string
+	LogoURL       string // PNG URL for email header; empty if no logo configured
 	BaseURL       string
 	BookingID     pgtype.UUID
 	StartDate     pgtype.Date
@@ -91,11 +92,12 @@ type BookingEmailData struct {
 
 // IssueEmailData holds all values needed to render an issue email.
 type IssueEmailData struct {
-	Event        string
-	Lang         string
+	Event         string
+	Lang          string
 	RecipientName string
-	GroupName    string
-	BaseURL      string
+	GroupName     string
+	LogoURL       string // PNG URL for email header; empty if no logo configured
+	BaseURL       string
 	IssueID      pgtype.UUID
 	Title        string
 	Severity     string
@@ -124,8 +126,10 @@ func renderBookingEmail(d BookingEmailData) (htmlOut, textOut string) {
 		bannerLabel = d.TeamName + ": " + bannerLabel
 	}
 
+	logoHdr := logoHeader(d.LogoURL, d.GroupName)
 	replacer := strings.NewReplacer(
 		"EMAIL_RECIPIENT_NAME", html.EscapeString(d.RecipientName),
+		"EMAIL_LOGO_HEADER", logoHdr,
 		"EMAIL_GROUP_NAME", html.EscapeString(d.GroupName),
 		"EMAIL_BANNER_LABEL", html.EscapeString(bannerLabel),
 		"EMAIL_BANNER_BG", style.bannerBG,
@@ -171,6 +175,7 @@ func renderIssueEmail(d IssueEmailData) (htmlOut, textOut string) {
 
 	replacer := strings.NewReplacer(
 		"EMAIL_RECIPIENT_NAME", html.EscapeString(d.RecipientName),
+		"EMAIL_LOGO_HEADER", logoHeader(d.LogoURL, d.GroupName),
 		"EMAIL_GROUP_NAME", html.EscapeString(d.GroupName),
 		"EMAIL_BANNER_LABEL", html.EscapeString(i18n.T(d.Lang, "email_banner_"+d.Event)),
 		"EMAIL_BANNER_BG", style.bannerBG,
@@ -218,6 +223,7 @@ func fetchBookingEmailData(ctx context.Context, q *db.Queries, b db.Booking, eve
 		Lang:          lang,
 		RecipientName: recipientName,
 		GroupName:     group.Name,
+		LogoURL:       groupLogoURL(ctx, q, b.GroupID, baseURL),
 		BaseURL:       baseURL,
 		BookingID:     b.ID,
 		StartDate:     b.StartDate,
@@ -252,6 +258,7 @@ func fetchIssueEmailData(ctx context.Context, q *db.Queries, issue db.IssueRepor
 		Lang:          lang,
 		RecipientName: recipientName,
 		GroupName:     group.Name,
+		LogoURL:       groupLogoURL(ctx, q, issue.GroupID, baseURL),
 		BaseURL:       baseURL,
 		IssueID:       issue.ID,
 		Title:         issue.Title,
@@ -264,6 +271,24 @@ func fetchIssueEmailData(ctx context.Context, q *db.Queries, issue db.IssueRepor
 }
 
 // --- Helpers ---
+
+// groupLogoURL returns the absolute PNG logo URL for a group, or empty string if none set.
+func groupLogoURL(ctx context.Context, q *db.Queries, groupID, baseURL string) string {
+	fileID, err := q.GetGroupLogoFileID(ctx, groupID)
+	if err != nil || !fileID.Valid {
+		return ""
+	}
+	return baseURL + "/api/v0/public/groups/" + groupID + "/logo.png"
+}
+
+// logoHeader returns an <img> tag for the logo (email PNG variant) when logoURL is set,
+// or the HTML-escaped group name otherwise. Substituted into EMAIL_LOGO_HEADER.
+func logoHeader(logoURL, groupName string) string {
+	if logoURL == "" {
+		return html.EscapeString(groupName)
+	}
+	return `<img src="` + html.EscapeString(logoURL) + `" style="height:50px;max-width:280px;display:block;" alt="` + html.EscapeString(groupName) + `">`
+}
 
 func formatDate(lang string, d pgtype.Date) string {
 	if !d.Valid {

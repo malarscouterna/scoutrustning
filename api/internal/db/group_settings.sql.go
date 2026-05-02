@@ -12,6 +12,16 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const clearGroupLogo = `-- name: ClearGroupLogo :exec
+UPDATE group_settings SET logo_file_id = NULL, updated_at = now()
+WHERE group_id = $1
+`
+
+func (q *Queries) ClearGroupLogo(ctx context.Context, groupID string) error {
+	_, err := q.db.Exec(ctx, clearGroupLogo, groupID)
+	return err
+}
+
 const countArticlesForCategory = `-- name: CountArticlesForCategory :one
 SELECT count(*) FROM articles
 WHERE group_id = $1 AND category_id = $2
@@ -50,7 +60,7 @@ const createGroupSettingsDefaults = `-- name: CreateGroupSettingsDefaults :one
 INSERT INTO group_settings (group_id)
 VALUES ($1)
 ON CONFLICT (group_id) DO NOTHING
-RETURNING group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults
+RETURNING group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults, logo_file_id
 `
 
 func (q *Queries) CreateGroupSettingsDefaults(ctx context.Context, groupID string) (GroupSetting, error) {
@@ -78,8 +88,20 @@ func (q *Queries) CreateGroupSettingsDefaults(ctx context.Context, groupID strin
 		&i.SmtpTls,
 		&i.SmtpUser,
 		&i.NotificationDefaults,
+		&i.LogoFileID,
 	)
 	return i, err
+}
+
+const getGroupLogoFileID = `-- name: GetGroupLogoFileID :one
+SELECT logo_file_id FROM group_settings WHERE group_id = $1
+`
+
+func (q *Queries) GetGroupLogoFileID(ctx context.Context, groupID string) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, getGroupLogoFileID, groupID)
+	var logo_file_id pgtype.UUID
+	err := row.Scan(&logo_file_id)
+	return logo_file_id, err
 }
 
 const getGroupNotificationDefaults = `-- name: GetGroupNotificationDefaults :one
@@ -95,7 +117,7 @@ func (q *Queries) GetGroupNotificationDefaults(ctx context.Context, groupID stri
 }
 
 const getGroupSettings = `-- name: GetGroupSettings :one
-SELECT group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults FROM group_settings
+SELECT group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults, logo_file_id FROM group_settings
 WHERE group_id = $1
 `
 
@@ -124,8 +146,24 @@ func (q *Queries) GetGroupSettings(ctx context.Context, groupID string) (GroupSe
 		&i.SmtpTls,
 		&i.SmtpUser,
 		&i.NotificationDefaults,
+		&i.LogoFileID,
 	)
 	return i, err
+}
+
+const setGroupLogo = `-- name: SetGroupLogo :exec
+UPDATE group_settings SET logo_file_id = $1, updated_at = now()
+WHERE group_id = $2
+`
+
+type SetGroupLogoParams struct {
+	LogoFileID pgtype.UUID `json:"logo_file_id"`
+	GroupID    string      `json:"group_id"`
+}
+
+func (q *Queries) SetGroupLogo(ctx context.Context, arg SetGroupLogoParams) error {
+	_, err := q.db.Exec(ctx, setGroupLogo, arg.LogoFileID, arg.GroupID)
+	return err
 }
 
 const setGroupNotificationDefaults = `-- name: SetGroupNotificationDefaults :exec
@@ -152,7 +190,7 @@ UPDATE group_settings SET
     smtp_user = $5,
     updated_at = now()
 WHERE group_id = $6
-RETURNING group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults
+RETURNING group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults, logo_file_id
 `
 
 type UpdateSmtpSettingsParams struct {
@@ -196,6 +234,7 @@ func (q *Queries) UpdateSmtpSettings(ctx context.Context, arg UpdateSmtpSettings
 		&i.SmtpTls,
 		&i.SmtpUser,
 		&i.NotificationDefaults,
+		&i.LogoFileID,
 	)
 	return i, err
 }
@@ -228,7 +267,7 @@ ON CONFLICT (group_id) DO UPDATE SET
     manager_notes_role = $13,
     default_language = $14,
     updated_at = now()
-RETURNING group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults
+RETURNING group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults, logo_file_id
 `
 
 type UpsertGroupSettingsParams struct {
@@ -288,6 +327,7 @@ func (q *Queries) UpsertGroupSettings(ctx context.Context, arg UpsertGroupSettin
 		&i.SmtpTls,
 		&i.SmtpUser,
 		&i.NotificationDefaults,
+		&i.LogoFileID,
 	)
 	return i, err
 }

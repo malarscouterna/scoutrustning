@@ -344,9 +344,39 @@ Minimal stub HTML built inline in `send.go` using i18n keys (`email_subject_*` a
 
 The `channel` dimension in `user_notification_prefs` and `group_notification_defaults` makes new channels additive: add the channel identifier to `notification_channels` in group settings, implement a new `Notifier`, add rows for the new channel in the defaults tables. No schema changes needed. The preference UI picks up the new column automatically.
 
-## Backlog
+## Group logo
 
-- **Group logo in email header** — groups should be able to upload a logo that replaces the text-only group name in the email header. Stored as an image (similar to article images). The MJML header section currently renders `EMAIL_GROUP_NAME` as bold white text; when a logo is configured, replace it with an `<mj-image>` pointing to a public URL for that image.
+Groups can upload a logo displayed in the email header and (optionally) the web app header.
+
+### Storage
+
+Logos live in a dedicated subfolder: `{IMAGE_DIR}/logos/{file_id}.webp` (web) and `{file_id}.png` (email). Both produced from one govips decode pass — no re-encoding chain.
+
+- **WebP**: lossless, fit within 1600×300 px
+- **PNG**: fit within 600×120 px — sized for ~60 px rendered height at 2× retina; universal email client support
+
+`logo_file_id uuid` stored in `group_settings` (migration 00007).
+
+### API
+
+```
+POST   /api/v0/group-settings/logo   (manager only, multipart file)
+DELETE /api/v0/group-settings/logo   (manager only)
+
+GET    /api/v0/public/groups/{id}/logo       → WebP (no auth, for web header)
+GET    /api/v0/public/groups/{id}/logo.png   → PNG  (no auth, for email)
+```
+
+`GET /api/v0/group-settings` response gains `logo_url: string` (empty when no logo).
+
+### Email integration
+
+`fetchBookingEmailData` / `fetchIssueEmailData` look up `logo_file_id` and set `LogoURL = baseURL + "/api/v0/public/groups/{id}/logo.png"`. The `EMAIL_LOGO_HEADER` placeholder in both MJML templates is substituted with either an `<img>` tag or the HTML-escaped group name fallback. `EMAIL_GROUP_NAME` remains in the footer as plain text.
+
+### Backlog
+
+- **Web header display** — frontend should fetch `logo_url` from group settings and render it in place of the text group name in the top nav when present.
+- **MJML cleanup** — currently the logo `<img>` is injected into a `<mj-text>` wrapper. A future pass should use a proper `<mj-image>` section with a conditional raw block for the text fallback.
 
 ## Implementation plan
 
@@ -365,9 +395,10 @@ Each step is independently testable. Steps 1–3 are backend prerequisites. Step
 | 6.5 | users.team_ids migration + UpsertUser update | ✅ done | — |
 | 7 | Notifier + event sends | ✅ done | 1, 3, 5, 6.5 |
 | 7.5 | Demo mode protection + test email button | ✅ done | 7 |
-| 8 | Scheduled jobs | — | 7 |
+| 8 | Scheduled jobs | ✅ done | 7 |
 | 9 | Group defaults UI + SMTP UI | ✅ done | 5, 6 |
-| 10 | Email body templates | 🚧 in progress | 7 |
+| 10 | Email body templates | ✅ done | 7 |
+| 11 | Group logo upload | ✅ done | — |
 
 Steps 3 and 5 can run in parallel after Step 1. Steps 4, 6, and 9 are frontend-only and can overlap with later backend steps once their APIs exist.
 
@@ -485,14 +516,14 @@ Frontend: "Skicka testnotis" button in the Aviseringar section of the group sett
 
 **Tests** (`TestNotifications_TestEmail`): real user receives email, persona is skipped, demo mode sends via injected `CapturingNotifier`.
 
-### Step 8: Scheduled jobs
+### Step 8: Scheduled jobs ✅
 
 `api/internal/notifications/scheduler.go` — goroutine started in `main.go` that fires daily at `NOTIFICATION_REMINDER_TIME`.
 
 - `SendReminders`: bookings with `start_date = tomorrow` and status `confirmed`/`picked_up`. Recipients: creator + team members. Deduplicates via `notification_log`.
 - `SendOverdueAlerts`: `picked_up` bookings with `end_date < today`. Recipients: creator + team members + opted-in managers. Once-only per `(booking_id, user_id, channel)`.
 
-**Test** (`TestNotifications_Scheduled`): call `SendReminders` and `SendOverdueAlerts` directly (not via timer). Assert correct recipients. Run twice — assert no duplicates. User with preference off — no message. Wrong date — not included.
+**Test** (`TestNotifications_Scheduled`): ✅ implemented. Calls `SendReminders` and `SendOverdueAlerts` directly with an explicit date param (no wall clock). 7 subtests: correct recipients, date filter, pref-off exclusion, overdue dedup (second run sends nothing), end_date=today not included, manager opt-in.
 
 ### Step 9: Group notification defaults UI + SMTP settings UI ✅
 

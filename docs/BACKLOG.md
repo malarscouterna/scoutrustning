@@ -202,6 +202,16 @@ Add a visible sort/filter for approval level in the browse view. The default vie
 
 Bookings list should be sorted: submitted first, then approved/confirmed, then picked_up, then draft, then returned/rejected/cancelled. Within each status group, sort ascending by start_date. Currently the list is unsorted (server return order).
 
+## Bokningar page - Additional fields
+It should be possible to create additional fields about each object. The user chooses between a few pre-made ones (like Aktivitet, Kommentar), or to make a custom field. It should be possible to add multiple "columns" to the booking. Concerning filtering and sorting, it should be possible to filter and sort by these custom fields as well. And they should be included at export, when copying the booking etc.
+
+## Bokningar booking flow - Distinguish comments from Beskrivning
+Each booking gets their notes, which should be renamed as beskrivning/description. In addition, we also have the comments flow already implemented. It should be possible to add commments while a booking is in draft state. To avoid mistakes, we remove the Skicka button from the cart, users should always go to the proper booking page to review it before they send it in, which is also their chance to write a comment about the booking. Imagine a group setting up their booking, they should be able to write about the booking while it is in draft, and then send it in.
+
+## Assign people to a booking
+Similar to issues, it should be possible to assign (and unassigne) a person or a group to a booking, so they also can see and make edits to it, and get update notifications. Use cases:
+- asking a specific manager questions about a booking
+- collaboration between groups, where they own a booking together
 
 ## Group settings on tab bar
 
