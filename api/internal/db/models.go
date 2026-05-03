@@ -131,6 +131,7 @@ type GroupSetting struct {
 	EnabledChannels                  []string           `json:"enabled_channels"`
 	GchatServiceAccountJsonEncrypted []byte             `json:"gchat_service_account_json_encrypted"`
 	GchatAdminEmail                  string             `json:"gchat_admin_email"`
+	DefaultGruppkanalChannels        []string           `json:"default_gruppkanal_channels"`
 }
 
 type IssueArticle struct {
@@ -227,16 +228,16 @@ type ProductImage struct {
 }
 
 type Team struct {
-	ID                             pgtype.UUID        `json:"id"`
-	GroupID                        string             `json:"group_id"`
-	Name                           string             `json:"name"`
-	Type                           string             `json:"type"`
-	AccessLevel                    string             `json:"access_level"`
-	CreatedAt                      pgtype.Timestamptz `json:"created_at"`
-	NotificationEmail              pgtype.Text        `json:"notification_email"`
-	NotificationPrefs              json.RawMessage    `json:"notification_prefs"`
-	IndividualNotificationsEnabled bool               `json:"individual_notifications_enabled"`
-	GchatSpaceID                   pgtype.Text        `json:"gchat_space_id"`
+	ID                 pgtype.UUID        `json:"id"`
+	GroupID            string             `json:"group_id"`
+	Name               string             `json:"name"`
+	Type               string             `json:"type"`
+	AccessLevel        string             `json:"access_level"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	NotificationEmail  pgtype.Text        `json:"notification_email"`
+	NotificationPrefs  json.RawMessage    `json:"notification_prefs"`
+	GchatSpaceID       pgtype.Text        `json:"gchat_space_id"`
+	GruppkanalChannels []string           `json:"gruppkanal_channels"`
 }
 
 type TeamClaimMapping struct {

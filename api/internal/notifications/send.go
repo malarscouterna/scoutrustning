@@ -46,13 +46,25 @@ func fromGetUserRow(r db.User) recipient {
 	return recipient{id: r.ID, name: r.Name, email: r.Email, lang: lang, maxAccessLevel: r.MaxAccessLevel, notifPrefs: r.NotificationPrefs}
 }
 
-// sendTo sends msg to r if their effective preference for event+channel is enabled.
-// teamID is the team context for three-tier pref resolution; pass "" for issue events.
+// sendTo sends msg to r based on their personal email policy for the event.
+// For personal events (teamID="") PolicyAlways/PolicyNever applies directly.
+// For team/role events, policy is resolved through user → team → group → system.
 // entityID and threadKey drive email threading; pass zero UUID / "" to skip threading.
 func sendTo(ctx context.Context, q *db.Queries, n Notifier, groupID, teamID string, r recipient, event, channel string, entityID pgtype.UUID, threadKey string, msg func(lang string) Message) {
-	if !IsEnabled(ctx, q, r.id, groupID, teamID, event, channel, r.maxAccessLevel == "manager") {
+	policy := ResolvePersonalEmailPolicy(ctx, q, r.id, groupID, teamID, event)
+	switch policy {
+	case PolicyNever:
 		return
+	case PolicyIfNoBroadcast:
+		// Suppress personal email if the team's effective Gruppkanal is non-empty.
+		team := GetTeamNotifSettings(ctx, q, groupID, teamID)
+		groupDefaultsRow, _ := q.GetGroupNotificationDefaults(ctx, groupID)
+		effective := EffectiveGruppkanalChannels(team.GruppkanalChannels, groupDefaultsRow.DefaultGruppkanalChannels)
+		if len(effective) > 0 {
+			return
+		}
 	}
+	// PolicyAlways or non-empty Gruppkanal suppression not triggered — send.
 	m := msg(r.lang)
 	m.GroupID = groupID
 
@@ -138,6 +150,16 @@ func groupManagers(ctx context.Context, q *db.Queries, groupID string) []recipie
 	return out
 }
 
+// containsChannel reports whether ch appears in the channels slice.
+func containsChannel(channels []string, ch string) bool {
+	for _, c := range channels {
+		if c == ch {
+			return true
+		}
+	}
+	return false
+}
+
 // dedup removes duplicate user IDs from a recipient list.
 func dedup(recipients []recipient) []recipient {
 	seen := make(map[string]bool, len(recipients))
@@ -152,6 +174,7 @@ func dedup(recipients []recipient) []recipient {
 }
 
 // sendBroadcastGChat sends one card to a team's mapped Google Chat Space if configured.
+// Fires only if "gchat" is in the team's effective Gruppkanal and IsGruppkanalEnabled.
 // Uses sentinel user_id "gchat:<teamID>" in notification_log.
 func sendBroadcastGChat(ctx context.Context, q *db.Queries, gn Notifier, groupID string, teamID pgtype.UUID, event string, entityID pgtype.UUID, threadKey, subject, textBody string) {
 	if !teamID.Valid {
@@ -161,23 +184,14 @@ func sendBroadcastGChat(ctx context.Context, q *db.Queries, gn Notifier, groupID
 	if err != nil || !team.GchatSpaceID.Valid || team.GchatSpaceID.String == "" {
 		return
 	}
-	teamPrefs := parseSimplePrefs(team.NotificationPrefs)
-	if enabled, ok := lookupSimplePrefs(teamPrefs, event, "gchat"); ok {
-		if !enabled {
-			return
-		}
-	} else {
-		groupDefaultsRaw, _ := q.GetGroupNotificationDefaults(ctx, groupID)
-		groupDefaults := ParseGroupDefaults(groupDefaultsRaw)
-		if gv, ok := groupDefaults.Lookup(event, "gchat", true); ok {
-			if !gv {
-				return
-			}
-		} else if bsd := BroadcastSystemDefaults(); bsd[EventKey(event)] != nil {
-			if !bsd[EventKey(event)]["gchat"] {
-				return
-			}
-		}
+	teamSettings := GetTeamNotifSettings(ctx, q, groupID, teamIDStr(teamID))
+	groupDefaultsRow, _ := q.GetGroupNotificationDefaults(ctx, groupID)
+	effective := EffectiveGruppkanalChannels(teamSettings.GruppkanalChannels, groupDefaultsRow.DefaultGruppkanalChannels)
+	if !containsChannel(effective, "gchat") {
+		return
+	}
+	if !IsGruppkanalEnabled(ctx, q, groupID, teamIDStr(teamID), event) {
+		return
 	}
 
 	msg := Message{
@@ -208,9 +222,10 @@ func sendBroadcastGChat(ctx context.Context, q *db.Queries, gn Notifier, groupID
 	})
 }
 
-// sendBroadcastEmail sends one email to a team's shared notification_email address if configured
-// and enabled in the team's notification prefs. Uses sentinel user_id "broadcast:<teamID>" in
-// notification_log so threading is independent from personal sends.
+// sendBroadcastEmail sends one email to a team's shared notification_email address if configured.
+// Fires only if "email" is in the team's effective Gruppkanal and IsGruppkanalEnabled.
+// Uses sentinel user_id "broadcast:<teamID>" in notification_log so threading is independent
+// from personal sends.
 func sendBroadcastEmail(ctx context.Context, q *db.Queries, n Notifier, groupID string, teamID pgtype.UUID, event string, entityID pgtype.UUID, threadKey string, msg Message) {
 	if !teamID.Valid {
 		return
@@ -221,24 +236,14 @@ func sendBroadcastEmail(ctx context.Context, q *db.Queries, n Notifier, groupID 
 	if err != nil || !ts.NotificationEmail.Valid || ts.NotificationEmail.String == "" {
 		return
 	}
-	teamPrefs := parseSimplePrefs(ts.NotificationPrefs)
-	if enabled, ok := lookupSimplePrefs(teamPrefs, event, "email"); ok {
-		if !enabled {
-			return
-		}
-	} else {
-		// No team pref — check group defaults, then broadcast system default.
-		groupDefaultsRaw, _ := q.GetGroupNotificationDefaults(ctx, groupID)
-		groupDefaults := ParseGroupDefaults(groupDefaultsRaw)
-		if gv, ok := groupDefaults.Lookup(event, "email", true); ok {
-			if !gv {
-				return
-			}
-		} else if bsd := BroadcastSystemDefaults(); bsd[EventKey(event)] != nil {
-			if !bsd[EventKey(event)]["email"] {
-				return
-			}
-		}
+	teamSettings := GetTeamNotifSettings(ctx, q, groupID, teamIDStr(teamID))
+	groupDefaultsRow, _ := q.GetGroupNotificationDefaults(ctx, groupID)
+	effective := EffectiveGruppkanalChannels(teamSettings.GruppkanalChannels, groupDefaultsRow.DefaultGruppkanalChannels)
+	if !containsChannel(effective, "email") {
+		return
+	}
+	if !IsGruppkanalEnabled(ctx, q, groupID, teamIDStr(teamID), event) {
+		return
 	}
 
 	sentinelUserID := "broadcast:" + teamIDStr(teamID)

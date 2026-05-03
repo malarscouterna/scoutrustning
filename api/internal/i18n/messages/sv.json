@@ -578,7 +578,7 @@
   "page_profile_notifs_team_heading": "Avdelnings- och rollnotiser",
   "page_profile_notifs_always_email": "Alltid personlig e-post",
   "page_profile_notifs_always_short": "Alltid",
-  "page_profile_notifs_follow_team": "Följ avdelningsstandard",
+  "page_profile_notifs_follow_team": "Följ standard",
   "page_profile_notifs_follow_short": "Standard",
   "page_profile_notifs_no_email": "Ingen personlig e-post",
   "page_profile_notifs_no_email_short": "Aldrig",
@@ -608,5 +608,26 @@
   "page_profile_gchat_space_none_option": "Ingen",
   "page_profile_gchat_team_column": "Avdelning",
   "page_profile_gchat_space_column": "Google Chat-utrymme",
-  "page_profile_gchat_error_connect": "Kunde inte ansluta Google Chat. Kontrollera att JSON-nyckeln är korrekt."
+  "page_profile_gchat_error_connect": "Kunde inte ansluta Google Chat. Kontrollera att JSON-nyckeln är korrekt.",
+
+  "page_profile_teams_gruppkanal_heading": "Gruppkanal",
+  "page_profile_teams_gruppkanal_help": "Välj vilka kanaler som ingår i avdelningens gruppkanal. Ett samlat utskick skickas per händelse till valda kanaler.",
+  "page_profile_teams_gruppkanal_no_channels": "Inga grupputskick kopplade — kontakta en ansvarig.",
+  "page_profile_teams_gruppkanal_channel_email": "Grupp-e-post",
+  "page_profile_teams_gruppkanal_channel_gchat": "Google Chat",
+  "page_profile_teams_gruppkanal_inherited": "(standard)",
+
+  "page_profile_teams_notif_col_personal": "Personlig e-post",
+  "page_profile_teams_notif_col_gruppkanal": "Gruppkanal",
+  "page_profile_teams_notif_personal_always": "Alltid",
+  "page_profile_teams_notif_personal_if_no_broadcast": "Om ej gruppkanal",
+  "page_profile_teams_notif_personal_never": "Aldrig",
+  "page_profile_teams_notif_personal_if_no_broadcast_dimmed_tooltip": "Avdelningen har ingen aktiv gruppkanal — fungerar som 'Alltid'.",
+  "page_profile_teams_notif_inherited": "(standard)",
+
+  "page_profile_group_defaults_gruppkanal_heading": "Standardval för gruppkanal",
+  "page_profile_group_defaults_gruppkanal_help": "Vilka kanaler som ingår i gruppkanalen som standard för avdelningar utan egna inställningar.",
+
+  "page_profile_notif_force_defaults_confirm_v2": "Återställa alla användares notisinställningar och avdelningarnas gruppkanalval? Individuella inställningar skrivs över och gruppstandarden används istället.",
+  "page_profile_notif_force_defaults_done_v2": "{user_count} användare och {team_count} avdelningar återställda."
 }

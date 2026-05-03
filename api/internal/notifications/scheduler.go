@@ -121,8 +121,17 @@ func sendOverdueForBooking(ctx context.Context, q *db.Queries, n Notifier, b db.
 		if err != nil || sent {
 			continue
 		}
-		if !IsEnabled(ctx, q, r.id, b.GroupID, teamIDStr(b.UsedByTeamID), EventBookingOverdue, "email", r.maxAccessLevel == "manager") {
+		policy := ResolvePersonalEmailPolicy(ctx, q, r.id, b.GroupID, teamIDStr(b.UsedByTeamID), EventBookingOverdue)
+		if policy == PolicyNever {
 			continue
+		}
+		if policy == PolicyIfNoBroadcast {
+			teamSettings := GetTeamNotifSettings(ctx, q, b.GroupID, teamIDStr(b.UsedByTeamID))
+			groupDefaultsRow, _ := q.GetGroupNotificationDefaults(ctx, b.GroupID)
+			effective := EffectiveGruppkanalChannels(teamSettings.GruppkanalChannels, groupDefaultsRow.DefaultGruppkanalChannels)
+			if len(effective) > 0 {
+				continue
+			}
 		}
 		booking := db.Booking{
 			ID:           b.ID,
