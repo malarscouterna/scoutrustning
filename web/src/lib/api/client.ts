@@ -48,11 +48,19 @@ export interface Team {
 	claim_mappings: { claim_scope: string; claim_id: string }[];
 }
 
+export interface PerEventPrefs {
+	gruppkanal?: boolean;
+	personal_email_policy?: 'always' | 'if_no_broadcast' | 'never';
+}
+
 export interface TeamNotifSettings {
 	notification_email: string;
-	notification_prefs: Record<string, Record<string, boolean>>;
-	individual_notifications_enabled: boolean;
+	notification_prefs: Record<string, PerEventPrefs>;
 	gchat_space_id: string;
+	/** null = inherit group default; [] = explicit opt-out; [...] = explicit selection */
+	gruppkanal_channels: string[] | null;
+	/** Group-level default, returned alongside the team's own settings for display purposes. */
+	default_gruppkanal_channels: string[];
 }
 
 export interface Booking {
@@ -400,16 +408,17 @@ export function createApiClient(opts: FetchOptions = {}) {
 			requestMut<{ sent?: boolean; skipped?: boolean }>('/me/test-email', 'POST', undefined, opts),
 		getGroupNotificationDefaults: () =>
 			request<{
-				defaults: Record<string, Record<string, boolean>>;
-				system_defaults: Record<string, Record<string, boolean>>;
+				defaults: Record<string, PerEventPrefs>;
+				system_defaults: Record<string, PerEventPrefs>;
+				default_gruppkanal_channels: string[];
 			}>('/group-settings/notification-defaults', opts),
-		updateGroupNotificationDefaults: (data: { user: Record<string, Record<string, boolean>>; manager: Record<string, Record<string, boolean>> }) =>
+		updateGroupNotificationDefaults: (data: { defaults: Record<string, PerEventPrefs>; default_gruppkanal_channels: string[] }) =>
 			requestMut<void>('/group-settings/notification-defaults', 'PUT', data, opts),
 		forceGroupNotificationDefaults: () =>
-			requestMut<{ reset_count: number }>('/group-settings/force-notification-defaults', 'POST', undefined, opts),
+			requestMut<{ reset_user_count: number; reset_team_count: number }>('/group-settings/force-notification-defaults', 'POST', undefined, opts),
 		getTeamNotificationSettings: (id: string) =>
 			request<TeamNotifSettings>(`/teams/${id}/notification-settings`, opts),
-		updateTeamNotificationSettings: (id: string, data: Partial<Pick<TeamNotifSettings, 'notification_email' | 'notification_prefs' | 'individual_notifications_enabled'>>) =>
+		updateTeamNotificationSettings: (id: string, data: Partial<Pick<TeamNotifSettings, 'notification_email' | 'notification_prefs' | 'gruppkanal_channels'>>) =>
 			requestMut<void>(`/teams/${id}/notification-settings`, 'PUT', data, opts),
 		updateTeamName: (id: string, name: string) =>
 			requestMut<Team>(`/teams/${id}/name`, 'PUT', { name }, opts),

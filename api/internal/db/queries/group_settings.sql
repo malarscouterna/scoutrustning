@@ -49,11 +49,14 @@ ON CONFLICT (group_id) DO NOTHING
 RETURNING *;
 
 -- name: GetGroupNotificationDefaults :one
-SELECT notification_defaults FROM group_settings
+SELECT notification_defaults, default_gruppkanal_channels FROM group_settings
 WHERE group_id = @group_id;
 
 -- name: SetGroupNotificationDefaults :exec
-UPDATE group_settings SET notification_defaults = @notification_defaults, updated_at = now()
+UPDATE group_settings SET
+    notification_defaults = @notification_defaults,
+    default_gruppkanal_channels = @default_gruppkanal_channels,
+    updated_at = now()
 WHERE group_id = @group_id;
 
 -- name: SetGroupLogo :exec

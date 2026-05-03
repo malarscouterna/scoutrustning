@@ -60,7 +60,7 @@ func (q *Queries) CountManagerTeams(ctx context.Context, groupID string) (int64,
 const createTeam = `-- name: CreateTeam :one
 INSERT INTO teams (group_id, name, type, access_level)
 VALUES ($1, $2, $3, $4)
-RETURNING id, group_id, name, type, access_level, created_at, notification_email, notification_prefs, individual_notifications_enabled, gchat_space_id
+RETURNING id, group_id, name, type, access_level, created_at, notification_email, notification_prefs, gchat_space_id, gruppkanal_channels
 `
 
 type CreateTeamParams struct {
@@ -87,8 +87,8 @@ func (q *Queries) CreateTeam(ctx context.Context, arg CreateTeamParams) (Team, e
 		&i.CreatedAt,
 		&i.NotificationEmail,
 		&i.NotificationPrefs,
-		&i.IndividualNotificationsEnabled,
 		&i.GchatSpaceID,
+		&i.GruppkanalChannels,
 	)
 	return i, err
 }
@@ -109,7 +109,7 @@ func (q *Queries) DeleteTeam(ctx context.Context, arg DeleteTeamParams) error {
 }
 
 const getTeam = `-- name: GetTeam :one
-SELECT id, group_id, name, type, access_level, created_at, notification_email, notification_prefs, individual_notifications_enabled, gchat_space_id FROM teams
+SELECT id, group_id, name, type, access_level, created_at, notification_email, notification_prefs, gchat_space_id, gruppkanal_channels FROM teams
 WHERE id = $1 AND group_id = $2
 `
 
@@ -130,14 +130,14 @@ func (q *Queries) GetTeam(ctx context.Context, arg GetTeamParams) (Team, error) 
 		&i.CreatedAt,
 		&i.NotificationEmail,
 		&i.NotificationPrefs,
-		&i.IndividualNotificationsEnabled,
 		&i.GchatSpaceID,
+		&i.GruppkanalChannels,
 	)
 	return i, err
 }
 
 const getTeamByName = `-- name: GetTeamByName :one
-SELECT id, group_id, name, type, access_level, created_at, notification_email, notification_prefs, individual_notifications_enabled, gchat_space_id FROM teams
+SELECT id, group_id, name, type, access_level, created_at, notification_email, notification_prefs, gchat_space_id, gruppkanal_channels FROM teams
 WHERE group_id = $1 AND name = $2
 LIMIT 1
 `
@@ -159,14 +159,14 @@ func (q *Queries) GetTeamByName(ctx context.Context, arg GetTeamByNameParams) (T
 		&i.CreatedAt,
 		&i.NotificationEmail,
 		&i.NotificationPrefs,
-		&i.IndividualNotificationsEnabled,
 		&i.GchatSpaceID,
+		&i.GruppkanalChannels,
 	)
 	return i, err
 }
 
 const getTeamNotificationSettings = `-- name: GetTeamNotificationSettings :one
-SELECT notification_email, notification_prefs, individual_notifications_enabled, gchat_space_id
+SELECT notification_email, notification_prefs, gchat_space_id, gruppkanal_channels
 FROM teams
 WHERE id = $1 AND group_id = $2
 `
@@ -177,10 +177,10 @@ type GetTeamNotificationSettingsParams struct {
 }
 
 type GetTeamNotificationSettingsRow struct {
-	NotificationEmail              pgtype.Text     `json:"notification_email"`
-	NotificationPrefs              json.RawMessage `json:"notification_prefs"`
-	IndividualNotificationsEnabled bool            `json:"individual_notifications_enabled"`
-	GchatSpaceID                   pgtype.Text     `json:"gchat_space_id"`
+	NotificationEmail  pgtype.Text     `json:"notification_email"`
+	NotificationPrefs  json.RawMessage `json:"notification_prefs"`
+	GchatSpaceID       pgtype.Text     `json:"gchat_space_id"`
+	GruppkanalChannels []string        `json:"gruppkanal_channels"`
 }
 
 func (q *Queries) GetTeamNotificationSettings(ctx context.Context, arg GetTeamNotificationSettingsParams) (GetTeamNotificationSettingsRow, error) {
@@ -189,8 +189,8 @@ func (q *Queries) GetTeamNotificationSettings(ctx context.Context, arg GetTeamNo
 	err := row.Scan(
 		&i.NotificationEmail,
 		&i.NotificationPrefs,
-		&i.IndividualNotificationsEnabled,
 		&i.GchatSpaceID,
+		&i.GruppkanalChannels,
 	)
 	return i, err
 }
@@ -216,7 +216,7 @@ func (q *Queries) IsTeamMember(ctx context.Context, arg IsTeamMemberParams) (boo
 }
 
 const listTeams = `-- name: ListTeams :many
-SELECT t.id, t.group_id, t.name, t.type, t.access_level, t.created_at, t.notification_email, t.notification_prefs, t.individual_notifications_enabled, t.gchat_space_id,
+SELECT t.id, t.group_id, t.name, t.type, t.access_level, t.created_at, t.notification_email, t.notification_prefs, t.gchat_space_id, t.gruppkanal_channels,
     COALESCE(
         (SELECT jsonb_agg(jsonb_build_object('claim_scope', tcm.claim_scope, 'claim_id', tcm.claim_id))
          FROM team_claim_mappings tcm WHERE tcm.team_id = t.id),
@@ -228,17 +228,17 @@ ORDER BY t.name
 `
 
 type ListTeamsRow struct {
-	ID                             pgtype.UUID        `json:"id"`
-	GroupID                        string             `json:"group_id"`
-	Name                           string             `json:"name"`
-	Type                           string             `json:"type"`
-	AccessLevel                    string             `json:"access_level"`
-	CreatedAt                      pgtype.Timestamptz `json:"created_at"`
-	NotificationEmail              pgtype.Text        `json:"notification_email"`
-	NotificationPrefs              json.RawMessage    `json:"notification_prefs"`
-	IndividualNotificationsEnabled bool               `json:"individual_notifications_enabled"`
-	GchatSpaceID                   pgtype.Text        `json:"gchat_space_id"`
-	ClaimMappings                  interface{}        `json:"claim_mappings"`
+	ID                 pgtype.UUID        `json:"id"`
+	GroupID            string             `json:"group_id"`
+	Name               string             `json:"name"`
+	Type               string             `json:"type"`
+	AccessLevel        string             `json:"access_level"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	NotificationEmail  pgtype.Text        `json:"notification_email"`
+	NotificationPrefs  json.RawMessage    `json:"notification_prefs"`
+	GchatSpaceID       pgtype.Text        `json:"gchat_space_id"`
+	GruppkanalChannels []string           `json:"gruppkanal_channels"`
+	ClaimMappings      interface{}        `json:"claim_mappings"`
 }
 
 func (q *Queries) ListTeams(ctx context.Context, groupID string) ([]ListTeamsRow, error) {
@@ -259,8 +259,8 @@ func (q *Queries) ListTeams(ctx context.Context, groupID string) ([]ListTeamsRow
 			&i.CreatedAt,
 			&i.NotificationEmail,
 			&i.NotificationPrefs,
-			&i.IndividualNotificationsEnabled,
 			&i.GchatSpaceID,
+			&i.GruppkanalChannels,
 			&i.ClaimMappings,
 		); err != nil {
 			return nil, err
@@ -274,7 +274,7 @@ func (q *Queries) ListTeams(ctx context.Context, groupID string) ([]ListTeamsRow
 }
 
 const listTeamsByNames = `-- name: ListTeamsByNames :many
-SELECT id, group_id, name, type, access_level, created_at, notification_email, notification_prefs, individual_notifications_enabled, gchat_space_id FROM teams
+SELECT id, group_id, name, type, access_level, created_at, notification_email, notification_prefs, gchat_space_id, gruppkanal_channels FROM teams
 WHERE group_id = $1 AND name = ANY($2::text[])
 `
 
@@ -301,8 +301,8 @@ func (q *Queries) ListTeamsByNames(ctx context.Context, arg ListTeamsByNamesPara
 			&i.CreatedAt,
 			&i.NotificationEmail,
 			&i.NotificationPrefs,
-			&i.IndividualNotificationsEnabled,
 			&i.GchatSpaceID,
+			&i.GruppkanalChannels,
 		); err != nil {
 			return nil, err
 		}
@@ -346,6 +346,22 @@ func (q *Queries) ListTeamsWithGchatInfo(ctx context.Context, groupID string) ([
 	return items, nil
 }
 
+const resetAllTeamGruppkanalChannels = `-- name: ResetAllTeamGruppkanalChannels :one
+WITH updated AS (
+  UPDATE teams SET gruppkanal_channels = NULL
+  WHERE group_id = $1
+  RETURNING id
+)
+SELECT count(*) AS reset_count FROM updated
+`
+
+func (q *Queries) ResetAllTeamGruppkanalChannels(ctx context.Context, groupID string) (int64, error) {
+	row := q.db.QueryRow(ctx, resetAllTeamGruppkanalChannels, groupID)
+	var reset_count int64
+	err := row.Scan(&reset_count)
+	return reset_count, err
+}
+
 const setTeamGchatSpace = `-- name: SetTeamGchatSpace :exec
 UPDATE teams SET gchat_space_id = $1
 WHERE id = $2 AND group_id = $3
@@ -362,13 +378,29 @@ func (q *Queries) SetTeamGchatSpace(ctx context.Context, arg SetTeamGchatSpacePa
 	return err
 }
 
+const setTeamGruppkanalChannels = `-- name: SetTeamGruppkanalChannels :exec
+UPDATE teams SET gruppkanal_channels = $1
+WHERE id = $2 AND group_id = $3
+`
+
+type SetTeamGruppkanalChannelsParams struct {
+	GruppkanalChannels []string    `json:"gruppkanal_channels"`
+	ID                 pgtype.UUID `json:"id"`
+	GroupID            string      `json:"group_id"`
+}
+
+func (q *Queries) SetTeamGruppkanalChannels(ctx context.Context, arg SetTeamGruppkanalChannelsParams) error {
+	_, err := q.db.Exec(ctx, setTeamGruppkanalChannels, arg.GruppkanalChannels, arg.ID, arg.GroupID)
+	return err
+}
+
 const updateTeam = `-- name: UpdateTeam :one
 UPDATE teams SET
     name = $1,
     type = $2,
     access_level = $3
 WHERE id = $4 AND group_id = $5
-RETURNING id, group_id, name, type, access_level, created_at, notification_email, notification_prefs, individual_notifications_enabled, gchat_space_id
+RETURNING id, group_id, name, type, access_level, created_at, notification_email, notification_prefs, gchat_space_id, gruppkanal_channels
 `
 
 type UpdateTeamParams struct {
@@ -397,8 +429,8 @@ func (q *Queries) UpdateTeam(ctx context.Context, arg UpdateTeamParams) (Team, e
 		&i.CreatedAt,
 		&i.NotificationEmail,
 		&i.NotificationPrefs,
-		&i.IndividualNotificationsEnabled,
 		&i.GchatSpaceID,
+		&i.GruppkanalChannels,
 	)
 	return i, err
 }
@@ -406,7 +438,7 @@ func (q *Queries) UpdateTeam(ctx context.Context, arg UpdateTeamParams) (Team, e
 const updateTeamName = `-- name: UpdateTeamName :one
 UPDATE teams SET name = $1
 WHERE id = $2 AND group_id = $3
-RETURNING id, group_id, name, type, access_level, created_at, notification_email, notification_prefs, individual_notifications_enabled, gchat_space_id
+RETURNING id, group_id, name, type, access_level, created_at, notification_email, notification_prefs, gchat_space_id, gruppkanal_channels
 `
 
 type UpdateTeamNameParams struct {
@@ -427,8 +459,8 @@ func (q *Queries) UpdateTeamName(ctx context.Context, arg UpdateTeamNameParams) 
 		&i.CreatedAt,
 		&i.NotificationEmail,
 		&i.NotificationPrefs,
-		&i.IndividualNotificationsEnabled,
 		&i.GchatSpaceID,
+		&i.GruppkanalChannels,
 	)
 	return i, err
 }
@@ -437,24 +469,24 @@ const updateTeamNotificationSettings = `-- name: UpdateTeamNotificationSettings 
 UPDATE teams SET
     notification_email = $1,
     notification_prefs = $2,
-    individual_notifications_enabled = $3
+    gruppkanal_channels = $3
 WHERE id = $4 AND group_id = $5
-RETURNING id, group_id, name, type, access_level, created_at, notification_email, notification_prefs, individual_notifications_enabled, gchat_space_id
+RETURNING id, group_id, name, type, access_level, created_at, notification_email, notification_prefs, gchat_space_id, gruppkanal_channels
 `
 
 type UpdateTeamNotificationSettingsParams struct {
-	NotificationEmail              pgtype.Text     `json:"notification_email"`
-	NotificationPrefs              json.RawMessage `json:"notification_prefs"`
-	IndividualNotificationsEnabled bool            `json:"individual_notifications_enabled"`
-	ID                             pgtype.UUID     `json:"id"`
-	GroupID                        string          `json:"group_id"`
+	NotificationEmail  pgtype.Text     `json:"notification_email"`
+	NotificationPrefs  json.RawMessage `json:"notification_prefs"`
+	GruppkanalChannels []string        `json:"gruppkanal_channels"`
+	ID                 pgtype.UUID     `json:"id"`
+	GroupID            string          `json:"group_id"`
 }
 
 func (q *Queries) UpdateTeamNotificationSettings(ctx context.Context, arg UpdateTeamNotificationSettingsParams) (Team, error) {
 	row := q.db.QueryRow(ctx, updateTeamNotificationSettings,
 		arg.NotificationEmail,
 		arg.NotificationPrefs,
-		arg.IndividualNotificationsEnabled,
+		arg.GruppkanalChannels,
 		arg.ID,
 		arg.GroupID,
 	)
@@ -468,8 +500,8 @@ func (q *Queries) UpdateTeamNotificationSettings(ctx context.Context, arg Update
 		&i.CreatedAt,
 		&i.NotificationEmail,
 		&i.NotificationPrefs,
-		&i.IndividualNotificationsEnabled,
 		&i.GchatSpaceID,
+		&i.GruppkanalChannels,
 	)
 	return i, err
 }

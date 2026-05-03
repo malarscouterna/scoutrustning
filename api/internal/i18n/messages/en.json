@@ -608,5 +608,26 @@
   "page_profile_gchat_space_none_option": "None",
   "page_profile_gchat_team_column": "Team",
   "page_profile_gchat_space_column": "Google Chat space",
-  "page_profile_gchat_error_connect": "Could not connect Google Chat. Check that the JSON key is correct."
+  "page_profile_gchat_error_connect": "Could not connect Google Chat. Check that the JSON key is correct.",
+
+  "page_profile_teams_gruppkanal_heading": "Group channel",
+  "page_profile_teams_gruppkanal_help": "Choose which channels are included in the team's group channel. One combined message is sent per event to the selected channels.",
+  "page_profile_teams_gruppkanal_no_channels": "No group channels connected — contact a manager.",
+  "page_profile_teams_gruppkanal_channel_email": "Group email",
+  "page_profile_teams_gruppkanal_channel_gchat": "Google Chat",
+  "page_profile_teams_gruppkanal_inherited": "(default)",
+
+  "page_profile_teams_notif_col_personal": "Personal email",
+  "page_profile_teams_notif_col_gruppkanal": "Group channel",
+  "page_profile_teams_notif_personal_always": "Always",
+  "page_profile_teams_notif_personal_if_no_broadcast": "If no group channel",
+  "page_profile_teams_notif_personal_never": "Never",
+  "page_profile_teams_notif_personal_if_no_broadcast_dimmed_tooltip": "The team has no active group channel — behaves like 'Always'.",
+  "page_profile_teams_notif_inherited": "(default)",
+
+  "page_profile_group_defaults_gruppkanal_heading": "Default group channel",
+  "page_profile_group_defaults_gruppkanal_help": "Which channels are included in the group channel by default for teams without their own settings.",
+
+  "page_profile_notif_force_defaults_confirm_v2": "Reset all users' notification settings and teams' group channel selections? Individual settings will be overwritten and the group standard will be used instead.",
+  "page_profile_notif_force_defaults_done_v2": "{user_count} users and {team_count} teams reset."
 }

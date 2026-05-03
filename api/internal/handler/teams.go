@@ -260,11 +260,13 @@ func (h *TeamHandler) GetNotificationSettings(w http.ResponseWriter, r *http.Req
 		WriteError(w, http.StatusNotFound, "team not found")
 		return
 	}
+	groupDefaultsRow, _ := h.Q.GetGroupNotificationDefaults(r.Context(), claims.GroupID)
 	WriteJSON(w, http.StatusOK, map[string]any{
-		"notification_email":               row.NotificationEmail.String,
-		"notification_prefs":               row.NotificationPrefs,
-		"individual_notifications_enabled": row.IndividualNotificationsEnabled,
-		"gchat_space_id":                   row.GchatSpaceID.String,
+		"notification_email":          row.NotificationEmail.String,
+		"notification_prefs":          row.NotificationPrefs,
+		"gchat_space_id":              row.GchatSpaceID.String,
+		"gruppkanal_channels":         row.GruppkanalChannels,
+		"default_gruppkanal_channels": groupDefaultsRow.DefaultGruppkanalChannels,
 	})
 }
 
@@ -282,9 +284,9 @@ func (h *TeamHandler) UpdateNotificationSettings(w http.ResponseWriter, r *http.
 	}
 
 	var req struct {
-		NotificationEmail              *string                       `json:"notification_email"`
-		NotificationPrefs              map[string]map[string]bool    `json:"notification_prefs"`
-		IndividualNotificationsEnabled *bool                         `json:"individual_notifications_enabled"`
+		NotificationEmail  *string                              `json:"notification_email"`
+		NotificationPrefs  notifications.NotificationPrefs      `json:"notification_prefs"`
+		GruppkanalChannels *[]string                            `json:"gruppkanal_channels"` // null = reset to inherit
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		WriteError(w, http.StatusBadRequest, "invalid request body")
@@ -305,16 +307,9 @@ func (h *TeamHandler) UpdateNotificationSettings(w http.ResponseWriter, r *http.
 		email = pgtype.Text{String: *req.NotificationEmail, Valid: *req.NotificationEmail != ""}
 	}
 
-	indivEnabled := existing.IndividualNotificationsEnabled
-	if req.IndividualNotificationsEnabled != nil {
-		indivEnabled = *req.IndividualNotificationsEnabled
-	} else if req.NotificationEmail != nil && *req.NotificationEmail != "" && !existing.NotificationEmail.Valid {
-		// First time a broadcast email is set: default individual notifications to off.
-		indivEnabled = false
-	}
-
 	prefsJSON := existing.NotificationPrefs
 	if req.NotificationPrefs != nil {
+		// Validate that any Gruppkanal channels are actually available for this team.
 		encoded, err := json.Marshal(req.NotificationPrefs)
 		if err != nil {
 			WriteError(w, http.StatusInternalServerError, "failed to encode prefs")
@@ -323,12 +318,38 @@ func (h *TeamHandler) UpdateNotificationSettings(w http.ResponseWriter, r *http.
 		prefsJSON = encoded
 	}
 
+	// Resolve Gruppkanal channels: keep existing if not provided.
+	gruppkanalChannels := existing.GruppkanalChannels
+	if req.GruppkanalChannels != nil {
+		// Validate that requested channels are available (notification_email or gchat_space_id must be set).
+		requested := *req.GruppkanalChannels
+		var validated []string
+		for _, ch := range requested {
+			switch ch {
+			case "email":
+				if email.Valid && email.String != "" {
+					validated = append(validated, ch)
+				}
+			case "gchat":
+				if existing.GchatSpaceID.Valid && existing.GchatSpaceID.String != "" {
+					validated = append(validated, ch)
+				}
+			}
+		}
+		gruppkanalChannels = validated // nil if empty (explicit opt-out stored as empty slice, not nil)
+		if len(validated) == 0 && len(requested) > 0 {
+			// All requested channels were invalid — keep nil so UI shows validation failed
+			// by returning empty but not nil; store as empty array to distinguish from inherit.
+			gruppkanalChannels = []string{}
+		}
+	}
+
 	_, err = h.Q.UpdateTeamNotificationSettings(r.Context(), db.UpdateTeamNotificationSettingsParams{
-		ID:                             id,
-		GroupID:                        claims.GroupID,
-		NotificationEmail:              email,
-		NotificationPrefs:              prefsJSON,
-		IndividualNotificationsEnabled: indivEnabled,
+		ID:                 id,
+		GroupID:            claims.GroupID,
+		NotificationEmail:  email,
+		NotificationPrefs:  prefsJSON,
+		GruppkanalChannels: gruppkanalChannels,
 	})
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, "failed to update notification settings")

@@ -119,61 +119,81 @@ func (h *NotificationPrefsHandler) DeleteMe(w http.ResponseWriter, r *http.Reque
 }
 
 // GET /group-settings/notification-defaults — manager only.
-// Returns effective defaults per role (user/manager), merged with system defaults.
+// Returns effective defaults merged with system defaults, plus default_gruppkanal_channels.
 func (h *NotificationPrefsHandler) GetGroupDefaults(w http.ResponseWriter, r *http.Request) {
 	claims, _ := auth.ClaimsFromContext(r.Context())
 
-	raw, _ := h.Q.GetGroupNotificationDefaults(r.Context(), claims.GroupID)
-	groupDefaults := notifications.ParseGroupDefaults(raw)
+	row, _ := h.Q.GetGroupNotificationDefaults(r.Context(), claims.GroupID)
+	groupDefaults := notifications.ParseNotificationPrefs(row.NotificationDefaults)
 
 	sys := notifications.BroadcastSystemDefaults()
-	out := make(map[string]map[string]bool, len(sys))
-	for event, channels := range sys {
-		out[event] = make(map[string]bool)
-		for ch, sv := range channels {
-			if gv, ok := groupDefaults.Lookup(event, ch, true); ok {
-				out[event][ch] = gv
-			} else {
-				out[event][ch] = sv
+	out := make(notifications.NotificationPrefs, len(sys))
+	for event, sd := range sys {
+		ep := sd
+		if gd, ok := groupDefaults[event]; ok {
+			if gd.Gruppkanal != nil {
+				ep.Gruppkanal = gd.Gruppkanal
+			}
+			if gd.PersonalEmailPolicy != "" {
+				ep.PersonalEmailPolicy = gd.PersonalEmailPolicy
 			}
 		}
+		out[event] = ep
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]any{
-		"defaults":         out,
-		"system_defaults":  sys,
+		"defaults":                    out,
+		"system_defaults":             sys,
+		"default_gruppkanal_channels": row.DefaultGruppkanalChannels,
 	})
 }
 
 // POST /group-settings/force-notification-defaults — manager only.
-// Resets notification_prefs to '{}' for every user in the group.
+// Resets user notification_prefs to '{}' and team gruppkanal_channels to NULL,
+// so all inherit the current group defaults.
 func (h *NotificationPrefsHandler) ForceDefaults(w http.ResponseWriter, r *http.Request) {
 	claims, _ := auth.ClaimsFromContext(r.Context())
-	count, err := h.Q.ResetAllNotificationPrefs(r.Context(), claims.GroupID)
+	userCount, err := h.Q.ResetAllNotificationPrefs(r.Context(), claims.GroupID)
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, "failed to reset preferences")
+		WriteError(w, http.StatusInternalServerError, "failed to reset user preferences")
 		return
 	}
-	WriteJSON(w, http.StatusOK, map[string]any{"reset_count": count})
+	teamCount, err := h.Q.ResetAllTeamGruppkanalChannels(r.Context(), claims.GroupID)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to reset team gruppkanal channels")
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{
+		"reset_user_count": userCount,
+		"reset_team_count": teamCount,
+	})
 }
 
 // PUT /group-settings/notification-defaults — manager only, full replacement.
-// Body: { "user": {event: {ch: bool}}, "manager": {event: {ch: bool}} }
+// Body: { "defaults": {event: {gruppkanal, personal_email_policy}}, "default_gruppkanal_channels": [...] }
 func (h *NotificationPrefsHandler) PutGroupDefaults(w http.ResponseWriter, r *http.Request) {
 	claims, _ := auth.ClaimsFromContext(r.Context())
 
-	var incoming notifications.GroupNotificationDefaults
-	if err := json.NewDecoder(r.Body).Decode(&incoming); err != nil {
+	var body struct {
+		Defaults                  notifications.NotificationPrefs `json:"defaults"`
+		DefaultGruppkanalChannels []string                        `json:"default_gruppkanal_channels"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	encoded, err := json.Marshal(incoming)
+	encoded, err := json.Marshal(body.Defaults)
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, "failed to encode defaults")
 		return
 	}
+	if body.DefaultGruppkanalChannels == nil {
+		body.DefaultGruppkanalChannels = []string{}
+	}
 	if err := h.Q.SetGroupNotificationDefaults(r.Context(), db.SetGroupNotificationDefaultsParams{
-		GroupID: claims.GroupID, NotificationDefaults: encoded,
+		GroupID:                   claims.GroupID,
+		NotificationDefaults:      encoded,
+		DefaultGruppkanalChannels: body.DefaultGruppkanalChannels,
 	}); err != nil {
 		WriteError(w, http.StatusInternalServerError, "failed to save defaults")
 		return

@@ -620,10 +620,18 @@ The three-column radio (Alltid / Följ avdelningsstandard / Aldrig) is unchanged
 #### `teams` — new column
 
 ```sql
-ALTER TABLE teams ADD COLUMN gruppkanal_channels text[] NOT NULL DEFAULT '{}';
+ALTER TABLE teams ADD COLUMN gruppkanal_channels text[];   -- NULL = inherit group default
 ```
 
-Stores the channels the team has opted into for Gruppkanal (e.g. `'{email,gchat}'`). Empty array = no Gruppkanal. The manager sets up which channels are *available* (via `notification_email` / `gchat_space_id`); the team picks from those.
+Three meaningful states:
+
+| Value | Meaning |
+|---|---|
+| `NULL` | No explicit selection — inherits `default_gruppkanal_channels` from group settings |
+| `'{}'` (empty array) | Team has explicitly opted out of all broadcast channels |
+| `'{email,gchat}'` | Team has explicitly chosen these channels |
+
+The manager sets up which channels are *available* for a team (via `notification_email` / `gchat_space_id`); the team picks from those available channels. A channel can only appear in `gruppkanal_channels` if it is actually configured — the backend enforces this on every write and automatically removes a channel when its integration is unlinked.
 
 #### `group_settings` — new column
 
@@ -631,41 +639,55 @@ Stores the channels the team has opted into for Gruppkanal (e.g. `'{email,gchat}
 ALTER TABLE group_settings ADD COLUMN default_gruppkanal_channels text[] NOT NULL DEFAULT '{}';
 ```
 
-Group manager's default Gruppkanal composition for teams that have not set their own. Teams inherit this when first created or when their explicit selection is cleared.
+Group-level default Gruppkanal composition. Teams with `gruppkanal_channels IS NULL` inherit this. When the group admin adds a new broadcast channel to the group and sets it in `default_gruppkanal_channels`, all `NULL`-teams pick it up automatically.
 
-#### `notification_prefs` JSONB — new key per event
+**Force-to-default**: the existing `POST /api/v0/group-settings/force-notification-defaults` endpoint is extended to also reset all teams' `gruppkanal_channels` to `NULL`, so they inherit the current `default_gruppkanal_channels`. The endpoint already resets user prefs; this adds team Gruppkanal to the same operation. The UI button label and confirmation dialog should reflect both effects.
 
-`personal_email_policy` is stored in the existing JSONB alongside the per-event broadcast on/off flags. The `email` and `gchat` keys per event continue to mean "is this broadcast channel on for this event" — independently stored, independently fired:
+#### `notification_prefs` JSONB — revised shape
+
+The per-event JSONB shape is simplified. The old per-channel `email`/`gchat` booleans are replaced by a single `gruppkanal` boolean (on/off for all opted-in channels) and `personal_email_policy`:
 
 ```json
 {
   "booking_confirmed": {
-    "email": true,
-    "gchat": true,
+    "gruppkanal": true,
     "personal_email_policy": "if_no_broadcast"
   },
   "booking_needs_approval": {
-    "email": true,
-    "gchat": false,
+    "gruppkanal": true,
     "personal_email_policy": "always"
   }
 }
 ```
 
-Missing `personal_email_policy` for an event → fall back to group defaults → system default (`if_no_broadcast`).
+Which channels actually fire is determined by `gruppkanal_channels` (team column or group default) — not by per-event channel flags. Missing `gruppkanal` key → fall back to group defaults → system default (on). Missing `personal_email_policy` → fall back to group defaults → system default (`if_no_broadcast`).
+
+This shape applies to `teams.notification_prefs`, `group_settings.notification_defaults`, and `users.notification_prefs` (users only store `personal_email_policy` — they have no Gruppkanal key).
 
 Migration: `00010_gruppkanal.sql` (new file, alongside existing migrations; consolidated at release).
 
 ### Dispatch logic changes
 
-**Broadcast step**: before firing each channel, check `gruppkanal_channels` contains that channel in addition to the existing `IsEnabled` check:
+**Resolve effective Gruppkanal channels** (helper, used in both broadcast and personal steps):
 
 ```
-for channel in ["email", "gchat", ...]:
-  if channel not in team.gruppkanal_channels → skip
-  if not IsEnabled(team.prefs → group_defaults → system, event, channel) → skip
+effectiveChannels(team) =
+  if team.gruppkanal_channels IS NOT NULL → team.gruppkanal_channels
+  else → group_settings.default_gruppkanal_channels
+```
+
+Only channels that are actually configured for the team appear in `gruppkanal_channels` — the backend enforces this — so no availability check is needed at dispatch time.
+
+**Broadcast step**:
+
+```
+channels = effectiveChannels(team)
+for channel in channels:
+  if not IsEnabled(team.prefs → group_defaults → system, event, "gruppkanal") → skip
   → fire channel
 ```
+
+`IsEnabled` now looks up the `gruppkanal` key in `notification_prefs` (not per-channel keys).
 
 **Personal email step** for team/role events (replaces `individual_notifications_enabled` check):
 
@@ -676,7 +698,7 @@ for channel in ["email", "gchat", ...]:
 2. if policy == "never"  → skip personal email for all members
 3. if policy == "always" → send personal email to each member (subject to user's own radio)
 4. if policy == "if_no_broadcast":
-     if team.gruppkanal_channels is non-empty → skip personal email
+     if effectiveChannels(team) is non-empty → skip personal email
      else → send personal email to each member
 5. User's own explicit radio always overrides the team policy:
      "Alltid" → send regardless of policy
@@ -684,13 +706,17 @@ for channel in ["email", "gchat", ...]:
      "Följ standard" → apply policy from steps 2–4
 ```
 
-Step 4 checks `gruppkanal_channels` (the team's opted-in set), not what the manager has configured. A team that has channels available but opted into none still receives personal email.
+Step 4 checks `effectiveChannels` (the team's opted-in set). A team that has channels available but whose effective Gruppkanal is empty (e.g. group default is also `'{}'`) still receives personal email.
 
 ### API changes
 
-- `GET/PUT /teams/{id}/notification-settings` — gains `gruppkanal_channels` field.
-- `GET /group-settings/notification-defaults` — gains `default_gruppkanal_channels` and `personal_email_policy` per event in the defaults map.
-- `PUT /group-settings/notification-defaults` — accepts `default_gruppkanal_channels` alongside the per-event JSONB.
+- `GET /teams/{id}/notification-settings` — returns `gruppkanal_channels` (null or array), `available_channels` (channels the manager has configured for this team — derived from `notification_email`/`gchat_space_id`), and `notification_prefs` using the new JSONB shape.
+- `PUT /teams/{id}/notification-settings` — accepts `gruppkanal_channels` (null to reset to inherit, array to set explicit). Backend validates that every channel in the array is in `available_channels`; rejects otherwise.
+- `GET /api/v0/group-settings/notification-defaults` — gains `default_gruppkanal_channels` and returns `notification_defaults` in the new JSONB shape (`gruppkanal` + `personal_email_policy` per event).
+- `PUT /api/v0/group-settings/notification-defaults` — accepts `default_gruppkanal_channels` alongside the per-event JSONB.
+- `POST /api/v0/group-settings/force-notification-defaults` — extended: now also sets all teams' `gruppkanal_channels` to `NULL`. Response: `{ "reset_user_count": 42, "reset_team_count": 7 }`.
+
+When a manager unlinks a channel from a team (clears `notification_email` or `gchat_space_id`), the backend automatically removes that channel from `gruppkanal_channels` if present.
 
 No new endpoints.
 
@@ -698,13 +724,16 @@ No new endpoints.
 
 | Step | Deliverable | Status |
 |---|---|---|
-| 3.6-1 | Auto-expand first team on Avdelningar och roller tab open | ⬜ |
-| 3.6-2 | Migration `00010_gruppkanal.sql` + sqlc queries for new columns | ⬜ |
-| 3.6-3 | i18n keys for new labels (Gruppkanal, radio options, column headers) | ⬜ |
-| 3.6-4 | Team settings UI: Gruppkanal composition selector + unified per-event table (Personlig e-post radio + Gruppkanal checkbox); remove `individual_notifications_enabled` toggle | ⬜ |
-| 3.6-5 | Group defaults UI: default Gruppkanal composition checkboxes + same per-event table | ⬜ |
-| 3.6-6 | Backend — `gruppkanal_channels` in dispatch; `personal_email_policy` resolution in `send.go` | ⬜ |
-| 3.6-7 | Backend — `personal_email_policy` in `BroadcastSystemDefaults` and group defaults response | ⬜ |
+| 3.6-1 | Auto-expand first team on Avdelningar och roller tab open | ✅ done |
+| 3.6-2 | Migration `00010_gruppkanal.sql`: `teams.gruppkanal_channels text[]` (nullable); `group_settings.default_gruppkanal_channels text[] NOT NULL DEFAULT '{}'`; drop `teams.individual_notifications_enabled` | ✅ done |
+| 3.6-3 | sqlc queries: `GetTeamNotificationSettings` returns new columns; `SetTeamGruppkanalChannels`; `GetGroupNotificationDefaults`/`SetGroupNotificationDefaults` updated | ✅ done |
+| 3.6-4 | Backend — channel availability enforcement: auto-remove channel from `gruppkanal_channels` when integration is unlinked; validate on PUT | ✅ done |
+| 3.6-5 | Backend — extend `force-notification-defaults` to also NULL-out all teams' `gruppkanal_channels` | ✅ done |
+| 3.6-6 | Backend — dispatch: `EffectiveGruppkanalChannels()` helper; `IsGruppkanalEnabled`; `ResolvePersonalEmailPolicy` in `send.go` and `scheduler.go` | ✅ done |
+| 3.6-7 | Backend — `personal_email_policy` and `gruppkanal` in `BroadcastSystemDefaults`; group defaults and team settings API responses updated | ✅ done |
+| 3.6-8 | i18n keys for new labels (Gruppkanal, radio options, column headers, force-defaults updated confirmation) | ✅ done |
+| 3.6-9 | Team settings UI: Gruppkanal composition selector + unified per-event table (Personlig e-post radio + Gruppkanal checkbox); remove `individual_notifications_enabled` toggle | ✅ done |
+| 3.6-10 | Group defaults UI: default Gruppkanal composition checkboxes + same per-event table; update force-defaults confirmation dialog | ✅ done |
 
 ---
 

@@ -35,12 +35,16 @@ RETURNING *;
 UPDATE teams SET
     notification_email = @notification_email,
     notification_prefs = @notification_prefs,
-    individual_notifications_enabled = @individual_notifications_enabled
+    gruppkanal_channels = @gruppkanal_channels
 WHERE id = @id AND group_id = @group_id
 RETURNING *;
 
+-- name: SetTeamGruppkanalChannels :exec
+UPDATE teams SET gruppkanal_channels = @gruppkanal_channels
+WHERE id = @id AND group_id = @group_id;
+
 -- name: GetTeamNotificationSettings :one
-SELECT notification_email, notification_prefs, individual_notifications_enabled, gchat_space_id
+SELECT notification_email, notification_prefs, gchat_space_id, gruppkanal_channels
 FROM teams
 WHERE id = @id AND group_id = @group_id;
 
@@ -84,3 +88,11 @@ WHERE id = @id AND group_id = @group_id;
 SELECT id, name, gchat_space_id FROM teams
 WHERE group_id = @group_id
 ORDER BY name;
+
+-- name: ResetAllTeamGruppkanalChannels :one
+WITH updated AS (
+  UPDATE teams SET gruppkanal_channels = NULL
+  WHERE group_id = @group_id
+  RETURNING id
+)
+SELECT count(*) AS reset_count FROM updated;
