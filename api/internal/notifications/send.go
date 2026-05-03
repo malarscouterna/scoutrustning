@@ -486,7 +486,7 @@ func sendTestEmail(ctx context.Context, q *db.Queries, n Notifier, groupID, to, 
 	group, _ := q.GetGroup(ctx, groupID)
 	subject := i18n.T(lang, "email_subject_test_email")
 	bodyText := i18n.T(lang, "notif_test_email")
-	logoURL := groupLogoURL(ctx, q, groupID, baseURL)
+	logoURL := GroupLogoURL(ctx, q, groupID, baseURL)
 	logoHdr := logoHeader(logoURL, group.Name)
 	unsubURL := html.EscapeString(baseURL + "/profile")
 	body := fmt.Sprintf(`<div style="font-family:sans-serif;max-width:600px;margin:0 auto">

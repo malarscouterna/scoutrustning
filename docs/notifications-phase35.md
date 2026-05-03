@@ -445,7 +445,7 @@ GET    /api/v0/group-settings/gchat-spaces      → [{ "id", "name" }]      (man
 | 3.5b-2a | SQL queries updated (`group_settings.sql`, `teams.sql`) + `sqlc generate` run | ✅ done |
 | 3.5b-2b | `GChatNotifier` (card builder, threading, DWD auth) | ✅ done |
 | 3.5b-3 | gchat-key endpoints + enabled_channels update on connect/disconnect | ✅ done |
-| 3.5b-4 | Team mapper UI + space link/unlink endpoints | 🚧 UI implemented, svelte-check pending |
+| 3.5b-4 | Team mapper UI + space link/unlink endpoints | ✅ done |
 | 3.5b-5 | Dispatch loop: gchat broadcast path | ✅ done |
 
 **What was done in 3.5b-1/2a:**
@@ -753,7 +753,7 @@ Group defaults UI keeps three-way radio. Middle option relabelled "Föredra grup
 
 ## Remaining work
 
-- **3.5b-4 smoke-test**: visually verify team tab, GChat integration section, and group defaults table in the browser.
+- ~~**3.5b-4 smoke-test**~~ ✅ done — team tab, GChat section, and group defaults table verified in browser.
 - **Step 10 email templates**: visual review via Mailpit (`http://localhost:8025`) + extend `TestNotifications_EventTriggered` to assert body contains booking URL, dates, item list.
 
 Deferred items (personal email override, GChat richness, Slack/Teams, push notifications, logo in web header) moved to `docs/BACKLOG.md`.

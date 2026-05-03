@@ -21,6 +21,9 @@ var bookingTemplate string
 //go:embed templates/issue.html
 var issueTemplate string
 
+//go:embed templates/test.html
+var testTemplate string
+
 // eventStyle holds banner and CTA colors for a notification event.
 type eventStyle struct {
 	bannerBG string
@@ -204,6 +207,30 @@ func renderIssueEmail(d IssueEmailData) (htmlOut, textOut string) {
 	return
 }
 
+// RenderTestEmail renders the branded test notification email.
+func RenderTestEmail(lang, recipientName, groupName, logoURL, baseURL string) (htmlOut, textOut string) {
+	bodyText := i18n.T(lang, "notif_test_email")
+	unsubLabel := i18n.T(lang, "email_footer_unsubscribe")
+	bannerLabel := i18n.T(lang, "email_banner_test_email")
+	ctaLabel := i18n.T(lang, "email_cta_open_settings")
+
+	replacer := strings.NewReplacer(
+		"EMAIL_RECIPIENT_NAME", html.EscapeString(recipientName),
+		"EMAIL_LOGO_HEADER", logoHeader(logoURL, groupName),
+		"EMAIL_GROUP_NAME", html.EscapeString(groupName),
+		"EMAIL_BANNER_LABEL", html.EscapeString(bannerLabel),
+		"EMAIL_BODY", html.EscapeString(bodyText),
+		"EMAIL_CTA_URL", baseURL+"/profile",
+		"EMAIL_CTA_LABEL", html.EscapeString(ctaLabel),
+		"EMAIL_UNSUBSCRIBE_URL", baseURL+"/profile",
+		"EMAIL_FOOTER_UNSUBSCRIBE", html.EscapeString(unsubLabel),
+	)
+
+	htmlOut = replacer.Replace(testTemplate)
+	textOut = fmt.Sprintf("%s\n\n%s: %s/profile", bodyText, unsubLabel, baseURL)
+	return
+}
+
 // fetchBookingEmailData loads group name, team name, and items for a booking.
 func fetchBookingEmailData(ctx context.Context, q *db.Queries, b db.Booking, event, lang, recipientName, baseURL string) BookingEmailData {
 	group, _ := q.GetGroup(ctx, b.GroupID)
@@ -223,7 +250,7 @@ func fetchBookingEmailData(ctx context.Context, q *db.Queries, b db.Booking, eve
 		Lang:          lang,
 		RecipientName: recipientName,
 		GroupName:     group.Name,
-		LogoURL:       groupLogoURL(ctx, q, b.GroupID, baseURL),
+		LogoURL:       GroupLogoURL(ctx, q, b.GroupID, baseURL),
 		BaseURL:       baseURL,
 		BookingID:     b.ID,
 		StartDate:     b.StartDate,
@@ -258,7 +285,7 @@ func fetchIssueEmailData(ctx context.Context, q *db.Queries, issue db.IssueRepor
 		Lang:          lang,
 		RecipientName: recipientName,
 		GroupName:     group.Name,
-		LogoURL:       groupLogoURL(ctx, q, issue.GroupID, baseURL),
+		LogoURL:       GroupLogoURL(ctx, q, issue.GroupID, baseURL),
 		BaseURL:       baseURL,
 		IssueID:       issue.ID,
 		Title:         issue.Title,
@@ -272,8 +299,8 @@ func fetchIssueEmailData(ctx context.Context, q *db.Queries, issue db.IssueRepor
 
 // --- Helpers ---
 
-// groupLogoURL returns the absolute PNG logo URL for a group, or empty string if none set.
-func groupLogoURL(ctx context.Context, q *db.Queries, groupID, baseURL string) string {
+// GroupLogoURL returns the absolute PNG logo URL for a group, or empty string if none set.
+func GroupLogoURL(ctx context.Context, q *db.Queries, groupID, baseURL string) string {
 	fileID, err := q.GetGroupLogoFileID(ctx, groupID)
 	if err != nil || !fileID.Valid {
 		return ""
