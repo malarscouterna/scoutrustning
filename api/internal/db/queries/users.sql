@@ -7,7 +7,7 @@ ON CONFLICT (id) DO UPDATE SET
     max_access_level = EXCLUDED.max_access_level,
     team_ids = EXCLUDED.team_ids,
     updated_at = now()
-RETURNING *;
+RETURNING id, group_id, name, email, active_group_id, created_at, updated_at, language, max_access_level, notification_prefs, team_ids;
 
 -- name: ListUsersByGroup :many
 SELECT id, name, email, max_access_level FROM users
@@ -16,7 +16,7 @@ WHERE group_id = @group_id
 ORDER BY name;
 
 -- name: GetUser :one
-SELECT * FROM users
+SELECT id, group_id, name, email, active_group_id, created_at, updated_at, language, max_access_level, notification_prefs, team_ids FROM users
 WHERE id = @id AND group_id = @group_id;
 
 -- name: UpdateUserLanguage :exec

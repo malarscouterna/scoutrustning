@@ -12,6 +12,21 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const clearTeamGchatSpace = `-- name: ClearTeamGchatSpace :exec
+UPDATE teams SET gchat_space_id = NULL
+WHERE id = $1 AND group_id = $2
+`
+
+type ClearTeamGchatSpaceParams struct {
+	ID      pgtype.UUID `json:"id"`
+	GroupID string      `json:"group_id"`
+}
+
+func (q *Queries) ClearTeamGchatSpace(ctx context.Context, arg ClearTeamGchatSpaceParams) error {
+	_, err := q.db.Exec(ctx, clearTeamGchatSpace, arg.ID, arg.GroupID)
+	return err
+}
+
 const countActiveBookingsForTeam = `-- name: CountActiveBookingsForTeam :one
 SELECT count(*) FROM bookings
 WHERE used_by_team_id = $1 AND group_id = $2
@@ -45,7 +60,7 @@ func (q *Queries) CountManagerTeams(ctx context.Context, groupID string) (int64,
 const createTeam = `-- name: CreateTeam :one
 INSERT INTO teams (group_id, name, type, access_level)
 VALUES ($1, $2, $3, $4)
-RETURNING id, group_id, name, type, access_level, gchat_webhook_url, created_at, notification_email, notification_prefs, individual_notifications_enabled
+RETURNING id, group_id, name, type, access_level, created_at, notification_email, notification_prefs, individual_notifications_enabled, gchat_space_id
 `
 
 type CreateTeamParams struct {
@@ -69,11 +84,11 @@ func (q *Queries) CreateTeam(ctx context.Context, arg CreateTeamParams) (Team, e
 		&i.Name,
 		&i.Type,
 		&i.AccessLevel,
-		&i.GchatWebhookUrl,
 		&i.CreatedAt,
 		&i.NotificationEmail,
 		&i.NotificationPrefs,
 		&i.IndividualNotificationsEnabled,
+		&i.GchatSpaceID,
 	)
 	return i, err
 }
@@ -94,7 +109,7 @@ func (q *Queries) DeleteTeam(ctx context.Context, arg DeleteTeamParams) error {
 }
 
 const getTeam = `-- name: GetTeam :one
-SELECT id, group_id, name, type, access_level, gchat_webhook_url, created_at, notification_email, notification_prefs, individual_notifications_enabled FROM teams
+SELECT id, group_id, name, type, access_level, created_at, notification_email, notification_prefs, individual_notifications_enabled, gchat_space_id FROM teams
 WHERE id = $1 AND group_id = $2
 `
 
@@ -112,17 +127,17 @@ func (q *Queries) GetTeam(ctx context.Context, arg GetTeamParams) (Team, error) 
 		&i.Name,
 		&i.Type,
 		&i.AccessLevel,
-		&i.GchatWebhookUrl,
 		&i.CreatedAt,
 		&i.NotificationEmail,
 		&i.NotificationPrefs,
 		&i.IndividualNotificationsEnabled,
+		&i.GchatSpaceID,
 	)
 	return i, err
 }
 
 const getTeamByName = `-- name: GetTeamByName :one
-SELECT id, group_id, name, type, access_level, gchat_webhook_url, created_at, notification_email, notification_prefs, individual_notifications_enabled FROM teams
+SELECT id, group_id, name, type, access_level, created_at, notification_email, notification_prefs, individual_notifications_enabled, gchat_space_id FROM teams
 WHERE group_id = $1 AND name = $2
 LIMIT 1
 `
@@ -141,17 +156,17 @@ func (q *Queries) GetTeamByName(ctx context.Context, arg GetTeamByNameParams) (T
 		&i.Name,
 		&i.Type,
 		&i.AccessLevel,
-		&i.GchatWebhookUrl,
 		&i.CreatedAt,
 		&i.NotificationEmail,
 		&i.NotificationPrefs,
 		&i.IndividualNotificationsEnabled,
+		&i.GchatSpaceID,
 	)
 	return i, err
 }
 
 const getTeamNotificationSettings = `-- name: GetTeamNotificationSettings :one
-SELECT notification_email, notification_prefs, individual_notifications_enabled
+SELECT notification_email, notification_prefs, individual_notifications_enabled, gchat_space_id
 FROM teams
 WHERE id = $1 AND group_id = $2
 `
@@ -165,17 +180,43 @@ type GetTeamNotificationSettingsRow struct {
 	NotificationEmail              pgtype.Text     `json:"notification_email"`
 	NotificationPrefs              json.RawMessage `json:"notification_prefs"`
 	IndividualNotificationsEnabled bool            `json:"individual_notifications_enabled"`
+	GchatSpaceID                   pgtype.Text     `json:"gchat_space_id"`
 }
 
 func (q *Queries) GetTeamNotificationSettings(ctx context.Context, arg GetTeamNotificationSettingsParams) (GetTeamNotificationSettingsRow, error) {
 	row := q.db.QueryRow(ctx, getTeamNotificationSettings, arg.ID, arg.GroupID)
 	var i GetTeamNotificationSettingsRow
-	err := row.Scan(&i.NotificationEmail, &i.NotificationPrefs, &i.IndividualNotificationsEnabled)
+	err := row.Scan(
+		&i.NotificationEmail,
+		&i.NotificationPrefs,
+		&i.IndividualNotificationsEnabled,
+		&i.GchatSpaceID,
+	)
 	return i, err
 }
 
+const isTeamMember = `-- name: IsTeamMember :one
+SELECT EXISTS(
+    SELECT 1 FROM users
+    WHERE id = $1 AND group_id = $2 AND $3::uuid = ANY(team_ids)
+) AS is_member
+`
+
+type IsTeamMemberParams struct {
+	UserID  string      `json:"user_id"`
+	GroupID string      `json:"group_id"`
+	TeamID  pgtype.UUID `json:"team_id"`
+}
+
+func (q *Queries) IsTeamMember(ctx context.Context, arg IsTeamMemberParams) (bool, error) {
+	row := q.db.QueryRow(ctx, isTeamMember, arg.UserID, arg.GroupID, arg.TeamID)
+	var is_member bool
+	err := row.Scan(&is_member)
+	return is_member, err
+}
+
 const listTeams = `-- name: ListTeams :many
-SELECT t.id, t.group_id, t.name, t.type, t.access_level, t.gchat_webhook_url, t.created_at, t.notification_email, t.notification_prefs, t.individual_notifications_enabled,
+SELECT t.id, t.group_id, t.name, t.type, t.access_level, t.created_at, t.notification_email, t.notification_prefs, t.individual_notifications_enabled, t.gchat_space_id,
     COALESCE(
         (SELECT jsonb_agg(jsonb_build_object('claim_scope', tcm.claim_scope, 'claim_id', tcm.claim_id))
          FROM team_claim_mappings tcm WHERE tcm.team_id = t.id),
@@ -192,11 +233,11 @@ type ListTeamsRow struct {
 	Name                           string             `json:"name"`
 	Type                           string             `json:"type"`
 	AccessLevel                    string             `json:"access_level"`
-	GchatWebhookUrl                pgtype.Text        `json:"gchat_webhook_url"`
 	CreatedAt                      pgtype.Timestamptz `json:"created_at"`
 	NotificationEmail              pgtype.Text        `json:"notification_email"`
 	NotificationPrefs              json.RawMessage    `json:"notification_prefs"`
 	IndividualNotificationsEnabled bool               `json:"individual_notifications_enabled"`
+	GchatSpaceID                   pgtype.Text        `json:"gchat_space_id"`
 	ClaimMappings                  interface{}        `json:"claim_mappings"`
 }
 
@@ -215,11 +256,11 @@ func (q *Queries) ListTeams(ctx context.Context, groupID string) ([]ListTeamsRow
 			&i.Name,
 			&i.Type,
 			&i.AccessLevel,
-			&i.GchatWebhookUrl,
 			&i.CreatedAt,
 			&i.NotificationEmail,
 			&i.NotificationPrefs,
 			&i.IndividualNotificationsEnabled,
+			&i.GchatSpaceID,
 			&i.ClaimMappings,
 		); err != nil {
 			return nil, err
@@ -233,7 +274,7 @@ func (q *Queries) ListTeams(ctx context.Context, groupID string) ([]ListTeamsRow
 }
 
 const listTeamsByNames = `-- name: ListTeamsByNames :many
-SELECT id, group_id, name, type, access_level, gchat_webhook_url, created_at, notification_email, notification_prefs, individual_notifications_enabled FROM teams
+SELECT id, group_id, name, type, access_level, created_at, notification_email, notification_prefs, individual_notifications_enabled, gchat_space_id FROM teams
 WHERE group_id = $1 AND name = ANY($2::text[])
 `
 
@@ -257,11 +298,11 @@ func (q *Queries) ListTeamsByNames(ctx context.Context, arg ListTeamsByNamesPara
 			&i.Name,
 			&i.Type,
 			&i.AccessLevel,
-			&i.GchatWebhookUrl,
 			&i.CreatedAt,
 			&i.NotificationEmail,
 			&i.NotificationPrefs,
 			&i.IndividualNotificationsEnabled,
+			&i.GchatSpaceID,
 		); err != nil {
 			return nil, err
 		}
@@ -273,13 +314,61 @@ func (q *Queries) ListTeamsByNames(ctx context.Context, arg ListTeamsByNamesPara
 	return items, nil
 }
 
+const listTeamsWithGchatInfo = `-- name: ListTeamsWithGchatInfo :many
+SELECT id, name, gchat_space_id FROM teams
+WHERE group_id = $1
+ORDER BY name
+`
+
+type ListTeamsWithGchatInfoRow struct {
+	ID           pgtype.UUID `json:"id"`
+	Name         string      `json:"name"`
+	GchatSpaceID pgtype.Text `json:"gchat_space_id"`
+}
+
+func (q *Queries) ListTeamsWithGchatInfo(ctx context.Context, groupID string) ([]ListTeamsWithGchatInfoRow, error) {
+	rows, err := q.db.Query(ctx, listTeamsWithGchatInfo, groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTeamsWithGchatInfoRow{}
+	for rows.Next() {
+		var i ListTeamsWithGchatInfoRow
+		if err := rows.Scan(&i.ID, &i.Name, &i.GchatSpaceID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const setTeamGchatSpace = `-- name: SetTeamGchatSpace :exec
+UPDATE teams SET gchat_space_id = $1
+WHERE id = $2 AND group_id = $3
+`
+
+type SetTeamGchatSpaceParams struct {
+	GchatSpaceID pgtype.Text `json:"gchat_space_id"`
+	ID           pgtype.UUID `json:"id"`
+	GroupID      string      `json:"group_id"`
+}
+
+func (q *Queries) SetTeamGchatSpace(ctx context.Context, arg SetTeamGchatSpaceParams) error {
+	_, err := q.db.Exec(ctx, setTeamGchatSpace, arg.GchatSpaceID, arg.ID, arg.GroupID)
+	return err
+}
+
 const updateTeam = `-- name: UpdateTeam :one
 UPDATE teams SET
     name = $1,
     type = $2,
     access_level = $3
 WHERE id = $4 AND group_id = $5
-RETURNING id, group_id, name, type, access_level, gchat_webhook_url, created_at, notification_email, notification_prefs, individual_notifications_enabled
+RETURNING id, group_id, name, type, access_level, created_at, notification_email, notification_prefs, individual_notifications_enabled, gchat_space_id
 `
 
 type UpdateTeamParams struct {
@@ -305,11 +394,41 @@ func (q *Queries) UpdateTeam(ctx context.Context, arg UpdateTeamParams) (Team, e
 		&i.Name,
 		&i.Type,
 		&i.AccessLevel,
-		&i.GchatWebhookUrl,
 		&i.CreatedAt,
 		&i.NotificationEmail,
 		&i.NotificationPrefs,
 		&i.IndividualNotificationsEnabled,
+		&i.GchatSpaceID,
+	)
+	return i, err
+}
+
+const updateTeamName = `-- name: UpdateTeamName :one
+UPDATE teams SET name = $1
+WHERE id = $2 AND group_id = $3
+RETURNING id, group_id, name, type, access_level, created_at, notification_email, notification_prefs, individual_notifications_enabled, gchat_space_id
+`
+
+type UpdateTeamNameParams struct {
+	Name    string      `json:"name"`
+	ID      pgtype.UUID `json:"id"`
+	GroupID string      `json:"group_id"`
+}
+
+func (q *Queries) UpdateTeamName(ctx context.Context, arg UpdateTeamNameParams) (Team, error) {
+	row := q.db.QueryRow(ctx, updateTeamName, arg.Name, arg.ID, arg.GroupID)
+	var i Team
+	err := row.Scan(
+		&i.ID,
+		&i.GroupID,
+		&i.Name,
+		&i.Type,
+		&i.AccessLevel,
+		&i.CreatedAt,
+		&i.NotificationEmail,
+		&i.NotificationPrefs,
+		&i.IndividualNotificationsEnabled,
+		&i.GchatSpaceID,
 	)
 	return i, err
 }
@@ -320,7 +439,7 @@ UPDATE teams SET
     notification_prefs = $2,
     individual_notifications_enabled = $3
 WHERE id = $4 AND group_id = $5
-RETURNING id, group_id, name, type, access_level, gchat_webhook_url, created_at, notification_email, notification_prefs, individual_notifications_enabled
+RETURNING id, group_id, name, type, access_level, created_at, notification_email, notification_prefs, individual_notifications_enabled, gchat_space_id
 `
 
 type UpdateTeamNotificationSettingsParams struct {
@@ -346,11 +465,11 @@ func (q *Queries) UpdateTeamNotificationSettings(ctx context.Context, arg Update
 		&i.Name,
 		&i.Type,
 		&i.AccessLevel,
-		&i.GchatWebhookUrl,
 		&i.CreatedAt,
 		&i.NotificationEmail,
 		&i.NotificationPrefs,
 		&i.IndividualNotificationsEnabled,
+		&i.GchatSpaceID,
 	)
 	return i, err
 }

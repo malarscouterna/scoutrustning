@@ -37,3 +37,4 @@ services:
       - /app/node_modules
       - ./dev-personas.json:/app/dev-personas.json:ro
       - ./docs/guide.md:/app/guide.md:ro
+      - ./docs/gchat-manager-guide.md:/app/gchat-manager-guide.md:ro

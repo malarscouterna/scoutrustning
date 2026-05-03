@@ -2,14 +2,17 @@ package handler
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"os"
+	"slices"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/malarscouterna/ms-utrustning/api/internal/auth"
 	"github.com/malarscouterna/ms-utrustning/api/internal/crypto"
 	"github.com/malarscouterna/ms-utrustning/api/internal/db"
+	"github.com/malarscouterna/ms-utrustning/api/internal/notifications"
 )
 
 type GroupSettingsHandler struct {
@@ -22,6 +25,9 @@ func (h *GroupSettingsHandler) Routes() chi.Router {
 	r.Use(auth.RequireRole("equipment_manager"))
 	r.Get("/", h.Get)
 	r.Put("/", h.Update)
+	r.Post("/gchat-key", h.UploadGChatKey)
+	r.Delete("/gchat-key", h.DeleteGChatKey)
+	r.Get("/gchat-spaces", h.ListGChatSpaces)
 	return r
 }
 
@@ -35,7 +41,8 @@ type groupSettingsResponse struct {
 	SmtpKeyMasked         string   `json:"smtp_key_masked"`
 	SystemSmtpConfigured  bool     `json:"system_smtp_configured"`
 	SystemSmtpFrom        string   `json:"system_smtp_from"`
-	GchatWebhookURL       string   `json:"gchat_webhook_url"`
+	GchatConfigured       bool     `json:"gchat_configured"`
+	GchatAdminEmail       string   `json:"gchat_admin_email"`
 	DefaultApprovalLevel  string   `json:"default_approval_level"`
 	DefaultAccessUnknown  string   `json:"default_access_unknown"`
 	DefaultAccessTroop    string   `json:"default_access_troop"`
@@ -84,7 +91,6 @@ type groupSettingsRequest struct {
 	SmtpTls               string  `json:"smtp_tls"`
 	SmtpUser              string  `json:"smtp_user"`
 	SmtpKey               *string `json:"smtp_key"`
-	GchatWebhookURL       string  `json:"gchat_webhook_url"`
 	DefaultApprovalLevel  string  `json:"default_approval_level"`
 	DefaultAccessUnknown  string  `json:"default_access_unknown"`
 	DefaultAccessTroop    string  `json:"default_access_troop"`
@@ -192,7 +198,6 @@ func (h *GroupSettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		GroupID:               claims.GroupID,
 		NotificationEmailFrom: req.NotificationEmailFrom,
 		SmtpKeyEncrypted:      smtpKeyEncrypted,
-		GchatWebhookUrl:       req.GchatWebhookURL,
 		DefaultApprovalLevel:  approvalLevel,
 		DefaultAccessUnknown:  defaultAccessUnknown,
 		DefaultAccessTroop:    defaultAccessTroop,
@@ -234,6 +239,112 @@ func (h *GroupSettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, settingsToResponse(settings))
 }
 
+// UploadGChatKey accepts the service account JSON as the request body, validates it by
+// listing spaces, stores it encrypted, and appends "gchat" to enabled_channels.
+func (h *GroupSettingsHandler) UploadGChatKey(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+
+	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "failed to read body")
+		return
+	}
+
+	// The body must be valid JSON (service account key file content).
+	var keyCheck map[string]interface{}
+	if err := json.Unmarshal(body, &keyCheck); err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid JSON key file")
+		return
+	}
+	adminEmail, _ := keyCheck["client_email"].(string)
+
+	// Validate by listing spaces.
+	spaces, err := notifications.ListGChatSpaces(r.Context(), body, adminEmail)
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "gchat_key_invalid: "+err.Error())
+		return
+	}
+
+	encrypted, err := crypto.Encrypt(body)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to encrypt key")
+		return
+	}
+
+	if err := h.Q.SetGchatCredentials(r.Context(), db.SetGchatCredentialsParams{
+		GchatServiceAccountJsonEncrypted: encrypted,
+		GchatAdminEmail:                  adminEmail,
+		GroupID:                          claims.GroupID,
+	}); err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to save credentials")
+		return
+	}
+
+	// Append "gchat" to enabled_channels if not already present.
+	gs, _ := h.Q.GetGroupSettings(r.Context(), claims.GroupID)
+	channels := gs.EnabledChannels
+	if !slices.Contains(channels, "gchat") {
+		channels = append(channels, "gchat")
+		_ = h.Q.UpdateEnabledChannels(r.Context(), db.UpdateEnabledChannelsParams{
+			EnabledChannels: channels,
+			GroupID:         claims.GroupID,
+		})
+	}
+
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"gchat_configured": true,
+		"gchat_admin_email": adminEmail,
+		"spaces":           spaces,
+	})
+}
+
+// DeleteGChatKey removes GChat credentials, removes "gchat" from enabled_channels,
+// and clears all team space mappings for the group.
+func (h *GroupSettingsHandler) DeleteGChatKey(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+
+	_ = h.Q.ClearAllGchatSpacesForGroup(r.Context(), claims.GroupID)
+	_ = h.Q.ClearGchatCredentials(r.Context(), claims.GroupID)
+
+	gs, _ := h.Q.GetGroupSettings(r.Context(), claims.GroupID)
+	channels := make([]string, 0, len(gs.EnabledChannels))
+	for _, ch := range gs.EnabledChannels {
+		if ch != "gchat" {
+			channels = append(channels, ch)
+		}
+	}
+	_ = h.Q.UpdateEnabledChannels(r.Context(), db.UpdateEnabledChannelsParams{
+		EnabledChannels: channels,
+		GroupID:         claims.GroupID,
+	})
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ListGChatSpaces returns spaces accessible to the stored service account.
+func (h *GroupSettingsHandler) ListGChatSpaces(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+
+	creds, err := h.Q.GetGchatCredentials(r.Context(), claims.GroupID)
+	if err != nil || len(creds.GchatServiceAccountJsonEncrypted) == 0 {
+		WriteError(w, http.StatusBadRequest, "gchat not configured")
+		return
+	}
+	saJSON, err := crypto.Decrypt(creds.GchatServiceAccountJsonEncrypted)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to decrypt credentials")
+		return
+	}
+
+	spaces, err := notifications.ListGChatSpaces(r.Context(), saJSON, creds.GchatAdminEmail)
+	if err != nil {
+		WriteError(w, http.StatusBadGateway, "failed to list spaces: "+err.Error())
+		return
+	}
+
+	WriteJSON(w, http.StatusOK, spaces)
+}
+
 func settingsToResponse(s db.GroupSetting) groupSettingsResponse {
 	resp := groupSettingsResponse{
 		NotificationEmailFrom: s.NotificationEmailFrom,
@@ -244,7 +355,8 @@ func settingsToResponse(s db.GroupSetting) groupSettingsResponse {
 		SmtpKeySet:            len(s.SmtpKeyEncrypted) > 0,
 		SystemSmtpConfigured:  os.Getenv("SMTP_DEFAULT_HOST") != "",
 		SystemSmtpFrom:        os.Getenv("SMTP_DEFAULT_FROM"),
-		GchatWebhookURL:       s.GchatWebhookUrl,
+		GchatConfigured:       len(s.GchatServiceAccountJsonEncrypted) > 0,
+		GchatAdminEmail:       s.GchatAdminEmail,
 		DefaultApprovalLevel:  s.DefaultApprovalLevel,
 		DefaultAccessUnknown:  s.DefaultAccessUnknown,
 		DefaultAccessTroop:    s.DefaultAccessTroop,
@@ -258,10 +370,7 @@ func settingsToResponse(s db.GroupSetting) groupSettingsResponse {
 		NotificationChannels:  s.EnabledChannels,
 	}
 	if s.LogoFileID.Valid {
-		id := s.LogoFileID.Bytes
-		groupID := s.GroupID
-		resp.LogoURL = "/api/v0/public/groups/" + groupID + "/logo"
-		_ = id // file_id is resolved server-side by the public endpoint
+		resp.LogoURL = "/api/v0/public/groups/" + s.GroupID + "/logo"
 	}
 	if len(s.SmtpKeyEncrypted) > 0 {
 		decrypted, err := crypto.Decrypt(s.SmtpKeyEncrypted)

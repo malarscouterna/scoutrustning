@@ -117,7 +117,7 @@ func (q *Queries) GetTeamMembersWithEmails(ctx context.Context, arg GetTeamMembe
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, group_id, name, email, notification_channel, gchat_webhook_url, active_group_id, created_at, updated_at, language, max_access_level, notification_prefs, team_ids FROM users
+SELECT id, group_id, name, email, active_group_id, created_at, updated_at, language, max_access_level, notification_prefs, team_ids FROM users
 WHERE id = $1 AND group_id = $2
 `
 
@@ -134,8 +134,6 @@ func (q *Queries) GetUser(ctx context.Context, arg GetUserParams) (User, error) 
 		&i.GroupID,
 		&i.Name,
 		&i.Email,
-		&i.NotificationChannel,
-		&i.GchatWebhookUrl,
 		&i.ActiveGroupID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -264,7 +262,7 @@ ON CONFLICT (id) DO UPDATE SET
     max_access_level = EXCLUDED.max_access_level,
     team_ids = EXCLUDED.team_ids,
     updated_at = now()
-RETURNING id, group_id, name, email, notification_channel, gchat_webhook_url, active_group_id, created_at, updated_at, language, max_access_level, notification_prefs, team_ids
+RETURNING id, group_id, name, email, active_group_id, created_at, updated_at, language, max_access_level, notification_prefs, team_ids
 `
 
 type UpsertUserParams struct {
@@ -291,8 +289,6 @@ func (q *Queries) UpsertUser(ctx context.Context, arg UpsertUserParams) (User, e
 		&i.GroupID,
 		&i.Name,
 		&i.Email,
-		&i.NotificationChannel,
-		&i.GchatWebhookUrl,
 		&i.ActiveGroupID,
 		&i.CreatedAt,
 		&i.UpdatedAt,

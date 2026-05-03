@@ -43,7 +43,7 @@ var AllEvents = []EventKey{
 	EventIssueCommented,
 }
 
-// SystemDefaults returns the hardcoded default for (eventKey, channel, isManager).
+// SystemDefaults returns the hardcoded default for individual email delivery.
 func SystemDefaults(isManager bool) map[EventKey]map[string]bool {
 	d := map[EventKey]map[string]bool{
 		EventBookingNeedsApproval:       {"email": isManager},
@@ -60,6 +60,23 @@ func SystemDefaults(isManager bool) map[EventKey]map[string]bool {
 		EventIssueCommented:             {"email": true},
 	}
 	return d
+}
+
+// BroadcastSystemDefaults returns the hardcoded system default for broadcast channel delivery
+// (team email, Google Chat). Used as the final fallback in group defaults resolution.
+// Most team/role events default to ON so that teams with a connected broadcast channel
+// receive notifications without manual configuration.
+func BroadcastSystemDefaults() map[EventKey]map[string]bool {
+	return map[EventKey]map[string]bool{
+		EventBookingNeedsApproval:       {"email": true, "gchat": true},
+		EventBookingSubmittedNoApproval: {"email": true, "gchat": true},
+		EventBookingConfirmed:           {"email": true, "gchat": true},
+		EventBookingCancelled:           {"email": true, "gchat": true},
+		EventBookingReminder:            {"email": true, "gchat": true},
+		EventBookingOverdue:             {"email": true, "gchat": true},
+		EventBookingAnyCreated:          {"email": false, "gchat": false},
+		EventIssueCreated:               {"email": true, "gchat": true},
+	}
 }
 
 // PrefSource describes where an effective preference value came from.

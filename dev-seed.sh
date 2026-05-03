@@ -25,6 +25,7 @@ echo "API ready."
 
 echo "Clearing existing seed data..."
 docker compose exec -T db psql -U utrustning -d utrustning -c "
+  DELETE FROM notification_log;
   DELETE FROM issue_events;
   DELETE FROM issue_assignees;
   DELETE FROM issue_articles;

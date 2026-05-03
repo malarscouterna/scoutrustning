@@ -84,13 +84,16 @@ func main() {
 
 		personaIDs := buildPersonaIDs(demoMode, getenv("DEV_PERSONAS_PATH", "dev-personas.json"))
 		smtpNotifier := &notifications.SMTPNotifier{Q: queries}
+		gchatNotifier := &notifications.GChatNotifier{Q: queries}
 
 		// In demo mode, event sends from handlers are suppressed via NoopNotifier.
 		// The test-email endpoint always uses smtpNotifier directly so demo visitors
 		// can verify SMTP config is working.
 		var eventNotifier notifications.Notifier = smtpNotifier
+		var eventGChatNotifier notifications.Notifier = gchatNotifier
 		if demoMode {
 			eventNotifier = notifications.NoopNotifier{}
+			eventGChatNotifier = notifications.NoopNotifier{}
 		}
 
 		notifPrefsHandler := &handler.NotificationPrefsHandler{Q: queries}
@@ -101,7 +104,7 @@ func main() {
 		locations := &handler.LocationHandler{Q: queries}
 		categories := &handler.CategoryHandler{Q: queries}
 
-		bookings := &handler.BookingHandler{Q: queries, Notifier: eventNotifier, BaseURL: appBaseURL}
+		bookings := &handler.BookingHandler{Q: queries, Notifier: eventNotifier, GChatNotifier: eventGChatNotifier, BaseURL: appBaseURL}
 		teams := &handler.TeamHandler{Q: queries}
 		groupSettings := &handler.GroupSettingsHandler{Q: queries, Perms: permCache}
 		issueHandler := &handler.IssueHandler{Q: queries, Perms: permCache, Notifier: eventNotifier, BaseURL: appBaseURL}

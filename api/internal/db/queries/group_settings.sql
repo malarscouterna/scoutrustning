@@ -4,13 +4,13 @@ WHERE group_id = @group_id;
 
 -- name: UpsertGroupSettings :one
 INSERT INTO group_settings (
-    group_id, notification_email_from, smtp_key_encrypted, gchat_webhook_url,
+    group_id, notification_email_from, smtp_key_encrypted,
     default_approval_level, default_access_unknown, default_access_troop,
     default_access_role, image_upload_role, booking_role, article_edit_role,
     issue_resolve_role, manager_notes_role, default_language
 )
 VALUES (
-    @group_id, @notification_email_from, @smtp_key_encrypted, @gchat_webhook_url,
+    @group_id, @notification_email_from, @smtp_key_encrypted,
     @default_approval_level, @default_access_unknown, @default_access_troop,
     @default_access_role, @image_upload_role, @booking_role, @article_edit_role,
     @issue_resolve_role, @manager_notes_role, @default_language
@@ -18,7 +18,6 @@ VALUES (
 ON CONFLICT (group_id) DO UPDATE SET
     notification_email_from = @notification_email_from,
     smtp_key_encrypted = @smtp_key_encrypted,
-    gchat_webhook_url = @gchat_webhook_url,
     default_approval_level = @default_approval_level,
     default_access_unknown = @default_access_unknown,
     default_access_troop = @default_access_troop,
@@ -67,6 +66,32 @@ WHERE group_id = @group_id;
 
 -- name: GetGroupLogoFileID :one
 SELECT logo_file_id FROM group_settings WHERE group_id = @group_id;
+
+-- name: SetGchatCredentials :exec
+UPDATE group_settings SET
+    gchat_service_account_json_encrypted = @gchat_service_account_json_encrypted,
+    gchat_admin_email = @gchat_admin_email,
+    updated_at = now()
+WHERE group_id = @group_id;
+
+-- name: ClearGchatCredentials :exec
+UPDATE group_settings SET
+    gchat_service_account_json_encrypted = NULL,
+    gchat_admin_email = '',
+    updated_at = now()
+WHERE group_id = @group_id;
+
+-- name: GetGchatCredentials :one
+SELECT gchat_service_account_json_encrypted, gchat_admin_email FROM group_settings
+WHERE group_id = @group_id;
+
+-- name: UpdateEnabledChannels :exec
+UPDATE group_settings SET enabled_channels = @enabled_channels, updated_at = now()
+WHERE group_id = @group_id;
+
+-- name: ClearAllGchatSpacesForGroup :exec
+UPDATE teams SET gchat_space_id = NULL
+WHERE group_id = @group_id;
 
 -- name: CountArticlesForLocation :one
 SELECT count(*) FROM articles

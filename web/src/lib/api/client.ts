@@ -52,6 +52,7 @@ export interface TeamNotifSettings {
 	notification_email: string;
 	notification_prefs: Record<string, Record<string, boolean>>;
 	individual_notifications_enabled: boolean;
+	gchat_space_id: string;
 }
 
 export interface Booking {
@@ -136,7 +137,8 @@ export interface GroupSettings {
 	smtp_key_masked: string;
 	system_smtp_configured: boolean;
 	system_smtp_from: string;
-	gchat_webhook_url: string;
+	gchat_configured: boolean;
+	gchat_admin_email: string;
 	default_approval_level: string;
 	default_access_unknown: string;
 	default_access_troop: string;
@@ -374,13 +376,23 @@ export function createApiClient(opts: FetchOptions = {}) {
 
 		// Group settings
 		getGroupSettings: () => request<GroupSettings>('/group-settings', opts),
-		updateGroupSettings: (data: { notification_email_from?: string; smtp_host?: string; smtp_port?: number; smtp_tls?: string; smtp_user?: string; smtp_key?: string | null; gchat_webhook_url?: string; default_approval_level?: string; default_language?: string }) =>
+		updateGroupSettings: (data: { notification_email_from?: string; smtp_host?: string; smtp_port?: number; smtp_tls?: string; smtp_user?: string; smtp_key?: string | null; default_approval_level?: string; default_language?: string }) =>
 			requestMut<GroupSettings>('/group-settings', 'PUT', data, opts),
+		uploadGchatKey: (keyJson: string) =>
+			requestMut<{ gchat_configured: boolean; gchat_admin_email: string; spaces: { name: string; displayName: string }[] }>('/group-settings/gchat-key', 'POST', JSON.parse(keyJson), opts),
+		deleteGchatKey: () =>
+			requestMut<void>('/group-settings/gchat-key', 'DELETE', undefined, opts),
+		listGchatSpaces: () =>
+			request<{ name: string; displayName: string }[]>('/group-settings/gchat-spaces', opts),
+		setTeamGchatSpace: (teamId: string, gchatSpaceId: string) =>
+			requestMut<void>(`/teams/${teamId}/gchat-space`, 'PUT', { gchat_space_id: gchatSpaceId }, opts),
+		clearTeamGchatSpace: (teamId: string) =>
+			requestMut<void>(`/teams/${teamId}/gchat-space`, 'DELETE', undefined, opts),
 		updateLanguage: (language: string | null) =>
 			requestMut<void>('/me/language', 'PUT', { language }, opts),
 		getNotificationPrefs: () =>
 			request<{ prefs: NotificationPrefs }>('/me/notification-prefs', opts),
-		updateNotificationPrefs: (data: Record<string, Record<string, boolean>>) =>
+		updateNotificationPrefs: (data: Record<string, Record<string, boolean | null>>) =>
 			requestMut<void>('/me/notification-prefs', 'PUT', data, opts),
 		resetNotificationPrefs: () =>
 			requestMut<void>('/me/notification-prefs', 'DELETE', undefined, opts),
@@ -388,10 +400,8 @@ export function createApiClient(opts: FetchOptions = {}) {
 			requestMut<{ sent?: boolean; skipped?: boolean }>('/me/test-email', 'POST', undefined, opts),
 		getGroupNotificationDefaults: () =>
 			request<{
-				user: Record<string, Record<string, boolean>>;
-				manager: Record<string, Record<string, boolean>>;
-				system_defaults_user: Record<string, Record<string, boolean>>;
-				system_defaults_manager: Record<string, Record<string, boolean>>;
+				defaults: Record<string, Record<string, boolean>>;
+				system_defaults: Record<string, Record<string, boolean>>;
 			}>('/group-settings/notification-defaults', opts),
 		updateGroupNotificationDefaults: (data: { user: Record<string, Record<string, boolean>>; manager: Record<string, Record<string, boolean>> }) =>
 			requestMut<void>('/group-settings/notification-defaults', 'PUT', data, opts),
@@ -401,6 +411,8 @@ export function createApiClient(opts: FetchOptions = {}) {
 			request<TeamNotifSettings>(`/teams/${id}/notification-settings`, opts),
 		updateTeamNotificationSettings: (id: string, data: Partial<Pick<TeamNotifSettings, 'notification_email' | 'notification_prefs' | 'individual_notifications_enabled'>>) =>
 			requestMut<void>(`/teams/${id}/notification-settings`, 'PUT', data, opts),
+		updateTeamName: (id: string, name: string) =>
+			requestMut<Team>(`/teams/${id}/name`, 'PUT', { name }, opts),
 
 		// Article CRUD
 		getArticle: (id: string) => request<Article>(`/articles/${id}`, opts),

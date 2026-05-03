@@ -28,7 +28,9 @@ Default `'{email}'` — groups that never touch this field continue to work as t
 
 ## System defaults
 
-The system default is **individual email only**. Broadcast destinations (shared email, chat spaces) are always off by default and require explicit manager configuration. This ensures groups that have never touched notification settings get sensible behaviour without any setup.
+The system default is **individual email on, all broadcasts off**. Broadcast destinations (shared email, chat spaces) require a team to have a channel connected AND either the group default or team default to have that event enabled. This ensures groups that have never touched notification settings get sensible individual-email behaviour without any setup.
+
+Individual email defaults are NOT controlled by the group defaults table. They cascade as: user explicit choice → team `individual_notifications_enabled` → system default (on).
 
 ---
 
@@ -40,7 +42,7 @@ Managers can push the current group/team defaults to all users, overwriting ever
 POST /api/v0/group-settings/force-notification-defaults
 ```
 
-Effect: sets `users.notification_prefs = '{}'` for every user in the group (same as each user pressing "Återställ till standard"). The next pref resolution for each user will pick up the current group and team defaults.
+Effect: sets `users.notification_prefs = '{}'` for every user in the group. In the updated UX, `{}` means "Följ avdelningsstandard" (middle column) — the next pref resolution for each user will pick up the current team and group defaults.
 
 UI: A "Återställ alla användares notiser till standard" button in the group notification defaults section, behind a confirmation dialog. Returns a count of affected users.
 
@@ -53,8 +55,9 @@ UI: A "Återställ alla användares notiser till standard" button in the group n
 - Teams can define a shared `notification_email` address that receives one "broadcast" message per event (rather than N individual emails).
 - Notification emails for the same booking/issue are threaded (Gmail/Outlook group them into one conversation).
 - Three-tier preference resolution: Group defaults → Team defaults → User prefs.
-- Personal user notification prefs remain unchanged in the UI (flat per-group table on `/profile`). No per-team context switcher.
-- `enabled_channels` drives which columns appear in all preference UIs.
+- Personal user notification prefs use a three-column radio table (Alltid personlig e-post / Följ avdelningsstandard / Ingen personlig e-post) rather than a per-channel toggle table.
+- Group defaults control **broadcast channel defaults only** (which event types fire the team email/GChat broadcast when a team has that channel connected, including manager-team events). Individual email defaults are not set at group level.
+- `enabled_channels` drives which broadcast channel columns appear in the group defaults and team defaults UIs.
 
 ---
 
@@ -154,25 +157,119 @@ func IsEnabled(ctx context.Context, q *db.Queries, userID, groupID, teamID, even
 
 Resolution order (first match wins):
 
-1. `users.notification_prefs[event][channel]` — explicit user override
-2. If team exists AND `individual_notifications_enabled == false` AND step 1 had no explicit value → `false`
-3. `teams.notification_prefs[event][channel]` — team default
-4. `group_settings.notification_defaults[event][channel]` — group default
-5. `systemDefaults[event][isManager]` — hardcoded fallback
+**For broadcast channels (team email, gchat) — team/role events only:**
+1. `teams.notification_prefs[event][channel]` — team explicit setting (resolved against the event's target team)
+2. `group_settings.notification_defaults[event][channel]` — group broadcast default
+3. `systemDefaults[event][channel]` — hardcoded fallback (broadcast off)
 
-Pass `teamID = ""` for events with no team context (some issue events) to skip tiers 2–3.
+Broadcast only fires if the target team actually has the channel connected (`notification_email` set or `gchat_space_id` set). The group defaults table covers broadcast defaults for all team/role events, including manager events (where the "team" is the manager team).
 
-`GET /api/v0/me/notification-prefs` — `source` field gains a new possible value: `"team_default"`. Frontend label: "(teamstandard)".
+**For individual email — personal events:**
+Resolution is simple on/off from `users.notification_prefs[event]["email"]` → `systemDefaults[event]["email"]` (on). No team or group tier — `individual_notifications_enabled` does not apply.
+
+**For individual email — team/role events:**
+1. `users.notification_prefs[event]["email"]` — explicit user override (left/right column in personal tab)
+2. If step 1 has no value AND `team.individual_notifications_enabled == false` → `false`
+3. `systemDefaults[event]["email"]` — hardcoded fallback (on)
+
+Group defaults do not participate in individual email resolution for any event category. The group defaults table is broadcast-only.
+
+Pass `teamID = ""` for personal events to skip the team tier entirely.
+
+`GET /api/v0/me/notification-prefs` — `source` field values: `"user"`, `"team_default"`, `"group_default"`, `"system"`. For team/role events this drives which radio column is pre-selected: explicit user value → left or right, no user pref → middle.
 
 ---
 
-### Team notification settings UI
+### Event categorisation
 
-Located on the **Team Detail page** (`/teams/[id]`, manager/trusted only), new "Notiser" section:
+Notification events split into two categories with different UX treatment:
 
-- **Broadcast email**: text input for `notification_email`. Shown for all groups (email is always an enabled channel).
-- **Suppress individual notifications toggle**: "Skicka inte notiser till enskilda medlemmar som standard". Hint: "Medlemmar kan fortfarande aktivera egna notiser i sin profil."
-- **Team notification defaults table**: same toggle-table layout as the group defaults table. Columns driven by `group.enabled_channels` — only active channels appear.
+**Personal events** — the user is the named subject. Team broadcast is irrelevant; these always go to the individual.
+
+| Event | Who receives | Notes |
+|---|---|---|
+| `issue_assigned_to_me` | The assignee | Non-toggleable — always on |
+| `issue_resolved` | Reporter + all assignees | Simple on/off |
+| `issue_commented` | Reporter + all assignees | Simple on/off |
+| `booking_rejected` | Booking creator | Simple on/off |
+
+**Team/role events** — the user is notified as a member of a team or role. A team broadcast (email or GChat) is a real alternative to individual delivery. Manager-targeted events go to the manager team and can have a shared broadcast destination like any other team.
+
+| Event | Target team | Visible to |
+|---|---|---|
+| `booking_confirmed` | Booking's used-by team | All |
+| `booking_cancelled` | Booking's used-by team | All |
+| `booking_reminder` | Booking's used-by team | All |
+| `booking_overdue` | Booking's used-by team | All |
+| `booking_needs_approval` | Manager team | Managers only |
+| `booking_submitted_no_approval` | Manager team | Managers only |
+| `booking_any_created` | Manager team | Managers only |
+| `issue_created` | Manager team | Managers only |
+
+For team/role events, "which team's standard do I follow?" depends on the event: booking events resolve against the booking's used-by team; manager events resolve against the manager team. The middle-column behaviour follows the relevant team's `individual_notifications_enabled` flag.
+
+**Which events are visible per team access level** (in the team settings tab and personal tab):
+- `view` / `book` / `trusted`: booking events only (`booking_confirmed`, `booking_cancelled`, `booking_reminder`, `booking_overdue`). Trusted teams have no special notification distinction from book-level — the auto-approval difference is in the booking flow, not notifications.
+- `manager`: all of the above plus manager events (`booking_needs_approval`, `booking_submitted_no_approval`, `booking_any_created`, `issue_created`).
+
+Manager-event rows are never shown in the context of a non-manager team, even to users who are also managers in a separate team.
+
+---
+
+### Personal tab — notification preferences
+
+The personal tab replaces the old flat toggle table with **two distinct sections**:
+
+**Personliga notiser** — personal events. Simple on/off toggle per row. `issue_assigned_to_me` renders as a non-toggle informational row (always on, lock icon).
+
+**Avdelnings- och rollnotiser** — team/role events. A **three-column radio table** (one row per event). Manager-only rows hidden for non-managers.
+
+| Column | Swedish label | Meaning | Maps to in `users.notification_prefs` |
+|---|---|---|---|
+| Left | Alltid personlig e-post | Always send personal email, regardless of team broadcast | `{email: true}` |
+| Middle | Följ avdelningsstandard | Inherit the relevant team's defaults (default state) | `{}` (no explicit override) |
+| Right | Ingen personlig e-post | Never send personal email | `{email: false}` |
+
+Middle column behaviour is controlled by the relevant team's `individual_notifications_enabled` flag. GChat has no personal delivery path (broadcast-only via spaces), so it does not appear as a column here.
+
+A "Hantera avdelningsnotiser →" link near the Avdelnings- och rollnotiser heading leads to the team settings tab.
+
+### Team tab — team notification settings
+
+A new **"Avdelningar och roller"** tab on the profile page, positioned between the personal tab and the manager group tab. Visible to any user who belongs to at least one team.
+
+**Team picker**: simplified chip/card grid — one card per team the user belongs to. Clicking selects the team and reveals a details panel.
+
+**Details panel** (all team members can view and edit):
+
+- **Namn** — editable text input with save button.
+- **Notiser** section:
+  - **Broadcast email input** (`notification_email`) — shared mailbox for team-wide email delivery.
+  - **Standard för avdelningsmedlemmar** toggle (`individual_notifications_enabled`) — "Skicka inte personlig e-post till medlemmar som standard". Controls what happens for members on the "Följ avdelningsstandard" column in their personal tab.
+  - **Per-event broadcast channel table** — rows = event types, columns = broadcast channels enabled by the group (team email, GChat space). Each cell is a checkbox (on/off). Greyed-out cells show the inherited group default when no explicit team value is set.
+- **Integrationer** section (read-only for non-managers):
+  - Shows the configured broadcast email address.
+  - Shows the linked Google Chat space name, e.g. "Eagle Scouts (spaces/AAAA123)", or "Inget Google Chat-utrymme kopplat" if none.
+  - Managers assign/unlink the GChat space from the Group tab.
+
+### Group tab — GChat integration section (manager only, near SMTP settings)
+
+**State A — not configured:**
+- Short explanation of what the service account JSON is for.
+- Textarea (full width, ~8 rows) to paste the raw service account JSON key.
+- "Anslut Google Chat" button — calls `POST /group-settings/gchat-key`, shows inline error on failure (same style as SMTP errors).
+
+**State B — configured:**
+- Status line: connected indicator + admin email (`gchat_admin_email`).
+- "Koppla bort" button — confirmation dialog before `DELETE /group-settings/gchat-key`.
+- Expandable/collapsible "Teamkopplingar" section (collapsed by default):
+  - Table: team name | Google Chat-utrymme dropdown.
+  - Dropdown options: "Ingen" (top, clears mapping) + one option per available space formatted as "DisplayName (spaces/AAAA123)".
+  - Selecting a space auto-saves via `PUT /teams/{id}/gchat-space`; "Ingen" calls `DELETE /teams/{id}/gchat-space`. No separate save button.
+
+### i18n
+
+All user-visible strings use Paraglide keys in `api/internal/i18n/messages/{sv,en}.json`. Swedish uses existing terminology: "avdelning" (troop), "roll" (role), "avdelningar och roller" (teams collectively). The word "lag" is not used.
 
 ---
 
@@ -193,9 +290,11 @@ Located on the **Team Detail page** (`/teams/[id]`, manager/trusted only), new "
 Notification settings have dedicated endpoints to keep concerns separate:
 
 ```
-GET  /api/v0/teams/{id}/notification-settings   (manager only)
-PUT  /api/v0/teams/{id}/notification-settings   (manager only, partial update)
+GET  /api/v0/teams/{id}/notification-settings   (any team member)
+PUT  /api/v0/teams/{id}/notification-settings   (any team member, partial update)
 ```
+
+Authorization: the caller must belong to the team (their `team_ids` contains the team ID), or be a group manager. This is checked server-side, not just via role middleware.
 
 `PUT` body: any combination of `notification_email`, `notification_prefs`, `individual_notifications_enabled`. Missing fields are left unchanged.
 
@@ -340,19 +439,279 @@ GET    /api/v0/group-settings/gchat-spaces      → [{ "id", "name" }]      (man
 
 ### Implementation steps
 
-| Step | Deliverable |
-|---|---|
-| 3.5b-1 | Migration `00009_gchat.sql` (gchat columns; drop gchat_webhook_url) |
-| 3.5b-2 | `GChatNotifier` (card builder, threading, DWD auth) |
-| 3.5b-3 | gchat-key endpoints + enabled_channels update on connect/disconnect |
-| 3.5b-4 | Team mapper UI + space link/unlink endpoints |
-| 3.5b-5 | Dispatch loop: gchat broadcast path |
+| Step | Deliverable | Status |
+|---|---|---|
+| 3.5b-1 | Migration `00009_gchat.sql` (gchat columns; drop gchat_webhook_url) | ✅ done |
+| 3.5b-2a | SQL queries updated (`group_settings.sql`, `teams.sql`) + `sqlc generate` run | ✅ done |
+| 3.5b-2b | `GChatNotifier` (card builder, threading, DWD auth) | ✅ done |
+| 3.5b-3 | gchat-key endpoints + enabled_channels update on connect/disconnect | ✅ done |
+| 3.5b-4 | Team mapper UI + space link/unlink endpoints | 🚧 UI implemented, svelte-check pending |
+| 3.5b-5 | Dispatch loop: gchat broadcast path | ✅ done |
+
+**What was done in 3.5b-1/2a:**
+- `00009_gchat.sql`: adds `gchat_service_account_json_encrypted bytea` and `gchat_admin_email text` to `group_settings`; adds `gchat_space_id text` to `teams`; drops `gchat_webhook_url` from `group_settings`, `teams`, and `users`.
+- New queries in `group_settings.sql`: `SetGchatCredentials`, `ClearGchatCredentials`, `GetGchatCredentials`, `UpdateEnabledChannels`, `ClearAllGchatSpacesForGroup`.
+- New queries in `teams.sql`: `SetTeamGchatSpace`, `ClearTeamGchatSpace`, `ListTeamsWithGchatInfo`.
+- `sqlc generate` regenerated all files in `internal/db/` — do not edit those by hand.
+
+**What was done in 3.5b-2b–3.5b-5:**
+- `notifications/gchat.go`: `GChatNotifier` implements `Notifier`. Auth uses a service account JWT signed with `golang-jwt/jwt/v5` (already a dep — no new packages added) and exchanged for an OAuth2 bearer token. `Send()` posts a threaded text message to `spaces/{id}/messages` using `msg.ThreadKey` for Chat API thread keying. `ListGChatSpaces()` and `AddBotToSpace()` are exported helpers used by the handler layer.
+- `notifications/notifier.go`: `Message` gains a `ThreadKey string` field (only consumed by `GChatNotifier`; `SMTPNotifier` ignores it).
+- `notifications/send.go`: `sendBroadcastGChat()` mirrors `sendBroadcastEmail()` — checks team `gchat_space_id`, checks team prefs for the `"gchat"` channel, sends, and writes to `notification_log`. All five booking `Send*` functions gain a `gn Notifier` parameter and call both broadcast paths.
+- `handler/group_settings.go`: removed stale `gchat_webhook_url` fields; added `gchat_configured bool` and `gchat_admin_email string` to the response; registered `POST /gchat-key`, `DELETE /gchat-key`, `GET /gchat-spaces`.
+- `handler/teams.go`: registered `PUT /{id}/gchat-space` and `DELETE /{id}/gchat-space`.
+- `handler/bookings.go`: `BookingHandler` gains `GChatNotifier notifications.Notifier`; all Send* calls pass it through.
+- `cmd/server/main.go`: creates `&notifications.GChatNotifier{Q: queries}` and passes it (or `NoopNotifier{}` in demo mode) to `BookingHandler`.
+- `web/src/lib/api/client.ts`: updated `GroupSettings` type; added `uploadGchatKey`, `deleteGchatKey`, `listGchatSpaces`, `setTeamGchatSpace`, `clearTeamGchatSpace` client methods.
+
+**3.5b-4 UI — what was implemented:**
+
+Backend additions (all compile-checked):
+- New sqlc queries: `IsTeamMember`, `UpdateTeamName`, `GetTeamNotificationSettings` now returns `gchat_space_id`.
+- `PUT /teams/{id}/notification-settings` and `GET /teams/{id}/notification-settings` opened to team members (membership checked via `IsTeamMember`; managers bypass the check). Previously manager-only.
+- `PUT /teams/{id}/name` — new endpoint, team member accessible.
+- `PUT /me/notification-prefs` now accepts `*bool` values; `null` removes an explicit user override, reverting that event+channel to team/group/system default (needed for the "Följ avdelningsstandard" middle radio column).
+- `client.ts`: `TeamNotifSettings` gains `gchat_space_id`; `updateNotificationPrefs` accepts `boolean | null`; `updateTeamName` method added.
+- i18n: ~30 new keys added to both `sv.json` and `en.json` (tab label, notification section headings, three-column radio labels, team settings labels, GChat section labels, force-defaults labels).
+
+Frontend additions (`web/src/routes/profile/+page.svelte`):
+- **New "Avdelningar och roller" tab** — between Profil and Gruppinställningar. Visible when user belongs to ≥1 team.
+- **Team picker** — chip-style buttons, one per user team. Clicking loads team notification settings from the API.
+- **Team detail panel** — name edit (all members), broadcast email input, suppress-individual toggle, per-event broadcast channel table (event set filtered by team access level: manager teams see manager events too), read-only integrations section (broadcast email + GChat space ID).
+- **Personal tab notification section redesigned** — split into:
+  - "Personliga notiser": simple on/off checkboxes for personal events (`booking_rejected`, `issue_assigned_to_me` locked, `issue_resolved`, `issue_commented`).
+  - "Avdelnings- och rollnotiser": three-column radio table (`always` / `follow` / `never`) for team/role events. Manager-only rows hidden for non-managers.
+- **GChat integration section** in the group tab (manager only), below SMTP. State A: textarea + connect button. State B: connected status + disconnect button + collapsible team-space mapper table (auto-saves on dropdown change).
+
+**Still needed before this step is done:**
+- Run `pnpm run build && pnpm run check` and fix any remaining svelte-check errors (10 errors were left at the end of the session — all related to missing i18n keys now added; need a rebuild to confirm zero errors).
+- Smoke-test: visually verify the three new UI sections work in the browser.
+- The group tab's existing team notification settings section (manager view) still uses `allBookingEvents`/`allIssueEvents` — confirm this renders correctly.
+
+---
+
+---
+
+## Phase 3.6 — Per-event personal email policy + richer team settings UI
+
+### Motivation
+
+`individual_notifications_enabled` is a single boolean that applies to all events for a team. This is too coarse: teams that connect a broadcast email want personal emails to stop automatically, but the current model requires them to flip a toggle manually. At the same time, some events may still warrant personal delivery even when broadcast is set up (e.g. a booking rejection directed at the creator). Phase 3.6 replaces the boolean with a per-event **personal email policy** stored inside `notification_prefs`, giving teams the right default automatically and fine-grained control where needed.
+
+### Gruppkanal — unified broadcast concept
+
+Two roles govern which broadcast channels a team uses:
+
+1. **Manager** — configures which integrations exist for a team (sets `notification_email`, links a GChat space). These are the *available* channels.
+2. **Team members** — choose, at the team level, which of the available channels to include in their Gruppkanal. This is a **team-level selection**, not per event.
+
+A team may have both email and GChat available (set up by the manager) but choose to only use GChat. Or choose both. Or neither. Once the Gruppkanal composition is decided, per-event it is just one Gruppkanal checkbox (on/off) — no per-event channel selection.
+
+The Gruppkanal composition is stored per team (see Data model). Dispatch fires every channel the team has opted into for each event where Gruppkanal is on.
+
+Group `enabled_channels` in `group_settings` controls which channel types the manager can configure. A channel type not in `enabled_channels` cannot appear in any team's Gruppkanal.
+
+### Personal email policy
+
+For each team/role event, a team (and the group defaults) stores one of three personal email policies:
+
+| Policy value | Swedish label | Meaning |
+|---|---|---|
+| `always` | Alltid personlig | Send personal email to every team member regardless of Gruppkanal |
+| `if_no_broadcast` | Personlig om gruppkanal saknas | Send personal email only if the team has no Gruppkanal configured; if Gruppkanal is available, use that instead |
+| `never` | Aldrig personlig | Never send personal email to team members for this event |
+
+**`if_no_broadcast` checks Gruppkanal composition, not delivery**: personal email is suppressed if the team's Gruppkanal includes at least one channel, regardless of whether delivery succeeds. A broken SMTP server would also fail personal delivery — no fallback is warranted.
+
+**System default**: `if_no_broadcast`. A team that opts into any Gruppkanal channel automatically gets the right behaviour. Teams with an empty Gruppkanal continue to receive personal emails as before.
+
+`individual_notifications_enabled` is **deprecated**. It remains in the schema until migrations are consolidated at release. The dispatch logic reads `personal_email_policy` from `notification_prefs` first; if absent it falls back to `individual_notifications_enabled`; if that is also absent it uses `if_no_broadcast`.
+
+### Channel taxonomy
+
+**Broadcast channels** (Gruppkanal) — one message to a shared destination per event, all fire together:
+- `email` — team's `notification_email` address
+- `gchat` — team's linked Google Chat Space
+- Future: `slack`, `teams`, etc.
+
+**Individual channels** — one message per recipient:
+- `personal_email` — each member's own email address, governed by the personal email policy
+- `push` (future) — web push to each member's device, see below
+
+### Future: push notifications
+
+Web push (PWA on smartphone) would add a new individual channel. It delivers to each member's device, not to a shared space — it is architecturally individual, not broadcast. It would:
+- Have its own per-event policy: `push_policy` with the same three options (`always` / `if_no_broadcast` / `never`), stored in `notification_prefs`
+- Appear as a separate row in the personal tab (not a Gruppkanal column), since push is personal
+- The group can enable/disable the push channel via `enabled_channels`
+
+No implementation yet — documented here to keep the data model extensible.
+
+---
+
+### UI specification (UI first)
+
+> **Implementation order**: build and validate the UI against hardcoded/mocked data before touching the backend. This makes UX problems visible early.
+
+#### Team tab — revised detail panel
+
+**Gruppkanal section** (above the per-event table): shows the available channels the manager has set up for this team, with a checkbox for each. The team opts into whichever they want included in Gruppkanal. This selection applies to all events — not per event.
+
+Example (team has both email and GChat available):
+```
+Gruppkanal
+☑ Grupp-e-post  (scouts@example.org)
+☐ Google Chat   (Eagle Scouts)
+```
+
+If the manager has set a group default for Gruppkanal composition, teams that have not made their own selection show the default with a "(standard)" badge and can override it.
+
+If no channels are available (manager has not set up any integrations for this team), the Gruppkanal section shows a note: "Inga grupputskick kopplade — kontakta en ansvarig."
+
+**Per-event table** (below Gruppkanal section): rows = event types visible for this team. Columns:
+
+| Column | When shown | Control type |
+|---|---|---|
+| **Personlig e-post** | Always | Compact 3-option radio |
+| **Gruppkanal** | Team's Gruppkanal is non-empty | Checkbox |
+| **Push** (future) | Group has `push` in `enabled_channels` | Checkbox |
+
+The 3-option radio for **Personlig e-post** uses short labels:
+- Alltid
+- Om ej gruppkanal *(dimmed when team Gruppkanal is empty — equivalent to "Alltid"; show tooltip)*
+- Aldrig
+
+The Gruppkanal checkbox column is omitted if the team's Gruppkanal is empty (nothing opted into). When shown, checking a row fires all opted-in channels for that event.
+
+Cells showing the group default (no explicit team override) render lighter with a "(standard)" badge.
+
+The **"Skicka inte personlig e-post till medlemmar som standard"** toggle is removed.
+
+**Auto-expand first team**: when the user navigates to the Avdelningar och roller tab, the first team in the list is automatically selected and its detail panel opened.
+
+**Mobile layout**: Gruppkanal section stacks vertically. Per-event table collapses to cards — event label, then the radio and Gruppkanal checkbox on the same row.
+
+#### Group defaults tab — revised
+
+Two parts mirroring the team tab structure:
+
+**Default Gruppkanal composition** (above the per-event table): checkboxes for each channel type available in the group (`enabled_channels`). Sets the default opted-in channels for teams that have not chosen their own composition. Teams can override.
+
+Example:
+```
+Standardval för gruppkanal
+☑ Grupp-e-post
+☑ Google Chat
+```
+
+**Per-event table**: same two columns as team settings (Personlig e-post radio + Gruppkanal checkbox). Sets the per-event defaults for teams without explicit settings.
+
+- **Personlig e-post** column: system default = `if_no_broadcast`, shown with "(systemstandard)" badge.
+- **Gruppkanal** column: system default = on for most events (`BroadcastSystemDefaults`). Always shown (applies to any team that has a non-empty Gruppkanal).
+
+#### Personal tab — unchanged
+
+The three-column radio (Alltid / Följ avdelningsstandard / Aldrig) is unchanged. "Följ avdelningsstandard" follows the team's `personal_email_policy` for each event.
+
+---
+
+### Data model changes
+
+#### `teams` — new column
+
+```sql
+ALTER TABLE teams ADD COLUMN gruppkanal_channels text[] NOT NULL DEFAULT '{}';
+```
+
+Stores the channels the team has opted into for Gruppkanal (e.g. `'{email,gchat}'`). Empty array = no Gruppkanal. The manager sets up which channels are *available* (via `notification_email` / `gchat_space_id`); the team picks from those.
+
+#### `group_settings` — new column
+
+```sql
+ALTER TABLE group_settings ADD COLUMN default_gruppkanal_channels text[] NOT NULL DEFAULT '{}';
+```
+
+Group manager's default Gruppkanal composition for teams that have not set their own. Teams inherit this when first created or when their explicit selection is cleared.
+
+#### `notification_prefs` JSONB — new key per event
+
+`personal_email_policy` is stored in the existing JSONB alongside the per-event broadcast on/off flags. The `email` and `gchat` keys per event continue to mean "is this broadcast channel on for this event" — independently stored, independently fired:
+
+```json
+{
+  "booking_confirmed": {
+    "email": true,
+    "gchat": true,
+    "personal_email_policy": "if_no_broadcast"
+  },
+  "booking_needs_approval": {
+    "email": true,
+    "gchat": false,
+    "personal_email_policy": "always"
+  }
+}
+```
+
+Missing `personal_email_policy` for an event → fall back to group defaults → system default (`if_no_broadcast`).
+
+Migration: `00010_gruppkanal.sql` (new file, alongside existing migrations; consolidated at release).
+
+### Dispatch logic changes
+
+**Broadcast step**: before firing each channel, check `gruppkanal_channels` contains that channel in addition to the existing `IsEnabled` check:
+
+```
+for channel in ["email", "gchat", ...]:
+  if channel not in team.gruppkanal_channels → skip
+  if not IsEnabled(team.prefs → group_defaults → system, event, channel) → skip
+  → fire channel
+```
+
+**Personal email step** for team/role events (replaces `individual_notifications_enabled` check):
+
+```
+1. Read policy = team.notification_prefs[event]["personal_email_policy"]
+                 ?? group_defaults[event]["personal_email_policy"]
+                 ?? "if_no_broadcast"
+2. if policy == "never"  → skip personal email for all members
+3. if policy == "always" → send personal email to each member (subject to user's own radio)
+4. if policy == "if_no_broadcast":
+     if team.gruppkanal_channels is non-empty → skip personal email
+     else → send personal email to each member
+5. User's own explicit radio always overrides the team policy:
+     "Alltid" → send regardless of policy
+     "Aldrig" → skip regardless of policy
+     "Följ standard" → apply policy from steps 2–4
+```
+
+Step 4 checks `gruppkanal_channels` (the team's opted-in set), not what the manager has configured. A team that has channels available but opted into none still receives personal email.
+
+### API changes
+
+- `GET/PUT /teams/{id}/notification-settings` — gains `gruppkanal_channels` field.
+- `GET /group-settings/notification-defaults` — gains `default_gruppkanal_channels` and `personal_email_policy` per event in the defaults map.
+- `PUT /group-settings/notification-defaults` — accepts `default_gruppkanal_channels` alongside the per-event JSONB.
+
+No new endpoints.
+
+### Implementation steps
+
+| Step | Deliverable | Status |
+|---|---|---|
+| 3.6-1 | Auto-expand first team on Avdelningar och roller tab open | ⬜ |
+| 3.6-2 | Migration `00010_gruppkanal.sql` + sqlc queries for new columns | ⬜ |
+| 3.6-3 | i18n keys for new labels (Gruppkanal, radio options, column headers) | ⬜ |
+| 3.6-4 | Team settings UI: Gruppkanal composition selector + unified per-event table (Personlig e-post radio + Gruppkanal checkbox); remove `individual_notifications_enabled` toggle | ⬜ |
+| 3.6-5 | Group defaults UI: default Gruppkanal composition checkboxes + same per-event table | ⬜ |
+| 3.6-6 | Backend — `gruppkanal_channels` in dispatch; `personal_email_policy` resolution in `send.go` | ⬜ |
+| 3.6-7 | Backend — `personal_email_policy` in `BroadcastSystemDefaults` and group defaults response | ⬜ |
 
 ---
 
 ## Open questions / backlog
 
-- **`gchat_webhook_url` data**: check for any existing rows before dropping the column in 3.5b-1.
-- **Slack / Teams**: when adding, follow the same pattern — new `Notifier`, append channel id to `enabled_channels`, implement a setup UI section in Integrationer. No other changes needed.
+- **3.5b-4 smoke-test**: visually verify team tab, GChat integration section, and group defaults table in the browser.
+- **Slack / Teams**: follow the same pattern (once 3.5b is fully done) — new `Notifier`, append channel id to `enabled_channels`, implement a setup UI section in Integrationer. No other changes needed.
 - **Personal GChat DMs**: deferred. Would require storing the user's Google identity at login (only feasible if OIDC provider is Google Workspace).
-- **Step 6 TODO from Phase 3**: "when changing back to the default setting, indicate we are on the default setting" — addressable in 3.5a-8 when `source` gains `"team_default"`.
+- **GChat card richness**: `GChatNotifier.Send` currently posts plain text. A follow-up could upgrade to `cardsV2` with a header, field widgets, and a CTA button (all data is available in `msg.Subject` and `msg.TextBody`).
+- **Push notifications**: deferred to a later phase. Requires service worker registration, push subscription storage per user/device, and a Web Push API sender. Channel taxonomy is already documented in Phase 3.6 to keep the data model extensible.
