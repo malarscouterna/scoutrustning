@@ -107,29 +107,30 @@ type Group struct {
 }
 
 type GroupSetting struct {
-	GroupID               string             `json:"group_id"`
-	NotificationEmailFrom string             `json:"notification_email_from"`
-	SmtpKeyEncrypted      []byte             `json:"smtp_key_encrypted"`
-	GchatWebhookUrl       string             `json:"gchat_webhook_url"`
-	DefaultApprovalLevel  string             `json:"default_approval_level"`
-	DefaultAccessUnknown  string             `json:"default_access_unknown"`
-	DefaultAccessTroop    string             `json:"default_access_troop"`
-	DefaultAccessRole     string             `json:"default_access_role"`
-	ImageUploadRole       string             `json:"image_upload_role"`
-	BookingRole           string             `json:"booking_role"`
-	ArticleEditRole       string             `json:"article_edit_role"`
-	IssueResolveRole      string             `json:"issue_resolve_role"`
-	ManagerNotesRole      string             `json:"manager_notes_role"`
-	CreatedAt             pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
-	DefaultLanguage       string             `json:"default_language"`
-	SmtpHost              string             `json:"smtp_host"`
-	SmtpPort              int32              `json:"smtp_port"`
-	SmtpTls               string             `json:"smtp_tls"`
-	SmtpUser              string             `json:"smtp_user"`
-	NotificationDefaults  json.RawMessage    `json:"notification_defaults"`
-	LogoFileID            pgtype.UUID        `json:"logo_file_id"`
-	EnabledChannels       []string           `json:"enabled_channels"`
+	GroupID                          string             `json:"group_id"`
+	NotificationEmailFrom            string             `json:"notification_email_from"`
+	SmtpKeyEncrypted                 []byte             `json:"smtp_key_encrypted"`
+	DefaultApprovalLevel             string             `json:"default_approval_level"`
+	DefaultAccessUnknown             string             `json:"default_access_unknown"`
+	DefaultAccessTroop               string             `json:"default_access_troop"`
+	DefaultAccessRole                string             `json:"default_access_role"`
+	ImageUploadRole                  string             `json:"image_upload_role"`
+	BookingRole                      string             `json:"booking_role"`
+	ArticleEditRole                  string             `json:"article_edit_role"`
+	IssueResolveRole                 string             `json:"issue_resolve_role"`
+	ManagerNotesRole                 string             `json:"manager_notes_role"`
+	CreatedAt                        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                        pgtype.Timestamptz `json:"updated_at"`
+	DefaultLanguage                  string             `json:"default_language"`
+	SmtpHost                         string             `json:"smtp_host"`
+	SmtpPort                         int32              `json:"smtp_port"`
+	SmtpTls                          string             `json:"smtp_tls"`
+	SmtpUser                         string             `json:"smtp_user"`
+	NotificationDefaults             json.RawMessage    `json:"notification_defaults"`
+	LogoFileID                       pgtype.UUID        `json:"logo_file_id"`
+	EnabledChannels                  []string           `json:"enabled_channels"`
+	GchatServiceAccountJsonEncrypted []byte             `json:"gchat_service_account_json_encrypted"`
+	GchatAdminEmail                  string             `json:"gchat_admin_email"`
 }
 
 type IssueArticle struct {
@@ -231,11 +232,11 @@ type Team struct {
 	Name                           string             `json:"name"`
 	Type                           string             `json:"type"`
 	AccessLevel                    string             `json:"access_level"`
-	GchatWebhookUrl                pgtype.Text        `json:"gchat_webhook_url"`
 	CreatedAt                      pgtype.Timestamptz `json:"created_at"`
 	NotificationEmail              pgtype.Text        `json:"notification_email"`
 	NotificationPrefs              json.RawMessage    `json:"notification_prefs"`
 	IndividualNotificationsEnabled bool               `json:"individual_notifications_enabled"`
+	GchatSpaceID                   pgtype.Text        `json:"gchat_space_id"`
 }
 
 type TeamClaimMapping struct {
@@ -248,17 +249,15 @@ type TeamClaimMapping struct {
 }
 
 type User struct {
-	ID                  string             `json:"id"`
-	GroupID             string             `json:"group_id"`
-	Name                string             `json:"name"`
-	Email               string             `json:"email"`
-	NotificationChannel string             `json:"notification_channel"`
-	GchatWebhookUrl     pgtype.Text        `json:"gchat_webhook_url"`
-	ActiveGroupID       pgtype.Text        `json:"active_group_id"`
-	CreatedAt           pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
-	Language            pgtype.Text        `json:"language"`
-	MaxAccessLevel      string             `json:"max_access_level"`
-	NotificationPrefs   json.RawMessage    `json:"notification_prefs"`
-	TeamIds             []pgtype.UUID      `json:"team_ids"`
+	ID                string             `json:"id"`
+	GroupID           string             `json:"group_id"`
+	Name              string             `json:"name"`
+	Email             string             `json:"email"`
+	ActiveGroupID     pgtype.Text        `json:"active_group_id"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	Language          pgtype.Text        `json:"language"`
+	MaxAccessLevel    string             `json:"max_access_level"`
+	NotificationPrefs json.RawMessage    `json:"notification_prefs"`
+	TeamIds           []pgtype.UUID      `json:"team_ids"`
 }

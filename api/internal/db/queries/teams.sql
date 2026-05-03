@@ -40,9 +40,20 @@ WHERE id = @id AND group_id = @group_id
 RETURNING *;
 
 -- name: GetTeamNotificationSettings :one
-SELECT notification_email, notification_prefs, individual_notifications_enabled
+SELECT notification_email, notification_prefs, individual_notifications_enabled, gchat_space_id
 FROM teams
 WHERE id = @id AND group_id = @group_id;
+
+-- name: UpdateTeamName :one
+UPDATE teams SET name = @name
+WHERE id = @id AND group_id = @group_id
+RETURNING *;
+
+-- name: IsTeamMember :one
+SELECT EXISTS(
+    SELECT 1 FROM users
+    WHERE id = @user_id AND group_id = @group_id AND @team_id::uuid = ANY(team_ids)
+) AS is_member;
 
 -- name: DeleteTeam :exec
 DELETE FROM teams
@@ -60,3 +71,16 @@ WHERE group_id = @group_id AND access_level = 'manager';
 -- name: ListTeamsByNames :many
 SELECT * FROM teams
 WHERE group_id = @group_id AND name = ANY(@names::text[]);
+
+-- name: SetTeamGchatSpace :exec
+UPDATE teams SET gchat_space_id = @gchat_space_id
+WHERE id = @id AND group_id = @group_id;
+
+-- name: ClearTeamGchatSpace :exec
+UPDATE teams SET gchat_space_id = NULL
+WHERE id = @id AND group_id = @group_id;
+
+-- name: ListTeamsWithGchatInfo :many
+SELECT id, name, gchat_space_id FROM teams
+WHERE group_id = @group_id
+ORDER BY name;

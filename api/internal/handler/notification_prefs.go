@@ -57,12 +57,13 @@ func (h *NotificationPrefsHandler) GetMe(w http.ResponseWriter, r *http.Request)
 }
 
 // PUT /me/notification-prefs — partial update; only keys present are changed.
-// Redundant overrides (value matches group/system default) are pruned so that
-// source correctly reverts to "group_default" or "system_default".
+// A null channel value removes that channel's explicit override (reverts to
+// team/group/system default — the "Följ avdelningsstandard" middle column).
+// If all channels for an event are removed the event key is pruned entirely.
 func (h *NotificationPrefsHandler) PutMe(w http.ResponseWriter, r *http.Request) {
 	claims, _ := auth.ClaimsFromContext(r.Context())
 
-	var incoming map[string]map[string]bool
+	var incoming map[string]map[string]*bool
 	if err := json.NewDecoder(r.Body).Decode(&incoming); err != nil {
 		WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
@@ -80,7 +81,14 @@ func (h *NotificationPrefsHandler) PutMe(w http.ResponseWriter, r *http.Request)
 			existing[event] = map[string]bool{}
 		}
 		for ch, enabled := range channels {
-			existing[event][ch] = enabled
+			if enabled == nil {
+				delete(existing[event], ch)
+			} else {
+				existing[event][ch] = *enabled
+			}
+		}
+		if len(existing[event]) == 0 {
+			delete(existing, event)
 		}
 	}
 
@@ -118,27 +126,22 @@ func (h *NotificationPrefsHandler) GetGroupDefaults(w http.ResponseWriter, r *ht
 	raw, _ := h.Q.GetGroupNotificationDefaults(r.Context(), claims.GroupID)
 	groupDefaults := notifications.ParseGroupDefaults(raw)
 
-	mergeRole := func(isManager bool) map[string]map[string]bool {
-		sys := notifications.SystemDefaults(isManager)
-		out := make(map[string]map[string]bool, len(notifications.AllEvents))
-		for _, event := range notifications.AllEvents {
-			out[event] = make(map[string]bool)
-			for ch, sv := range sys[event] {
-				if gv, ok := groupDefaults.Lookup(event, ch, isManager); ok {
-					out[event][ch] = gv
-				} else {
-					out[event][ch] = sv
-				}
+	sys := notifications.BroadcastSystemDefaults()
+	out := make(map[string]map[string]bool, len(sys))
+	for event, channels := range sys {
+		out[event] = make(map[string]bool)
+		for ch, sv := range channels {
+			if gv, ok := groupDefaults.Lookup(event, ch, true); ok {
+				out[event][ch] = gv
+			} else {
+				out[event][ch] = sv
 			}
 		}
-		return out
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]any{
-		"user":                   mergeRole(false),
-		"manager":                mergeRole(true),
-		"system_defaults_user":   notifications.SystemDefaults(false),
-		"system_defaults_manager": notifications.SystemDefaults(true),
+		"defaults":         out,
+		"system_defaults":  sys,
 	})
 }
 

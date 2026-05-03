@@ -19,6 +19,10 @@ type Message struct {
 	// Both are empty strings when threading is not applicable.
 	MessageID string
 	InReplyTo string
+
+	// ThreadKey is used by GChatNotifier to group messages into Chat API threads.
+	// Not used by SMTPNotifier.
+	ThreadKey string
 }
 
 // Notifier sends a notification message on a specific channel.
