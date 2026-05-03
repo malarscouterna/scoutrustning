@@ -12,7 +12,7 @@ const outDir = resolve(__dirname, '../../api/internal/notifications/templates');
 
 mkdirSync(outDir, { recursive: true });
 
-const templates = ['booking', 'issue'];
+const templates = ['booking', 'issue', 'test'];
 
 for (const name of templates) {
 	const mjmlSrc = readFileSync(`${emailsDir}/${name}.mjml`, 'utf-8');

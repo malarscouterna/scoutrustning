@@ -512,6 +512,8 @@
   "email_subject_issue_resolved": "Ärende löst: {title}",
   "email_subject_issue_commented": "Ny kommentar på ärende: {title}",
   "email_subject_test_email": "Testnotis från MS Utrustning",
+  "email_banner_test_email": "Testnotis",
+  "email_cta_open_settings": "Öppna notisinställningar",
   "notif_test_email": "Det här är en testnotis för att bekräfta att e-postnotiser fungerar.",
 
   "email_banner_booking_needs_approval": "Godkännande krävs",

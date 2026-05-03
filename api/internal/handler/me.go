@@ -2,7 +2,6 @@ package handler
 
 import (
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -103,14 +102,15 @@ func (h *MeHandler) PostTestEmail(w http.ResponseWriter, r *http.Request) {
 	if baseURL == "" {
 		baseURL = "http://localhost:5173"
 	}
-	bodyText := i18n.T(lang, "notif_test_email")
-	unsubscribeLabel := i18n.T(lang, "email_footer_unsubscribe")
+	group, _ := h.Q.GetGroup(r.Context(), claims.GroupID)
+	logoURL := notifications.GroupLogoURL(r.Context(), h.Q, claims.GroupID, baseURL)
+	htmlBody, textBody := notifications.RenderTestEmail(lang, claims.Name, group.Name, logoURL, baseURL)
 	msg := notifications.Message{
 		GroupID:  claims.GroupID,
 		To:       claims.Email,
 		Subject:  i18n.T(lang, "email_subject_test_email"),
-		Body:     fmt.Sprintf(`<!DOCTYPE html><html><body><p>%s</p><p><a href="%s/profile">%s</a></p></body></html>`, bodyText, baseURL, unsubscribeLabel),
-		TextBody: fmt.Sprintf("%s\n\n%s: %s/profile", bodyText, unsubscribeLabel, baseURL),
+		Body:     htmlBody,
+		TextBody: textBody,
 	}
 	if err := h.Notifier.Send(r.Context(), msg); err != nil {
 		slog.Error("test email failed", "to", claims.Email, "group", claims.GroupID, "err", err)

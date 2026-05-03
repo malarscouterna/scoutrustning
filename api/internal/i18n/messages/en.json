@@ -512,6 +512,8 @@
   "email_subject_issue_resolved": "Issue resolved: {title}",
   "email_subject_issue_commented": "New comment on issue: {title}",
   "email_subject_test_email": "Test notification from MS Utrustning",
+  "email_banner_test_email": "Test notification",
+  "email_cta_open_settings": "Open notification settings",
   "notif_test_email": "This is a test notification to confirm that email notifications are working.",
 
   "email_banner_booking_needs_approval": "Approval required",
