@@ -106,29 +106,35 @@ YGGDRASIL_ID=$(get_team_id "Yggdrasil")
 FLASKPOST_ID=$(get_team_id "Flaskpostorné")
 VALBORG_ID_SEED=$(get_team_id "Valborgskommittén")
 
-# Yggdrasil: broadcast email + individual notifications on (default)
+# Yggdrasil: broadcast email, opts email into Gruppkanal
 if [ -n "$YGGDRASIL_ID" ]; then
   curl -sf -X PUT "$API/api/v0/teams/$YGGDRASIL_ID/notification-settings" \
     -H "$HEADER" -H "Content-Type: application/json" \
-    -d '{"notification_email":"yggdrasil@malarscouterna.example.com"}' > /dev/null \
-    && echo "  Yggdrasil: notification_email set" || echo "  Yggdrasil: FAILED"
+    -d '{"notification_email":"yggdrasil@malarscouterna.example.com","gruppkanal_channels":["email"]}' > /dev/null \
+    && echo "  Yggdrasil: notification_email + gruppkanal set" || echo "  Yggdrasil: FAILED"
 fi
 
-# Flaskpostorné: broadcast email + individual notifications suppressed by default
+# Flaskpostorné: broadcast email, opts email into Gruppkanal
 if [ -n "$FLASKPOST_ID" ]; then
   curl -sf -X PUT "$API/api/v0/teams/$FLASKPOST_ID/notification-settings" \
     -H "$HEADER" -H "Content-Type: application/json" \
-    -d '{"notification_email":"flaskpost@malarscouterna.example.com","individual_notifications_enabled":false}' > /dev/null \
-    && echo "  Flaskpostorné: notification_email set, individual suppressed" || echo "  Flaskpostorné: FAILED"
+    -d '{"notification_email":"flaskpost@malarscouterna.example.com","gruppkanal_channels":["email"]}' > /dev/null \
+    && echo "  Flaskpostorné: notification_email + gruppkanal set" || echo "  Flaskpostorné: FAILED"
 fi
 
-# Valborgskommittén: broadcast email only, no individual suppression
+# Valborgskommittén: broadcast email, opts email into Gruppkanal
 if [ -n "$VALBORG_ID_SEED" ]; then
   curl -sf -X PUT "$API/api/v0/teams/$VALBORG_ID_SEED/notification-settings" \
     -H "$HEADER" -H "Content-Type: application/json" \
-    -d '{"notification_email":"valborg@malarscouterna.example.com"}' > /dev/null \
-    && echo "  Valborgskommittén: notification_email set" || echo "  Valborgskommittén: FAILED"
+    -d '{"notification_email":"valborg@malarscouterna.example.com","gruppkanal_channels":["email"]}' > /dev/null \
+    && echo "  Valborgskommittén: notification_email + gruppkanal set" || echo "  Valborgskommittén: FAILED"
 fi
+
+# Group default: email is in the default Gruppkanal for teams that have it configured
+curl -sf -X PUT "$API/api/v0/group-settings/notification-defaults" \
+  -H "$HEADER" -H "Content-Type: application/json" \
+  -d '{"defaults":{},"default_gruppkanal_channels":["email"]}' > /dev/null \
+  && echo "  Group: default_gruppkanal_channels set to [email]" || echo "  Group: notification-defaults FAILED"
 
 # Report issues on some quantity-tracked articles to demo status mix
 echo ""

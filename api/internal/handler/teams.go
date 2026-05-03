@@ -336,12 +336,10 @@ func (h *TeamHandler) UpdateNotificationSettings(w http.ResponseWriter, r *http.
 				}
 			}
 		}
-		gruppkanalChannels = validated // nil if empty (explicit opt-out stored as empty slice, not nil)
-		if len(validated) == 0 && len(requested) > 0 {
-			// All requested channels were invalid — keep nil so UI shows validation failed
-			// by returning empty but not nil; store as empty array to distinguish from inherit.
-			gruppkanalChannels = []string{}
+		if validated == nil {
+			validated = []string{}
 		}
+		gruppkanalChannels = validated
 	}
 
 	_, err = h.Q.UpdateTeamNotificationSettings(r.Context(), db.UpdateTeamNotificationSettingsParams{

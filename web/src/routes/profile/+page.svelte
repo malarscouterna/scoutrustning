@@ -1039,7 +1039,13 @@
 
 					<!-- Notification settings -->
 					<div class="p-4">
-						<h3 class="text-sm font-semibold text-neutral-700 mb-3">{m.page_profile_teams_notif_heading()}</h3>
+						<div class="flex items-center justify-between mb-3">
+							<h3 class="text-sm font-semibold text-neutral-700">{m.page_profile_teams_notif_heading()}</h3>
+							<button
+								onclick={() => saveUserTeamNotifSettings({ notification_prefs: {}, gruppkanal_channels: null })}
+								class="text-xs text-neutral-400 hover:text-red-600"
+							>{m.page_profile_teams_notif_reset()}</button>
+						</div>
 
 						{#if userTeamSettingsLoading}
 							<p class="text-sm text-neutral-400">{m.btn_loading()}</p>
@@ -1063,7 +1069,6 @@
 									<p class="text-sm text-neutral-400 italic">{m.page_profile_teams_gruppkanal_no_channels()}</p>
 								{:else}
 									{#each availableChannels as ch}
-										{@const isInherited = userTeamSettings.gruppkanal_channels === null}
 										{@const checked = effectiveGruppkanal.includes(ch)}
 										<label class="flex items-center gap-2 mb-1 cursor-pointer">
 											<input
@@ -1083,18 +1088,15 @@
 												{#if ch === 'email' && userTeamSettings.notification_email}
 													<span class="text-neutral-400 text-xs ml-1">({userTeamSettings.notification_email})</span>
 												{/if}
-												{#if isInherited}
-													<span class="text-neutral-400 text-xs ml-1">{m.page_profile_teams_gruppkanal_inherited()}</span>
-												{/if}
 											</span>
 										</label>
 									{/each}
 								{/if}
 							</div>
 
-							<!-- Per-event table: Personlig e-post radio + Gruppkanal checkbox -->
+							<!-- Per-event table: context-aware personal email toggle + Gruppkanal checkbox -->
 							{@const tabEvents = teamTabEvents(selectedMembership?.access_level ?? 'book')}
-							{@const showGruppkanalCol = effectiveGruppkanal.length > 0}
+							{@const showGruppkanalCol = effectiveGruppkanal.some(ch => availableChannels.includes(ch))}
 							<table class="w-full text-sm border-collapse">
 								<thead>
 									<tr>
@@ -1110,30 +1112,36 @@
 									{@const ep = userTeamSettings.notification_prefs?.[row.key]}
 									{@const policy = ep?.personal_email_policy ?? ''}
 									{@const grEnabled = ep?.gruppkanal ?? null}
-									{@const isInherited = ep === undefined || ep === null}
 									<tr class="border-t border-neutral-100">
 										<td class="py-2 pr-3">{row.label()}</td>
-										<!-- Personal email: compact 3-option radio -->
-										<td class="py-2 px-2">
-											<div class="flex gap-1 justify-center">
-												{#each [['always', m.page_profile_teams_notif_personal_always()], ['if_no_broadcast', m.page_profile_teams_notif_personal_if_no_broadcast()], ['never', m.page_profile_teams_notif_personal_never()]] as [val, label]}
-													<button
-														onclick={() => {
-															const prefs = { ...userTeamSettings!.notification_prefs };
-															prefs[row.key] = { ...(prefs[row.key] ?? {}), personal_email_policy: val as 'always' | 'if_no_broadcast' | 'never' };
-															saveUserTeamNotifSettings({ notification_prefs: prefs });
-														}}
-														class="px-2 py-0.5 text-xs rounded border {(policy || 'if_no_broadcast') === val ? 'bg-blue-700 text-white border-blue-700' : 'bg-white text-neutral-600 border-neutral-300 hover:border-blue-400'}
-														{val === 'if_no_broadcast' && effectiveGruppkanal.length === 0 ? 'opacity-40' : ''}"
-														title={val === 'if_no_broadcast' && effectiveGruppkanal.length === 0 ? m.page_profile_teams_notif_personal_if_no_broadcast_dimmed_tooltip() : ''}
-													>{label}</button>
-												{/each}
-												{#if policy !== '' && policy !== 'if_no_broadcast'}
-													<span class="text-xs text-neutral-400 self-center ml-1">{m.page_profile_teams_notif_inherited()}</span>
-												{/if}
-											</div>
+										<!-- Personal email: off → "never"; on without Gruppkanal → omit (default sends); on with Gruppkanal → "always" -->
+										<td class="py-2 px-2 text-center">
+											<input
+												type="checkbox"
+												checked={showGruppkanalCol ? policy === 'always' : policy !== 'never'}
+												onchange={(e) => {
+													const prefs = { ...userTeamSettings!.notification_prefs };
+													if (e.currentTarget.checked) {
+														if (showGruppkanalCol) {
+															prefs[row.key] = { ...(prefs[row.key] ?? {}), personal_email_policy: 'always' };
+														} else {
+															const { personal_email_policy: _, ...rest } = prefs[row.key] ?? {};
+															prefs[row.key] = Object.keys(rest).length ? rest : undefined as any;
+														}
+													} else {
+														if (showGruppkanalCol) {
+															const { personal_email_policy: _, ...rest } = prefs[row.key] ?? {};
+															prefs[row.key] = Object.keys(rest).length ? rest : undefined as any;
+														} else {
+															prefs[row.key] = { ...(prefs[row.key] ?? {}), personal_email_policy: 'never' };
+														}
+													}
+													saveUserTeamNotifSettings({ notification_prefs: prefs });
+												}}
+												class="h-4 w-4 accent-blue-700"
+											/>
 										</td>
-										<!-- Gruppkanal checkbox -->
+										<!-- Gruppkanal checkbox: only when channels available -->
 										{#if showGruppkanalCol}
 										<td class="py-2 px-3 text-center">
 											<input
@@ -1146,9 +1154,6 @@
 												}}
 												class="h-4 w-4 accent-blue-700"
 											/>
-											{#if grEnabled === null}
-												<span class="block text-xs text-neutral-400">{m.page_profile_teams_notif_inherited()}</span>
-											{/if}
 										</td>
 										{/if}
 									</tr>
@@ -1740,7 +1745,7 @@
 							<td class="py-1.5 pr-3">{row.label()}</td>
 							<td class="py-1.5 px-2">
 								<div class="flex gap-1 justify-center">
-									{#each [['always', m.page_profile_teams_notif_personal_always()], ['if_no_broadcast', m.page_profile_teams_notif_personal_if_no_broadcast()], ['never', m.page_profile_teams_notif_personal_never()]] as [val, label]}
+									{#each [['always', m.page_profile_teams_notif_personal_always()], ['if_no_broadcast', m.page_profile_group_defaults_notif_personal_prefer_broadcast()], ['never', m.page_profile_teams_notif_personal_never()]] as [val, label]}
 										<button
 											onclick={() => saveGroupDefaults({ defaults: { ...groupNotifDefaults, [row.key]: { ...(groupNotifDefaults[row.key] ?? {}), personal_email_policy: val as 'always' | 'if_no_broadcast' | 'never' } } })}
 											class="px-2 py-0.5 text-xs rounded border {(policy || sysEp?.personal_email_policy || 'if_no_broadcast') === val ? 'bg-blue-700 text-white border-blue-700' : 'bg-white text-neutral-600 border-neutral-300 hover:border-blue-400'}"
@@ -1770,7 +1775,7 @@
 							<td class="py-1.5 pr-3">{row.label()}</td>
 							<td class="py-1.5 px-2">
 								<div class="flex gap-1 justify-center">
-									{#each [['always', m.page_profile_teams_notif_personal_always()], ['if_no_broadcast', m.page_profile_teams_notif_personal_if_no_broadcast()], ['never', m.page_profile_teams_notif_personal_never()]] as [val, label]}
+									{#each [['always', m.page_profile_teams_notif_personal_always()], ['if_no_broadcast', m.page_profile_group_defaults_notif_personal_prefer_broadcast()], ['never', m.page_profile_teams_notif_personal_never()]] as [val, label]}
 										<button
 											onclick={() => saveGroupDefaults({ defaults: { ...groupNotifDefaults, [row.key]: { ...(groupNotifDefaults[row.key] ?? {}), personal_email_policy: val as 'always' | 'if_no_broadcast' | 'never' } } })}
 											class="px-2 py-0.5 text-xs rounded border {(policy || sysEp?.personal_email_policy || 'if_no_broadcast') === val ? 'bg-blue-700 text-white border-blue-700' : 'bg-white text-neutral-600 border-neutral-300 hover:border-blue-400'}"

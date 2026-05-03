@@ -735,12 +735,25 @@ No new endpoints.
 | 3.6-9 | Team settings UI: Gruppkanal composition selector + unified per-event table (Personlig e-post radio + Gruppkanal checkbox); remove `individual_notifications_enabled` toggle | ✅ done |
 | 3.6-10 | Group defaults UI: default Gruppkanal composition checkboxes + same per-event table; update force-defaults confirmation dialog | ✅ done |
 
+### Outstanding fixes (3.6 follow-up)
+
+~~**Team settings per-event table — simplify personal email control**~~ ✅ done
+
+Implemented as context-aware binary toggle:
+- **No Gruppkanal active**: single "Personlig e-post" checkbox. Unchecked → `personal_email_policy: "never"`. Checked/unset → omit key (default `always`).
+- **Gruppkanal active**: "Gruppkanal" checkbox (existing) + "Skicka också personlig e-post" checkbox. Checked → `personal_email_policy: "always"`. Unchecked/unset → omit key (default `if_no_broadcast` suppresses personal).
+
+Group defaults UI keeps three-way radio. Middle option relabelled "Föredra gruppkanal" via new key `page_profile_group_defaults_notif_personal_prefer_broadcast`. Removed `page_profile_teams_notif_personal_if_no_broadcast` and `_dimmed_tooltip`; added `page_profile_teams_notif_reset`. `page_profile_teams_notif_personal_always` and `_never` still used by group defaults radio.
+
+~~**Dev-seed: set sane defaults for groups with broadcast email**~~ ✅ done (`default_gruppkanal_channels: ["email"]` already present)
+
+~~**`00010_gruppkanal.sql` cleanup**~~ ✅ done — migration is schema-only, no seed data.
+
 ---
 
-## Open questions / backlog
+## Remaining work
 
 - **3.5b-4 smoke-test**: visually verify team tab, GChat integration section, and group defaults table in the browser.
-- **Slack / Teams**: follow the same pattern (once 3.5b is fully done) — new `Notifier`, append channel id to `enabled_channels`, implement a setup UI section in Integrationer. No other changes needed.
-- **Personal GChat DMs**: deferred. Would require storing the user's Google identity at login (only feasible if OIDC provider is Google Workspace).
-- **GChat card richness**: `GChatNotifier.Send` currently posts plain text. A follow-up could upgrade to `cardsV2` with a header, field widgets, and a CTA button (all data is available in `msg.Subject` and `msg.TextBody`).
-- **Push notifications**: deferred to a later phase. Requires service worker registration, push subscription storage per user/device, and a Web Push API sender. Channel taxonomy is already documented in Phase 3.6 to keep the data model extensible.
+- **Step 10 email templates**: visual review via Mailpit (`http://localhost:8025`) + extend `TestNotifications_EventTriggered` to assert body contains booking URL, dates, item list.
+
+Deferred items (personal email override, GChat richness, Slack/Teams, push notifications, logo in web header) moved to `docs/BACKLOG.md`.
