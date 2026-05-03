@@ -373,10 +373,6 @@ GET    /api/v0/public/groups/{id}/logo.png   → PNG  (no auth, for email)
 
 `fetchBookingEmailData` / `fetchIssueEmailData` look up `logo_file_id` and set `LogoURL = baseURL + "/api/v0/public/groups/{id}/logo.png"`. The `EMAIL_LOGO_HEADER` placeholder in both MJML templates is substituted with either an `<img>` tag or the HTML-escaped group name fallback. `EMAIL_GROUP_NAME` remains in the footer as plain text.
 
-### Backlog
-
-- **Web header display** — frontend should fetch `logo_url` from group settings and render it in place of the text group name in the top nav when present.
-- **MJML cleanup** — currently the logo `<img>` is injected into a `<mj-text>` wrapper. A future pass should use a proper `<mj-image>` section with a conditional raw block for the text fallback.
 
 ## Implementation plan
 
@@ -465,7 +461,6 @@ Assignment event log renders "tilldelade / tog bort tilldelning för [name]" rat
 "Notiser" section on `/profile`. Semantic `<table>`: rows = event types grouped into Bokningar/Ärenden, columns = channels from `group_settings.notification_channels`. Columns render dynamically — no hardcoded channel names. `booking_needs_approval` and `issue_created` absent for non-managers. `issue_assigned_to_me` is a non-toggle informational row. `source` shown as hint under the event label when inherited. "Återställ till standard" calls `DELETE /me/notification-prefs`.
 
 **Test**: SSR smoke test. Toggles and restore button work for both leader and manager personas.
-TODO: when changing back to the default setting, once again indicate that we are no the default setting.
 
 ### Step 7: Notification infrastructure + event-triggered sends ✅
 
@@ -571,6 +566,5 @@ Full design in `docs/email-templates.md`.
 **New env var**: `APP_BASE_URL` (default `http://localhost:5173` in dev) — used for booking/issue links and unsubscribe URL. Set in `gen-env.sh` and `docker-compose.yml`.
 
 **Still remaining**:
-- Visual review via Mailpit
-- Extend `TestNotifications_EventTriggered` to assert body contains booking URL, dates, item list
 - Visual review via Mailpit (`http://localhost:8025`)
+- Extend `TestNotifications_EventTriggered` to assert body contains booking URL, dates, item list

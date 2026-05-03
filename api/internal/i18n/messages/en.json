@@ -586,6 +586,7 @@
 
   "page_profile_teams_no_teams": "You do not belong to any teams or roles.",
   "page_profile_teams_notif_heading": "Notifications",
+  "page_profile_teams_notif_reset": "Reset to default",
   "page_profile_teams_notif_email_label": "Broadcast address (shared team email)",
   "page_profile_teams_notif_suppress_label": "Do not send personal emails to members by default",
   "page_profile_teams_notif_suppress_hint": "Members can still enable personal notifications in their profile.",
@@ -620,10 +621,10 @@
   "page_profile_teams_notif_col_personal": "Personal email",
   "page_profile_teams_notif_col_gruppkanal": "Group channel",
   "page_profile_teams_notif_personal_always": "Always",
-  "page_profile_teams_notif_personal_if_no_broadcast": "If no group channel",
   "page_profile_teams_notif_personal_never": "Never",
-  "page_profile_teams_notif_personal_if_no_broadcast_dimmed_tooltip": "The team has no active group channel — behaves like 'Always'.",
   "page_profile_teams_notif_inherited": "(default)",
+
+  "page_profile_group_defaults_notif_personal_prefer_broadcast": "Prefer group channel",
 
   "page_profile_group_defaults_gruppkanal_heading": "Default group channel",
   "page_profile_group_defaults_gruppkanal_help": "Which channels are included in the group channel by default for teams without their own settings.",

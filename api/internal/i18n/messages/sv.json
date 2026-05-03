@@ -586,6 +586,7 @@
 
   "page_profile_teams_no_teams": "Du tillhör inga avdelningar eller roller.",
   "page_profile_teams_notif_heading": "Notiser",
+  "page_profile_teams_notif_reset": "Återställ till standard",
   "page_profile_teams_notif_email_label": "Utskicksadress (gemensam e-post för avdelningen)",
   "page_profile_teams_notif_suppress_label": "Skicka inte personlig e-post till medlemmar som standard",
   "page_profile_teams_notif_suppress_hint": "Medlemmar kan fortfarande aktivera egna notiser i sin profil.",
@@ -620,10 +621,10 @@
   "page_profile_teams_notif_col_personal": "Personlig e-post",
   "page_profile_teams_notif_col_gruppkanal": "Gruppkanal",
   "page_profile_teams_notif_personal_always": "Alltid",
-  "page_profile_teams_notif_personal_if_no_broadcast": "Om ej gruppkanal",
   "page_profile_teams_notif_personal_never": "Aldrig",
-  "page_profile_teams_notif_personal_if_no_broadcast_dimmed_tooltip": "Avdelningen har ingen aktiv gruppkanal — fungerar som 'Alltid'.",
   "page_profile_teams_notif_inherited": "(standard)",
+
+  "page_profile_group_defaults_notif_personal_prefer_broadcast": "Föredra gruppkanal",
 
   "page_profile_group_defaults_gruppkanal_heading": "Standardval för gruppkanal",
   "page_profile_group_defaults_gruppkanal_help": "Vilka kanaler som ingår i gruppkanalen som standard för avdelningar utan egna inställningar.",

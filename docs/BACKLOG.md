@@ -244,3 +244,19 @@ When a user wants to consolidate two active pickups into one, there is no merge 
 ## Personal booking deprecation
 
 Managers cannot distinguish personal bookings (no team, no external name) from other users' personal bookings. Options: show creator name always (requires backend name join on booking response), remove personal booking creation from the UI, or deprecate the concept in favour of external-name bookings.
+
+## Notifications — deferred items
+
+**Personal notification email override** — Users should be able to set a custom notification email in their profile, defaulting to their Keycloak-provisioned `email`. Requires: `notification_email` column on `users` (nullable); a new endpoint or extending `PUT /me`; UI field in the personal profile tab pre-filled from Keycloak email. Dispatch reads a `user.NotificationEmail()` helper that falls back to `users.email`.
+
+**GChat card richness** — `GChatNotifier.Send` currently posts plain text. Upgrade to `cardsV2` with a header, field widgets, and a CTA button (all data available in `msg.Subject` and `msg.TextBody`).
+
+**Personal GChat DMs** — Broadcast-only for now. Personal DMs require storing the user's Google identity at login (only feasible if the OIDC provider is Google Workspace).
+
+**Slack / Teams** — Follow the same additive pattern as GChat: new `Notifier`, append channel id to `enabled_channels`, setup UI section in Integrationer. No other changes needed.
+
+**Push notifications** — Requires service worker registration, push subscription storage per user/device, and a Web Push API sender. Channel taxonomy already documented in Phase 3.6 to keep the data model extensible.
+
+**Group logo in web header** — Frontend should fetch `logo_url` from group settings and render it in place of the text group name in the top nav when present.
+
+**Email MJML logo cleanup** — The logo `<img>` is currently injected into a `<mj-text>` wrapper. A future pass should use a proper `<mj-image>` section with a conditional raw block for the text fallback.
