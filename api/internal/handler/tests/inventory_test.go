@@ -54,7 +54,6 @@ func TestInventoryManagement(t *testing.T) {
 		// PUT saves settings
 		body := map[string]any{
 			"notification_email_from": "test@example.com",
-			"gchat_webhook_url":       "https://chat.example.com/webhook",
 			"default_approval_level":  "none",
 		}
 		b, _ := json.Marshal(body)
@@ -69,12 +68,12 @@ func TestInventoryManagement(t *testing.T) {
 			t.Errorf("expected email test@example.com, got %v", settings["notification_email_from"])
 		}
 
-		// GET returns saved settings
+		// GET returns saved settings; gchat_webhook_url was removed in migration 00009
 		resp, _ = manager.Get("/api/v0/group-settings")
 		json.NewDecoder(resp.Body).Decode(&settings)
 		resp.Body.Close()
-		if settings["gchat_webhook_url"] != "https://chat.example.com/webhook" {
-			t.Errorf("expected webhook URL, got %v", settings["gchat_webhook_url"])
+		if _, hasKey := settings["gchat_configured"]; !hasKey {
+			t.Errorf("expected gchat_configured in group settings response, got keys: %v", settings)
 		}
 	})
 

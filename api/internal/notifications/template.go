@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"html"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -676,5 +675,3 @@ func buildIssueText(d IssueEmailData, desc, issueURL string) string {
 	return b.String()
 }
 
-// timeNow is used for tests to override the current time.
-var timeNow = time.Now

@@ -165,7 +165,7 @@ func GetTeamNotifSettings(ctx context.Context, q *db.Queries, groupID, teamID st
 // ResolvePrefs returns the merged effective personal email preferences for a user across all
 // known events. Resolution order: user → team → group → system.
 // Pass teamID="" when no team context exists.
-func ResolvePrefs(ctx context.Context, q *db.Queries, userID, groupID, teamID string, _ []string, isManager bool) (ResolvedPrefs, error) {
+func ResolvePrefs(ctx context.Context, q *db.Queries, userID, groupID, teamID string) (ResolvedPrefs, error) {
 	sys := BroadcastSystemDefaults()
 
 	userPrefsRaw, _ := q.GetUserNotificationPrefs(ctx, db.GetUserNotificationPrefsParams{
