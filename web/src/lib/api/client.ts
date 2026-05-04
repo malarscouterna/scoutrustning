@@ -160,13 +160,13 @@ export interface GroupSettings {
 	notification_channels: string[];
 }
 
-export interface ChannelPref {
-	enabled: boolean;
+export interface ResolvedPref {
+	policy: 'always' | 'if_no_broadcast' | 'never';
 	source: 'user' | 'team_default' | 'group_default' | 'system_default';
-	default_enabled: boolean;
+	default_policy: 'always' | 'if_no_broadcast' | 'never';
 }
 
-export type NotificationPrefs = Record<string, Record<string, ChannelPref>>;
+export type NotificationPrefs = Record<string, ResolvedPref>;
 
 export interface IssueArticle {
 	id: string;
@@ -400,7 +400,7 @@ export function createApiClient(opts: FetchOptions = {}) {
 			requestMut<void>('/me/language', 'PUT', { language }, opts),
 		getNotificationPrefs: () =>
 			request<{ prefs: NotificationPrefs }>('/me/notification-prefs', opts),
-		updateNotificationPrefs: (data: Record<string, Record<string, boolean | null>>) =>
+		updateNotificationPrefs: (data: Record<string, PerEventPrefs | null>) =>
 			requestMut<void>('/me/notification-prefs', 'PUT', data, opts),
 		resetNotificationPrefs: () =>
 			requestMut<void>('/me/notification-prefs', 'DELETE', undefined, opts),

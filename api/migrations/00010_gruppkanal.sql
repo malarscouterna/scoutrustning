@@ -11,3 +11,7 @@ ALTER TABLE teams DROP COLUMN IF EXISTS individual_notifications_enabled;
 
 -- group_settings: default Gruppkanal composition for teams with NULL gruppkanal_channels
 ALTER TABLE group_settings ADD COLUMN IF NOT EXISTS default_gruppkanal_channels text[] NOT NULL DEFAULT '{}';
+
+-- +goose Down
+-- Down migration is a no-op: individual_notifications_enabled was dropped and
+-- restoring it alongside the new gruppkanal_channels column is not warranted.

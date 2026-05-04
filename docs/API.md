@@ -803,32 +803,38 @@ Set the user's personal language preference.
 **Response** `204` | `400` (unsupported language) | `401`
 
 ### `GET /api/v0/me/notification-prefs`
-Returns the effective (merged) notification preferences for the active group. Resolution order: user overrides - group defaults - system defaults.
+Returns the effective (merged) notification preferences for the active group. Resolution order: user → team → group → system defaults.
 
 **Response** `200`
 ```json
 {
   "prefs": {
-    "booking_confirmed":   {"email": {"enabled": true,  "source": "user"}},
-    "issue_created":       {"email": {"enabled": false, "source": "group_default"}},
-    "booking_any_created": {"email": {"enabled": false, "source": "system_default"}}
+    "booking_confirmed": {"policy": "if_no_broadcast", "source": "system_default", "default_policy": "if_no_broadcast"},
+    "booking_reminder":  {"policy": "never",           "source": "user",           "default_policy": "if_no_broadcast"},
+    "booking_rejected":  {"policy": "always",          "source": "group_default",  "default_policy": "always"}
   }
 }
 ```
-`source`: `"user"` | `"group_default"` | `"system_default"`.
+`policy`: `"always"` | `"if_no_broadcast"` | `"never"`.
+`source`: `"user"` | `"team_default"` | `"group_default"` | `"system_default"`.
+`default_policy`: the non-user effective default (what the user would get if their override were removed).
 
 ### `PUT /api/v0/me/notification-prefs`
-Partial update - only keys present in the body are changed.
+Partial update — only keys present in the body are changed. A `null` value removes the user's override for that event (reverts to team/group/system default).
 
 **Body**
 ```json
-{"booking_confirmed": {"email": true}, "issue_created": {"email": false}}
+{
+  "booking_confirmed": {"personal_email_policy": "always"},
+  "booking_reminder":  {"personal_email_policy": "never"},
+  "booking_rejected":  null
+}
 ```
 
 **Response** `204` | `400`
 
 ### `DELETE /api/v0/me/notification-prefs`
-Resets all user-level preferences for the active group. Subsequent `GET` returns group/system defaults.
+Resets all user-level preferences for the active group. Subsequent `GET` returns team/group/system defaults.
 
 **Response** `204`
 
@@ -837,13 +843,23 @@ Returns group-level notification defaults. Manager only.
 
 **Response** `200`
 ```json
-{"defaults": {"booking_confirmed": {"email": true}}}
+{
+  "defaults": {"booking_confirmed": {"personal_email_policy": "always", "gruppkanal": true}},
+  "system_defaults": {"booking_confirmed": {"personal_email_policy": "if_no_broadcast", "gruppkanal": true}},
+  "default_gruppkanal_channels": ["email"]
+}
 ```
 
 ### 🔒 `PUT /api/v0/group-settings/notification-defaults`
 Full replacement of group notification defaults. Manager only.
 
-**Body** Same shape as the `defaults` field above.
+**Body**
+```json
+{
+  "defaults": {"booking_confirmed": {"personal_email_policy": "always", "gruppkanal": true}},
+  "default_gruppkanal_channels": ["email", "gchat"]
+}
+```
 
 **Response** `204` | `400` | `403`
 

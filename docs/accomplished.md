@@ -8,6 +8,43 @@ Newest first.
 
 ---
 
+## 2026-05-04
+
+### feat/notifications branch — pre-merge fixes
+
+Resolved all issues identified in the branch review (`docs/notifications-branch-review.md`).
+
+**Critical — personal notification prefs end-to-end fix**
+
+The Phase 3.6 JSONB shape (`{personal_email_policy, gruppkanal}`) was implemented in the backend but `PutMe` still accepted and stored the old `{email: bool}` per-channel format, silently discarding every user preference write. Fixed:
+
+- `PutMe` in `notification_prefs.go` now accepts `map[string]*PerEventPrefs` (null removes user override for that event), matching the same format as the team/group settings endpoints.
+- TypeScript `NotificationPrefs` type updated from `Record<string, Record<string, ChannelPref>>` to `Record<string, ResolvedPref>` where `ResolvedPref = {policy, source, default_policy}`.
+- Profile page helpers (`notifEnabled`, `teamEventRadio`, `toggleNotif`, `setTeamEventRadio`) updated to read and write the new shape.
+- `notification_prefs_test.go` fully rewritten — all 8 subtests pass against the live DB.
+- Stale pref format in `scheduled_notifications_test.go` updated (`{"email":false}` → `{"personal_email_policy":"never"}`).
+- Stale `gchat_webhook_url` reference removed from `inventory_test.go` (column dropped in migration 00009).
+- GChat code review: booking events are fully wired; issue events have no GChat broadcast path and GChat key management endpoints lack integration tests — documented in `docs/notifications-phase35.md` and `docs/BACKLOG.md`.
+
+**High — dead code removed**
+
+`sendTestEmail` (unexported, never called in `send.go`) deleted along with its stale `html` import.
+
+**Medium**
+
+- Reminder deduplication: `sendReminderForBooking` now calls `HasNotificationBeenSent` before sending, preventing double-sends on server restart at the reminder window (mirrors the overdue-alert path).
+- Migrations 00009 and 00010 now have `-- +goose Down` stub sections so `goose down` no longer errors.
+- Unchecked `LogNotification` error in `scheduler.go` made consistent with `_ =` (all other call sites).
+
+**Low — cleanup**
+
+- `ResolvePrefs` signature simplified: removed unused `channels []string` and `isManager bool` parameters; call site in `GetMe` updated.
+- `var timeNow = time.Now` and its `time` import removed from `template.go`.
+- Empty `web/gchat-manager-guide.md` deleted.
+- `docs/API.md` updated to document the current `PUT /me/notification-prefs` and `GET /me/notification-prefs` shapes.
+
+---
+
 ## 2026-04-24
 
 ### Notifications - Steps 1-6

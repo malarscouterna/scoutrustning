@@ -72,6 +72,15 @@ func sendReminderForBooking(ctx context.Context, q *db.Queries, n Notifier, b db
 	recipients := bookingRecipients(ctx, q, b.GroupID, b.CreatedBy, b.UsedByTeamID)
 	for _, r := range recipients {
 		r := r
+		sent, err := q.HasNotificationBeenSent(ctx, db.HasNotificationBeenSentParams{
+			EntityID:  b.ID,
+			EventType: EventBookingReminder,
+			UserID:    r.id,
+			Channel:   "email",
+		})
+		if err != nil || sent {
+			continue
+		}
 		sendTo(ctx, q, n, b.GroupID, teamIDStr(b.UsedByTeamID), r, EventBookingReminder, "email", b.ID, "booking_"+teamIDStr(b.ID), func(lang string) Message {
 			booking := db.Booking{
 				ID:           b.ID,
@@ -171,7 +180,7 @@ func sendOverdueForBooking(ctx context.Context, q *db.Queries, n Notifier, b db.
 			errStr = sendErr.Error()
 			slog.Error("overdue notification failed", "booking", b.ID, "user", r.id, "error", sendErr)
 		}
-		q.LogNotification(ctx, db.LogNotificationParams{
+		_ = q.LogNotification(ctx, db.LogNotificationParams{
 			GroupID:   b.GroupID,
 			UserID:    r.id,
 			EventType: EventBookingOverdue,

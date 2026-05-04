@@ -245,6 +245,20 @@ When a user wants to consolidate two active pickups into one, there is no merge 
 
 Managers cannot distinguish personal bookings (no team, no external name) from other users' personal bookings. Options: show creator name always (requires backend name join on booking response), remove personal booking creation from the UI, or deprecate the concept in favour of external-name bookings.
 
+## Notifications — blocking gaps (feat/notifications branch)
+
+These must be resolved before the `feat/notifications` branch can merge.
+
+**GChat broadcast for issue events** — `SendIssueCreated`, `SendIssueResolved`, and `SendIssueCommented` have no GChat path. `IssueHandler` has no `GChatNotifier` field. Intended dispatch: issue events that target a manager team (issue_created, issue_resolved, issue_commented) should broadcast to that team's linked GChat space. `issue_assigned_to_me` is personal-only (no broadcast). Mirror the `BookingHandler` / `sendBroadcastGChat` pattern. See `docs/notifications-phase35.md` Known gaps for full detail.
+
+**Integration tests for GChat key management** — `POST /gchat-key`, `DELETE /gchat-key`, `GET /gchat-spaces`, `PUT /teams/{id}/gchat-space`, and `DELETE /teams/{id}/gchat-space` have zero test coverage. A mock `GChatNotifier` (similar to `CapturingNotifier`) seeded with fake credentials would cover the happy path without a real Google account.
+
+**Integration tests for team notification settings** — `GET /teams/{id}/notification-settings` and `PUT /teams/{id}/notification-settings` (team email, prefs, gruppkanal_channels) have zero test coverage. No external dependencies — same pattern as `notification_prefs_test.go`. Should cover: team member can read/write, non-member is rejected, gruppkanal_channels NULL/empty/explicit values resolve correctly.
+
+**Integration tests for force-notification-defaults** — `POST /group-settings/force-notification-defaults` has zero test coverage. Should verify: all users in the group have `notification_prefs` reset to `{}`, all teams have `gruppkanal_channels` reset to NULL, response contains correct reset counts.
+
+**Integration test for PUT /teams/{id}/name** — trivial, no external dependencies.
+
 ## Notifications — deferred items
 
 **Personal notification email override** — Users should be able to set a custom notification email in their profile, defaulting to their Keycloak-provisioned `email`. Requires: `notification_email` column on `users` (nullable); a new endpoint or extending `PUT /me`; UI field in the personal profile tab pre-filled from Keycloak email. Dispatch reads a `user.NotificationEmail()` helper that falls back to `users.email`.

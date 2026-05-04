@@ -11,9 +11,6 @@ import (
 	"github.com/malarscouterna/ms-utrustning/api/internal/notifications"
 )
 
-// fallbackChannels is used when group settings cannot be loaded.
-var fallbackChannels = []string{"email"}
-
 type NotificationPrefsHandler struct {
 	Q *db.Queries
 }
@@ -44,11 +41,7 @@ func (h *NotificationPrefsHandler) ForceDefaultsRoute() chi.Router {
 // GET /me/notification-prefs — returns merged effective prefs with source info.
 func (h *NotificationPrefsHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	claims, _ := auth.ClaimsFromContext(r.Context())
-	channels, err := h.Q.GetGroupEnabledChannels(r.Context(), claims.GroupID)
-	if err != nil || len(channels) == 0 {
-		channels = fallbackChannels
-	}
-	prefs, err := notifications.ResolvePrefs(r.Context(), h.Q, claims.MemberID, claims.GroupID, "", channels, claims.IsManager())
+	prefs, err := notifications.ResolvePrefs(r.Context(), h.Q, claims.MemberID, claims.GroupID, "")
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, "failed to load preferences")
 		return
@@ -57,38 +50,31 @@ func (h *NotificationPrefsHandler) GetMe(w http.ResponseWriter, r *http.Request)
 }
 
 // PUT /me/notification-prefs — partial update; only keys present are changed.
-// A null channel value removes that channel's explicit override (reverts to
-// team/group/system default — the "Följ avdelningsstandard" middle column).
-// If all channels for an event are removed the event key is pruned entirely.
+// A null event value removes the user's explicit override for that event (reverts
+// to team/group/system default — the "Följ avdelningsstandard" middle column).
 func (h *NotificationPrefsHandler) PutMe(w http.ResponseWriter, r *http.Request) {
 	claims, _ := auth.ClaimsFromContext(r.Context())
 
-	var incoming map[string]map[string]*bool
+	var incoming map[string]*notifications.PerEventPrefs
 	if err := json.NewDecoder(r.Body).Decode(&incoming); err != nil {
 		WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	// Load existing prefs so we can merge (partial update).
-	existing := map[string]map[string]bool{}
 	raw, _ := h.Q.GetUserNotificationPrefs(r.Context(), db.GetUserNotificationPrefsParams{
 		ID: claims.MemberID, GroupID: claims.GroupID,
 	})
-	json.Unmarshal(raw, &existing) //nolint:errcheck
+	existing := notifications.ParseNotificationPrefs(raw)
+	if existing == nil {
+		existing = notifications.NotificationPrefs{}
+	}
 
-	for event, channels := range incoming {
-		if _, ok := existing[event]; !ok {
-			existing[event] = map[string]bool{}
-		}
-		for ch, enabled := range channels {
-			if enabled == nil {
-				delete(existing[event], ch)
-			} else {
-				existing[event][ch] = *enabled
-			}
-		}
-		if len(existing[event]) == 0 {
+	for event, prefs := range incoming {
+		if prefs == nil {
 			delete(existing, event)
+		} else {
+			existing[event] = *prefs
 		}
 	}
 

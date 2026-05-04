@@ -351,21 +351,21 @@
 	// channels from group settings, fallback to ['email']
 	let notifChannels = $derived(data.groupSettings?.notification_channels ?? ['email']);
 
-	function notifEnabled(key: string, ch: string): boolean {
-		return notifPrefs?.[key]?.[ch]?.enabled ?? false;
+	function notifEnabled(key: string, _ch: string): boolean {
+		return (notifPrefs?.[key]?.policy ?? 'always') !== 'never';
 	}
 
 	// Three-column radio value for team/role events.
-	// 'always' = explicit user true, 'never' = explicit user false, 'follow' = no user override.
+	// 'always' = explicit user always, 'never' = explicit user never, 'follow' = no user override.
 	function teamEventRadio(key: string): 'always' | 'follow' | 'never' {
-		const pref = notifPrefs?.[key]?.['email'];
+		const pref = notifPrefs?.[key];
 		if (!pref || pref.source !== 'user') return 'follow';
-		return pref.enabled ? 'always' : 'never';
+		return pref.policy === 'always' ? 'always' : 'never';
 	}
 
-	async function toggleNotif(key: string, ch: string, value: boolean) {
+	async function toggleNotif(key: string, _ch: string, value: boolean) {
 		try {
-			await api.updateNotificationPrefs({ [key]: { [ch]: value } });
+			await api.updateNotificationPrefs({ [key]: { personal_email_policy: value ? 'always' : 'never' } });
 			const result = await api.getNotificationPrefs();
 			notifPrefs = result.prefs;
 		} catch { /* ignore */ }
@@ -374,12 +374,12 @@
 	async function setTeamEventRadio(key: string, value: 'always' | 'follow' | 'never') {
 		try {
 			if (value === 'always') {
-				await api.updateNotificationPrefs({ [key]: { email: true } });
+				await api.updateNotificationPrefs({ [key]: { personal_email_policy: 'always' } });
 			} else if (value === 'never') {
-				await api.updateNotificationPrefs({ [key]: { email: false } });
+				await api.updateNotificationPrefs({ [key]: { personal_email_policy: 'never' } });
 			} else {
 				// null removes the explicit user override, reverting to team/group/system default
-				await api.updateNotificationPrefs({ [key]: { email: null } });
+				await api.updateNotificationPrefs({ [key]: null });
 			}
 			const result = await api.getNotificationPrefs();
 			notifPrefs = result.prefs;

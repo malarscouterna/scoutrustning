@@ -446,7 +446,8 @@ GET    /api/v0/group-settings/gchat-spaces      → [{ "id", "name" }]      (man
 | 3.5b-2b | `GChatNotifier` (card builder, threading, DWD auth) | ✅ done |
 | 3.5b-3 | gchat-key endpoints + enabled_channels update on connect/disconnect | ✅ done |
 | 3.5b-4 | Team mapper UI + space link/unlink endpoints | ✅ done |
-| 3.5b-5 | Dispatch loop: gchat broadcast path | ✅ done |
+| 3.5b-5 | Dispatch loop: gchat broadcast path | ⚠️ partial — booking events only (see below) |
+| 3.5b-6 | Integration tests for GChat key management endpoints | ❌ not done |
 
 **What was done in 3.5b-1/2a:**
 - `00009_gchat.sql`: adds `gchat_service_account_json_encrypted bytea` and `gchat_admin_email text` to `group_settings`; adds `gchat_space_id text` to `teams`; drops `gchat_webhook_url` from `group_settings`, `teams`, and `users`.
@@ -463,6 +464,23 @@ GET    /api/v0/group-settings/gchat-spaces      → [{ "id", "name" }]      (man
 - `handler/bookings.go`: `BookingHandler` gains `GChatNotifier notifications.Notifier`; all Send* calls pass it through.
 - `cmd/server/main.go`: creates `&notifications.GChatNotifier{Q: queries}` and passes it (or `NoopNotifier{}` in demo mode) to `BookingHandler`.
 - `web/src/lib/api/client.ts`: updated `GroupSettings` type; added `uploadGchatKey`, `deleteGchatKey`, `listGchatSpaces`, `setTeamGchatSpace`, `clearTeamGchatSpace` client methods.
+
+**Known gaps (3.5b not fully complete):**
+
+**Issue events — no GChat broadcast (3.5b-5 partial)**
+
+All four `SendIssue*` functions (`SendIssueCreated`, `SendIssueAssignedToMe`, `SendIssueResolved`, `SendIssueCommented`) only accept a single `Notifier` and have no `sendBroadcastGChat` call. `IssueHandler` has no `GChatNotifier` field and main.go does not pass one. Issue events will never reach GChat spaces regardless of configuration.
+
+The intended dispatch for issue events:
+- `issue_created` — personal email to the reporter; GChat broadcast to the manager team's linked space (manager team is the team with `access_level = "manager"` in the group).
+- `issue_assigned_to_me` — personal email only (directed at one named user; no team broadcast makes sense).
+- `issue_resolved`, `issue_commented` — personal email to reporter and assignees; GChat broadcast to the manager team's space (keeps the thread visible to all managers, not just the individuals involved).
+
+To fix: add `gn Notifier` to each `SendIssue*` signature, add `sendBroadcastGChat` calls (passing the manager team's ID as the team context), add `GChatNotifier` to `IssueHandler`, wire in `main.go`. Mirror the pattern in `handler/bookings.go`.
+
+**No integration tests for GChat key management (3.5b-6 missing)**
+
+`POST /gchat-key`, `DELETE /gchat-key`, `GET /gchat-spaces`, `PUT /teams/{id}/gchat-space`, and `DELETE /teams/{id}/gchat-space` have zero test coverage. The encryption path (same `crypto.Encrypt`/`crypto.Decrypt` as SMTP) and the enabled_channels toggle are untested. A test using a mock GChatNotifier (similar to `CapturingNotifier`) and a seeded fake service account JSON would cover the happy path without a real Google account.
 
 **3.5b-4 UI — what was implemented:**
 
@@ -483,10 +501,7 @@ Frontend additions (`web/src/routes/profile/+page.svelte`):
   - "Avdelnings- och rollnotiser": three-column radio table (`always` / `follow` / `never`) for team/role events. Manager-only rows hidden for non-managers.
 - **GChat integration section** in the group tab (manager only), below SMTP. State A: textarea + connect button. State B: connected status + disconnect button + collapsible team-space mapper table (auto-saves on dropdown change).
 
-**Still needed before this step is done:**
-- Run `pnpm run build && pnpm run check` and fix any remaining svelte-check errors (10 errors were left at the end of the session — all related to missing i18n keys now added; need a rebuild to confirm zero errors).
-- Smoke-test: visually verify the three new UI sections work in the browser.
-- The group tab's existing team notification settings section (manager view) still uses `allBookingEvents`/`allIssueEvents` — confirm this renders correctly.
+**Status**: ⚠️ partially complete. `pnpm run check` shows 0 errors and 0 warnings (2026-05-04). GChat dispatch for issue events and key management integration tests are still missing — see Known gaps above.
 
 ---
 

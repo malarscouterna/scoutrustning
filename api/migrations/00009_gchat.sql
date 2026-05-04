@@ -18,3 +18,7 @@ ALTER TABLE users DROP COLUMN IF EXISTS notification_channel;
 
 -- teams: add Chat Space mapping
 ALTER TABLE teams ADD COLUMN IF NOT EXISTS gchat_space_id text;
+
+-- +goose Down
+-- Down migration is a no-op: columns added here only exist in this branch and
+-- restoring gchat_webhook_url (dropped above) is not warranted.

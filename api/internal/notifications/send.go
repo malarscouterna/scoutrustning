@@ -3,7 +3,6 @@ package notifications
 import (
 	"context"
 	"fmt"
-	"html"
 	"log/slog"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -480,26 +479,3 @@ func SendIssueCommented(ctx context.Context, q *db.Queries, n Notifier, issue db
 	}
 }
 
-// sendTestEmail sends a test email directly to the given address using SMTPNotifier.
-// Used by the test-email endpoint; not subject to preference checks.
-func sendTestEmail(ctx context.Context, q *db.Queries, n Notifier, groupID, to, recipientName, lang, baseURL string) error {
-	group, _ := q.GetGroup(ctx, groupID)
-	subject := i18n.T(lang, "email_subject_test_email")
-	bodyText := i18n.T(lang, "notif_test_email")
-	logoURL := GroupLogoURL(ctx, q, groupID, baseURL)
-	logoHdr := logoHeader(logoURL, group.Name)
-	unsubURL := html.EscapeString(baseURL + "/profile")
-	body := fmt.Sprintf(`<div style="font-family:sans-serif;max-width:600px;margin:0 auto">
-<div style="background:#1e3a5f;padding:20px 24px;border-radius:6px 6px 0 0">%s</div>
-<div style="background:#ffffff;padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 6px 6px">
-<p style="margin:0 0 16px">%s</p>
-<p style="margin:0;font-size:12px;color:#6b7280">%s &mdash; <a href="%s">%s</a></p>
-</div></div>`,
-		logoHdr,
-		html.EscapeString(bodyText),
-		html.EscapeString(group.Name),
-		unsubURL,
-		html.EscapeString(i18n.T(lang, "email_footer_unsubscribe")),
-	)
-	return n.Send(ctx, Message{GroupID: groupID, To: to, Subject: subject, Body: body, TextBody: bodyText})
-}

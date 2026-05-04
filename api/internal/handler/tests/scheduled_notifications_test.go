@@ -151,7 +151,7 @@ func TestNotifications_Scheduled(t *testing.T) {
 		creatorID, _, _ := seedSchedulerUsers(t, env)
 		// Disable booking_reminder for creator
 		_, err := env.Pool.Exec(context.Background(),
-			`UPDATE users SET notification_prefs = '{"booking_reminder":{"email":false}}' WHERE id = $1`, creatorID)
+			`UPDATE users SET notification_prefs = '{"booking_reminder":{"personal_email_policy":"never"}}' WHERE id = $1`, creatorID)
 		if err != nil {
 			t.Fatalf("update pref: %v", err)
 		}
