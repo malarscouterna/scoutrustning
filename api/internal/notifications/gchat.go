@@ -8,6 +8,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -20,7 +21,8 @@ import (
 )
 
 // GChatNotifier sends broadcast card messages to Google Chat Spaces via the REST API.
-// Auth: service account JSON with Domain-Wide Delegation, impersonating gchat_admin_email.
+// Sending uses chat.bot scope (service account direct). Listing spaces and managing
+// memberships uses DWD (chat.spaces.readonly + chat.memberships) impersonating gchat_admin_email.
 // To must be the space resource name, e.g. "spaces/AAAA123".
 type GChatNotifier struct {
 	Q *db.Queries
@@ -37,9 +39,32 @@ type serviceAccountKey struct {
 type GChatSpace struct {
 	Name        string `json:"name"`
 	DisplayName string `json:"displayName"`
+	SpaceType   string `json:"spaceType"`
+	CanAutoAdd  bool   `json:"can_auto_add"`  // admin is a member → bot can be added automatically
+	BotIsMember bool   `json:"bot_is_member"` // bot is already in the space → link directly
 }
 
-func gchatAccessToken(ctx context.Context, saJSON []byte, adminEmail string) (string, error) {
+// gchatBotToken returns a token for the service account itself (chat.bot scope, no impersonation).
+// Use this for posting messages to spaces where the bot is already a member.
+func gchatBotToken(ctx context.Context, saJSON []byte) (string, error) {
+	return gchatJWT(ctx, saJSON, "https://www.googleapis.com/auth/chat.bot", "")
+}
+
+// gchatAdminToken returns a DWD token impersonating adminEmail with user-level Chat scopes.
+// Use this for listing spaces.
+func gchatAdminToken(ctx context.Context, saJSON []byte, adminEmail string) (string, error) {
+	return gchatJWT(ctx, saJSON,
+		"https://www.googleapis.com/auth/chat.spaces.readonly",
+		adminEmail)
+}
+
+// gchatUserMembershipToken returns a DWD token impersonating adminEmail with
+// chat.memberships.app scope, allowing that user to add the bot to spaces they belong to.
+func gchatUserMembershipToken(ctx context.Context, saJSON []byte, adminEmail string) (string, error) {
+	return gchatJWT(ctx, saJSON, "https://www.googleapis.com/auth/chat.memberships.app", adminEmail)
+}
+
+func gchatJWT(ctx context.Context, saJSON []byte, scope, sub string) (string, error) {
 	var key serviceAccountKey
 	if err := json.Unmarshal(saJSON, &key); err != nil {
 		return "", fmt.Errorf("gchat: parse service account: %w", err)
@@ -66,13 +91,13 @@ func gchatAccessToken(ctx context.Context, saJSON []byte, adminEmail string) (st
 	now := time.Now()
 	claims := jwt.MapClaims{
 		"iss":   key.ClientEmail,
-		"scope": "https://www.googleapis.com/auth/chat.bot",
+		"scope": scope,
 		"aud":   tokenURI,
 		"iat":   now.Unix(),
 		"exp":   now.Add(time.Hour).Unix(),
 	}
-	if adminEmail != "" {
-		claims["sub"] = adminEmail
+	if sub != "" {
+		claims["sub"] = sub
 	}
 
 	t := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
@@ -137,15 +162,10 @@ func gchatPost(ctx context.Context, token, path string, body interface{}) error 
 	return nil
 }
 
-// ListGChatSpaces lists the spaces accessible to the service account.
-func ListGChatSpaces(ctx context.Context, saJSON []byte, adminEmail string) ([]GChatSpace, error) {
-	token, err := gchatAccessToken(ctx, saJSON, adminEmail)
-	if err != nil {
-		return nil, err
-	}
-
+// listSpacesWithToken fetches all SPACE-type spaces accessible via the given token.
+func listSpacesWithToken(ctx context.Context, token string) ([]GChatSpace, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		"https://chat.googleapis.com/v1/spaces?pageSize=100&filter=spaceType%3DSPACE", nil)
+		"https://chat.googleapis.com/v1/spaces?pageSize=100", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -167,18 +187,72 @@ func ListGChatSpaces(ctx context.Context, saJSON []byte, adminEmail string) ([]G
 	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, err
 	}
-	return result.Spaces, nil
+	slog.Debug("gchat list spaces", "count", len(result.Spaces))
+	// Filter client-side: only named spaces support bot membership.
+	filtered := result.Spaces[:0]
+	for _, s := range result.Spaces {
+		if s.SpaceType == "SPACE" {
+			filtered = append(filtered, s)
+		}
+	}
+	return filtered, nil
 }
 
-// AddBotToSpace posts a membership create and a welcome card to the space.
-// Ignores 409 (already a member).
-func AddBotToSpace(ctx context.Context, saJSON []byte, adminEmail, spaceName string) error {
-	token, err := gchatAccessToken(ctx, saJSON, adminEmail)
+// ListGChatSpaces returns the union of spaces where the admin is a member (can_auto_add)
+// and spaces where the bot is already a member (bot_is_member), filtered to SPACE type.
+// Spaces in neither category are omitted — they are not actionable.
+func ListGChatSpaces(ctx context.Context, saJSON []byte, adminEmail string) ([]GChatSpace, error) {
+	adminToken, err := gchatAdminToken(ctx, saJSON, adminEmail)
+	if err != nil {
+		return nil, err
+	}
+	botToken, err := gchatBotToken(ctx, saJSON)
+	if err != nil {
+		return nil, err
+	}
+
+	adminSpaces, err := listSpacesWithToken(ctx, adminToken)
+	if err != nil {
+		return nil, err
+	}
+	// Bot space listing is best-effort — if the bot has no spaces yet, return an empty list.
+	botSpaces, botErr := listSpacesWithToken(ctx, botToken)
+	if botErr != nil {
+		slog.Warn("gchat: bot space listing failed (bot_is_member will be derived from DB)", "err", botErr)
+	}
+
+	botSet := make(map[string]bool, len(botSpaces))
+	for _, s := range botSpaces {
+		botSet[s.Name] = true
+	}
+
+	// Build result: admin spaces with flags, then any bot-only spaces.
+	seen := make(map[string]bool, len(adminSpaces))
+	result := make([]GChatSpace, 0, len(adminSpaces))
+	for _, s := range adminSpaces {
+		s.CanAutoAdd = true
+		s.BotIsMember = botSet[s.Name]
+		result = append(result, s)
+		seen[s.Name] = true
+	}
+	for _, s := range botSpaces {
+		if !seen[s.Name] {
+			s.BotIsMember = true
+			result = append(result, s)
+		}
+	}
+	return result, nil
+}
+
+// AddBotToSpace adds the app to the space and posts a welcome message that includes teamName.
+// Uses chat.memberships.app scope via DWD impersonating adminEmail.
+// Requires adminEmail to be a member of the space. Ignores 409 (already a member).
+func AddBotToSpace(ctx context.Context, saJSON []byte, adminEmail, spaceName, teamName string) error {
+	membershipToken, err := gchatUserMembershipToken(ctx, saJSON, adminEmail)
 	if err != nil {
 		return err
 	}
 
-	// Add bot membership (ignore 409 already-member).
 	memberBody := map[string]interface{}{
 		"member": map[string]interface{}{
 			"name": "users/app",
@@ -192,17 +266,24 @@ func AddBotToSpace(ctx context.Context, saJSON []byte, adminEmail, spaceName str
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Authorization", "Bearer "+membershipToken)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("gchat: add bot member: %w", err)
 	}
+	rb, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
-	// 409 = already a member; acceptable.
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != 409 {
+		return fmt.Errorf("gchat: add bot member failed (%d): %s", resp.StatusCode, rb)
+	}
 
-	return gchatPost(ctx, token, spaceName+"/messages", map[string]interface{}{
-		"text": "Google Chat-anslutning aktiverad! Boknings- och ärendenotiser kommer att skickas hit.",
+	botToken, err := gchatBotToken(ctx, saJSON)
+	if err != nil {
+		return err
+	}
+	return gchatPost(ctx, botToken, spaceName+"/messages", map[string]interface{}{
+		"text": fmt.Sprintf("✅ Google Chat kopplat för avdelningen *%s*. Boknings- och ärendenotiser kommer att skickas hit.", teamName),
 	})
 }
 
@@ -217,7 +298,7 @@ func (g *GChatNotifier) Send(ctx context.Context, msg Message) error {
 		return fmt.Errorf("gchat: decrypt credentials: %w", err)
 	}
 
-	token, err := gchatAccessToken(ctx, saJSON, creds.GchatAdminEmail)
+	token, err := gchatBotToken(ctx, saJSON)
 	if err != nil {
 		return err
 	}

@@ -4,7 +4,7 @@ FROM node:24-alpine AS dev
 RUN corepack enable
 WORKDIR /app
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --ignore-scripts
 EXPOSE 3000
 CMD ["pnpm", "dev", "--host", "--port", "3000"]
 
@@ -15,7 +15,7 @@ FROM node:24-alpine AS build
 RUN corepack enable
 WORKDIR /app
 COPY web/package.json web/pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY web/ .
 COPY api/internal/i18n/messages/ ../api/internal/i18n/messages/
 RUN pnpm build
@@ -25,7 +25,7 @@ RUN corepack enable
 WORKDIR /app
 COPY --from=build /app/build ./build
 COPY --from=build /app/package.json /app/pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 EXPOSE 3000
 ENV NODE_ENV=production
 CMD ["node", "build"]

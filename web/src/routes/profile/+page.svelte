@@ -422,6 +422,13 @@
 		userTeamSettings = null;
 		userTeamSettingsError = '';
 		userTeamSettingsLoading = true;
+		memberGchatEditing = false;
+		memberGchatPending = '';
+		memberGchatStatus = null;
+		memberGchatError = '';
+		memberGchatLoaded = false;
+		memberGchatConfigured = false;
+		memberGchatSpaces = [];
 		try {
 			userTeamSettings = await api.getTeamNotificationSettings(teamId);
 		} catch {
@@ -457,6 +464,51 @@
 		}
 	}
 
+	let memberGchatSpaces = $state<import('$lib/api/client').GChatSpace[]>([]);
+	let memberGchatLoaded = $state(false);
+	let memberGchatConfigured = $state(false);
+	let memberGchatEditing = $state(false);
+	let memberGchatPending = $state('');
+	let memberGchatSaving = $state(false);
+	let memberGchatStatus = $state<'success' | 'error' | null>(null);
+	let memberGchatError = $state('');
+
+	async function openMemberGchatEditor(initialPending = '') {
+		memberGchatEditing = true;
+		memberGchatPending = initialPending;
+		memberGchatStatus = null;
+		memberGchatError = '';
+		if (memberGchatLoaded) return;
+		try {
+			memberGchatSpaces = await api.listGchatSpaces();
+			memberGchatConfigured = true;
+		} catch { /* gchat not configured for this group */ }
+		memberGchatLoaded = true;
+	}
+
+	async function linkMemberGchatSpace() {
+		if (!selectedUserTeamId) return;
+		memberGchatSaving = true;
+		memberGchatStatus = null;
+		memberGchatError = '';
+		try {
+			if (memberGchatPending) {
+				await api.setTeamGchatSpace(selectedUserTeamId, memberGchatPending);
+			} else {
+				await api.clearTeamGchatSpace(selectedUserTeamId);
+			}
+			userTeamSettings = await api.getTeamNotificationSettings(selectedUserTeamId);
+			memberGchatStatus = 'success';
+			memberGchatPending = '';
+			memberGchatEditing = false;
+		} catch (e) {
+			memberGchatStatus = 'error';
+			memberGchatError = e instanceof Error ? e.message : String(e);
+		} finally {
+			memberGchatSaving = false;
+		}
+	}
+
 	// Team broadcast-channel events: shown in the team tab for broadcast toggles.
 	// Visibility is per access_level: all teams see booking events; manager teams also see manager events.
 	function teamTabEvents(accessLevel: string): EventRow[] {
@@ -479,23 +531,29 @@
 
 	// --- GChat group settings state ---
 	let gchatKeyJson = $state('');
+	let gchatAdminEmail = $state('');
 	let gchatConnecting = $state(false);
 	let gchatError = $state('');
-	let gchatSpaces = $state<{ name: string; displayName: string }[]>([]);
+	let gchatSpaces = $state<import('$lib/api/client').GChatSpace[]>([]);
 	let gchatTeamMapperOpen = $state(false);
 	let gchatTeams = $state<{ id: string; name: string; gchat_space_id: string }[]>([]);
 	let gchatTeamSaving = $state<Record<string, boolean>>({});
+	let gchatTeamPending = $state<Record<string, string>>({});
+	let gchatTeamStatus = $state<Record<string, 'success' | 'error'>>({});
+	let gchatTeamError = $state<Record<string, string>>({});
 
 	async function connectGChat() {
 		gchatConnecting = true;
 		gchatError = '';
 		try {
-			const result = await api.uploadGchatKey(gchatKeyJson);
+			const result = await api.uploadGchatKey(gchatKeyJson, gchatAdminEmail);
 			gchatSpaces = result.spaces;
 			gchatKeyJson = '';
+			gchatAdminEmail = '';
 			groupSettings = await api.getGroupSettings();
-		} catch {
-			gchatError = m.page_profile_gchat_error_connect();
+		} catch (e) {
+			const detail = (e as { message?: string })?.message;
+			gchatError = detail ? `${m.page_profile_gchat_error_connect()} (${detail})` : m.page_profile_gchat_error_connect();
 		} finally {
 			gchatConnecting = false;
 		}
@@ -520,12 +578,21 @@
 	async function loadGchatTeams() {
 		try {
 			const teams = await api.listTeams();
-			gchatTeams = teams.map(t => ({ id: t.id, name: t.name, gchat_space_id: (t as any).gchat_space_id ?? '' }));
-		} catch { /* ignore */ }
+			gchatTeams = teams.map(t => ({
+				id: t.id,
+				name: t.name,
+				gchat_space_id: (typeof t.gchat_space_id === 'object' && t.gchat_space_id !== null)
+					? (t.gchat_space_id as any).String ?? ''
+					: (t.gchat_space_id ?? '')
+			}));
+		} catch (e) { console.error('loadGchatTeams failed', e); }
 	}
 
-	async function setGchatTeamSpace(teamId: string, spaceId: string) {
+async function linkGchatTeamSpace(teamId: string) {
+		const spaceId = gchatTeamPending[teamId] ?? gchatTeams.find(t => t.id === teamId)?.gchat_space_id ?? '';
 		gchatTeamSaving = { ...gchatTeamSaving, [teamId]: true };
+		gchatTeamStatus = { ...gchatTeamStatus, [teamId]: undefined as any };
+		gchatTeamError = { ...gchatTeamError, [teamId]: '' };
 		try {
 			if (spaceId) {
 				await api.setTeamGchatSpace(teamId, spaceId);
@@ -533,7 +600,11 @@
 				await api.clearTeamGchatSpace(teamId);
 			}
 			await loadGchatTeams();
-		} catch { /* ignore */ } finally {
+			gchatTeamStatus = { ...gchatTeamStatus, [teamId]: 'success' };
+		} catch (e) {
+			gchatTeamStatus = { ...gchatTeamStatus, [teamId]: 'error' };
+			gchatTeamError = { ...gchatTeamError, [teamId]: e instanceof Error ? e.message : String(e) };
+		} finally {
 			gchatTeamSaving = { ...gchatTeamSaving, [teamId]: false };
 		}
 	}
@@ -1163,26 +1234,66 @@
 						{/if}
 					</div>
 
-					<!-- Integrations (read-only) -->
+					<!-- Integrations -->
 					<div class="p-4">
 						<h3 class="text-sm font-semibold text-neutral-700 mb-2">{m.page_profile_teams_integrations_heading()}</h3>
 						{#if userTeamSettings}
-							<div class="text-sm text-neutral-600 space-y-1">
+							<div class="text-sm text-neutral-600 space-y-2">
 								<div>
 									<span class="text-neutral-400">{m.page_profile_teams_notif_email_label()}:</span>
 									{userTeamSettings.notification_email || '–'}
 								</div>
 								<div>
-									<span class="text-neutral-400">{m.page_profile_teams_gchat_space_label()}:</span>
-									{#if userTeamSettings.gchat_space_id}
-										{userTeamSettings.gchat_space_id}
+									<span class="text-neutral-400 block mb-1">{m.page_profile_teams_gchat_space_label()}:</span>
+									{#if !memberGchatEditing}
+										<!-- Read-only view — immediate, no loading -->
+										{#if userTeamSettings.gchat_space_id}
+											<p class="text-sm font-medium">{userTeamSettings.gchat_space_id}</p>
+											<button onclick={() => openMemberGchatEditor(userTeamSettings?.gchat_space_id ?? '')} class="text-xs text-blue-700 mt-1 hover:underline">{m.page_profile_gchat_change_space()}</button>
+										{:else}
+											<p class="text-sm text-neutral-500">{m.page_profile_teams_gchat_space_none()}</p>
+											<button onclick={() => openMemberGchatEditor()} class="text-xs text-blue-700 mt-1 hover:underline">{m.page_profile_gchat_link_btn()}</button>
+										{/if}
 									{:else}
-										{m.page_profile_teams_gchat_space_none()}
+										<!-- Editor — loads spaces lazily -->
+										{#if !memberGchatLoaded}
+											<p class="text-xs text-neutral-400">{m.btn_loading()}</p>
+										{:else if !memberGchatConfigured}
+											<p class="text-xs text-neutral-400 mt-1">{m.page_profile_teams_gchat_space_self_help()}</p>
+											<button onclick={() => memberGchatEditing = false} class="text-xs text-neutral-500 mt-1 hover:underline">{m.btn_cancel()}</button>
+										{:else}
+											{@const connectedSpace = memberGchatSpaces.find(s => s.name === userTeamSettings?.gchat_space_id)}
+											{#if connectedSpace && memberGchatPending === userTeamSettings?.gchat_space_id}
+												<!-- Show friendly name once spaces loaded -->
+											{/if}
+											<div class="flex items-center gap-2">
+												<select bind:value={memberGchatPending} disabled={memberGchatSaving} class="border rounded px-2 py-1 text-sm flex-1 max-w-xs disabled:opacity-50">
+													<option value="">{m.page_profile_gchat_space_none_option()}</option>
+													{#if memberGchatSpaces.some(s => s.bot_is_member)}
+														<optgroup label={m.page_profile_gchat_space_group_bot_member()}>
+															{#each memberGchatSpaces.filter(s => s.bot_is_member) as space}
+																<option value={space.name}>{space.displayName}</option>
+															{/each}
+														</optgroup>
+													{/if}
+													{#if memberGchatSpaces.some(s => s.can_auto_add && !s.bot_is_member)}
+														<optgroup label={m.page_profile_gchat_space_group_auto_add()}>
+															{#each memberGchatSpaces.filter(s => s.can_auto_add && !s.bot_is_member) as space}
+																<option value={space.name}>{space.displayName}</option>
+															{/each}
+														</optgroup>
+													{/if}
+												</select>
+												<button onclick={linkMemberGchatSpace} disabled={memberGchatSaving || (memberGchatPending === (userTeamSettings?.gchat_space_id ?? ''))} class="text-sm bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50">{m.page_profile_gchat_link_btn()}</button>
+												<button onclick={() => { memberGchatEditing = false; memberGchatPending = ''; }} class="text-xs text-neutral-500 hover:underline">{m.btn_cancel()}</button>
+											</div>
+											<p class="text-xs text-neutral-400 mt-2">{m.page_profile_teams_gchat_space_self_help()}</p>
+										{/if}
+										{#if memberGchatStatus === 'error'}
+											<p class="text-xs text-red-600 mt-1">{memberGchatError || m.page_profile_gchat_link_error()}</p>
+										{/if}
 									{/if}
 								</div>
-								{#if !mgr}
-									<p class="text-xs text-neutral-400 mt-1">{m.page_profile_teams_gchat_space_managed_by_manager()}</p>
-								{/if}
 							</div>
 						{/if}
 					</div>
@@ -1637,29 +1748,55 @@
 											<tr>
 												<th class="text-left py-1 pr-3 font-normal text-neutral-500">{m.page_profile_gchat_team_column()}</th>
 												<th class="text-left py-1 font-normal text-neutral-500">{m.page_profile_gchat_space_column()}</th>
+												<th></th>
 											</tr>
 										</thead>
 										<tbody>
 											{#each gchatTeams as gt}
+											{@const pending = gchatTeamPending[gt.id] ?? gt.gchat_space_id}
 											<tr class="border-t border-neutral-100">
 												<td class="py-1.5 pr-3">{gt.name}</td>
-												<td class="py-1.5">
+												<td class="py-1.5 pr-2">
 													<select
-														value={gt.gchat_space_id}
-														onchange={(e) => setGchatTeamSpace(gt.id, e.currentTarget.value)}
+														value={pending}
+														onchange={(e) => { gchatTeamPending = { ...gchatTeamPending, [gt.id]: e.currentTarget.value }; gchatTeamStatus = { ...gchatTeamStatus, [gt.id]: undefined as any }; }}
 														disabled={gchatTeamSaving[gt.id]}
 														class="border rounded px-2 py-1 text-sm w-full max-w-xs disabled:opacity-50"
 													>
 														<option value="">{m.page_profile_gchat_space_none_option()}</option>
-														{#each gchatSpaces as space}
-															<option value={space.name}>{space.displayName} ({space.name})</option>
-														{/each}
+														{#if gchatSpaces.some(s => s.bot_is_member)}
+															<optgroup label={m.page_profile_gchat_space_group_bot_member()}>
+																{#each gchatSpaces.filter(s => s.bot_is_member) as space}
+																	<option value={space.name}>{space.displayName}</option>
+																{/each}
+															</optgroup>
+														{/if}
+														{#if gchatSpaces.some(s => s.can_auto_add && !s.bot_is_member)}
+															<optgroup label={m.page_profile_gchat_space_group_auto_add()}>
+																{#each gchatSpaces.filter(s => s.can_auto_add && !s.bot_is_member) as space}
+																	<option value={space.name}>{space.displayName}</option>
+																{/each}
+															</optgroup>
+														{/if}
 													</select>
 												</td>
+												<td class="py-1.5 whitespace-nowrap">
+													<button
+														onclick={() => linkGchatTeamSpace(gt.id)}
+														disabled={gchatTeamSaving[gt.id]}
+														class="text-sm bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50"
+													>{m.page_profile_gchat_link_btn()}</button>
+													{#if gchatTeamStatus[gt.id] === 'success'}
+														<span class="ml-2 text-sm text-green-700">{m.page_profile_gchat_link_success()}</span>
+													{:else if gchatTeamStatus[gt.id] === 'error'}
+														<span class="ml-2 text-sm text-red-600">{gchatTeamError[gt.id] || m.page_profile_gchat_link_error()}</span>
+													{/if}
+																			</td>
 											</tr>
 											{/each}
 										</tbody>
 									</table>
+									<p class="text-xs text-neutral-400 mt-3">{m.page_profile_gchat_manual_add_hint()}</p>
 								{/if}
 							</div>
 						{/if}
@@ -1679,12 +1816,22 @@
 							placeholder='{"{"}  "type": "service_account", ...'
 						></textarea>
 					</label>
+					<label class="block mb-3" for="gchat-admin-email">
+						<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_gchat_admin_email_label()}</span>
+						<input
+							id="gchat-admin-email"
+							type="email"
+							bind:value={gchatAdminEmail}
+							class="border rounded px-2 py-1 text-sm w-full"
+							placeholder="admin@yourgroup.se"
+						/>
+					</label>
 					{#if gchatError}
 						<p class="text-sm text-red-600 mb-2">{gchatError}</p>
 					{/if}
 					<button
 						onclick={connectGChat}
-						disabled={gchatConnecting || !gchatKeyJson.trim()}
+						disabled={gchatConnecting || !gchatKeyJson.trim() || !gchatAdminEmail.trim()}
 						class="text-sm bg-blue-700 text-white px-4 py-2 rounded disabled:opacity-50"
 					>{gchatConnecting ? m.page_profile_gchat_connecting() : m.page_profile_gchat_connect()}</button>
 				{/if}

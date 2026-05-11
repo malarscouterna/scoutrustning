@@ -14,6 +14,7 @@ web/src/lib/paraglide/
 web/dev-personas.json
 web/role-mapping.json
 web/guide.md
+web/.pnpm-store
 
 # Environment
 .env

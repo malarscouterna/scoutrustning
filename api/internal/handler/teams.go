@@ -3,7 +3,9 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -27,8 +29,8 @@ func (h *TeamHandler) Routes() chi.Router {
 	r.Get("/{id}/notification-settings", h.GetNotificationSettings)
 	r.Put("/{id}/notification-settings", h.UpdateNotificationSettings)
 	r.Put("/{id}/name", h.UpdateName)
-	r.With(auth.RequireRole("equipment_manager")).Put("/{id}/gchat-space", h.SetGChatSpace)
-	r.With(auth.RequireRole("equipment_manager")).Delete("/{id}/gchat-space", h.ClearGChatSpace)
+	r.Put("/{id}/gchat-space", h.SetGChatSpace)
+	r.Delete("/{id}/gchat-space", h.ClearGChatSpace)
 	return r
 }
 
@@ -357,11 +359,17 @@ func (h *TeamHandler) UpdateNotificationSettings(w http.ResponseWriter, r *http.
 }
 
 // SetGChatSpace links a team to a Google Chat Space, adds the bot, and posts a welcome card.
+// Accessible to team members and managers. Auto-add requires the stored admin account to be
+// a member of the space; if not, the caller gets a clear error with manual-add instructions.
 func (h *TeamHandler) SetGChatSpace(w http.ResponseWriter, r *http.Request) {
 	claims, _ := auth.ClaimsFromContext(r.Context())
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	if !h.requireTeamMembership(r.Context(), claims, id) {
+		WriteError(w, http.StatusForbidden, "not a member of this team")
 		return
 	}
 
@@ -370,6 +378,12 @@ func (h *TeamHandler) SetGChatSpace(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.GchatSpaceID == "" {
 		WriteError(w, http.StatusBadRequest, "gchat_space_id required")
+		return
+	}
+
+	team, err := h.Q.GetTeam(r.Context(), db.GetTeamParams{ID: id, GroupID: claims.GroupID})
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to look up team")
 		return
 	}
 
@@ -384,6 +398,12 @@ func (h *TeamHandler) SetGChatSpace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := notifications.AddBotToSpace(r.Context(), saJSON, creds.GchatAdminEmail, req.GchatSpaceID, team.Name); err != nil {
+		slog.Error("gchat add bot to space failed", "err", err, "space", req.GchatSpaceID)
+		WriteError(w, http.StatusBadGateway, gchatAddBotError(err))
+		return
+	}
+
 	if err := h.Q.SetTeamGchatSpace(r.Context(), db.SetTeamGchatSpaceParams{
 		GchatSpaceID: pgtype.Text{String: req.GchatSpaceID, Valid: true},
 		ID:           id,
@@ -393,18 +413,30 @@ func (h *TeamHandler) SetGChatSpace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Add bot and send welcome card in the background — non-fatal if it fails.
-	go notifications.AddBotToSpace(context.Background(), saJSON, creds.GchatAdminEmail, req.GchatSpaceID)
-
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// gchatAddBotError converts a raw AddBotToSpace error into a user-readable message.
+func gchatAddBotError(err error) string {
+	msg := err.Error()
+	if strings.Contains(msg, "PERMISSION_DENIED") || strings.Contains(msg, "403") {
+		return "Kunde inte lägga till boten automatiskt — administratörskontot är inte medlem i det här utrymmet. " +
+			"Lägg till appen manuellt i Google Chat-utrymmet och försök igen."
+	}
+	return "could not add bot to space: " + msg
+}
+
 // ClearGChatSpace unlinks a team from its Google Chat Space.
+// Accessible to team members and managers.
 func (h *TeamHandler) ClearGChatSpace(w http.ResponseWriter, r *http.Request) {
 	claims, _ := auth.ClaimsFromContext(r.Context())
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	if !h.requireTeamMembership(r.Context(), claims, id) {
+		WriteError(w, http.StatusForbidden, "not a member of this team")
 		return
 	}
 

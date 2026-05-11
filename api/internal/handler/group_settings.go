@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"slices"
@@ -22,12 +23,14 @@ type GroupSettingsHandler struct {
 
 func (h *GroupSettingsHandler) Routes() chi.Router {
 	r := chi.NewRouter()
-	r.Use(auth.RequireRole("equipment_manager"))
-	r.Get("/", h.Get)
-	r.Put("/", h.Update)
-	r.Post("/gchat-key", h.UploadGChatKey)
-	r.Delete("/gchat-key", h.DeleteGChatKey)
-	r.Get("/gchat-spaces", h.ListGChatSpaces)
+	r.Get("/gchat-spaces", h.ListGChatSpaces) // any authenticated group member
+	r.Group(func(r chi.Router) {
+		r.Use(auth.RequireRole("equipment_manager"))
+		r.Get("/", h.Get)
+		r.Put("/", h.Update)
+		r.Post("/gchat-key", h.UploadGChatKey)
+		r.Delete("/gchat-key", h.DeleteGChatKey)
+	})
 	return r
 }
 
@@ -250,22 +253,32 @@ func (h *GroupSettingsHandler) UploadGChatKey(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// The body must be valid JSON (service account key file content).
-	var keyCheck map[string]interface{}
-	if err := json.Unmarshal(body, &keyCheck); err != nil {
+	// The body must be a JSON object with two fields: key_json and admin_email.
+	var payload struct {
+		KeyJSON    json.RawMessage `json:"key_json"`
+		AdminEmail string          `json:"admin_email"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil || len(payload.KeyJSON) == 0 {
 		WriteError(w, http.StatusBadRequest, "invalid JSON key file")
 		return
 	}
-	adminEmail, _ := keyCheck["client_email"].(string)
+	keyBytes, err := payload.KeyJSON.MarshalJSON()
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid JSON key file")
+		return
+	}
+	adminEmail := payload.AdminEmail
 
 	// Validate by listing spaces.
-	spaces, err := notifications.ListGChatSpaces(r.Context(), body, adminEmail)
+	slog.Info("gchat: attempting connection", "admin_email", adminEmail, "key_bytes_len", len(keyBytes))
+	spaces, err := notifications.ListGChatSpaces(r.Context(), keyBytes, adminEmail)
 	if err != nil {
+		slog.Error("gchat: connection failed", "err", err, "admin_email", adminEmail)
 		WriteError(w, http.StatusBadRequest, "gchat_key_invalid: "+err.Error())
 		return
 	}
 
-	encrypted, err := crypto.Encrypt(body)
+	encrypted, err := crypto.Encrypt(keyBytes)
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, "failed to encrypt key")
 		return
@@ -340,6 +353,22 @@ func (h *GroupSettingsHandler) ListGChatSpaces(w http.ResponseWriter, r *http.Re
 	if err != nil {
 		WriteError(w, http.StatusBadGateway, "failed to list spaces: "+err.Error())
 		return
+	}
+
+	// Mark spaces already linked to a team as bot_is_member — the bot was added when the link
+	// was created, so the DB is the authoritative source even if the bot token listing fails.
+	if teams, dbErr := h.Q.ListTeamsWithGchatInfo(r.Context(), claims.GroupID); dbErr == nil {
+		linked := make(map[string]bool, len(teams))
+		for _, t := range teams {
+			if t.GchatSpaceID.Valid && t.GchatSpaceID.String != "" {
+				linked[t.GchatSpaceID.String] = true
+			}
+		}
+		for i := range spaces {
+			if linked[spaces[i].Name] {
+				spaces[i].BotIsMember = true
+			}
+		}
 	}
 
 	WriteJSON(w, http.StatusOK, spaces)
