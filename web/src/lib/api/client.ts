@@ -168,6 +168,14 @@ export interface ResolvedPref {
 
 export type NotificationPrefs = Record<string, ResolvedPref>;
 
+export interface GChatSpace {
+	name: string;
+	displayName: string;
+	spaceType: string;
+	can_auto_add: boolean;
+	bot_is_member: boolean;
+}
+
 export interface IssueArticle {
 	id: string;
 	commercial_name: string;
@@ -386,17 +394,17 @@ export function createApiClient(opts: FetchOptions = {}) {
 		getGroupSettings: () => request<GroupSettings>('/group-settings', opts),
 		updateGroupSettings: (data: { notification_email_from?: string; smtp_host?: string; smtp_port?: number; smtp_tls?: string; smtp_user?: string; smtp_key?: string | null; default_approval_level?: string; default_language?: string }) =>
 			requestMut<GroupSettings>('/group-settings', 'PUT', data, opts),
-		uploadGchatKey: (keyJson: string) =>
-			requestMut<{ gchat_configured: boolean; gchat_admin_email: string; spaces: { name: string; displayName: string }[] }>('/group-settings/gchat-key', 'POST', JSON.parse(keyJson), opts),
+		uploadGchatKey: (keyJson: string, adminEmail: string) =>
+			requestMut<{ gchat_configured: boolean; gchat_admin_email: string; spaces: GChatSpace[] }>('/group-settings/gchat-key', 'POST', { key_json: JSON.parse(keyJson), admin_email: adminEmail }, opts),
 		deleteGchatKey: () =>
 			requestMut<void>('/group-settings/gchat-key', 'DELETE', undefined, opts),
 		listGchatSpaces: () =>
-			request<{ name: string; displayName: string }[]>('/group-settings/gchat-spaces', opts),
+			request<GChatSpace[]>('/group-settings/gchat-spaces', opts),
 		setTeamGchatSpace: (teamId: string, gchatSpaceId: string) =>
 			requestMut<void>(`/teams/${teamId}/gchat-space`, 'PUT', { gchat_space_id: gchatSpaceId }, opts),
 		clearTeamGchatSpace: (teamId: string) =>
 			requestMut<void>(`/teams/${teamId}/gchat-space`, 'DELETE', undefined, opts),
-		updateLanguage: (language: string | null) =>
+updateLanguage: (language: string | null) =>
 			requestMut<void>('/me/language', 'PUT', { language }, opts),
 		getNotificationPrefs: () =>
 			request<{ prefs: NotificationPrefs }>('/me/notification-prefs', opts),
