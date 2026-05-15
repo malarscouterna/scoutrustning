@@ -53,7 +53,6 @@ The data model and multi-tenancy architecture are not tied to Sweden — multipl
 
 ### What's not yet done
 
-- **Scheduled notifications** — booking reminders and overdue alerts are not yet sent automatically (scheduled jobs not implemented).
 - **CSV import preview** — import runs immediately with no dry-run step.
 - **CSV export and print view** — no export from the browse page; no print-friendly checklist.
 - **Packages** — predefined article sets that populate the cart (designed but not built).
@@ -83,13 +82,30 @@ docker compose up
 
 In dev mode, no login is required. Use the persona switcher (floating panel) to switch between preconfigured roles. See `dev-personas.json` for available personas.
 
-### Testing emails in dev
+### Testing email notifications in dev
 
 [Mailpit](https://mailpit.axllent.org/) is included in the dev Compose stack — it starts automatically with `docker compose up`. It catches all outgoing email and shows it in a web UI at `http://localhost:8025`. No configuration needed; the generated `.env` already points at it (`SMTP_DEFAULT_HOST=mailpit`).
 
 To test against a real provider instead, set `SMTP_DEFAULT_*` in `.env` to your mail provider credentials (SendGrid, Mailgun, a Gmail app password, etc.) and restart the API container.
 
 Use the **Skicka testnotis** button on your profile page (group settings tab) to send a test email without triggering a booking event.
+
+Booking events (confirmed, rejected, etc.) trigger emails automatically during `./dev-seed.sh`. Check Mailpit at `http://localhost:8025` after seeding.
+
+### Testing Google Chat notifications in dev
+
+To test GChat notifications locally you need a Google Workspace service account with Domain-Wide Delegation and an existing Chat Space.
+
+1. Place the service account JSON file at `dev-secrets/gchat-key.json` (gitignored).
+2. Fill in the three vars in `.env`:
+   ```
+   DEV_GCHAT_KEY_PATH=./dev-secrets/gchat-key.json
+   DEV_GCHAT_SPACE_ID=spaces/XXXXXXXXX
+   DEV_GCHAT_ADMIN_EMAIL=admin@yourorg.com
+   ```
+3. Re-run `./dev-seed.sh` — it will upload and validate the key, then link **Yggdrasil** (email + GChat) and **Utrustningsgruppen** (GChat only) to the space. Subsequent booking events in the seed will trigger GChat notifications to that space.
+
+**What reaches the space**: booking events (`booking_confirmed`, `booking_needs_approval`, `booking_reminder`, etc.) for Yggdrasil bookings. Issue events do not yet have a GChat broadcast path (known gap — see `docs/notifications-phase35.md`).
 
 You still need `docker compose up --build` when adding Go or Node dependencies, or changing a Dockerfile.
 

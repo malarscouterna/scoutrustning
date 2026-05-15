@@ -72,6 +72,11 @@ AND status NOT IN ('returned', 'cancelled');
 SELECT count(*) FROM teams
 WHERE group_id = @group_id AND access_level = 'manager';
 
+-- name: GetManagerTeam :one
+SELECT id FROM teams
+WHERE group_id = @group_id AND access_level = 'manager'
+LIMIT 1;
+
 -- name: ListTeamsByNames :many
 SELECT * FROM teams
 WHERE group_id = @group_id AND name = ANY(@names::text[]);

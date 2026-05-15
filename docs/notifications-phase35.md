@@ -446,7 +446,7 @@ GET    /api/v0/group-settings/gchat-spaces      → [{ "id", "name" }]      (man
 | 3.5b-2b | `GChatNotifier` (card builder, threading, DWD auth) | ✅ done |
 | 3.5b-3 | gchat-key endpoints + enabled_channels update on connect/disconnect | ✅ done |
 | 3.5b-4 | Team mapper UI + space link/unlink endpoints | ✅ done |
-| 3.5b-5 | Dispatch loop: gchat broadcast path | ⚠️ partial — booking events only (see below) |
+| 3.5b-5 | Dispatch loop: gchat broadcast path | ✅ done — booking + issue events, manager team routing fixed |
 | 3.5b-6 | Integration tests for GChat key management endpoints | ❌ not done |
 
 **What was done in 3.5b-1/2a:**
@@ -469,18 +469,22 @@ GET    /api/v0/group-settings/gchat-spaces      → [{ "id", "name" }]      (man
 
 **Issue events — no GChat broadcast (3.5b-5 partial)**
 
-All four `SendIssue*` functions (`SendIssueCreated`, `SendIssueAssignedToMe`, `SendIssueResolved`, `SendIssueCommented`) only accept a single `Notifier` and have no `sendBroadcastGChat` call. `IssueHandler` has no `GChatNotifier` field and main.go does not pass one. Issue events will never reach GChat spaces regardless of configuration.
+All four `SendIssue*` functions only accept a single `Notifier` and have no `sendBroadcastGChat` call. `IssueHandler` has no `GChatNotifier` field. Issue events will never reach GChat spaces regardless of configuration.
 
-The intended dispatch for issue events:
-- `issue_created` — personal email to the reporter; GChat broadcast to the manager team's linked space (manager team is the team with `access_level = "manager"` in the group).
-- `issue_assigned_to_me` — personal email only (directed at one named user; no team broadcast makes sense).
-- `issue_resolved`, `issue_commented` — personal email to reporter and assignees; GChat broadcast to the manager team's space (keeps the thread visible to all managers, not just the individuals involved).
+Intended dispatch:
+- `issue_created` — personal email to managers; GChat broadcast to **manager team's** linked space.
+- `issue_assigned_to_me` — personal email only (no team broadcast).
+- `issue_resolved`, `issue_commented` — personal email to reporter and assignees; GChat broadcast to the manager team's space.
 
-To fix: add `gn Notifier` to each `SendIssue*` signature, add `sendBroadcastGChat` calls (passing the manager team's ID as the team context), add `GChatNotifier` to `IssueHandler`, wire in `main.go`. Mirror the pattern in `handler/bookings.go`.
+Fix: add `gn Notifier` to each `SendIssue*` signature, add `sendBroadcastGChat` calls with the manager team's ID, add `GChatNotifier` to `IssueHandler`, wire in `main.go`. Also needs `GetManagerTeam(groupID)` query (see manager-team broadcast bug below).
 
-**No integration tests for GChat key management (3.5b-6 missing)**
+**Manager-team broadcast bug**
 
-`POST /gchat-key`, `DELETE /gchat-key`, `GET /gchat-spaces`, `PUT /teams/{id}/gchat-space`, and `DELETE /teams/{id}/gchat-space` have zero test coverage. The encryption path (same `crypto.Encrypt`/`crypto.Decrypt` as SMTP) and the enabled_channels toggle are untested. A test using a mock GChatNotifier (similar to `CapturingNotifier`) and a seeded fake service account JSON would cover the happy path without a real Google account.
+`SendBookingNeedsApproval` and `SendBookingSubmittedNoApproval` call `sendBroadcastGChat` with `b.UsedByTeamID` instead of the manager team's ID. Manager events should go to the manager team's space. Fix: add a `GetManagerTeam(ctx, groupID)` sqlc query (returns the team with highest access level / `manager`), use its ID for these two sends and all `SendIssue*` GChat broadcasts.
+
+**No integration tests for GChat key management (3.5b-6)**
+
+`POST /gchat-key`, `DELETE /gchat-key`, `GET /gchat-spaces`, `PUT /teams/{id}/gchat-space`, and `DELETE /teams/{id}/gchat-space` have zero test coverage.
 
 **3.5b-4 UI — what was implemented:**
 
@@ -501,7 +505,7 @@ Frontend additions (`web/src/routes/profile/+page.svelte`):
   - "Avdelnings- och rollnotiser": three-column radio table (`always` / `follow` / `never`) for team/role events. Manager-only rows hidden for non-managers.
 - **GChat integration section** in the group tab (manager only), below SMTP. State A: textarea + connect button. State B: connected status + disconnect button + collapsible team-space mapper table (auto-saves on dropdown change).
 
-**Status**: ⚠️ partially complete. `pnpm run check` shows 0 errors and 0 warnings (2026-05-04). GChat dispatch for issue events and key management integration tests are still missing — see Known gaps above.
+**Status**: ⚠️ partially complete. GChat dispatch for all events is now implemented. One gap remains: key management integration tests (3.5b-6).
 
 ---
 
@@ -768,7 +772,68 @@ Group defaults UI keeps three-way radio. Middle option relabelled "Föredra grup
 
 ## Remaining work
 
-- ~~**3.5b-4 smoke-test**~~ ✅ done — team tab, GChat section, and group defaults table verified in browser.
 - **Step 10 email templates**: visual review via Mailpit (`http://localhost:8025`) + extend `TestNotifications_EventTriggered` to assert body contains booking URL, dates, item list.
+- ~~**Issue events → GChat broadcast (3.5b-5 partial)**~~ ✅ fixed — `SendIssueCreated`, `SendIssueResolved`, `SendIssueCommented` now accept `gn Notifier` and call `sendBroadcastGChat` targeting the manager team's space. `IssueHandler` gains `GChatNotifier` field, wired in `main.go`.
+- ~~**Manager-team GChat broadcast bug**~~ ✅ fixed — `SendBookingNeedsApproval` and `SendBookingSubmittedNoApproval` now use `managerTeamID()` (new `GetManagerTeam` sqlc query) instead of `b.UsedByTeamID` for both email and GChat broadcasts.
+- **No integration tests for GChat key management (3.5b-6)**: `POST /gchat-key`, `DELETE /gchat-key`, `GET /gchat-spaces`, `PUT /teams/{id}/gchat-space` have zero test coverage.
+- **GChat two-message thread pattern not implemented**: Current `GChatNotifier.Send()` sends one flat message. The intended UX is two messages using the same `threadKey`: (1) opener — unit name, dates, current status; (2) reply — full booking/issue details, item list, link. Both sent immediately; Chat API threads them by `threadKey`.
+- **Manager team (Utrustningsgruppen) not receiving GChat notifications**: Expected to receive `booking_submitted_no_approval` and manager-targeted events. Likely cause: Yggdrasil bookings are auto-confirmed (book-level, no approval needed) so `SendBookingNeedsApproval` never fires in the seed; `SendBookingSubmittedNoApproval` may not be firing either, or `IsGruppkanalEnabled` is returning false for the manager team's prefs. Needs investigation.
 
 Deferred items (personal email override, GChat richness, Slack/Teams, push notifications, logo in web header) moved to `docs/BACKLOG.md`.
+
+---
+
+## Dev / Demo / Prod environment behaviour
+
+### Dev
+
+**Email**: Mailpit (`docker-compose.override.yml`) receives all SMTP. `SMTP_DEFAULT_HOST=mailpit`, port 1025. View at `http://localhost:8025`. Booking events trigger emails during `./dev-seed.sh` — check Mailpit after seeding.
+
+**GChat**: Three env vars control dev GChat testing, all optional and emitted as empty by `gen-env.sh` (dev mode only — absent in demo/prod):
+
+| Var | Purpose |
+|---|---|
+| `DEV_GCHAT_KEY_PATH` | Host path to the service account JSON (e.g. `./dev-secrets/gchat-key.json`, gitignored). |
+| `DEV_GCHAT_SPACE_ID` | The space to link, e.g. `spaces/AAAA123`. |
+| `DEV_GCHAT_ADMIN_EMAIL` | Google Workspace admin email for Domain-Wide Delegation. |
+
+When all three are set, `dev-seed.sh` uploads and validates the key via `POST /api/v0/group-settings/gchat-key` (which adds `"gchat"` to `enabled_channels`), then links the space to:
+- **Yggdrasil** (unit, `book`): `gruppkanal_channels: ["email", "gchat"]`
+- **Utrustningsgruppen** (manager team): `gruppkanal_channels: ["gchat"]` only
+
+Subsequent booking events in the seed (Yggdrasil bookings) fire GChat broadcasts automatically. If any var is empty, the GChat block is skipped silently.
+
+**What reaches the space vs. what doesn't** (with vars set):
+
+| Event | Reaches space? | Reason |
+|---|---|---|
+| `booking_confirmed` / `booking_cancelled` / `booking_reminder` for Yggdrasil bookings | ✅ | Team has space linked + gchat in Gruppkanal |
+| `booking_needs_approval` / `booking_submitted_no_approval` | ✅ | Broadcasts to manager team (Utrustningsgruppen) space |
+| `issue_created` / `issue_resolved` / `issue_commented` | ✅ | Broadcasts to manager team space |
+
+### Demo (`DEMO_MODE=true`) ✅ implemented
+
+All outgoing notifications are suppressed:
+- Event handlers (`BookingHandler`, `IssueHandler`) receive `NoopNotifier` — no booking/issue event sends.
+- Scheduler receives `NoopNotifier` — no reminder or overdue alerts.
+- `POST /me/test-email` returns `{"skipped": true}` without sending.
+- `PUT /group-settings` with SMTP fields returns `403 Forbidden`.
+- `POST /gchat-key` and `DELETE /gchat-key` return `403 Forbidden`.
+- `GET /group-settings` response includes `demo_mode: true` so the frontend can hide the SMTP and GChat configuration sections.
+
+### Prod
+
+Prod docker-compose is identical to demo without `DEMO_MODE=true`. Checklist before a prod deployment:
+
+- [ ] `SETTINGS_ENCRYPTION_KEY` generated and stored securely. **Changing it after deployment breaks all stored SMTP passwords and GChat service account JSONs** — no key rotation story exists; document this to operators.
+- [ ] `TZ` set explicitly in `docker-compose.yml` (e.g. `Europe/Stockholm`) — `NOTIFICATION_REMINDER_TIME` defaults to `08:00` server-local time and will shift with DST if `TZ` is unset.
+- [ ] `APP_BASE_URL` set to the public URL (booking/issue links in emails).
+- [ ] Issue→GChat dispatch and manager-team broadcast bug fixed before enabling GChat for prod groups.
+- [ ] `notification_log` rows with `status = 'failed'` have no alerting. Minimum: a periodic `SELECT count(*) FROM notification_log WHERE status='failed' AND created_at > now()-interval '24h'` surfaced in a dashboard.
+
+**Security notes**:
+- `smtp_key_encrypted` and `gchat_service_account_json_encrypted` are AES-256-GCM encrypted at rest using `SETTINGS_ENCRYPTION_KEY`. Plaintext is only held in memory during a send and never logged.
+- `smtp_key_masked` (first 3 + last 4 chars) is returned in group settings responses. GChat has no equivalent — only `gchat_configured: bool` is exposed.
+- The service account JSON contains a private RSA key stored as an encrypted blob. Decrypted bytes exist only in-process during token exchange. DB backups of `group_settings` should be treated as sensitive.
+- `GET /api/v0/users` is manager-only and returns email addresses. Demo mode filters results to persona IDs only (`PersonaIDs` filter applied in `UserHandler`).
+- `notification_log` accumulates `user_id` + `entity_id` + channel over time with no retention policy. Consider a periodic `DELETE FROM notification_log WHERE created_at < now() - interval '90 days'`.

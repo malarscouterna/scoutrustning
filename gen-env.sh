@@ -181,6 +181,14 @@ SMTP_DEFAULT_TLS=starttls
 SMTP_DEFAULT_USER=
 SMTP_DEFAULT_KEY=
 APP_BASE_URL=http://localhost:5173
+
+# ── Dev GChat testing (optional) ──────────────────────────
+# Fill in to test GChat notifications locally. Place the service account JSON
+# at the path below, then re-run dev-seed.sh to connect and link teams.
+# Leave blank to skip GChat setup.
+DEV_GCHAT_KEY_PATH=
+DEV_GCHAT_SPACE_ID=
+DEV_GCHAT_ADMIN_EMAIL=
 EOF
 else
   cat >> .env << EOF

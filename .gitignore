@@ -42,3 +42,5 @@ Thumbs.db
 # Test
 coverage/
 tmp/
+# Dev secrets (service account keys, etc) — never commit
+dev-secrets/

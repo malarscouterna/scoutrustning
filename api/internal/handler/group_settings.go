@@ -17,8 +17,9 @@ import (
 )
 
 type GroupSettingsHandler struct {
-	Q     *db.Queries
-	Perms *PermissionCache
+	Q        *db.Queries
+	Perms    *PermissionCache
+	DemoMode bool
 }
 
 func (h *GroupSettingsHandler) Routes() chi.Router {
@@ -58,6 +59,7 @@ type groupSettingsResponse struct {
 	DefaultLanguage       string   `json:"default_language"`
 	NotificationChannels  []string `json:"notification_channels"`
 	LogoURL               string   `json:"logo_url"` // empty string when no logo uploaded
+	DemoMode              bool     `json:"demo_mode"`
 }
 
 func (h *GroupSettingsHandler) Get(w http.ResponseWriter, r *http.Request) {
@@ -80,11 +82,14 @@ func (h *GroupSettingsHandler) Get(w http.ResponseWriter, r *http.Request) {
 			NotificationChannels: []string{"email"},
 			SystemSmtpConfigured: os.Getenv("SMTP_DEFAULT_HOST") != "",
 			SystemSmtpFrom:       os.Getenv("SMTP_DEFAULT_FROM"),
+			DemoMode:             h.DemoMode,
 		})
 		return
 	}
 
-	WriteJSON(w, http.StatusOK, settingsToResponse(settings))
+	resp := settingsToResponse(settings)
+	resp.DemoMode = h.DemoMode
+	WriteJSON(w, http.StatusOK, resp)
 }
 
 type groupSettingsRequest struct {
@@ -112,6 +117,11 @@ func (h *GroupSettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	var req groupSettingsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if h.DemoMode && (req.SmtpHost != "" || req.SmtpUser != "" || req.SmtpKey != nil || req.NotificationEmailFrom != "") {
+		WriteError(w, http.StatusForbidden, "smtp_not_allowed_in_demo")
 		return
 	}
 
@@ -245,6 +255,10 @@ func (h *GroupSettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
 // UploadGChatKey accepts the service account JSON as the request body, validates it by
 // listing spaces, stores it encrypted, and appends "gchat" to enabled_channels.
 func (h *GroupSettingsHandler) UploadGChatKey(w http.ResponseWriter, r *http.Request) {
+	if h.DemoMode {
+		WriteError(w, http.StatusForbidden, "gchat_not_allowed_in_demo")
+		return
+	}
 	claims, _ := auth.ClaimsFromContext(r.Context())
 
 	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
@@ -314,6 +328,10 @@ func (h *GroupSettingsHandler) UploadGChatKey(w http.ResponseWriter, r *http.Req
 // DeleteGChatKey removes GChat credentials, removes "gchat" from enabled_channels,
 // and clears all team space mappings for the group.
 func (h *GroupSettingsHandler) DeleteGChatKey(w http.ResponseWriter, r *http.Request) {
+	if h.DemoMode {
+		WriteError(w, http.StatusForbidden, "gchat_not_allowed_in_demo")
+		return
+	}
 	claims, _ := auth.ClaimsFromContext(r.Context())
 
 	_ = h.Q.ClearAllGchatSpacesForGroup(r.Context(), claims.GroupID)
