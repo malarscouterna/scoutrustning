@@ -6,6 +6,15 @@
 
 set -e
 
+# Load .env so DEV_GCHAT_* and other vars are available when running from a plain shell.
+# Values already exported in the environment take precedence.
+if [ -f .env ]; then
+  set -a
+  # shellcheck disable=SC1091
+  source .env
+  set +a
+fi
+
 API="${API:-http://localhost:8080}"
 HEADER="X-Dev-Role-Override: manager-equipment"
 LEADER="X-Dev-Role-Override: leader-yggdrasil"
@@ -135,6 +144,58 @@ curl -sf -X PUT "$API/api/v0/group-settings/notification-defaults" \
   -H "$HEADER" -H "Content-Type: application/json" \
   -d '{"defaults":{},"default_gruppkanal_channels":["email"]}' > /dev/null \
   && echo "  Group: default_gruppkanal_channels set to [email]" || echo "  Group: notification-defaults FAILED"
+
+# Optional: link a dev GChat space for testing GChat notifications.
+# Set DEV_GCHAT_KEY_PATH, DEV_GCHAT_SPACE_ID, and DEV_GCHAT_ADMIN_EMAIL in .env to enable.
+# The key file must be placed in dev-secrets/ and will be read from the host path.
+if [ -n "$DEV_GCHAT_KEY_PATH" ] && [ -n "$DEV_GCHAT_SPACE_ID" ] && [ -n "$DEV_GCHAT_ADMIN_EMAIL" ]; then
+  echo "Configuring dev GChat integration (space: $DEV_GCHAT_SPACE_ID)..."
+  if [ ! -f "$DEV_GCHAT_KEY_PATH" ]; then
+    echo "  WARNING: DEV_GCHAT_KEY_PATH set but file not found: $DEV_GCHAT_KEY_PATH — skipping GChat setup"
+  else
+    KEY_JSON=$(cat "$DEV_GCHAT_KEY_PATH")
+    # Upload the service account key (validates against Google API and adds gchat to enabled_channels)
+    GCHAT_RESULT=$(curl -sf -X POST "$API/api/v0/group-settings/gchat-key" \
+      -H "$HEADER" -H "Content-Type: application/json" \
+      -d "{\"key_json\":$KEY_JSON,\"admin_email\":\"$DEV_GCHAT_ADMIN_EMAIL\"}" 2>&1) \
+      && echo "  GChat key uploaded and validated" \
+      || { echo "  GChat key upload FAILED: $GCHAT_RESULT"; echo "  Skipping space linking"; GCHAT_RESULT=""; }
+
+    if [ -n "$GCHAT_RESULT" ]; then
+      # Fetch fresh team list (IDs are stable but re-fetch for clarity)
+      TEAMS_JSON=$(curl -s "$API/api/v0/teams" -H "$HEADER")
+      get_team_id() { echo "$TEAMS_JSON" | python3 -c "import json,sys; ts=[t for t in json.load(sys.stdin) if t['name']=='$1']; print(ts[0]['id'] if ts else '')" ; }
+      YGGDRASIL_ID=$(get_team_id "Yggdrasil")
+      UTRUSTNING_ID=$(get_team_id "Utrustningsgruppen")
+
+      # Yggdrasil (unit-level): link space + email+gchat in Gruppkanal
+      if [ -n "$YGGDRASIL_ID" ]; then
+        curl -sf -X PUT "$API/api/v0/teams/$YGGDRASIL_ID/gchat-space" \
+          -H "$HEADER" -H "Content-Type: application/json" \
+          -d "{\"gchat_space_id\":\"$DEV_GCHAT_SPACE_ID\"}" > /dev/null \
+          && echo "  Yggdrasil: gchat_space_id set" || echo "  Yggdrasil: gchat-space FAILED"
+        curl -sf -X PUT "$API/api/v0/teams/$YGGDRASIL_ID/notification-settings" \
+          -H "$HEADER" -H "Content-Type: application/json" \
+          -d '{"gruppkanal_channels":["email","gchat"]}' > /dev/null \
+          && echo "  Yggdrasil: gruppkanal updated to [email, gchat]" || echo "  Yggdrasil: gruppkanal update FAILED"
+      fi
+
+      # Utrustningsgruppen (manager team): link space, gchat-only Gruppkanal (no broadcast email for managers)
+      if [ -n "$UTRUSTNING_ID" ]; then
+        curl -sf -X PUT "$API/api/v0/teams/$UTRUSTNING_ID/gchat-space" \
+          -H "$HEADER" -H "Content-Type: application/json" \
+          -d "{\"gchat_space_id\":\"$DEV_GCHAT_SPACE_ID\"}" > /dev/null \
+          && echo "  Utrustningsgruppen: gchat_space_id set" || echo "  Utrustningsgruppen: gchat-space FAILED"
+        curl -sf -X PUT "$API/api/v0/teams/$UTRUSTNING_ID/notification-settings" \
+          -H "$HEADER" -H "Content-Type: application/json" \
+          -d '{"gruppkanal_channels":["gchat"]}' > /dev/null \
+          && echo "  Utrustningsgruppen: gruppkanal set to [gchat]" || echo "  Utrustningsgruppen: gruppkanal update FAILED"
+      fi
+    fi
+  fi
+else
+  echo "  (DEV_GCHAT_KEY_PATH/SPACE_ID/ADMIN_EMAIL not set — skipping GChat setup)"
+fi
 
 # Report issues on some quantity-tracked articles to demo status mix
 echo ""

@@ -108,6 +108,19 @@ func (q *Queries) DeleteTeam(ctx context.Context, arg DeleteTeamParams) error {
 	return err
 }
 
+const getManagerTeam = `-- name: GetManagerTeam :one
+SELECT id FROM teams
+WHERE group_id = $1 AND access_level = 'manager'
+LIMIT 1
+`
+
+func (q *Queries) GetManagerTeam(ctx context.Context, groupID string) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, getManagerTeam, groupID)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const getTeam = `-- name: GetTeam :one
 SELECT id, group_id, name, type, access_level, created_at, notification_email, notification_prefs, gchat_space_id, gruppkanal_channels FROM teams
 WHERE id = $1 AND group_id = $2

@@ -172,6 +172,15 @@ func dedup(recipients []recipient) []recipient {
 	return out
 }
 
+// managerTeamID returns the UUID of the manager-level team for a group, or an invalid UUID if none.
+func managerTeamID(ctx context.Context, q *db.Queries, groupID string) pgtype.UUID {
+	id, err := q.GetManagerTeam(ctx, groupID)
+	if err != nil {
+		return pgtype.UUID{}
+	}
+	return id
+}
+
 // sendBroadcastGChat sends one card to a team's mapped Google Chat Space if configured.
 // Fires only if "gchat" is in the team's effective Gruppkanal and IsGruppkanalEnabled.
 // Uses sentinel user_id "gchat:<teamID>" in notification_log.
@@ -326,8 +335,9 @@ func SendBookingNeedsApproval(ctx context.Context, q *db.Queries, n Notifier, gn
 	tid := teamIDStr(b.UsedByTeamID)
 	tk := bookingThreadKey(b)
 	broadcastMsg := bookingMsg(ctx, q, b, EventBookingNeedsApproval, baseURL, recipient{lang: "sv"})
-	sendBroadcastEmail(ctx, q, n, b.GroupID, b.UsedByTeamID, EventBookingNeedsApproval, b.ID, tk, broadcastMsg)
-	sendBroadcastGChat(ctx, q, gn, b.GroupID, b.UsedByTeamID, EventBookingNeedsApproval, b.ID, tk, broadcastMsg.Subject, broadcastMsg.TextBody)
+	mgrTeam := managerTeamID(ctx, q, b.GroupID)
+	sendBroadcastEmail(ctx, q, n, b.GroupID, mgrTeam, EventBookingNeedsApproval, b.ID, tk, broadcastMsg)
+	sendBroadcastGChat(ctx, q, gn, b.GroupID, mgrTeam, EventBookingNeedsApproval, b.ID, tk, broadcastMsg.Subject, broadcastMsg.TextBody)
 	for _, r := range groupManagers(ctx, q, b.GroupID) {
 		r := r
 		sendTo(ctx, q, n, b.GroupID, tid, r, EventBookingNeedsApproval, "email", b.ID, tk, func(lang string) Message {
@@ -340,8 +350,9 @@ func SendBookingSubmittedNoApproval(ctx context.Context, q *db.Queries, n Notifi
 	tid := teamIDStr(b.UsedByTeamID)
 	tk := bookingThreadKey(b)
 	broadcastMsg := bookingMsg(ctx, q, b, EventBookingSubmittedNoApproval, baseURL, recipient{lang: "sv"})
-	sendBroadcastEmail(ctx, q, n, b.GroupID, b.UsedByTeamID, EventBookingSubmittedNoApproval, b.ID, tk, broadcastMsg)
-	sendBroadcastGChat(ctx, q, gn, b.GroupID, b.UsedByTeamID, EventBookingSubmittedNoApproval, b.ID, tk, broadcastMsg.Subject, broadcastMsg.TextBody)
+	mgrTeam := managerTeamID(ctx, q, b.GroupID)
+	sendBroadcastEmail(ctx, q, n, b.GroupID, mgrTeam, EventBookingSubmittedNoApproval, b.ID, tk, broadcastMsg)
+	sendBroadcastGChat(ctx, q, gn, b.GroupID, mgrTeam, EventBookingSubmittedNoApproval, b.ID, tk, broadcastMsg.Subject, broadcastMsg.TextBody)
 	for _, r := range groupManagers(ctx, q, b.GroupID) {
 		r := r
 		sendTo(ctx, q, n, b.GroupID, tid, r, EventBookingSubmittedNoApproval, "email", b.ID, tk, func(lang string) Message {
@@ -413,8 +424,11 @@ func SendBookingCancelled(ctx context.Context, q *db.Queries, n Notifier, gn Not
 
 // --- Issue events ---
 
-func SendIssueCreated(ctx context.Context, q *db.Queries, n Notifier, issue db.IssueReport, baseURL string) {
+func SendIssueCreated(ctx context.Context, q *db.Queries, n Notifier, gn Notifier, issue db.IssueReport, baseURL string) {
 	tk := issueThreadKey(issue)
+	mgrTeam := managerTeamID(ctx, q, issue.GroupID)
+	broadcastMsg := issueMsg(ctx, q, issue, EventIssueCreated, baseURL, recipient{lang: "sv"})
+	sendBroadcastGChat(ctx, q, gn, issue.GroupID, mgrTeam, EventIssueCreated, issue.ID, tk, broadcastMsg.Subject, broadcastMsg.TextBody)
 	for _, r := range groupManagers(ctx, q, issue.GroupID) {
 		r := r
 		sendTo(ctx, q, n, issue.GroupID, "", r, EventIssueCreated, "email", issue.ID, tk, func(lang string) Message {
@@ -435,13 +449,17 @@ func SendIssueAssignedToMe(ctx context.Context, q *db.Queries, n Notifier, issue
 	})
 }
 
-func SendIssueResolved(ctx context.Context, q *db.Queries, n Notifier, issue db.IssueReport, baseURL string) {
+func SendIssueResolved(ctx context.Context, q *db.Queries, n Notifier, gn Notifier, issue db.IssueReport, baseURL string) {
 	reporter, err := q.GetUser(ctx, db.GetUserParams{ID: issue.ReporterID, GroupID: issue.GroupID})
 	if err != nil {
 		return
 	}
 	assignees, _ := q.ListIssueAssignees(ctx, db.ListIssueAssigneesParams{IssueID: issue.ID, GroupID: issue.GroupID})
 	tk := issueThreadKey(issue)
+
+	mgrTeam := managerTeamID(ctx, q, issue.GroupID)
+	broadcastMsg := issueMsg(ctx, q, issue, EventIssueResolved, baseURL, recipient{lang: "sv"})
+	sendBroadcastGChat(ctx, q, gn, issue.GroupID, mgrTeam, EventIssueResolved, issue.ID, tk, broadcastMsg.Subject, broadcastMsg.TextBody)
 
 	recipients := []recipient{fromGetUserRow(reporter)}
 	for _, a := range assignees {
@@ -457,13 +475,17 @@ func SendIssueResolved(ctx context.Context, q *db.Queries, n Notifier, issue db.
 	}
 }
 
-func SendIssueCommented(ctx context.Context, q *db.Queries, n Notifier, issue db.IssueReport, baseURL string) {
+func SendIssueCommented(ctx context.Context, q *db.Queries, n Notifier, gn Notifier, issue db.IssueReport, baseURL string) {
 	reporter, err := q.GetUser(ctx, db.GetUserParams{ID: issue.ReporterID, GroupID: issue.GroupID})
 	if err != nil {
 		return
 	}
 	assignees, _ := q.ListIssueAssignees(ctx, db.ListIssueAssigneesParams{IssueID: issue.ID, GroupID: issue.GroupID})
 	tk := issueThreadKey(issue)
+
+	mgrTeam := managerTeamID(ctx, q, issue.GroupID)
+	broadcastMsg := issueMsg(ctx, q, issue, EventIssueCommented, baseURL, recipient{lang: "sv"})
+	sendBroadcastGChat(ctx, q, gn, issue.GroupID, mgrTeam, EventIssueCommented, issue.ID, tk, broadcastMsg.Subject, broadcastMsg.TextBody)
 
 	recipients := []recipient{fromGetUserRow(reporter)}
 	for _, a := range assignees {

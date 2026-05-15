@@ -98,7 +98,7 @@ func main() {
 
 		notifPrefsHandler := &handler.NotificationPrefsHandler{Q: queries}
 		appBaseURL := getenv("APP_BASE_URL", "http://localhost:5173")
-		meHandler := &handler.MeHandler{Q: queries, Perms: permCache, NotifPrefs: notifPrefsHandler, Notifier: smtpNotifier, PersonaIDs: personaIDs, BaseURL: appBaseURL}
+		meHandler := &handler.MeHandler{Q: queries, Perms: permCache, NotifPrefs: notifPrefsHandler, Notifier: smtpNotifier, PersonaIDs: personaIDs, DemoMode: demoMode, BaseURL: appBaseURL}
 
 		articles := &handler.ArticleHandler{Q: queries, Perms: permCache}
 		locations := &handler.LocationHandler{Q: queries}
@@ -106,8 +106,8 @@ func main() {
 
 		bookings := &handler.BookingHandler{Q: queries, Notifier: eventNotifier, GChatNotifier: eventGChatNotifier, BaseURL: appBaseURL}
 		teams := &handler.TeamHandler{Q: queries}
-		groupSettings := &handler.GroupSettingsHandler{Q: queries, Perms: permCache}
-		issueHandler := &handler.IssueHandler{Q: queries, Perms: permCache, Notifier: eventNotifier, BaseURL: appBaseURL}
+		groupSettings := &handler.GroupSettingsHandler{Q: queries, Perms: permCache, DemoMode: demoMode}
+		issueHandler := &handler.IssueHandler{Q: queries, Perms: permCache, Notifier: eventNotifier, GChatNotifier: eventGChatNotifier, BaseURL: appBaseURL}
 		imageHandler := &images.Handler{Q: queries, ImageDir: imageDir}
 		userHandler := &handler.UserHandler{Q: queries, DemoMode: demoMode, PersonaIDs: personaIDs}
 		logoHandler := &handler.LogoHandler{Q: queries, ImageDir: imageDir}
@@ -132,7 +132,12 @@ func main() {
 	r.Mount("/api/v0/public/groups", logoHandler.PublicLogoRoutes())
 
 	// Daily notification scheduler (reminders + overdue alerts).
-	notifications.StartScheduler(queries, &notifications.SMTPNotifier{Q: queries}, getenv("APP_BASE_URL", "http://localhost:5173"))
+	// In demo mode, use NoopNotifier so scheduled sends never fire.
+	var schedulerNotifier notifications.Notifier = &notifications.SMTPNotifier{Q: queries}
+	if demoMode {
+		schedulerNotifier = notifications.NoopNotifier{}
+	}
+	notifications.StartScheduler(queries, schedulerNotifier, getenv("APP_BASE_URL", "http://localhost:5173"))
 
 	addr := getenv("ADDR", ":8080")
 	srv := &http.Server{Addr: addr, Handler: r}

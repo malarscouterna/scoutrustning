@@ -19,11 +19,11 @@ type MeHandler struct {
 	Perms *PermissionCache
 	// NotifPrefs handles /me/notification-prefs sub-routes.
 	NotifPrefs *NotificationPrefsHandler
-	// Notifier is used exclusively by the test-email endpoint. Always SMTPNotifier
-	// in production (even in demo mode), so demo visitors can verify SMTP works.
+	// Notifier is used exclusively by the test-email endpoint.
 	Notifier   notifications.Notifier
 	// PersonaIDs is non-nil in demo mode. Persona users are skipped by test-email.
 	PersonaIDs map[string]bool
+	DemoMode   bool
 	BaseURL    string
 }
 
@@ -84,7 +84,7 @@ func (h *MeHandler) PostTestEmail(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	if h.PersonaIDs != nil && h.PersonaIDs[claims.MemberID] {
+	if h.DemoMode || (h.PersonaIDs != nil && h.PersonaIDs[claims.MemberID]) {
 		WriteJSON(w, http.StatusOK, map[string]any{"skipped": true})
 		return
 	}

@@ -18,10 +18,11 @@ import (
 )
 
 type IssueHandler struct {
-	Q        *db.Queries
-	Perms    *PermissionCache
-	Notifier notifications.Notifier
-	BaseURL  string
+	Q             *db.Queries
+	Perms         *PermissionCache
+	Notifier      notifications.Notifier
+	GChatNotifier notifications.Notifier
+	BaseURL       string
 }
 
 func (h *IssueHandler) Routes() chi.Router {
@@ -232,8 +233,8 @@ func (h *IssueHandler) Create(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if h.Notifier != nil {
-		iss, n, q := issue, h.Notifier, h.Q
-		go notifications.SendIssueCreated(context.Background(), q, n, iss, h.BaseURL)
+		iss, n, gn, q := issue, h.Notifier, h.GChatNotifier, h.Q
+		go notifications.SendIssueCreated(context.Background(), q, n, gn, iss, h.BaseURL)
 	}
 
 	issueDetail, _ := h.buildIssueDetail(r, claims, issue.ID)
@@ -345,8 +346,8 @@ func (h *IssueHandler) Update(w http.ResponseWriter, r *http.Request) {
 					Description: iss.Description, BookingID: iss.BookingID,
 					CreatedAt: iss.CreatedAt, UpdatedAt: iss.UpdatedAt,
 				}
-				n, q := h.Notifier, h.Q
-				go notifications.SendIssueResolved(context.Background(), q, n, issue, h.BaseURL)
+				n, gn, q := h.Notifier, h.GChatNotifier, h.Q
+				go notifications.SendIssueResolved(context.Background(), q, n, gn, issue, h.BaseURL)
 			}
 		}
 	}
@@ -401,8 +402,8 @@ func (h *IssueHandler) AddComment(w http.ResponseWriter, r *http.Request) {
 				Description: iss.Description, BookingID: iss.BookingID,
 				CreatedAt: iss.CreatedAt, UpdatedAt: iss.UpdatedAt,
 			}
-			n, q := h.Notifier, h.Q
-			go notifications.SendIssueCommented(context.Background(), q, n, issue, h.BaseURL)
+			n, gn, q := h.Notifier, h.GChatNotifier, h.Q
+			go notifications.SendIssueCommented(context.Background(), q, n, gn, issue, h.BaseURL)
 		}
 	}
 
