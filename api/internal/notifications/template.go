@@ -638,8 +638,8 @@ func buildBookingText(d BookingEmailData, bannerLabel, start, end, teamLabel, bo
 	return b.String()
 }
 
-// BookingOpenerText returns a compact GChat opener for a booking event, including the booking link.
-// Example: "Yggdrasil: 14 jun–18 jun · 3 artiklar · Bekräftad\nhttps://…/bookings/uuid"
+// BookingOpenerText returns a compact GChat opener for a booking event.
+// Uses <URL|text> syntax so Google Chat renders the title as a clickable link.
 func BookingOpenerText(d BookingEmailData) string {
 	start := formatDate(d.Lang, d.StartDate)
 	end := formatDate(d.Lang, d.EndDate)
@@ -650,7 +650,8 @@ func BookingOpenerText(d BookingEmailData) string {
 	}
 	itemCount := len(d.Items)
 	bookingURL := d.BaseURL + "/bookings/" + uuidString(d.BookingID)
-	return fmt.Sprintf("%s: %s–%s · %d artiklar · %s\n%s", prefix, start, end, itemCount, status, bookingURL)
+	linkText := fmt.Sprintf("Bokning för %s - %s–%s", prefix, start, end)
+	return fmt.Sprintf("<%s|%s> · %d artiklar · %s", bookingURL, linkText, itemCount, status)
 }
 
 // BookingDetailText returns the GChat detail reply for a booking — items list + optional notes.
@@ -712,13 +713,13 @@ func IssueDetailText(d IssueEmailData) string {
 	return b.String()
 }
 
-// IssueOpenerText returns a compact GChat opener for an issue event, including the issue link.
-// Example: "Ärende: Trasig tältpinne · Allvarlig · Öppen\nhttps://…/issues/uuid"
+// IssueOpenerText returns a compact GChat opener for an issue event.
+// Uses <URL|text> syntax so Google Chat renders the title as a clickable link.
 func IssueOpenerText(d IssueEmailData) string {
 	severity := i18n.T(d.Lang, "issue_severity_"+d.Severity)
 	status := i18n.T(d.Lang, "issue_status_"+d.Status)
 	issueURL := d.BaseURL + "/issues/" + uuidString(d.IssueID)
-	return fmt.Sprintf("Ärende: %s · %s · %s\n%s", d.Title, severity, status, issueURL)
+	return fmt.Sprintf("<%s|Ärende: %s> · %s · %s", issueURL, d.Title, severity, status)
 }
 
 // buildIssueText constructs the plain-text version of an issue email.

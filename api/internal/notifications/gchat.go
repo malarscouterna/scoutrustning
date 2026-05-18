@@ -140,29 +140,43 @@ func gchatJWT(ctx context.Context, saJSON []byte, scope, sub string) (string, er
 }
 
 func gchatPost(ctx context.Context, token, path string, body interface{}) error {
+	_, err := gchatPostGetThread(ctx, token, path, body)
+	return err
+}
+
+// gchatPostGetThread posts a message and returns the thread name from the response
+// (e.g. "spaces/AAAA/threads/BBBB"). The thread name is needed to reliably reply to
+// an existing thread — threadKey alone only works for creating threads.
+func gchatPostGetThread(ctx context.Context, token, path string, body interface{}) (threadName string, err error) {
 	bodyJSON, err := json.Marshal(body)
 	if err != nil {
-		return err
+		return "", err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		"https://chat.googleapis.com/v1/"+path,
 		strings.NewReader(string(bodyJSON)))
 	if err != nil {
-		return err
+		return "", err
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("gchat: POST %s: %w", path, err)
+		return "", fmt.Errorf("gchat: POST %s: %w", path, err)
 	}
 	defer resp.Body.Close()
+	rb, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("gchat: POST %s failed (%d): %s", path, resp.StatusCode, rb)
+		return "", fmt.Errorf("gchat: POST %s failed (%d): %s", path, resp.StatusCode, rb)
 	}
-	return nil
+	var result struct {
+		Thread struct {
+			Name string `json:"name"`
+		} `json:"thread"`
+	}
+	_ = json.Unmarshal(rb, &result)
+	return result.Thread.Name, nil
 }
 
 // listSpacesWithToken fetches all SPACE-type spaces accessible via the given token.
@@ -309,10 +323,55 @@ func (g *GChatNotifier) Send(ctx context.Context, msg Message) error {
 	chatMsg := map[string]interface{}{
 		"text": msg.Subject,
 	}
-	if msg.ThreadKey != "" {
+	if msg.ThreadName != "" {
+		// Reply to an existing thread by its API name — more reliable than threadKey.
+		chatMsg["thread"] = map[string]interface{}{"name": msg.ThreadName}
+	} else if msg.ThreadKey != "" {
 		chatMsg["thread"] = map[string]interface{}{"threadKey": msg.ThreadKey}
 	}
 
 	// msg.To is the full space resource name, e.g. "spaces/AAAA123".
-	return gchatPost(ctx, token, msg.To+"/messages?messageReplyOption=REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD", chatMsg)
+	_, err = gchatPostGetThread(ctx, token, msg.To+"/messages?messageReplyOption=REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD", chatMsg)
+	return err
+}
+
+// SendPaired sends opener and detail as two messages in the same thread.
+// The opener creates (or joins) a thread via threadKey; the detail replies using the
+// thread name returned by the API, which is more reliable than re-sending threadKey.
+// If the opener send fails, the detail is skipped. If detail is empty, it is not sent.
+func (g *GChatNotifier) SendPaired(ctx context.Context, groupID, space, opener, detail, threadKey string) (openerErr, detailErr error) {
+	creds, err := g.Q.GetGchatCredentials(ctx, groupID)
+	if err != nil || len(creds.GchatServiceAccountJsonEncrypted) == 0 {
+		return fmt.Errorf("gchat: no credentials for group %s", groupID), nil
+	}
+	saJSON, err := crypto.Decrypt(creds.GchatServiceAccountJsonEncrypted)
+	if err != nil {
+		return fmt.Errorf("gchat: decrypt credentials: %w", err), nil
+	}
+	token, err := gchatBotToken(ctx, saJSON)
+	if err != nil {
+		return err, nil
+	}
+
+	openerMsg := map[string]interface{}{
+		"text":   opener,
+		"thread": map[string]interface{}{"threadKey": threadKey},
+	}
+	threadName, openerErr := gchatPostGetThread(ctx, token,
+		space+"/messages?messageReplyOption=REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD", openerMsg)
+	if openerErr != nil || detail == "" {
+		return openerErr, nil
+	}
+
+	detailThread := map[string]interface{}{"threadKey": threadKey}
+	if threadName != "" {
+		detailThread = map[string]interface{}{"name": threadName}
+	}
+	detailMsg := map[string]interface{}{
+		"text":   detail,
+		"thread": detailThread,
+	}
+	detailErr = gchatPost(ctx, token,
+		space+"/messages?messageReplyOption=REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD", detailMsg)
+	return nil, detailErr
 }

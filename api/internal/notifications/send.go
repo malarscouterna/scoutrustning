@@ -55,11 +55,25 @@ func sendTo(ctx context.Context, q *db.Queries, n Notifier, groupID, teamID stri
 	case PolicyNever:
 		return
 	case PolicyIfNoBroadcast:
-		// Suppress personal email if the team's effective Gruppkanal is non-empty.
+		// Suppress personal email only if the team has at least one effective Gruppkanal
+		// channel that is actually configured (has a real endpoint). A channel appearing in
+		// the opted-in list but with no endpoint (e.g. "email" inherited from group default
+		// but no notification_email set) does not count — nothing would be delivered there.
 		team := GetTeamNotifSettings(ctx, q, groupID, teamID)
 		groupDefaultsRow, _ := q.GetGroupNotificationDefaults(ctx, groupID)
 		effective := EffectiveGruppkanalChannels(team.GruppkanalChannels, groupDefaultsRow.DefaultGruppkanalChannels)
-		if len(effective) > 0 {
+		hasConfiguredBroadcast := false
+		for _, ch := range effective {
+			if ch == "email" && team.HasNotificationEmail {
+				hasConfiguredBroadcast = true
+				break
+			}
+			if ch == "gchat" && team.HasGchatSpace {
+				hasConfiguredBroadcast = true
+				break
+			}
+		}
+		if hasConfiguredBroadcast {
 			return
 		}
 	}
@@ -220,20 +234,7 @@ func sendBroadcastGChat(ctx context.Context, q *db.Queries, gn Notifier, groupID
 	space := team.GchatSpaceID.String
 	sentinelUserID := "gchat:" + teamIDStr(teamID)
 
-	gchatSend := func(text string) {
-		msg := Message{
-			GroupID:   groupID,
-			To:        space,
-			Subject:   text,
-			ThreadKey: gchatThreadKey,
-		}
-		status := "sent"
-		errStr := ""
-		if sendErr := gn.Send(ctx, msg); sendErr != nil {
-			slog.Error("gchat broadcast failed", "event", event, "space", space, "error", sendErr)
-			status = "failed"
-			errStr = sendErr.Error()
-		}
+	logGChat := func(status, errStr string) {
 		_ = q.LogNotification(ctx, db.LogNotificationParams{
 			GroupID:   groupID,
 			UserID:    sentinelUserID,
@@ -247,8 +248,46 @@ func sendBroadcastGChat(ctx context.Context, q *db.Queries, gn Notifier, groupID
 		})
 	}
 
-	gchatSend(labeledOpener)
-	gchatSend(detailText)
+	// Use SendPaired when available: it captures the thread name from the opener response
+	// and uses it for the detail reply, ensuring both messages land in the same thread.
+	// Fall back to two separate Send calls for non-GChatNotifier implementations (e.g. tests).
+	if gcn, ok := gn.(*GChatNotifier); ok {
+		openerErr, detailErr := gcn.SendPaired(ctx, groupID, space, labeledOpener, detailText, gchatThreadKey)
+		if openerErr != nil {
+			slog.Error("gchat broadcast opener failed", "event", event, "space", space, "error", openerErr)
+			logGChat("failed", openerErr.Error())
+			return
+		}
+		logGChat("sent", "")
+		if detailText != "" {
+			if detailErr != nil {
+				slog.Error("gchat broadcast detail failed", "event", event, "space", space, "error", detailErr)
+			}
+			logGChat("sent", func() string {
+				if detailErr != nil {
+					return detailErr.Error()
+				}
+				return ""
+			}())
+		}
+		return
+	}
+
+	// Fallback for non-GChatNotifier (CapturingNotifier in tests).
+	for _, text := range []string{labeledOpener, detailText} {
+		if text == "" {
+			continue
+		}
+		msg := Message{GroupID: groupID, To: space, Subject: text, ThreadKey: gchatThreadKey}
+		status := "sent"
+		errStr := ""
+		if sendErr := gn.Send(ctx, msg); sendErr != nil {
+			slog.Error("gchat broadcast failed", "event", event, "space", space, "error", sendErr)
+			status = "failed"
+			errStr = sendErr.Error()
+		}
+		logGChat(status, errStr)
+	}
 }
 
 // sendBroadcastEmail sends one email to a team's shared notification_email address if configured.

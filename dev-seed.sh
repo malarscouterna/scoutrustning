@@ -139,6 +139,15 @@ if [ -n "$VALBORG_ID_SEED" ]; then
     && echo "  Valborgskommittén: notification_email + gruppkanal set" || echo "  Valborgskommittén: FAILED"
 fi
 
+# Utrustningsgruppen (manager team): always set broadcast email so issue/booking-approval events reach Mailpit
+UTRUSTNING_ID=$(get_team_id "Utrustningsgruppen")
+if [ -n "$UTRUSTNING_ID" ]; then
+  curl -sf -X PUT "$API/api/v0/teams/$UTRUSTNING_ID/notification-settings" \
+    -H "$HEADER" -H "Content-Type: application/json" \
+    -d '{"notification_email":"utrustning@malarscouterna.example.com","gruppkanal_channels":["email"]}' > /dev/null \
+    && echo "  Utrustningsgruppen: notification_email + gruppkanal set" || echo "  Utrustningsgruppen: FAILED"
+fi
+
 # Group default: email is in the default Gruppkanal for teams that have it configured
 curl -sf -X PUT "$API/api/v0/group-settings/notification-defaults" \
   -H "$HEADER" -H "Content-Type: application/json" \
@@ -180,7 +189,7 @@ if [ -n "$DEV_GCHAT_KEY_PATH" ] && [ -n "$DEV_GCHAT_SPACE_ID" ] && [ -n "$DEV_GC
           && echo "  Yggdrasil: gruppkanal updated to [email, gchat]" || echo "  Yggdrasil: gruppkanal update FAILED"
       fi
 
-      # Utrustningsgruppen (manager team): link space, gchat-only Gruppkanal (no broadcast email for managers)
+      # Utrustningsgruppen (manager team): link space, email+gchat in Gruppkanal
       if [ -n "$UTRUSTNING_ID" ]; then
         curl -sf -X PUT "$API/api/v0/teams/$UTRUSTNING_ID/gchat-space" \
           -H "$HEADER" -H "Content-Type: application/json" \
@@ -188,8 +197,8 @@ if [ -n "$DEV_GCHAT_KEY_PATH" ] && [ -n "$DEV_GCHAT_SPACE_ID" ] && [ -n "$DEV_GC
           && echo "  Utrustningsgruppen: gchat_space_id set" || echo "  Utrustningsgruppen: gchat-space FAILED"
         curl -sf -X PUT "$API/api/v0/teams/$UTRUSTNING_ID/notification-settings" \
           -H "$HEADER" -H "Content-Type: application/json" \
-          -d '{"gruppkanal_channels":["gchat"]}' > /dev/null \
-          && echo "  Utrustningsgruppen: gruppkanal set to [gchat]" || echo "  Utrustningsgruppen: gruppkanal update FAILED"
+          -d '{"gruppkanal_channels":["email","gchat"]}' > /dev/null \
+          && echo "  Utrustningsgruppen: gruppkanal updated to [email, gchat]" || echo "  Utrustningsgruppen: gruppkanal update FAILED"
       fi
     fi
   fi

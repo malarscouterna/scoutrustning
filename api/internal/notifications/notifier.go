@@ -23,6 +23,9 @@ type Message struct {
 	// ThreadKey is used by GChatNotifier to group messages into Chat API threads.
 	// Not used by SMTPNotifier.
 	ThreadKey string
+	// ThreadName is the Chat API thread resource name (e.g. "spaces/X/threads/Y").
+	// When set, it takes precedence over ThreadKey for replying to an existing thread.
+	ThreadName string
 }
 
 // Notifier sends a notification message on a specific channel.
