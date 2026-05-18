@@ -249,7 +249,7 @@ Managers cannot distinguish personal bookings (no team, no external name) from o
 
 These must be resolved before the `feat/notifications` branch can merge.
 
-**GChat broadcast for issue events** — `SendIssueCreated`, `SendIssueResolved`, and `SendIssueCommented` have no GChat path. `IssueHandler` has no `GChatNotifier` field. Intended dispatch: issue events that target a manager team (issue_created, issue_resolved, issue_commented) should broadcast to that team's linked GChat space. `issue_assigned_to_me` is personal-only (no broadcast). Mirror the `BookingHandler` / `sendBroadcastGChat` pattern. See `docs/notifications-phase35.md` Known gaps for full detail.
+**GChat broadcast for issue events** — Partially fixed (IssueHandler gained `GChatNotifier`; `SendIssueCreated/Resolved/Commented` call `sendBroadcastGChat`). Full resolution tracked in Phase 3.7: `issue_resolved` and `issue_commented` need Gruppkanal system defaults, `sendBroadcastEmail` for all issue events, and teamID plumbing for personal email policy. See `docs/notifications-phase35.md` Phase 3.7.
 
 **Integration tests for GChat key management** — `POST /gchat-key`, `DELETE /gchat-key`, `GET /gchat-spaces`, `PUT /teams/{id}/gchat-space`, and `DELETE /teams/{id}/gchat-space` have zero test coverage. A mock `GChatNotifier` (similar to `CapturingNotifier`) seeded with fake credentials would cover the happy path without a real Google account.
 
@@ -263,7 +263,7 @@ These must be resolved before the `feat/notifications` branch can merge.
 
 **Personal notification email override** — Users should be able to set a custom notification email in their profile, defaulting to their Keycloak-provisioned `email`. Requires: `notification_email` column on `users` (nullable); a new endpoint or extending `PUT /me`; UI field in the personal profile tab pre-filled from Keycloak email. Dispatch reads a `user.NotificationEmail()` helper that falls back to `users.email`.
 
-**GChat card richness** — `GChatNotifier.Send` currently posts plain text. Upgrade to `cardsV2` with a header, field widgets, and a CTA button (all data available in `msg.Subject` and `msg.TextBody`).
+**GChat card richness (Cards v2)** — `GChatNotifier.Send` currently posts plain text. Upgrade to `cardsV2` with a colour-coded header band (matching email event colours), key-value field widgets (dates, team, status, item count), and a CTA button row. All data is available from `BookingEmailData` / `IssueEmailData`. Phase 3.7 already adds the two-message thread structure (opener + detail) — card formatting is a pure visual upgrade on top of that and can be dropped in without structural changes.
 
 **Personal GChat DMs** — Broadcast-only for now. Personal DMs require storing the user's Google identity at login (only feasible if the OIDC provider is Google Workspace).
 

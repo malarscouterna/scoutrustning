@@ -773,13 +773,105 @@ Group defaults UI keeps three-way radio. Middle option relabelled "Föredra grup
 ## Remaining work
 
 - **Step 10 email templates**: visual review via Mailpit (`http://localhost:8025`) + extend `TestNotifications_EventTriggered` to assert body contains booking URL, dates, item list.
-- ~~**Issue events → GChat broadcast (3.5b-5 partial)**~~ ✅ fixed — `SendIssueCreated`, `SendIssueResolved`, `SendIssueCommented` now accept `gn Notifier` and call `sendBroadcastGChat` targeting the manager team's space. `IssueHandler` gains `GChatNotifier` field, wired in `main.go`.
+- ~~**Issue events → GChat broadcast (3.5b-5 partial)**~~ ✅ partially fixed — `SendIssueCreated`, `SendIssueResolved`, `SendIssueCommented` now accept `gn Notifier` and call `sendBroadcastGChat` targeting the manager team's space. `IssueHandler` gains `GChatNotifier` field, wired in `main.go`. Full fix in Phase 3.7 (issue_resolved/commented missing from system defaults, sendBroadcastEmail not called, teamID not plumbed for personal policy).
 - ~~**Manager-team GChat broadcast bug**~~ ✅ fixed — `SendBookingNeedsApproval` and `SendBookingSubmittedNoApproval` now use `managerTeamID()` (new `GetManagerTeam` sqlc query) instead of `b.UsedByTeamID` for both email and GChat broadcasts.
 - **No integration tests for GChat key management (3.5b-6)**: `POST /gchat-key`, `DELETE /gchat-key`, `GET /gchat-spaces`, `PUT /teams/{id}/gchat-space` have zero test coverage.
-- **GChat two-message thread pattern not implemented**: Current `GChatNotifier.Send()` sends one flat message. The intended UX is two messages using the same `threadKey`: (1) opener — unit name, dates, current status; (2) reply — full booking/issue details, item list, link. Both sent immediately; Chat API threads them by `threadKey`.
-- **Manager team (Utrustningsgruppen) not receiving GChat notifications**: Expected to receive `booking_submitted_no_approval` and manager-targeted events. Likely cause: Yggdrasil bookings are auto-confirmed (book-level, no approval needed) so `SendBookingNeedsApproval` never fires in the seed; `SendBookingSubmittedNoApproval` may not be firing either, or `IsGruppkanalEnabled` is returning false for the manager team's prefs. Needs investigation.
+- ~~**GChat two-message thread pattern not implemented**~~ → Phase 3.7.
+- ~~**Manager team (Utrustningsgruppen) not receiving GChat notifications**~~ → Investigate after Phase 3.7 is tested; may be resolved by the issue-event fixes.
 
-Deferred items (personal email override, GChat richness, Slack/Teams, push notifications, logo in web header) moved to `docs/BACKLOG.md`.
+Deferred items (personal email override, GChat card richness, Slack/Teams, push notifications, logo in web header) moved to `docs/BACKLOG.md`.
+
+---
+
+## Phase 3.7 — GChat threading + issue broadcast parity
+
+### Goals
+
+1. **GChat two-message thread** — Every GChat broadcast sends two messages using the same `threadKey`, so Chat API groups them:
+   - **Opener** — compact summary: team/entity name, dates or issue title, item count, current status.
+   - **Detail reply** — full text body, item list (bookings) or description + history (issues), link to the entity.
+   Both messages are sent immediately on every event; subsequent events for the same entity append to the same thread.
+
+2. **Issue events as manager-team broadcast events** — `issue_resolved` and `issue_commented` are currently classified as personal events (no Gruppkanal). They are promoted to manager-team events so they follow the same dispatch pattern as `issue_created` and booking events.
+
+3. **`sendBroadcastEmail` for all issue events** — Currently absent. After this phase `issue_created`, `issue_resolved`, and `issue_commented` all call `sendBroadcastEmail` targeting the manager team.
+
+4. **`issue_assigned_to_me`** — stays personal-only. No changes.
+
+---
+
+### Dispatch model after Phase 3.7
+
+| Event | Broadcast target | Channels | Personal email |
+|---|---|---|---|
+| `issue_created` | Manager team | email + gchat (if configured) | Each manager; policy resolved against manager team |
+| `issue_resolved` | Manager team | email + gchat (if configured) | Reporter + assignees; policy resolved against manager team |
+| `issue_commented` | Manager team | email + gchat (if configured) | Reporter + assignees; policy resolved against manager team |
+| `issue_assigned_to_me` | — | — | Assignee only (personal, always) |
+
+The team settings tab for manager-level teams shows all four issue events under broadcast. Users' personal tab shows `issue_resolved` and `issue_commented` in the three-column radio (was: simple toggle).
+
+---
+
+### Changes
+
+#### `prefs.go` — promote `issue_resolved` and `issue_commented`
+
+```go
+// BroadcastSystemDefaults — add to manager-team event block:
+EventIssueResolved:  {Gruppkanal: on, PersonalEmailPolicy: PolicyIfNoBroadcast},
+EventIssueCommented: {Gruppkanal: on, PersonalEmailPolicy: PolicyIfNoBroadcast},
+```
+
+Remove `issue_resolved` and `issue_commented` from the personal-events block (they keep a fallback `PolicyAlways` via `BroadcastSystemDefaults` when no team context exists, e.g. for the reporter who may not be a manager).
+
+#### `send.go` — GChat two-message thread
+
+`sendBroadcastGChat` gains two text parameters: `openerText string, detailText string`. It calls `gn.Send()` twice:
+
+```
+1. Send opener with ThreadKey → Chat API creates or joins thread
+2. Send detail with same ThreadKey → Chat API appends as reply
+```
+
+Each Send call logs a separate `notification_log` row (same sentinel `user_id`, same `thread_key`).
+
+A new helper `bookingOpenerText(data BookingEmailData) string` returns a compact one-line summary, e.g.:
+```
+Yggdrasil: 14 jun–18 jun · 3 artiklar · Bekräftad
+```
+
+`issueOpenerText(data IssueEmailData) string` returns:
+```
+Ärende: Trasig tältpinne · Allvarlig · Öppen
+```
+
+All existing `sendBroadcastGChat` call sites pass `openerText` as the new first text arg and `textBody` as detail.
+
+#### `send.go` — issue event fixes
+
+- `SendIssueCreated`: change `sendTo` call to pass `managerTeamID` string (not `""`) so personal email policy resolves against the manager team. Add `sendBroadcastEmail` call.
+- `SendIssueResolved`, `SendIssueCommented`: change `sendTo` calls to pass `managerTeamID` string (not `""`). Add `sendBroadcastEmail` calls. The personal recipients (reporter + assignees) are still the same individuals — only the team context used for policy resolution changes.
+
+#### Frontend — team settings and personal tab
+
+`teamTabEvents` (team detail panel): add `issue_resolved` and `issue_commented` under `accessLevel === 'manager'` branch.
+
+`allIssueEvents` (group defaults table): add `issue_resolved` and `issue_commented`.
+
+`personalEvents` (personal tab simple toggles): remove `issue_resolved` and `issue_commented` — they move to the three-column `teamEvents` radio table. They were already in `teamEvents`; add them to `managerOnlyKeys`.
+
+---
+
+### Implementation steps
+
+| Step | Deliverable | Status |
+|---|---|---|
+| 3.7-1 | `prefs.go`: promote `issue_resolved`/`issue_commented` to manager-team events in `BroadcastSystemDefaults` | ✅ done |
+| 3.7-2 | `send.go`: two-message thread in `sendBroadcastGChat` + opener helper functions | ✅ done |
+| 3.7-3 | `send.go`: add `sendBroadcastEmail` for all three issue events; fix `teamID` passed to `sendTo` | ✅ done |
+| 3.7-4 | Frontend: `teamTabEvents` + `allIssueEvents` + `personalEvents` / `teamEvents` / `managerOnlyKeys` | ✅ done |
+| 3.7-5 | Verify manager-team GChat dispatch end-to-end in dev (seed + Mailpit + real space if available) | ❌ |
 
 ---
 

@@ -638,6 +638,89 @@ func buildBookingText(d BookingEmailData, bannerLabel, start, end, teamLabel, bo
 	return b.String()
 }
 
+// BookingOpenerText returns a compact GChat opener for a booking event, including the booking link.
+// Example: "Yggdrasil: 14 jun–18 jun · 3 artiklar · Bekräftad\nhttps://…/bookings/uuid"
+func BookingOpenerText(d BookingEmailData) string {
+	start := formatDate(d.Lang, d.StartDate)
+	end := formatDate(d.Lang, d.EndDate)
+	status := i18n.T(d.Lang, "booking_status_"+d.Status)
+	prefix := d.TeamName
+	if prefix == "" {
+		prefix = d.GroupName
+	}
+	itemCount := len(d.Items)
+	bookingURL := d.BaseURL + "/bookings/" + uuidString(d.BookingID)
+	return fmt.Sprintf("%s: %s–%s · %d artiklar · %s\n%s", prefix, start, end, itemCount, status, bookingURL)
+}
+
+// BookingDetailText returns the GChat detail reply for a booking — items list + optional notes.
+// The link is in the opener; no need to repeat it here.
+func BookingDetailText(d BookingEmailData) string {
+	var b strings.Builder
+	if len(d.Items) > 0 {
+		curLoc := ""
+		for _, it := range d.Items {
+			if it.LocationName != curLoc {
+				curLoc = it.LocationName
+				fmt.Fprintf(&b, "[%s]\n", it.LocationName)
+			}
+			if it.IndividuallyTracked {
+				name := it.CommercialName
+				if it.CommonName != "" {
+					name += " – " + it.CommonName
+				}
+				if it.Place != "" {
+					name += " (" + it.Place + ")"
+				}
+				fmt.Fprintf(&b, "• %s\n", name)
+			} else {
+				fmt.Fprintf(&b, "• %s\n", it.CommercialName)
+			}
+		}
+	}
+	if d.Notes != "" {
+		fmt.Fprintf(&b, "\n_%s_\n", d.Notes)
+	}
+	return b.String()
+}
+
+// IssueDetailText returns the GChat detail reply for an issue — reporter + description + history.
+// The link is in the opener; no need to repeat it here.
+func IssueDetailText(d IssueEmailData) string {
+	var b strings.Builder
+	if d.ReporterName != "" {
+		fmt.Fprintf(&b, "Rapporterat av %s\n", d.ReporterName)
+	}
+	if d.Description != "" {
+		fmt.Fprintf(&b, "%s\n", truncate(d.Description, 300))
+	}
+	if len(d.Events) > 0 {
+		b.WriteString("\n")
+		for _, ev := range d.Events {
+			var ts string
+			if ev.CreatedAt.Valid {
+				ts = ev.CreatedAt.Time.Format("2 jan 15:04")
+			}
+			if ev.EventType == "comment" {
+				fmt.Fprintf(&b, "%s — %s\n_%s_\n", ts, ev.ActorName, ev.Description)
+			} else {
+				label := i18n.T(d.Lang, "issue_event_type_"+ev.EventType)
+				fmt.Fprintf(&b, "%s — %s: %s\n", ts, ev.ActorName, label)
+			}
+		}
+	}
+	return b.String()
+}
+
+// IssueOpenerText returns a compact GChat opener for an issue event, including the issue link.
+// Example: "Ärende: Trasig tältpinne · Allvarlig · Öppen\nhttps://…/issues/uuid"
+func IssueOpenerText(d IssueEmailData) string {
+	severity := i18n.T(d.Lang, "issue_severity_"+d.Severity)
+	status := i18n.T(d.Lang, "issue_status_"+d.Status)
+	issueURL := d.BaseURL + "/issues/" + uuidString(d.IssueID)
+	return fmt.Sprintf("Ärende: %s · %s · %s\n%s", d.Title, severity, status, issueURL)
+}
+
 // buildIssueText constructs the plain-text version of an issue email.
 func buildIssueText(d IssueEmailData, desc, issueURL string) string {
 	var b strings.Builder

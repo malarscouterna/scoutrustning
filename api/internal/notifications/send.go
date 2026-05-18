@@ -181,10 +181,14 @@ func managerTeamID(ctx context.Context, q *db.Queries, groupID string) pgtype.UU
 	return id
 }
 
-// sendBroadcastGChat sends one card to a team's mapped Google Chat Space if configured.
+// sendBroadcastGChat sends two threaded messages to a team's mapped Google Chat Space.
+// First message is a compact opener (team name + summary); second is the full detail, sent as a
+// reply in the same thread via entityThreadKey. All events for the same booking/issue share one
+// thread in a space, even when triggered by different teams. The team name prefix in the opener
+// distinguishes which team the message is addressed to.
 // Fires only if "gchat" is in the team's effective Gruppkanal and IsGruppkanalEnabled.
 // Uses sentinel user_id "gchat:<teamID>" in notification_log.
-func sendBroadcastGChat(ctx context.Context, q *db.Queries, gn Notifier, groupID string, teamID pgtype.UUID, event string, entityID pgtype.UUID, threadKey, subject, textBody string) {
+func sendBroadcastGChat(ctx context.Context, q *db.Queries, gn Notifier, groupID string, teamID pgtype.UUID, event string, entityID pgtype.UUID, entityThreadKey, openerText, detailText string) {
 	if !teamID.Valid {
 		return
 	}
@@ -202,32 +206,49 @@ func sendBroadcastGChat(ctx context.Context, q *db.Queries, gn Notifier, groupID
 		return
 	}
 
-	msg := Message{
-		GroupID:   groupID,
-		To:        team.GchatSpaceID.String,
-		Subject:   subject,
-		TextBody:  textBody,
-		ThreadKey: threadKey,
+	// Use the entity-level threadKey so all events for the same booking/issue land in
+	// one thread regardless of which team triggered them.
+	gchatThreadKey := entityThreadKey
+
+	// In dev mode (LabelTeam=true) prepend the team name so messages from different
+	// teams are easy to tell apart when one space is linked to both roles.
+	labeledOpener := openerText
+	if n, ok := gn.(*GChatNotifier); ok && n.LabelTeam {
+		labeledOpener = "*" + team.Name + "*  " + openerText
 	}
 
-	status := "sent"
-	errText := pgtype.Text{}
-	if sendErr := gn.Send(ctx, msg); sendErr != nil {
-		slog.Error("gchat broadcast failed", "event", event, "space", team.GchatSpaceID.String, "error", sendErr)
-		status = "failed"
-		errText = pgtype.Text{String: sendErr.Error(), Valid: true}
+	space := team.GchatSpaceID.String
+	sentinelUserID := "gchat:" + teamIDStr(teamID)
+
+	gchatSend := func(text string) {
+		msg := Message{
+			GroupID:   groupID,
+			To:        space,
+			Subject:   text,
+			ThreadKey: gchatThreadKey,
+		}
+		status := "sent"
+		errStr := ""
+		if sendErr := gn.Send(ctx, msg); sendErr != nil {
+			slog.Error("gchat broadcast failed", "event", event, "space", space, "error", sendErr)
+			status = "failed"
+			errStr = sendErr.Error()
+		}
+		_ = q.LogNotification(ctx, db.LogNotificationParams{
+			GroupID:   groupID,
+			UserID:    sentinelUserID,
+			EventType: event,
+			EntityID:  entityID,
+			Channel:   "gchat",
+			Status:    status,
+			Error:     pgtype.Text{String: errStr, Valid: errStr != ""},
+			ThreadKey: pgtype.Text{String: gchatThreadKey, Valid: gchatThreadKey != ""},
+			MessageID: pgtype.Text{},
+		})
 	}
-	_ = q.LogNotification(ctx, db.LogNotificationParams{
-		GroupID:   groupID,
-		UserID:    "gchat:" + teamIDStr(teamID),
-		EventType: event,
-		EntityID:  entityID,
-		Channel:   "gchat",
-		Status:    status,
-		Error:     errText,
-		ThreadKey: pgtype.Text{String: threadKey, Valid: threadKey != ""},
-		MessageID: pgtype.Text{},
-	})
+
+	gchatSend(labeledOpener)
+	gchatSend(detailText)
 }
 
 // sendBroadcastEmail sends one email to a team's shared notification_email address if configured.
@@ -307,6 +328,12 @@ func bookingMsg(ctx context.Context, q *db.Queries, b db.Booking, event, baseURL
 	}
 }
 
+// bookingBroadcastTexts returns the GChat opener and detail text for a booking broadcast.
+func bookingBroadcastTexts(ctx context.Context, q *db.Queries, b db.Booking, event, baseURL string) (opener, detail string) {
+	data := fetchBookingEmailData(ctx, q, b, event, "sv", "", baseURL)
+	return BookingOpenerText(data), BookingDetailText(data)
+}
+
 // issueMsg builds a Message for an issue event for a specific recipient.
 func issueMsg(ctx context.Context, q *db.Queries, issue db.IssueReport, event, baseURL string, r recipient) Message {
 	data := fetchIssueEmailData(ctx, q, issue, event, r.lang, r.name, baseURL)
@@ -314,6 +341,23 @@ func issueMsg(ctx context.Context, q *db.Queries, issue db.IssueReport, event, b
 	return Message{
 		To:       r.email,
 		Subject:  i18n.T(r.lang, "email_subject_"+event, map[string]string{"title": issue.Title}),
+		Body:     htmlBody,
+		TextBody: textBody,
+	}
+}
+
+// issueBroadcastTexts returns the GChat opener and detail text for an issue broadcast.
+func issueBroadcastTexts(ctx context.Context, q *db.Queries, issue db.IssueReport, event, baseURL string) (opener, detail string) {
+	data := fetchIssueEmailData(ctx, q, issue, event, "sv", "", baseURL)
+	return IssueOpenerText(data), IssueDetailText(data)
+}
+
+// issueBroadcastEmail builds a broadcast email Message for an issue event (no personal recipient).
+func issueBroadcastEmail(ctx context.Context, q *db.Queries, issue db.IssueReport, event, baseURL string) Message {
+	data := fetchIssueEmailData(ctx, q, issue, event, "sv", "", baseURL)
+	htmlBody, textBody := renderIssueEmail(data)
+	return Message{
+		Subject:  i18n.T("sv", "email_subject_"+event, map[string]string{"title": issue.Title}),
 		Body:     htmlBody,
 		TextBody: textBody,
 	}
@@ -334,10 +378,11 @@ func issueThreadKey(issue db.IssueReport) string {
 func SendBookingNeedsApproval(ctx context.Context, q *db.Queries, n Notifier, gn Notifier, b db.Booking, baseURL string) {
 	tid := teamIDStr(b.UsedByTeamID)
 	tk := bookingThreadKey(b)
-	broadcastMsg := bookingMsg(ctx, q, b, EventBookingNeedsApproval, baseURL, recipient{lang: "sv"})
 	mgrTeam := managerTeamID(ctx, q, b.GroupID)
+	broadcastMsg := bookingMsg(ctx, q, b, EventBookingNeedsApproval, baseURL, recipient{lang: "sv"})
+	opener, detail := bookingBroadcastTexts(ctx, q, b, EventBookingNeedsApproval, baseURL)
 	sendBroadcastEmail(ctx, q, n, b.GroupID, mgrTeam, EventBookingNeedsApproval, b.ID, tk, broadcastMsg)
-	sendBroadcastGChat(ctx, q, gn, b.GroupID, mgrTeam, EventBookingNeedsApproval, b.ID, tk, broadcastMsg.Subject, broadcastMsg.TextBody)
+	sendBroadcastGChat(ctx, q, gn, b.GroupID, mgrTeam, EventBookingNeedsApproval, b.ID, tk, opener, detail)
 	for _, r := range groupManagers(ctx, q, b.GroupID) {
 		r := r
 		sendTo(ctx, q, n, b.GroupID, tid, r, EventBookingNeedsApproval, "email", b.ID, tk, func(lang string) Message {
@@ -349,10 +394,11 @@ func SendBookingNeedsApproval(ctx context.Context, q *db.Queries, n Notifier, gn
 func SendBookingSubmittedNoApproval(ctx context.Context, q *db.Queries, n Notifier, gn Notifier, b db.Booking, baseURL string) {
 	tid := teamIDStr(b.UsedByTeamID)
 	tk := bookingThreadKey(b)
-	broadcastMsg := bookingMsg(ctx, q, b, EventBookingSubmittedNoApproval, baseURL, recipient{lang: "sv"})
 	mgrTeam := managerTeamID(ctx, q, b.GroupID)
+	broadcastMsg := bookingMsg(ctx, q, b, EventBookingSubmittedNoApproval, baseURL, recipient{lang: "sv"})
+	opener, detail := bookingBroadcastTexts(ctx, q, b, EventBookingSubmittedNoApproval, baseURL)
 	sendBroadcastEmail(ctx, q, n, b.GroupID, mgrTeam, EventBookingSubmittedNoApproval, b.ID, tk, broadcastMsg)
-	sendBroadcastGChat(ctx, q, gn, b.GroupID, mgrTeam, EventBookingSubmittedNoApproval, b.ID, tk, broadcastMsg.Subject, broadcastMsg.TextBody)
+	sendBroadcastGChat(ctx, q, gn, b.GroupID, mgrTeam, EventBookingSubmittedNoApproval, b.ID, tk, opener, detail)
 	for _, r := range groupManagers(ctx, q, b.GroupID) {
 		r := r
 		sendTo(ctx, q, n, b.GroupID, tid, r, EventBookingSubmittedNoApproval, "email", b.ID, tk, func(lang string) Message {
@@ -365,8 +411,9 @@ func SendBookingConfirmed(ctx context.Context, q *db.Queries, n Notifier, gn Not
 	tid := teamIDStr(b.UsedByTeamID)
 	tk := bookingThreadKey(b)
 	broadcastMsg := bookingMsg(ctx, q, b, EventBookingConfirmed, baseURL, recipient{lang: "sv"})
+	opener, detail := bookingBroadcastTexts(ctx, q, b, EventBookingConfirmed, baseURL)
 	sendBroadcastEmail(ctx, q, n, b.GroupID, b.UsedByTeamID, EventBookingConfirmed, b.ID, tk, broadcastMsg)
-	sendBroadcastGChat(ctx, q, gn, b.GroupID, b.UsedByTeamID, EventBookingConfirmed, b.ID, tk, broadcastMsg.Subject, broadcastMsg.TextBody)
+	sendBroadcastGChat(ctx, q, gn, b.GroupID, b.UsedByTeamID, EventBookingConfirmed, b.ID, tk, opener, detail)
 	recipients := dedup(append(
 		func() []recipient {
 			if r, ok := bookingCreator(ctx, q, b.GroupID, b.CreatedBy); ok {
@@ -392,8 +439,9 @@ func SendBookingRejected(ctx context.Context, q *db.Queries, n Notifier, gn Noti
 	tid := teamIDStr(b.UsedByTeamID)
 	tk := bookingThreadKey(b)
 	broadcastMsg := bookingMsg(ctx, q, b, EventBookingRejected, baseURL, recipient{lang: "sv"})
+	opener, detail := bookingBroadcastTexts(ctx, q, b, EventBookingRejected, baseURL)
 	sendBroadcastEmail(ctx, q, n, b.GroupID, b.UsedByTeamID, EventBookingRejected, b.ID, tk, broadcastMsg)
-	sendBroadcastGChat(ctx, q, gn, b.GroupID, b.UsedByTeamID, EventBookingRejected, b.ID, tk, broadcastMsg.Subject, broadcastMsg.TextBody)
+	sendBroadcastGChat(ctx, q, gn, b.GroupID, b.UsedByTeamID, EventBookingRejected, b.ID, tk, opener, detail)
 	sendTo(ctx, q, n, b.GroupID, tid, r, EventBookingRejected, "email", b.ID, tk, func(lang string) Message {
 		return bookingMsg(ctx, q, b, EventBookingRejected, baseURL, r)
 	})
@@ -403,8 +451,9 @@ func SendBookingCancelled(ctx context.Context, q *db.Queries, n Notifier, gn Not
 	tid := teamIDStr(b.UsedByTeamID)
 	tk := bookingThreadKey(b)
 	broadcastMsg := bookingMsg(ctx, q, b, EventBookingCancelled, baseURL, recipient{lang: "sv"})
+	opener, detail := bookingBroadcastTexts(ctx, q, b, EventBookingCancelled, baseURL)
 	sendBroadcastEmail(ctx, q, n, b.GroupID, b.UsedByTeamID, EventBookingCancelled, b.ID, tk, broadcastMsg)
-	sendBroadcastGChat(ctx, q, gn, b.GroupID, b.UsedByTeamID, EventBookingCancelled, b.ID, tk, broadcastMsg.Subject, broadcastMsg.TextBody)
+	sendBroadcastGChat(ctx, q, gn, b.GroupID, b.UsedByTeamID, EventBookingCancelled, b.ID, tk, opener, detail)
 	recipients := dedup(append(
 		func() []recipient {
 			if r, ok := bookingCreator(ctx, q, b.GroupID, b.CreatedBy); ok {
@@ -427,11 +476,13 @@ func SendBookingCancelled(ctx context.Context, q *db.Queries, n Notifier, gn Not
 func SendIssueCreated(ctx context.Context, q *db.Queries, n Notifier, gn Notifier, issue db.IssueReport, baseURL string) {
 	tk := issueThreadKey(issue)
 	mgrTeam := managerTeamID(ctx, q, issue.GroupID)
-	broadcastMsg := issueMsg(ctx, q, issue, EventIssueCreated, baseURL, recipient{lang: "sv"})
-	sendBroadcastGChat(ctx, q, gn, issue.GroupID, mgrTeam, EventIssueCreated, issue.ID, tk, broadcastMsg.Subject, broadcastMsg.TextBody)
+	mgrTeamID := teamIDStr(mgrTeam)
+	opener, detail := issueBroadcastTexts(ctx, q, issue, EventIssueCreated, baseURL)
+	sendBroadcastEmail(ctx, q, n, issue.GroupID, mgrTeam, EventIssueCreated, issue.ID, tk, issueBroadcastEmail(ctx, q, issue, EventIssueCreated, baseURL))
+	sendBroadcastGChat(ctx, q, gn, issue.GroupID, mgrTeam, EventIssueCreated, issue.ID, tk, opener, detail)
 	for _, r := range groupManagers(ctx, q, issue.GroupID) {
 		r := r
-		sendTo(ctx, q, n, issue.GroupID, "", r, EventIssueCreated, "email", issue.ID, tk, func(lang string) Message {
+		sendTo(ctx, q, n, issue.GroupID, mgrTeamID, r, EventIssueCreated, "email", issue.ID, tk, func(lang string) Message {
 			return issueMsg(ctx, q, issue, EventIssueCreated, baseURL, r)
 		})
 	}
@@ -458,8 +509,10 @@ func SendIssueResolved(ctx context.Context, q *db.Queries, n Notifier, gn Notifi
 	tk := issueThreadKey(issue)
 
 	mgrTeam := managerTeamID(ctx, q, issue.GroupID)
-	broadcastMsg := issueMsg(ctx, q, issue, EventIssueResolved, baseURL, recipient{lang: "sv"})
-	sendBroadcastGChat(ctx, q, gn, issue.GroupID, mgrTeam, EventIssueResolved, issue.ID, tk, broadcastMsg.Subject, broadcastMsg.TextBody)
+	mgrTeamID := teamIDStr(mgrTeam)
+	opener, detail := issueBroadcastTexts(ctx, q, issue, EventIssueResolved, baseURL)
+	sendBroadcastEmail(ctx, q, n, issue.GroupID, mgrTeam, EventIssueResolved, issue.ID, tk, issueBroadcastEmail(ctx, q, issue, EventIssueResolved, baseURL))
+	sendBroadcastGChat(ctx, q, gn, issue.GroupID, mgrTeam, EventIssueResolved, issue.ID, tk, opener, detail)
 
 	recipients := []recipient{fromGetUserRow(reporter)}
 	for _, a := range assignees {
@@ -469,7 +522,7 @@ func SendIssueResolved(ctx context.Context, q *db.Queries, n Notifier, gn Notifi
 	}
 	for _, r := range dedup(recipients) {
 		r := r
-		sendTo(ctx, q, n, issue.GroupID, "", r, EventIssueResolved, "email", issue.ID, tk, func(lang string) Message {
+		sendTo(ctx, q, n, issue.GroupID, mgrTeamID, r, EventIssueResolved, "email", issue.ID, tk, func(lang string) Message {
 			return issueMsg(ctx, q, issue, EventIssueResolved, baseURL, r)
 		})
 	}
@@ -484,8 +537,10 @@ func SendIssueCommented(ctx context.Context, q *db.Queries, n Notifier, gn Notif
 	tk := issueThreadKey(issue)
 
 	mgrTeam := managerTeamID(ctx, q, issue.GroupID)
-	broadcastMsg := issueMsg(ctx, q, issue, EventIssueCommented, baseURL, recipient{lang: "sv"})
-	sendBroadcastGChat(ctx, q, gn, issue.GroupID, mgrTeam, EventIssueCommented, issue.ID, tk, broadcastMsg.Subject, broadcastMsg.TextBody)
+	mgrTeamID := teamIDStr(mgrTeam)
+	opener, detail := issueBroadcastTexts(ctx, q, issue, EventIssueCommented, baseURL)
+	sendBroadcastEmail(ctx, q, n, issue.GroupID, mgrTeam, EventIssueCommented, issue.ID, tk, issueBroadcastEmail(ctx, q, issue, EventIssueCommented, baseURL))
+	sendBroadcastGChat(ctx, q, gn, issue.GroupID, mgrTeam, EventIssueCommented, issue.ID, tk, opener, detail)
 
 	recipients := []recipient{fromGetUserRow(reporter)}
 	for _, a := range assignees {
@@ -495,7 +550,7 @@ func SendIssueCommented(ctx context.Context, q *db.Queries, n Notifier, gn Notif
 	}
 	for _, r := range dedup(recipients) {
 		r := r
-		sendTo(ctx, q, n, issue.GroupID, "", r, EventIssueCommented, "email", issue.ID, tk, func(lang string) Message {
+		sendTo(ctx, q, n, issue.GroupID, mgrTeamID, r, EventIssueCommented, "email", issue.ID, tk, func(lang string) Message {
 			return issueMsg(ctx, q, issue, EventIssueCommented, baseURL, r)
 		})
 	}

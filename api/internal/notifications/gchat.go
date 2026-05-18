@@ -24,8 +24,11 @@ import (
 // Sending uses chat.bot scope (service account direct). Listing spaces and managing
 // memberships uses DWD (chat.spaces.readonly + chat.memberships) impersonating gchat_admin_email.
 // To must be the space resource name, e.g. "spaces/AAAA123".
+// LabelTeam prepends the team name to every opener message — useful in dev when the same
+// space is linked to multiple teams. Off by default in production.
 type GChatNotifier struct {
-	Q *db.Queries
+	Q         *db.Queries
+	LabelTeam bool
 }
 
 type serviceAccountKey struct {
@@ -303,13 +306,8 @@ func (g *GChatNotifier) Send(ctx context.Context, msg Message) error {
 		return err
 	}
 
-	text := msg.Subject
-	if msg.TextBody != "" {
-		text += "\n\n" + msg.TextBody
-	}
-
 	chatMsg := map[string]interface{}{
-		"text": text,
+		"text": msg.Subject,
 	}
 	if msg.ThreadKey != "" {
 		chatMsg["thread"] = map[string]interface{}{"threadKey": msg.ThreadKey}
