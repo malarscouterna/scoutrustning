@@ -53,7 +53,7 @@ importers:
         version: 5.55.1
       svelte-check:
         specifier: ^3.8.6
-        version: 3.8.6(postcss@8.5.8)(svelte@5.55.1)
+        version: 3.8.6(postcss@8.5.14)(svelte@5.55.1)
       tailwindcss:
         specifier: ^4.2.2
         version: 4.2.2
@@ -1525,8 +1525,8 @@ packages:
     resolution: {integrity: sha512-eW/gHNMlxdSP6dmG6uJip6FXN0EQBwm2clYYd8Wul42Cwu/DK8HEftzsapcNdYe2MfLiIwZqsDk2RDEsTE79hA==}
     engines: {node: '>=10'}
 
-  postcss@8.5.8:
-    resolution: {integrity: sha512-OW/rX8O/jXnm82Ey1k44pObPtdblfiuWnrd8X7GJ7emImCOstunGbXUpp7HdBrFQX6rJzn3sPT397Wp5aCwCHg==}
+  postcss@8.5.14:
+    resolution: {integrity: sha512-SoSL4+OSEtR99LHFZQiJLkT59C5B1amGO1NzTwj7TT1qCUgUO6hxOvzkOYxD+vMrXBM3XJIKzokoERdqQq/Zmg==}
     engines: {node: ^10 || ^12 || >=14}
 
   posthog-node@4.18.0:
@@ -3235,7 +3235,7 @@ snapshots:
 
   pify@5.0.0: {}
 
-  postcss@8.5.8:
+  postcss@8.5.14:
     dependencies:
       nanoid: 3.3.11
       picocolors: 1.1.1
@@ -3404,14 +3404,14 @@ snapshots:
 
   supports-preserve-symlinks-flag@1.0.0: {}
 
-  svelte-check@3.8.6(postcss@8.5.8)(svelte@5.55.1):
+  svelte-check@3.8.6(postcss@8.5.14)(svelte@5.55.1):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       chokidar: 3.6.0
       picocolors: 1.1.1
       sade: 1.8.1
       svelte: 5.55.1
-      svelte-preprocess: 5.1.4(postcss@8.5.8)(svelte@5.55.1)(typescript@5.9.3)
+      svelte-preprocess: 5.1.4(postcss@8.5.14)(svelte@5.55.1)(typescript@5.9.3)
       typescript: 5.9.3
     transitivePeerDependencies:
       - '@babel/core'
@@ -3428,7 +3428,7 @@ snapshots:
     dependencies:
       svelte: 5.55.1
 
-  svelte-preprocess@5.1.4(postcss@8.5.8)(svelte@5.55.1)(typescript@5.9.3):
+  svelte-preprocess@5.1.4(postcss@8.5.14)(svelte@5.55.1)(typescript@5.9.3):
     dependencies:
       '@types/pug': 2.0.10
       detect-indent: 6.1.0
@@ -3437,7 +3437,7 @@ snapshots:
       strip-indent: 3.0.0
       svelte: 5.55.1
     optionalDependencies:
-      postcss: 8.5.8
+      postcss: 8.5.14
       typescript: 5.9.3
 
   svelte@5.55.1:
@@ -3506,7 +3506,7 @@ snapshots:
     dependencies:
       lightningcss: 1.32.0
       picomatch: 4.0.4
-      postcss: 8.5.8
+      postcss: 8.5.14
       rolldown: 1.0.0-rc.12(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)
       tinyglobby: 0.2.15
     optionalDependencies:
