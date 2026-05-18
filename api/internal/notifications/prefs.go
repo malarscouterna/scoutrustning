@@ -134,6 +134,9 @@ type TeamNotifSettings struct {
 	// GruppkanalChannels is the team's explicit opt-in; nil means inherit group default.
 	GruppkanalChannels []string
 	Prefs              NotificationPrefs
+	// HasNotificationEmail and HasGchatSpace indicate whether each broadcast endpoint is configured.
+	HasNotificationEmail bool
+	HasGchatSpace        bool
 }
 
 // EffectiveGruppkanalChannels resolves the team's opted-in channels:
@@ -157,8 +160,10 @@ func GetTeamNotifSettings(ctx context.Context, q *db.Queries, groupID, teamID st
 		return TeamNotifSettings{}
 	}
 	return TeamNotifSettings{
-		GruppkanalChannels: row.GruppkanalChannels, // nil when NULL in DB
-		Prefs:              ParseNotificationPrefs(row.NotificationPrefs),
+		GruppkanalChannels:   row.GruppkanalChannels, // nil when NULL in DB
+		Prefs:                ParseNotificationPrefs(row.NotificationPrefs),
+		HasNotificationEmail: row.NotificationEmail.Valid && row.NotificationEmail.String != "",
+		HasGchatSpace:        row.GchatSpaceID.Valid && row.GchatSpaceID.String != "",
 	}
 }
 
