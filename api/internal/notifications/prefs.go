@@ -100,12 +100,12 @@ func BroadcastSystemDefaults() NotificationPrefs {
 		EventBookingReminder:            {Gruppkanal: on, PersonalEmailPolicy: PolicyIfNoBroadcast},
 		EventBookingOverdue:             {Gruppkanal: on, PersonalEmailPolicy: PolicyIfNoBroadcast},
 		EventBookingAnyCreated:          {Gruppkanal: off, PersonalEmailPolicy: PolicyIfNoBroadcast},
-		EventIssueCreated:               {Gruppkanal: on, PersonalEmailPolicy: PolicyIfNoBroadcast},
+		EventIssueCreated:   {Gruppkanal: on, PersonalEmailPolicy: PolicyIfNoBroadcast},
+		EventIssueResolved:  {Gruppkanal: on, PersonalEmailPolicy: PolicyIfNoBroadcast},
+		EventIssueCommented: {Gruppkanal: on, PersonalEmailPolicy: PolicyIfNoBroadcast},
 		// Personal events — no Gruppkanal, always-on by default.
 		EventBookingRejected:   {PersonalEmailPolicy: PolicyAlways},
 		EventIssueAssignedToMe: {PersonalEmailPolicy: PolicyAlways},
-		EventIssueResolved:     {PersonalEmailPolicy: PolicyAlways},
-		EventIssueCommented:    {PersonalEmailPolicy: PolicyAlways},
 	}
 }
 

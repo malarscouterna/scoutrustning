@@ -84,7 +84,7 @@ func main() {
 
 		personaIDs := buildPersonaIDs(demoMode, getenv("DEV_PERSONAS_PATH", "dev-personas.json"))
 		smtpNotifier := &notifications.SMTPNotifier{Q: queries}
-		gchatNotifier := &notifications.GChatNotifier{Q: queries}
+		gchatNotifier := &notifications.GChatNotifier{Q: queries, LabelTeam: os.Getenv("DEV_GCHAT_KEY_PATH") != ""}
 
 		// In demo mode, event sends from handlers are suppressed via NoopNotifier.
 		// The test-email endpoint always uses smtpNotifier directly so demo visitors

@@ -321,14 +321,14 @@
 	];
 	const allIssueEvents: EventRow[] = [
 		{ key: 'issue_created', label: m.notif_issue_created },
+		{ key: 'issue_resolved', label: m.notif_issue_resolved },
+		{ key: 'issue_commented', label: m.notif_issue_commented },
 	];
 
 	// Personal events: user is the named subject — simple on/off toggle.
 	const personalEvents: EventRow[] = [
 		{ key: 'booking_rejected', label: m.notif_booking_rejected },
 		{ key: 'issue_assigned_to_me', label: m.notif_issue_assigned_to_me, locked: true },
-		{ key: 'issue_resolved', label: m.notif_issue_resolved },
-		{ key: 'issue_commented', label: m.notif_issue_commented },
 	];
 
 	// Team/role events: user notified as a team or role member — three-column radio.
@@ -342,8 +342,10 @@
 		{ key: 'booking_submitted_no_approval', label: m.notif_booking_submitted_no_approval },
 		{ key: 'booking_any_created', label: m.notif_booking_any_created },
 		{ key: 'issue_created', label: m.notif_issue_created },
+		{ key: 'issue_resolved', label: m.notif_issue_resolved },
+		{ key: 'issue_commented', label: m.notif_issue_commented },
 	];
-	const managerOnlyKeys = new Set(['booking_needs_approval', 'booking_submitted_no_approval', 'booking_any_created', 'issue_created']);
+	const managerOnlyKeys = new Set(['booking_needs_approval', 'booking_submitted_no_approval', 'booking_any_created', 'issue_created', 'issue_resolved', 'issue_commented']);
 
 	let notifPrefs = $state<NotificationPrefs | null>(null);
 	$effect(() => { notifPrefs = data.notificationPrefs; });
@@ -524,6 +526,8 @@
 				{ key: 'booking_submitted_no_approval', label: m.notif_booking_submitted_no_approval },
 				{ key: 'booking_any_created', label: m.notif_booking_any_created },
 				{ key: 'issue_created', label: m.notif_issue_created },
+				{ key: 'issue_resolved', label: m.notif_issue_resolved },
+				{ key: 'issue_commented', label: m.notif_issue_commented },
 			);
 		}
 		return base;
