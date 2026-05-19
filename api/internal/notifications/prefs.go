@@ -133,7 +133,10 @@ type TeamNotifSettings struct {
 	// GruppkanalChannels is the team's explicit opt-in; nil means inherit group default.
 	GruppkanalChannels []string
 	Prefs              NotificationPrefs
-	// HasNotificationEmail and HasGchatSpace indicate whether each broadcast endpoint is configured.
+	// Broadcast endpoint values — empty string means not configured.
+	NotificationEmail string
+	GchatSpaceID      string
+	// Derived convenience booleans.
 	HasNotificationEmail bool
 	HasGchatSpace        bool
 }
@@ -158,11 +161,21 @@ func GetTeamNotifSettings(ctx context.Context, q *db.Queries, groupID, teamID st
 	if err != nil {
 		return TeamNotifSettings{}
 	}
+	email := ""
+	if row.NotificationEmail.Valid {
+		email = row.NotificationEmail.String
+	}
+	space := ""
+	if row.GchatSpaceID.Valid {
+		space = row.GchatSpaceID.String
+	}
 	return TeamNotifSettings{
 		GruppkanalChannels:   row.GruppkanalChannels, // nil when NULL in DB
 		Prefs:                ParseNotificationPrefs(row.NotificationPrefs),
-		HasNotificationEmail: row.NotificationEmail.Valid && row.NotificationEmail.String != "",
-		HasGchatSpace:        row.GchatSpaceID.Valid && row.GchatSpaceID.String != "",
+		NotificationEmail:    email,
+		GchatSpaceID:         space,
+		HasNotificationEmail: email != "",
+		HasGchatSpace:        space != "",
 	}
 }
 
@@ -266,6 +279,82 @@ func ResolvePersonalEmailPolicy(ctx context.Context, q *db.Queries, userID, grou
 	return PolicyAlways
 }
 
+// dispatchSettings holds team and group notification settings resolved once per Send* call.
+type dispatchSettings struct {
+	team          TeamNotifSettings
+	groupPrefs    NotificationPrefs
+	groupChannels []string // DefaultGruppkanalChannels
+	effective     []string // EffectiveGruppkanalChannels(team, group)
+}
+
+// loadDispatchSettings resolves team and group settings for one event dispatch.
+// Pass teamID="" when no team context exists (e.g. personal events).
+func loadDispatchSettings(ctx context.Context, q *db.Queries, groupID, teamID string) dispatchSettings {
+	team := GetTeamNotifSettings(ctx, q, groupID, teamID)
+	row, _ := q.GetGroupNotificationDefaults(ctx, groupID)
+	groupPrefs := ParseNotificationPrefs(row.NotificationDefaults)
+	effective := EffectiveGruppkanalChannels(team.GruppkanalChannels, row.DefaultGruppkanalChannels)
+	return dispatchSettings{
+		team:          team,
+		groupPrefs:    groupPrefs,
+		groupChannels: row.DefaultGruppkanalChannels,
+		effective:     effective,
+	}
+}
+
+// isGruppkanalEnabled reports whether the Gruppkanal should fire for event,
+// resolved through team → group → system defaults using pre-loaded settings.
+func isGruppkanalEnabled(ds dispatchSettings, event string) bool {
+	if enabled, ok := ds.team.Prefs.GruppkanalEnabled(event); ok {
+		return enabled
+	}
+	if enabled, ok := ds.groupPrefs.GruppkanalEnabled(event); ok {
+		return enabled
+	}
+	sys := BroadcastSystemDefaults()
+	if ev, ok := sys[event]; ok && ev.Gruppkanal != nil {
+		return *ev.Gruppkanal
+	}
+	return false
+}
+
+// resolvePersonalEmailPolicy returns the effective personal email policy for a user,
+// using pre-loaded team and group settings and only fetching the user's own prefs.
+func resolvePersonalEmailPolicy(ctx context.Context, q *db.Queries, ds dispatchSettings, userID, groupID, event string) PersonalEmailPolicy {
+	userPrefsRaw, _ := q.GetUserNotificationPrefs(ctx, db.GetUserNotificationPrefsParams{
+		ID: userID, GroupID: groupID,
+	})
+	userPrefs := ParseNotificationPrefs(userPrefsRaw)
+	if up, ok := userPrefs.Policy(event); ok {
+		return up
+	}
+	if tp, ok := ds.team.Prefs.Policy(event); ok {
+		return tp
+	}
+	if gp, ok := ds.groupPrefs.Policy(event); ok {
+		return gp
+	}
+	sys := BroadcastSystemDefaults()
+	if ev, ok := sys[event]; ok && ev.PersonalEmailPolicy != "" {
+		return ev.PersonalEmailPolicy
+	}
+	return PolicyAlways
+}
+
+// HasConfiguredBroadcast reports whether any channel in the effective Gruppkanal list
+// has a real delivery endpoint configured on the team.
+func HasConfiguredBroadcast(effective []string, ts TeamNotifSettings) bool {
+	for _, ch := range effective {
+		if ch == "email" && ts.HasNotificationEmail {
+			return true
+		}
+		if ch == "gchat" && ts.HasGchatSpace {
+			return true
+		}
+	}
+	return false
+}
+
 // mustParseUUID parses a UUID string; returns zero UUID on error.
 func mustParseUUID(s string) pgtype.UUID {
 	var u pgtype.UUID
@@ -273,9 +362,9 @@ func mustParseUUID(s string) pgtype.UUID {
 	return u
 }
 
-// teamIDStr converts a nullable UUID (e.g. booking.UsedByTeamID) to a string
-// suitable for passing as teamID. Returns "" if unset.
-func teamIDStr(u pgtype.UUID) string {
+// formatUUID converts a nullable UUID to a hex string suitable for use as a team/entity ID.
+// Returns "" if unset.
+func formatUUID(u pgtype.UUID) string {
 	if !u.Valid {
 		return ""
 	}

@@ -70,12 +70,19 @@ func (h *NotificationPrefsHandler) PutMe(w http.ResponseWriter, r *http.Request)
 		existing = notifications.NotificationPrefs{}
 	}
 
+	validPolicies := map[string]bool{
+		notifications.PolicyAlways: true, notifications.PolicyIfNoBroadcast: true, notifications.PolicyNever: true,
+	}
 	for event, prefs := range incoming {
 		if prefs == nil {
 			delete(existing, event)
-		} else {
-			existing[event] = *prefs
+			continue
 		}
+		if prefs.PersonalEmailPolicy != "" && !validPolicies[prefs.PersonalEmailPolicy] {
+			WriteError(w, http.StatusBadRequest, "invalid personal_email_policy for event "+event)
+			return
+		}
+		existing[event] = *prefs
 	}
 
 	merged, err := json.Marshal(existing)
@@ -167,6 +174,16 @@ func (h *NotificationPrefsHandler) PutGroupDefaults(w http.ResponseWriter, r *ht
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
+	}
+	validEvents := make(map[string]bool, len(notifications.AllEvents))
+	for _, e := range notifications.AllEvents {
+		validEvents[e] = true
+	}
+	for event := range body.Defaults {
+		if !validEvents[event] {
+			WriteError(w, http.StatusBadRequest, "unknown event key: "+event)
+			return
+		}
 	}
 	encoded, err := json.Marshal(body.Defaults)
 	if err != nil {

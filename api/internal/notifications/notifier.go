@@ -33,6 +33,13 @@ type Notifier interface {
 	Send(ctx context.Context, msg Message) error
 }
 
+// PairedNotifier extends Notifier with a two-message threaded send for GChat broadcasts.
+// SendPaired sends opener and detail as replies in the same thread, returning errors for each.
+type PairedNotifier interface {
+	Notifier
+	SendPaired(ctx context.Context, groupID, space, opener, detail, threadKey string) (openerErr, detailErr error)
+}
+
 // NoopNotifier discards all messages. Used in production when SMTP is not configured.
 type NoopNotifier struct{}
 

@@ -179,40 +179,51 @@ func gchatPostGetThread(ctx context.Context, token, path string, body interface{
 	return result.Thread.Name, nil
 }
 
-// listSpacesWithToken fetches all SPACE-type spaces accessible via the given token.
+// listSpacesWithToken fetches all SPACE-type spaces accessible via the given token,
+// following nextPageToken until all pages are retrieved.
 func listSpacesWithToken(ctx context.Context, token string) ([]GChatSpace, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		"https://chat.googleapis.com/v1/spaces?pageSize=100", nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("gchat: list spaces: %w", err)
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("gchat: list spaces failed (%d): %s", resp.StatusCode, body)
-	}
-
-	var result struct {
-		Spaces []GChatSpace `json:"spaces"`
-	}
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, err
-	}
-	slog.Debug("gchat list spaces", "count", len(result.Spaces))
-	// Filter client-side: only named spaces support bot membership.
-	filtered := result.Spaces[:0]
-	for _, s := range result.Spaces {
-		if s.SpaceType == "SPACE" {
-			filtered = append(filtered, s)
+	var all []GChatSpace
+	pageToken := ""
+	for {
+		u := "https://chat.googleapis.com/v1/spaces?pageSize=100"
+		if pageToken != "" {
+			u += "&pageToken=" + url.QueryEscape(pageToken)
 		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("gchat: list spaces: %w", err)
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("gchat: list spaces failed (%d): %s", resp.StatusCode, body)
+		}
+
+		var result struct {
+			Spaces        []GChatSpace `json:"spaces"`
+			NextPageToken string       `json:"nextPageToken"`
+		}
+		if err := json.Unmarshal(body, &result); err != nil {
+			return nil, err
+		}
+		for _, s := range result.Spaces {
+			if s.SpaceType == "SPACE" {
+				all = append(all, s)
+			}
+		}
+		if result.NextPageToken == "" {
+			break
+		}
+		pageToken = result.NextPageToken
 	}
-	return filtered, nil
+	slog.Debug("gchat list spaces", "count", len(all))
+	return all, nil
 }
 
 // ListGChatSpaces returns the union of spaces where the admin is a member (can_auto_add)

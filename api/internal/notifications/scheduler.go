@@ -13,10 +13,6 @@ import (
 	"github.com/malarscouterna/ms-utrustning/api/internal/db"
 )
 
-func pgText(s string) pgtype.Text {
-	return pgtype.Text{String: s, Valid: s != ""}
-}
-
 // StartScheduler launches the daily notification scheduler in a background goroutine.
 // It fires at NOTIFICATION_REMINDER_TIME (default "08:00") in the server's local timezone.
 func StartScheduler(q *db.Queries, n Notifier, baseURL string) {
@@ -69,7 +65,9 @@ func SendReminders(ctx context.Context, q *db.Queries, n Notifier, today pgtype.
 }
 
 func sendReminderForBooking(ctx context.Context, q *db.Queries, n Notifier, b db.GetAllBookingsStartingOnRow, baseURL string) {
+	ds := loadDispatchSettings(ctx, q, b.GroupID, formatUUID(b.UsedByTeamID))
 	recipients := bookingRecipients(ctx, q, b.GroupID, b.CreatedBy, b.UsedByTeamID)
+	tk := "booking_" + formatUUID(b.ID)
 	for _, r := range recipients {
 		r := r
 		sent, err := q.HasNotificationBeenSent(ctx, db.HasNotificationBeenSentParams{
@@ -81,7 +79,7 @@ func sendReminderForBooking(ctx context.Context, q *db.Queries, n Notifier, b db
 		if err != nil || sent {
 			continue
 		}
-		sendTo(ctx, q, n, b.GroupID, teamIDStr(b.UsedByTeamID), r, EventBookingReminder, "email", b.ID, "booking_"+teamIDStr(b.ID), func(lang string) Message {
+		sendTo(ctx, q, n, ds, b.GroupID, r, EventBookingReminder, "email", b.ID, tk, func(lang string) Message {
 			booking := db.Booking{
 				ID:           b.ID,
 				GroupID:      b.GroupID,
@@ -110,97 +108,31 @@ func SendOverdueAlerts(ctx context.Context, q *db.Queries, n Notifier, today pgt
 }
 
 func sendOverdueForBooking(ctx context.Context, q *db.Queries, n Notifier, b db.GetAllOverdueBookingsRow, today pgtype.Date, baseURL string) {
-	recipients := bookingRecipients(ctx, q, b.GroupID, b.CreatedBy, b.UsedByTeamID)
+	ds := loadDispatchSettings(ctx, q, b.GroupID, formatUUID(b.UsedByTeamID))
+	booking := db.Booking{
+		ID: b.ID, GroupID: b.GroupID, CreatedBy: b.CreatedBy,
+		UsedByTeamID: b.UsedByTeamID, StartDate: b.StartDate, EndDate: b.EndDate,
+		Status: "picked_up",
+	}
+	tk := "booking_" + formatUUID(b.ID)
 
-	// Managers who have opted into booking_overdue (not in system default, must be explicit).
+	recipients := bookingRecipients(ctx, q, b.GroupID, b.CreatedBy, b.UsedByTeamID)
 	managers, _ := q.GetGroupManagers(ctx, b.GroupID)
 	for _, m := range managers {
 		recipients = append(recipients, fromGetGroupManagersRow(m))
 	}
-	recipients = dedup(recipients)
 
-	for _, r := range recipients {
+	for _, r := range dedup(recipients) {
 		r := r
 		sent, err := q.HasNotificationBeenSent(ctx, db.HasNotificationBeenSentParams{
-			EntityID:  b.ID,
-			EventType: EventBookingOverdue,
-			UserID:    r.id,
-			Channel:   "email",
+			EntityID: b.ID, EventType: EventBookingOverdue, UserID: r.id, Channel: "email",
 		})
 		if err != nil || sent {
 			continue
 		}
-		policy := ResolvePersonalEmailPolicy(ctx, q, r.id, b.GroupID, teamIDStr(b.UsedByTeamID), EventBookingOverdue)
-		if policy == PolicyNever {
-			continue
-		}
-		if policy == PolicyIfNoBroadcast {
-			teamSettings := GetTeamNotifSettings(ctx, q, b.GroupID, teamIDStr(b.UsedByTeamID))
-			groupDefaultsRow, _ := q.GetGroupNotificationDefaults(ctx, b.GroupID)
-			effective := EffectiveGruppkanalChannels(teamSettings.GruppkanalChannels, groupDefaultsRow.DefaultGruppkanalChannels)
-			if len(effective) > 0 {
-				continue
-			}
-		}
-		booking := db.Booking{
-			ID:           b.ID,
-			GroupID:      b.GroupID,
-			CreatedBy:    b.CreatedBy,
-			UsedByTeamID: b.UsedByTeamID,
-			StartDate:    b.StartDate,
-			EndDate:      b.EndDate,
-			Status:       "picked_up",
-		}
-		tk := "booking_" + teamIDStr(b.ID)
-		idSuffix := r.id
-		if len(idSuffix) > 8 {
-			idSuffix = idSuffix[:8]
-		}
-		newMsgID := tk + "-" + idSuffix
-		msg := bookingMsg(ctx, q, booking, EventBookingOverdue, baseURL, r)
-		msg.GroupID = b.GroupID
-		prior, err := q.GetThreadMessageID(ctx, db.GetThreadMessageIDParams{
-			ThreadKey: pgtype.Text{String: tk, Valid: true},
-			UserID:    r.id,
-			Channel:   "email",
-		})
-		logMsgID := pgtype.Text{}
-		if err == nil && prior.Valid {
-			msg.InReplyTo = prior.String
-		} else {
-			msg.MessageID = newMsgID
-			logMsgID = pgtype.Text{String: newMsgID, Valid: true}
-		}
-		sendErr := n.Send(ctx, msg)
-
-		status := "sent"
-		errStr := ""
-		if sendErr != nil {
-			status = "failed"
-			errStr = sendErr.Error()
-			slog.Error("overdue notification failed", "booking", b.ID, "user", r.id, "error", sendErr)
-		}
-		_ = q.LogNotification(ctx, db.LogNotificationParams{
-			GroupID:   b.GroupID,
-			UserID:    r.id,
-			EventType: EventBookingOverdue,
-			EntityID:  b.ID,
-			Channel:   "email",
-			Status:    status,
-			Error:     pgText(errStr),
-			ThreadKey: pgtype.Text{String: tk, Valid: true},
-			MessageID: logMsgID,
+		sendTo(ctx, q, n, ds, b.GroupID, r, EventBookingOverdue, "email", b.ID, tk, func(lang string) Message {
+			return bookingMsg(ctx, q, booking, EventBookingOverdue, baseURL, r)
 		})
 	}
 }
 
-// bookingRecipients returns the creator and all team members for a booking,
-// deduped. Does not filter by preference — callers do that via sendTo or IsEnabled.
-func bookingRecipients(ctx context.Context, q *db.Queries, groupID, createdBy string, teamID pgtype.UUID) []recipient {
-	var out []recipient
-	if creator, ok := bookingCreator(ctx, q, groupID, createdBy); ok {
-		out = append(out, creator)
-	}
-	out = append(out, teamMembers(ctx, q, groupID, teamID)...)
-	return dedup(out)
-}
