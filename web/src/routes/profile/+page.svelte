@@ -440,7 +440,7 @@
 
 	function switchToTeamsTab() {
 		tab = 'teams';
-		if (!selectedUserTeamId && user && user.teams.length > 0) {
+		if (!selectedUserTeamId && user && user.teams?.length > 0) {
 			const first = user.teams[0];
 			selectUserTeam(first.team_id, first.team_name);
 		}
@@ -845,7 +845,7 @@ async function linkGchatTeamSpace(teamId: string) {
 			onclick={() => tab = 'profile'}
 			class="px-3 py-2 text-sm -mb-px {tab === 'profile' ? 'border-b-2 border-blue-700 font-medium text-blue-700' : 'text-neutral-500'}"
 		>{m.page_profile_tab_profile()}</button>
-		{#if user && user.teams.length > 0}
+		{#if user && user.teams?.length > 0}
 			<button
 				onclick={() => switchToTeamsTab()}
 				class="px-3 py-2 text-sm -mb-px {tab === 'teams' ? 'border-b-2 border-blue-700 font-medium text-blue-700' : 'text-neutral-500'}"
@@ -864,7 +864,7 @@ async function linkGchatTeamSpace(teamId: string) {
 		<section class="mb-6 border rounded-lg p-4">
 			<h2 class="font-medium mb-3">{m.page_profile_permissions_heading()}</h2>
 
-			{#if user.teams.length === 0}
+			{#if user.teams?.length === 0}
 				<p class="text-sm text-neutral-500">{m.page_profile_no_teams()}</p>
 			{:else}
 				<div class="space-y-3">
@@ -987,7 +987,7 @@ async function linkGchatTeamSpace(teamId: string) {
 			<!-- Team/role events: three-column radio -->
 			<div class="flex items-center justify-between mb-2">
 				<h3 class="text-sm font-semibold text-neutral-600">{m.page_profile_notifs_team_heading()}</h3>
-				{#if user && user.teams.length > 0}
+				{#if user && user.teams?.length > 0}
 					<button
 						onclick={() => switchToTeamsTab()}
 						class="text-xs text-blue-700 underline"
@@ -1132,7 +1132,7 @@ async function linkGchatTeamSpace(teamId: string) {
 
 	<!-- Teams tab -->
 	{:else if tab === 'teams'}
-		{#if !user || user.teams.length === 0}
+		{#if !user || user.teams?.length === 0}
 			<p class="text-sm text-neutral-500">{m.page_profile_teams_no_teams()}</p>
 		{:else}
 			<!-- Team picker -->

@@ -104,10 +104,21 @@ func SetupTestEnv(t *testing.T) *TestEnv {
 	t.Helper()
 
 	ctx := context.Background()
-	_, err := shared.pool.Exec(ctx,
-		`TRUNCATE groups, users, teams, team_claim_mappings, categories, locations, articles,
-		 article_events, booking_events, bookings, booking_items, packages, package_items,
-		 audit_log, group_settings, product_images, notification_log CASCADE`)
+
+	// Background goroutines from the previous test (e.g. async notification sends
+	// writing to notification_log) can deadlock with TRUNCATE. Retry a few times
+	// to let them finish.
+	var err error
+	for range 5 {
+		_, err = shared.pool.Exec(ctx,
+			`TRUNCATE groups, users, teams, team_claim_mappings, categories, locations, articles,
+			 article_events, booking_events, bookings, booking_items, packages, package_items,
+			 audit_log, group_settings, product_images, notification_log CASCADE`)
+		if err == nil {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 	if err != nil {
 		t.Fatalf("failed to truncate tables: %v", err)
 	}
@@ -137,7 +148,6 @@ func SetupTestEnv(t *testing.T) *TestEnv {
 	if err != nil {
 		t.Fatalf("failed to re-seed tables: %v", err)
 	}
-
 	queries := db.New(shared.pool)
 	personasPath := findPersonasPath()
 
