@@ -291,7 +291,7 @@ async function requestMut<T>(path: string, method: string, body: unknown, opts: 
 
 export function createApiClient(opts: FetchOptions = {}) {
 	return {
-		getMe: () => request<{ member_id: string; group_id: string; group_name: string; name: string; email: string; teams: { team_id: string; team_name: string; team_type: string; access_level: string }[]; max_access: string }>('/me', opts),
+		getMe: () => request<{ member_id: string; group_id: string; group_name: string; name: string; email: string; notification_email: string | null; teams: { team_id: string; team_name: string; team_type: string; access_level: string }[]; max_access: string }>('/me', opts),
 		listArticles: (params?: { search?: string; category_id?: string; location_id?: string; status?: string; mine?: boolean; with_availability?: boolean; date?: string }) => {
 			const query = new URLSearchParams();
 			if (params?.search) query.set('search', params.search);
@@ -412,6 +412,8 @@ updateLanguage: (language: string | null) =>
 			requestMut<void>('/me/notification-prefs', 'PUT', data, opts),
 		resetNotificationPrefs: () =>
 			requestMut<void>('/me/notification-prefs', 'DELETE', undefined, opts),
+		setNotificationEmail: (email: string | null) =>
+			requestMut<{ sent?: boolean; cleared?: boolean; skipped?: boolean }>('/me/notification-email', 'PUT', { email: email ?? '' }, opts),
 		sendTestEmail: () =>
 			requestMut<{ sent?: boolean; skipped?: boolean }>('/me/test-email', 'POST', undefined, opts),
 		getGroupNotificationDefaults: () =>

@@ -91,7 +91,6 @@ func (p NotificationPrefs) Policy(event EventKey) (PersonalEmailPolicy, bool) {
 // Most team/role events default to on. Personal events have no Gruppkanal.
 func BroadcastSystemDefaults() NotificationPrefs {
 	on := func() *bool { b := true; return &b }()
-	off := func() *bool { b := false; return &b }()
 	return NotificationPrefs{
 		EventBookingNeedsApproval:       {Gruppkanal: on, PersonalEmailPolicy: PolicyIfNoBroadcast},
 		EventBookingSubmittedNoApproval: {Gruppkanal: on, PersonalEmailPolicy: PolicyIfNoBroadcast},
@@ -99,7 +98,7 @@ func BroadcastSystemDefaults() NotificationPrefs {
 		EventBookingCancelled:           {Gruppkanal: on, PersonalEmailPolicy: PolicyIfNoBroadcast},
 		EventBookingReminder:            {Gruppkanal: on, PersonalEmailPolicy: PolicyIfNoBroadcast},
 		EventBookingOverdue:             {Gruppkanal: on, PersonalEmailPolicy: PolicyIfNoBroadcast},
-		EventBookingAnyCreated:          {Gruppkanal: off, PersonalEmailPolicy: PolicyIfNoBroadcast},
+		EventBookingAnyCreated:          {Gruppkanal: on, PersonalEmailPolicy: PolicyIfNoBroadcast},
 		EventIssueCreated:   {Gruppkanal: on, PersonalEmailPolicy: PolicyIfNoBroadcast},
 		EventIssueResolved:  {Gruppkanal: on, PersonalEmailPolicy: PolicyIfNoBroadcast},
 		EventIssueCommented: {Gruppkanal: on, PersonalEmailPolicy: PolicyIfNoBroadcast},

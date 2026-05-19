@@ -16,9 +16,18 @@ type recipient struct {
 	id             string
 	name           string
 	email          string
+	notifEmail     string // override for personal delivery; empty = use email
 	lang           string
 	maxAccessLevel string
 	notifPrefs     []byte
+}
+
+// deliveryEmail returns the address to use for personal notifications.
+func (r recipient) deliveryEmail() string {
+	if r.notifEmail != "" {
+		return r.notifEmail
+	}
+	return r.email
 }
 
 func fromGetGroupManagersRow(r db.GetGroupManagersRow) recipient {
@@ -26,7 +35,7 @@ func fromGetGroupManagersRow(r db.GetGroupManagersRow) recipient {
 	if r.Language.Valid {
 		lang = r.Language.String
 	}
-	return recipient{id: r.ID, name: r.Name, email: r.Email, lang: lang, maxAccessLevel: r.MaxAccessLevel, notifPrefs: r.NotificationPrefs}
+	return recipient{id: r.ID, name: r.Name, email: r.Email, notifEmail: r.NotificationEmail.String, lang: lang, maxAccessLevel: r.MaxAccessLevel, notifPrefs: r.NotificationPrefs}
 }
 
 func fromGetTeamMembersRow(r db.GetTeamMembersWithEmailsRow) recipient {
@@ -34,7 +43,7 @@ func fromGetTeamMembersRow(r db.GetTeamMembersWithEmailsRow) recipient {
 	if r.Language.Valid {
 		lang = r.Language.String
 	}
-	return recipient{id: r.ID, name: r.Name, email: r.Email, lang: lang, maxAccessLevel: r.MaxAccessLevel, notifPrefs: r.NotificationPrefs}
+	return recipient{id: r.ID, name: r.Name, email: r.Email, notifEmail: r.NotificationEmail.String, lang: lang, maxAccessLevel: r.MaxAccessLevel, notifPrefs: r.NotificationPrefs}
 }
 
 func fromGetUserRow(r db.User) recipient {
@@ -42,7 +51,7 @@ func fromGetUserRow(r db.User) recipient {
 	if r.Language.Valid {
 		lang = r.Language.String
 	}
-	return recipient{id: r.ID, name: r.Name, email: r.Email, lang: lang, maxAccessLevel: r.MaxAccessLevel, notifPrefs: r.NotificationPrefs}
+	return recipient{id: r.ID, name: r.Name, email: r.Email, notifEmail: r.NotificationEmail.String, lang: lang, maxAccessLevel: r.MaxAccessLevel, notifPrefs: r.NotificationPrefs}
 }
 
 // sendTo sends msg to r based on their personal email policy for the event.
@@ -102,7 +111,7 @@ func sendTo(ctx context.Context, q *db.Queries, n Notifier, groupID, teamID stri
 		status := "sent"
 		errText := pgtype.Text{}
 		if sendErr := n.Send(ctx, m); sendErr != nil {
-			slog.Error("notification send failed", "event", event, "to", r.email, "error", sendErr)
+			slog.Error("notification send failed", "event", event, "to", r.deliveryEmail(), "error", sendErr)
 			status = "failed"
 			errText = pgtype.Text{String: sendErr.Error(), Valid: true}
 		}
@@ -121,7 +130,7 @@ func sendTo(ctx context.Context, q *db.Queries, n Notifier, groupID, teamID stri
 	}
 
 	if err := n.Send(ctx, m); err != nil {
-		slog.Error("notification send failed", "event", event, "to", r.email, "error", err)
+		slog.Error("notification send failed", "event", event, "to", r.deliveryEmail(), "error", err)
 	}
 }
 
@@ -360,7 +369,7 @@ func bookingMsg(ctx context.Context, q *db.Queries, b db.Booking, event, baseURL
 		subject = data.TeamName + ": " + subject
 	}
 	return Message{
-		To:       r.email,
+		To:       r.deliveryEmail(),
 		Subject:  subject,
 		Body:     htmlBody,
 		TextBody: textBody,
@@ -378,7 +387,7 @@ func issueMsg(ctx context.Context, q *db.Queries, issue db.IssueReport, event, b
 	data := fetchIssueEmailData(ctx, q, issue, event, r.lang, r.name, baseURL)
 	htmlBody, textBody := renderIssueEmail(data)
 	return Message{
-		To:       r.email,
+		To:       r.deliveryEmail(),
 		Subject:  i18n.T(r.lang, "email_subject_"+event, map[string]string{"title": issue.Title}),
 		Body:     htmlBody,
 		TextBody: textBody,
