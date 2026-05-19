@@ -8,6 +8,8 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	// Fixed 32-byte hex key for tests — never used in production.
+	os.Setenv("SETTINGS_ENCRYPTION_KEY", "0000000000000000000000000000000000000000000000000000000000000000")
 	testutil.SetupShared()
 	code := m.Run()
 	testutil.TeardownShared()

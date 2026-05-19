@@ -11,8 +11,8 @@ Work to complete before moving from `/api/v0/` (pre-release) to v1.0.
 - [x] Phase 3.5b — Google Chat bot, team–space mapper UI
 - [x] Phase 3.6 — Gruppkanal, personal email policy
 - [x] Phase 3.7 — GChat two-message threading, issue broadcast parity
-- [ ] End-to-end smoke test in dev with real GChat space (3.7-5)
-- [ ] Integration tests for GChat key management endpoints (3.5b-6)
+- [x] End-to-end smoke test in dev with real GChat space (3.7-5)
+- [x] Integration tests for GChat key management endpoints (3.5b-6)
 
 ---
 

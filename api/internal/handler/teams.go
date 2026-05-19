@@ -18,6 +18,9 @@ import (
 
 type TeamHandler struct {
 	Q *db.Queries
+	// AddBotFn is called to add the service account bot to a GChat space.
+	// Defaults to notifications.AddBotToSpace when nil.
+	AddBotFn func(ctx context.Context, saJSON []byte, adminEmail, spaceID, teamName string) error
 }
 
 func (h *TeamHandler) Routes() chi.Router {
@@ -398,7 +401,11 @@ func (h *TeamHandler) SetGChatSpace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := notifications.AddBotToSpace(r.Context(), saJSON, creds.GchatAdminEmail, req.GchatSpaceID, team.Name); err != nil {
+	addBot := h.AddBotFn
+	if addBot == nil {
+		addBot = notifications.AddBotToSpace
+	}
+	if err := addBot(r.Context(), saJSON, creds.GchatAdminEmail, req.GchatSpaceID, team.Name); err != nil {
 		slog.Error("gchat add bot to space failed", "err", err, "space", req.GchatSpaceID)
 		WriteError(w, http.StatusBadGateway, gchatAddBotError(err))
 		return

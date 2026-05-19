@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -20,6 +21,9 @@ type GroupSettingsHandler struct {
 	Q        *db.Queries
 	Perms    *PermissionCache
 	DemoMode bool
+	// ListSpacesFn is called to validate a service account key and list spaces.
+	// Defaults to notifications.ListGChatSpaces when nil.
+	ListSpacesFn func(ctx context.Context, saJSON []byte, adminEmail string) ([]notifications.GChatSpace, error)
 }
 
 func (h *GroupSettingsHandler) Routes() chi.Router {
@@ -284,8 +288,12 @@ func (h *GroupSettingsHandler) UploadGChatKey(w http.ResponseWriter, r *http.Req
 	adminEmail := payload.AdminEmail
 
 	// Validate by listing spaces.
+	listSpaces := h.ListSpacesFn
+	if listSpaces == nil {
+		listSpaces = notifications.ListGChatSpaces
+	}
 	slog.Info("gchat: attempting connection", "admin_email", adminEmail, "key_bytes_len", len(keyBytes))
-	spaces, err := notifications.ListGChatSpaces(r.Context(), keyBytes, adminEmail)
+	spaces, err := listSpaces(r.Context(), keyBytes, adminEmail)
 	if err != nil {
 		slog.Error("gchat: connection failed", "err", err, "admin_email", adminEmail)
 		WriteError(w, http.StatusBadRequest, "gchat_key_invalid: "+err.Error())
@@ -367,7 +375,11 @@ func (h *GroupSettingsHandler) ListGChatSpaces(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	spaces, err := notifications.ListGChatSpaces(r.Context(), saJSON, creds.GchatAdminEmail)
+	listSpaces := h.ListSpacesFn
+	if listSpaces == nil {
+		listSpaces = notifications.ListGChatSpaces
+	}
+	spaces, err := listSpaces(r.Context(), saJSON, creds.GchatAdminEmail)
 	if err != nil {
 		WriteError(w, http.StatusBadGateway, "failed to list spaces: "+err.Error())
 		return

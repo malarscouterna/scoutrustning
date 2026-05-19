@@ -254,7 +254,7 @@ func TestNotifications_EventTriggered(t *testing.T) {
 
 		resp, _ := leader.Post("/api/v0/bookings/"+bookingID+"/submit", nil)
 		resp.Body.Close()
-		waitForMessages(notifier, 2) // drain needs_approval goroutines before reset
+		waitForMessages(notifier, 3) // drain confirmed + submitted_no_approval goroutines before reset
 		notifier.Reset()
 
 		resp, _ = leader.Post("/api/v0/bookings/"+bookingID+"/cancel", nil)
