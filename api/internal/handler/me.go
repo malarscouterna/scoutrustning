@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"net/mail"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -31,6 +32,7 @@ func (h *MeHandler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Get("/", h.Get)
 	r.Put("/language", h.PutLanguage)
+	r.Put("/notification-email", h.PutNotificationEmail)
 	r.Post("/test-email", h.PostTestEmail)
 	r.Mount("/notification-prefs", h.NotifPrefs.MeRoutes())
 	return r
@@ -49,25 +51,32 @@ func (h *MeHandler) Get(w http.ResponseWriter, r *http.Request) {
 	perms := h.Perms.Get(r, claims.GroupID)
 
 	lang := "sv"
+	var notificationEmail *string
 	if settings, err := h.Q.GetGroupSettings(r.Context(), claims.GroupID); err == nil {
 		lang = settings.DefaultLanguage
 	}
 	if user, err := h.Q.GetUser(r.Context(), db.GetUserParams{
 		ID:      claims.MemberID,
 		GroupID: claims.GroupID,
-	}); err == nil && user.Language.Valid && i18n.Supported(user.Language.String) {
-		lang = user.Language.String
+	}); err == nil {
+		if user.Language.Valid && i18n.Supported(user.Language.String) {
+			lang = user.Language.String
+		}
+		if user.NotificationEmail.Valid {
+			notificationEmail = &user.NotificationEmail.String
+		}
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]any{
-		"member_id":  claims.MemberID,
-		"group_id":   claims.GroupID,
-		"group_name": groupName,
-		"name":       claims.Name,
-		"email":      claims.Email,
-		"teams":      claims.Teams,
-		"max_access": claims.MaxAccess,
-		"language":   lang,
+		"member_id":          claims.MemberID,
+		"group_id":           claims.GroupID,
+		"group_name":         groupName,
+		"name":               claims.Name,
+		"email":              claims.Email,
+		"notification_email": notificationEmail,
+		"teams":              claims.Teams,
+		"max_access":         claims.MaxAccess,
+		"language":           lang,
 		"permissions": map[string]string{
 			"image_upload":  perms.ImageUpload,
 			"booking":       perms.Booking,
@@ -93,9 +102,13 @@ func (h *MeHandler) PostTestEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	lang := "sv"
+	to := claims.Email
 	if user, err := h.Q.GetUser(r.Context(), db.GetUserParams{ID: claims.MemberID, GroupID: claims.GroupID}); err == nil {
 		if user.Language.Valid && i18n.Supported(user.Language.String) {
 			lang = user.Language.String
+		}
+		if user.NotificationEmail.Valid {
+			to = user.NotificationEmail.String
 		}
 	}
 	baseURL := h.BaseURL
@@ -107,16 +120,95 @@ func (h *MeHandler) PostTestEmail(w http.ResponseWriter, r *http.Request) {
 	htmlBody, textBody := notifications.RenderTestEmail(lang, claims.Name, group.Name, logoURL, baseURL)
 	msg := notifications.Message{
 		GroupID:  claims.GroupID,
-		To:       claims.Email,
+		To:       to,
 		Subject:  i18n.T(lang, "email_subject_test_email"),
 		Body:     htmlBody,
 		TextBody: textBody,
 	}
 	if err := h.Notifier.Send(r.Context(), msg); err != nil {
-		slog.Error("test email failed", "to", claims.Email, "group", claims.GroupID, "err", err)
+		slog.Error("test email failed", "to", to, "group", claims.GroupID, "err", err)
 		WriteError(w, http.StatusServiceUnavailable, err.Error())
 		return
 	}
+	WriteJSON(w, http.StatusOK, map[string]any{"sent": true})
+}
+
+func (h *MeHandler) PutNotificationEmail(w http.ResponseWriter, r *http.Request) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		WriteError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if h.DemoMode {
+		WriteJSON(w, http.StatusOK, map[string]any{"skipped": true})
+		return
+	}
+	var req struct {
+		Email *string `json:"email"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.Email == nil || *req.Email == "" {
+		// Clear override — revert to ScoutID email.
+		if err := h.Q.ClearUserNotificationEmail(r.Context(), db.ClearUserNotificationEmailParams{
+			ID:      claims.MemberID,
+			GroupID: claims.GroupID,
+		}); err != nil {
+			WriteError(w, http.StatusInternalServerError, "failed to clear notification email")
+			return
+		}
+		WriteJSON(w, http.StatusOK, map[string]any{"cleared": true})
+		return
+	}
+
+	addr, err := mail.ParseAddress(*req.Email)
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid email address")
+		return
+	}
+	email := addr.Address
+
+	if err := h.Q.SetUserNotificationEmail(r.Context(), db.SetUserNotificationEmailParams{
+		NotificationEmail: pgtype.Text{String: email, Valid: true},
+		ID:                claims.MemberID,
+		GroupID:           claims.GroupID,
+	}); err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to save notification email")
+		return
+	}
+
+	// Send a test email so the user can verify delivery.
+	if h.Notifier != nil {
+		lang := "sv"
+		if user, err := h.Q.GetUser(r.Context(), db.GetUserParams{ID: claims.MemberID, GroupID: claims.GroupID}); err == nil {
+			if user.Language.Valid && i18n.Supported(user.Language.String) {
+				lang = user.Language.String
+			}
+		}
+		baseURL := h.BaseURL
+		if baseURL == "" {
+			baseURL = "http://localhost:5173"
+		}
+		group, _ := h.Q.GetGroup(r.Context(), claims.GroupID)
+		logoURL := notifications.GroupLogoURL(r.Context(), h.Q, claims.GroupID, baseURL)
+		htmlBody, textBody := notifications.RenderTestEmail(lang, claims.Name, group.Name, logoURL, baseURL)
+		msg := notifications.Message{
+			GroupID:  claims.GroupID,
+			To:       email,
+			Subject:  i18n.T(lang, "email_subject_test_email"),
+			Body:     htmlBody,
+			TextBody: textBody,
+		}
+		if sendErr := h.Notifier.Send(r.Context(), msg); sendErr != nil {
+			slog.Error("notification email test failed", "to", email, "group", claims.GroupID, "err", sendErr)
+			WriteError(w, http.StatusServiceUnavailable, sendErr.Error())
+			return
+		}
+	}
+
 	WriteJSON(w, http.StatusOK, map[string]any{"sent": true})
 }
 

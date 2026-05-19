@@ -261,4 +261,5 @@ type User struct {
 	MaxAccessLevel    string             `json:"max_access_level"`
 	NotificationPrefs json.RawMessage    `json:"notification_prefs"`
 	TeamIds           []pgtype.UUID      `json:"team_ids"`
+	NotificationEmail pgtype.Text        `json:"notification_email"`
 }

@@ -192,6 +192,10 @@
 	let locations = $state<Location[]>([]);
 	let categories = $state<Category[]>([]);
 	let groupSettings = $state<GroupSettings | null>(null);
+	const roleRank: Record<string, number> = { view: 0, book: 1, trusted: 2, manager: 3 };
+	let canBeAssignedIssue = $derived(
+		roleRank[user?.max_access ?? 'view'] >= roleRank[groupSettings?.issue_resolve_role ?? 'manager']
+	);
 
 	$effect(() => {
 		locations = data.locations;
@@ -350,6 +354,16 @@
 	let notifPrefs = $state<NotificationPrefs | null>(null);
 	$effect(() => { notifPrefs = data.notificationPrefs; });
 
+	let notifEmailOverride = $state(false);
+	let notifEmailInput = $state('');
+	let notifEmailSaving = $state(false);
+	let notifEmailMessage = $state<'sent' | 'cleared' | 'error' | null>(null);
+	$effect(() => {
+		const override = data.user?.notification_email ?? null;
+		notifEmailOverride = override !== null;
+		notifEmailInput = override ?? '';
+	});
+
 	// channels from group settings, fallback to ['email']
 	let notifChannels = $derived(data.groupSettings?.notification_channels ?? ['email']);
 
@@ -363,6 +377,20 @@
 		const pref = notifPrefs?.[key];
 		if (!pref || pref.source !== 'user') return 'follow';
 		return pref.policy === 'always' ? 'always' : 'never';
+	}
+
+	async function saveNotifEmail() {
+		notifEmailSaving = true;
+		notifEmailMessage = null;
+		try {
+			const email = notifEmailOverride ? notifEmailInput.trim() : null;
+			const result = await api.setNotificationEmail(email);
+			notifEmailMessage = result.cleared ? 'cleared' : 'sent';
+		} catch {
+			notifEmailMessage = 'error';
+		} finally {
+			notifEmailSaving = false;
+		}
 	}
 
 	async function toggleNotif(key: string, _ch: string, value: boolean) {
@@ -433,6 +461,13 @@
 		memberGchatSpaces = [];
 		try {
 			userTeamSettings = await api.getTeamNotificationSettings(teamId);
+			if (groupSettings?.gchat_configured && !memberGchatLoaded) {
+				try {
+					memberGchatSpaces = await api.listGchatSpaces();
+					memberGchatConfigured = true;
+				} catch { /* gchat not accessible */ }
+				memberGchatLoaded = true;
+			}
 		} catch {
 			userTeamSettingsError = 'Kunde inte ladda avdelningsinställningar.';
 		} finally {
@@ -872,6 +907,45 @@ async function linkGchatTeamSpace(teamId: string) {
 		<section class="mb-6 border rounded-lg p-4">
 			<h2 class="font-medium mb-4">{m.page_profile_notifs_heading()}</h2>
 
+			<!-- Notification email override -->
+			<div class="mb-5 pb-5 border-b border-neutral-100">
+				<p class="text-sm text-neutral-600 mb-1">
+					<span class="font-medium">{m.page_profile_notifs_email_label()}:</span>
+					<span class="ml-1 text-neutral-500">{data.user?.email}</span>
+				</p>
+				<label class="flex items-center gap-2 text-sm text-neutral-700 mb-2 cursor-pointer">
+					<input type="checkbox" bind:checked={notifEmailOverride} onchange={() => { notifEmailMessage = null; if (!notifEmailOverride) notifEmailInput = ''; }} class="h-4 w-4 accent-blue-700" />
+					{m.page_profile_notifs_email_override_checkbox()}
+				</label>
+				{#if notifEmailOverride}
+				<div class="flex items-center gap-2 mt-1">
+					<input
+						type="email"
+						bind:value={notifEmailInput}
+						class="border rounded px-2 py-1 text-sm w-64"
+						placeholder="din@epost.se"
+					/>
+					<button onclick={saveNotifEmail} disabled={notifEmailSaving || !notifEmailInput.trim()} class="text-sm bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50">
+						{notifEmailSaving ? m.page_profile_notifs_email_saving() : m.page_profile_notifs_email_save_btn()}
+					</button>
+				</div>
+				{:else if notifEmailOverride === false && notifEmailMessage === null}
+					<!-- nothing when unchecked and no message -->
+				{/if}
+				{#if !notifEmailOverride && data.user?.notification_email}
+				<button onclick={saveNotifEmail} disabled={notifEmailSaving} class="text-xs text-neutral-500 hover:underline mt-1">
+					{notifEmailSaving ? m.page_profile_notifs_email_saving() : '↩ ' + m.page_profile_notifs_email_cleared()}
+				</button>
+				{/if}
+				{#if notifEmailMessage === 'sent'}
+					<p class="text-sm text-green-700 mt-1">{m.page_profile_notifs_email_sent()}</p>
+				{:else if notifEmailMessage === 'cleared'}
+					<p class="text-sm text-green-700 mt-1">{m.page_profile_notifs_email_cleared()}</p>
+				{:else if notifEmailMessage === 'error'}
+					<p class="text-sm text-red-600 mt-1">{m.page_profile_notifs_email_error()}</p>
+				{/if}
+			</div>
+
 			<!-- Personal events: simple on/off -->
 			<h3 class="text-sm font-semibold text-neutral-600 mb-2">{m.page_profile_notifs_personal_heading()}</h3>
 			<p class="text-xs text-neutral-500 mb-3">{m.page_profile_notifs_personal_help()}</p>
@@ -884,6 +958,7 @@ async function linkGchatTeamSpace(teamId: string) {
 				</thead>
 				<tbody>
 					{#each personalEvents as row}
+					{#if row.key !== 'issue_assigned_to_me' || canBeAssignedIssue}
 					<tr class="border-t border-neutral-100">
 						<td class="py-1.5 pr-3 w-full">
 							<span>{row.label()}</span>
@@ -904,6 +979,7 @@ async function linkGchatTeamSpace(teamId: string) {
 							{/if}
 						</td>
 					</tr>
+					{/if}
 					{/each}
 				</tbody>
 			</table>
@@ -918,35 +994,22 @@ async function linkGchatTeamSpace(teamId: string) {
 					>{m.page_profile_notifs_manage_teams_link()}</button>
 				{/if}
 			</div>
-			<!-- Desktop header (hidden on mobile) -->
-			<div class="hidden sm:flex text-xs text-neutral-500 border-b border-neutral-200 pb-1 mb-1">
-				<span class="flex-1 pr-3"></span>
-				<span class="w-28 text-center leading-tight">{m.page_profile_notifs_always_email()}</span>
-				<span class="w-28 text-center leading-tight">{m.page_profile_notifs_follow_team()}</span>
-				<span class="w-28 text-center leading-tight">{m.page_profile_notifs_no_email()}</span>
-			</div>
+			<p class="text-xs text-neutral-500 mb-3">{m.page_profile_notifs_team_help()}</p>
 			<div class="space-y-0">
 				{#each teamEvents as row}
 					{#if !managerOnlyKeys.has(row.key) || mgr}
 					<div class="border-t border-neutral-100 py-2 flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-0">
 						<span class="text-sm flex-1 pr-3">{row.label()}</span>
-						<div class="flex gap-0">
+						<div class="flex gap-1">
 							{#each [
-								{ val: 'always', short: m.page_profile_notifs_always_short() },
-								{ val: 'follow', short: m.page_profile_notifs_follow_short() },
-								{ val: 'never', short: m.page_profile_notifs_no_email_short() },
-							] as opt}
-							<label class="flex items-center gap-1 sm:w-28 sm:justify-center cursor-pointer pr-4 sm:pr-0">
-								<input
-									type="radio"
-									name="notif-{row.key}"
-									value={opt.val}
-									checked={teamEventRadio(row.key) === opt.val}
-									onchange={() => setTeamEventRadio(row.key, opt.val as 'always' | 'follow' | 'never')}
-									class="h-4 w-4 accent-blue-700 shrink-0"
-								/>
-								<span class="text-xs text-neutral-600 sm:hidden">{opt.short}</span>
-							</label>
+								['always', m.page_profile_notifs_always_short()],
+								['follow', m.page_profile_notifs_follow_short()],
+								['never', m.page_profile_notifs_no_email_short()],
+							] as [val, label]}
+								<button
+									onclick={() => setTeamEventRadio(row.key, val as 'always' | 'follow' | 'never')}
+									class="px-2 py-0.5 text-xs rounded border whitespace-nowrap {teamEventRadio(row.key) === val ? 'bg-blue-700 text-white border-blue-700' : 'bg-white text-neutral-600 border-neutral-300 hover:border-blue-400'}"
+								>{label}</button>
 							{/each}
 						</div>
 					</div>
@@ -1172,6 +1235,10 @@ async function linkGchatTeamSpace(teamId: string) {
 							<!-- Per-event table: context-aware personal email toggle + Gruppkanal checkbox -->
 							{@const tabEvents = teamTabEvents(selectedMembership?.access_level ?? 'book')}
 							{@const showGruppkanalCol = effectiveGruppkanal.some(ch => availableChannels.includes(ch))}
+							<div class="mb-3">
+								<h4 class="text-sm font-medium text-neutral-700 mb-1">{m.page_profile_teams_notif_col_personal()}</h4>
+								<p class="text-xs text-neutral-400">{showGruppkanalCol ? m.page_profile_teams_notif_per_event_desc_with_channel() : m.page_profile_teams_notif_per_event_desc_no_channel()}</p>
+							</div>
 							<table class="w-full text-sm border-collapse">
 								<thead>
 									<tr>
@@ -1252,7 +1319,14 @@ async function linkGchatTeamSpace(teamId: string) {
 									{#if !memberGchatEditing}
 										<!-- Read-only view — immediate, no loading -->
 										{#if userTeamSettings.gchat_space_id}
-											<p class="text-sm font-medium">{userTeamSettings.gchat_space_id}</p>
+											{@const linkedSpace = memberGchatSpaces.find(s => s.name === userTeamSettings.gchat_space_id)}
+											{@const spaceRawId = (userTeamSettings.gchat_space_id ?? '').replace(/^spaces\//, '')}
+											{#if linkedSpace}
+												<a href="https://mail.google.com/mail/u/0/#chat/space/{spaceRawId}" target="_blank" rel="noopener noreferrer" class="text-sm font-medium text-blue-700 hover:underline">{linkedSpace.displayName}</a>
+												<p class="text-xs text-neutral-400">{userTeamSettings.gchat_space_id}</p>
+											{:else}
+												<p class="text-sm font-medium">{userTeamSettings.gchat_space_id}</p>
+											{/if}
 											<button onclick={() => openMemberGchatEditor(userTeamSettings?.gchat_space_id ?? '')} class="text-xs text-blue-700 mt-1 hover:underline">{m.page_profile_gchat_change_space()}</button>
 										{:else}
 											<p class="text-sm text-neutral-500">{m.page_profile_teams_gchat_space_none()}</p>
@@ -1874,6 +1948,10 @@ async function linkGchatTeamSpace(teamId: string) {
 				</div>
 
 				<!-- Per-event defaults table -->
+				<div class="mb-3">
+					<h4 class="text-sm font-medium text-neutral-700 mb-1">{m.page_profile_teams_notif_col_personal()}</h4>
+					<p class="text-xs text-neutral-400">{m.page_profile_teams_notif_per_event_desc_with_channel()}</p>
+				</div>
 				<div class="overflow-x-auto">
 				<table class="w-full text-sm border-collapse">
 					<thead>

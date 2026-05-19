@@ -29,9 +29,13 @@ Längst upp på alla sidor finns en menyrad med logotypen till vänster och län
   - [Artikelstatus](#artikelstatus)
   - [Hantera bilder](#hantera-bilder)
 - [Del 3: Notifieringar](#del-3-notifieringar)
-  - [Personliga notifieringsinställningar](#personliga-notifieringsinställningar)
-  - [Standardinställningar för gruppen](#standardinställningar-för-gruppen)
+  - [E-postadress för notiser](#e-postadress-för-notiser)
+  - [Personliga notiser](#personliga-notiser)
+  - [Avdelnings- och rollnotiser](#avdelnings--och-rollnotiser)
+  - [Avdelningsinställningar](#avdelningsinställningar)
+  - [Kårinställningar för notiser](#kårinställningar-för-notiser)
   - [E-postinställningar](#e-postinställningar)
+  - [Google Chat](#google-chat)
 
 ---
 
@@ -43,7 +47,7 @@ Startsidan visar en översikt av dina bokningar och ärenden. Härifrån kan du:
 
 - Klicka **Boka utrustning** för att starta en ny bokning.
 - Klicka **Visa utrustning** för att bläddra bland allt som finns.
-- Klicka **Inställningar** för att hantera din profil och, om du är utrustningsansvarig, gruppinställningar.
+- Klicka **Inställningar** för att hantera din profil och, om du är utrustningsansvarig, kårinställningar.
 - Klicka **Användarguide** för att öppna den här guiden.
 
 Dina aktiva bokningar visas direkt på startsidan, sorterade efter status. Utkast (ej skickade bokningar) visas överst - klicka på ett utkast för att aktivera det och fortsätta lägga till utrustning.
@@ -225,7 +229,7 @@ Som utrustningsansvarig kan du hantera bilder för alla artikelgrupper:
 - **Ordna om**: använd pilknapparna under varje bild för att ändra ordning.
 - **Ta bort**: tar bort bilden från artikelgruppen. Filen raderas bara om ingen annan artikel refererar till den.
 
-Vem som får ladda upp bilder styrs av inställningen "Vem kan ladda upp bilder?" under Gruppinställningar.
+Vem som får ladda upp bilder styrs av inställningen "Vem kan ladda upp bilder?" under Kårinställningar.
 
 ---
 
@@ -233,52 +237,90 @@ Vem som får ladda upp bilder styrs av inställningen "Vem kan ladda upp bilder?
 
 ## Del 3: Notifieringar
 
-Systemet skickar e-postnotifieringar vid händelser i bokningar och ärenden. Du styr själv vad du vill få — och utrustningsansvariga kan sätta standardvärden för hela gruppen.
+Systemet skickar e-postnotifieringar vid händelser i bokningar och ärenden. Du styr själv vad du vill få — och utrustningsansvariga kan sätta standardvärden för hela kåren.
 
-### Personliga notifieringsinställningar
+### E-postadress för notiser
 
-Under **Profil → Notiseringar** finns en tabell med alla händelsetyper, grupperade under Bokningar och Ärenden. Varje rad har en kryssruta per kanal (just nu enbart e-post).
+Längst upp i notiseringsavsnittet visas vilken e-postadress du får notiser till — som standard den adress som är kopplad till ditt ScoutID-konto.
 
-| Händelse | Vem får det som standard |
+Om du vill ta emot notiser på en annan adress (t.ex. en gemensam avdelningspostlåda eller ett privat konto) markerar du **Använd en annan e-postadress** och skriver in adressen. Klicka **Spara och testa** — systemet sparar adressen och skickar direkt ett testmail så att du kan bekräfta att det kom fram. Avmarkerar du kryssrutan återgår notiserna till din ScoutID-adress.
+
+### Personliga notiser
+
+Händelser som direkt berör dig — t.ex. att din bokning nekades — styr du med enkla på/av-kryssrutor.
+
+| Händelse | Mottagare |
 |---|---|
-| Bokningsförfrågan väntar på godkännande | Utrustningsansvariga |
-| Bokning bekräftad | Bokaren + teammedlemmar |
 | Bokning nekad | Bokaren |
-| Bokning avbokad | Bokaren + teammedlemmar |
-| Påminnelse dagen före start | Bokaren + teammedlemmar |
-| Bokning försenad | Bokaren + teammedlemmar |
+| Tilldelad till ärende 🔒 | Den tilldelade — alltid aktiv, kan inte stängas av |
+| Ärende löst | Rapportören och de tilldelade |
+| Kommentar på ärende | Rapportören och de tilldelade |
+
+### Avdelnings- och rollnotiser
+
+Händelser kopplade till din avdelning eller roll (t.ex. bokningsbekräftelser) visas i en tre-valsrad: **Alltid** · **Följ avdelning/roll** · **Aldrig**.
+
+- **Alltid** — du får alltid ett eget mail, oavsett vad avdelningen har ställt in.
+- **Följ avdelning/roll** — du förlitar dig på det avdelningen har bestämt. Om avdelningen har en gemensam kanal (gemensam e-post eller Google Chat) täcker den dig; annars får du ett personligt mail precis som vanligt. Det här är standardvalet.
+- **Aldrig** — du får aldrig personlig e-post för den här händelsen, även om avdelningen saknar gemensam kanal.
+
+Rader som inte gäller din roll visas inte.
+
+| Händelse | Standardmottagare |
+|---|---|
+| Bokning bekräftad | Bokare + avdelningsmedlemmar |
+| Bokning avbokad | Bokare + avdelningsmedlemmar |
+| Påminnelse inför start | Bokare + avdelningsmedlemmar |
+| Bokning försenad | Bokare + avdelningsmedlemmar |
+| Bokningsförfrågan väntar på godkännande | Utrustningsansvariga |
+| Bokning inskickad utan godkännande | Utrustningsansvariga |
+| Ny bokning skapad | Utrustningsansvariga |
 | Ärende skapat | Utrustningsansvariga |
-| Tilldelad till ärende | Den tilldelade (kan inte stängas av) |
-| Ärende löst | Rapportören + tilldelade |
-| Kommentar på ärende | Rapportören + tilldelade |
+| Ärende löst | Utrustningsansvariga |
+| Kommentar på ärende | Utrustningsansvariga |
 
-Rader som inte är relevanta för din roll visas inte alls. Händelsen "Tilldelad till ärende" är alltid aktiv och kan inte stängas av.
+Knappen **Återställ till standard** tar bort dina personliga val och återgår till avdelningens och kårens standardvärden.
 
-Under tabellen visas om ett värde är ärvet från gruppstandarden eller systemstandarden. Knappen **Återställ till standard** tar bort alla dina personliga val och återgår till gruppens standardvärden.
+### Avdelningsinställningar
 
-### Standardinställningar för gruppen
+Under **Profil → Avdelningar och roller** kan alla avdelningsmedlemmar ställa in hur notiser fungerar för avdelningen:
+
+- **Gruppmejl** — en gemensam e-postadress dit avdelningen får ett samlat utskick per händelse istället för att varje person får ett eget mail.
+- **Gemensam kanal** — välj vilka kanaler (gemensam e-post, Google Chat) som ingår i avdelningens samlade utskick.
+- **Per händelse** — välj för varje händelsetyp om gemensam kanalen ska vara aktiv, och om personlig e-post ska skickas utöver det eller inte.
+
+### Kårinställningar för notiser
 
 *(Kräver utrustningsansvarig)*
 
-Under **Profil → Gruppinställningar → Standardinställningar för notiser** kan du ställa in standardvärden separat för vanliga **användare** och **utrustningsansvariga**. Tabellen har två kolumner per kanal — en för vardera rollen. Ändringarna påverkar bara de som inte har satt egna preferenser.
+Under **Profil → Kårinställningar → Standardinställningar för notiser** sätter du standardvärden för alla avdelningar i kåren. Avdelningar och enskilda användare kan alltid välja att avvika från standarden.
+
+Knappen **Återställ alla användares notiser till standard** skriver över alla personliga och avdelningsvisa val med kårens nuvarande standardvärden — använd med försiktighet.
 
 ### E-postinställningar
 
 *(Kräver utrustningsansvarig)*
 
-Under **Profil → Gruppinställningar → Aviseringar** väljer du om gruppen ska använda egna SMTP-inställningar eller systemets standardavsändare.
+Under **Profil → Kårinställningar → Aviseringar** väljer du om kåren ska använda egna SMTP-inställningar eller systemets standardavsändare.
 
 - **Utan eget SMTP**: systemets avsändaradress visas som informationstext. Om ingen systemstandard är konfigurerad visas en varning.
 - **Med eget SMTP**: markera kryssrutan för att visa formuläret. Fyll i från-adress, host, port, TLS-läge, användarnamn och lösenord för din e-postleverantör (t.ex. SendGrid, Gmail med applösenord, Mailgun). Lösenordet lagras krypterat. Lämna lösenordsfältet tomt för att behålla det befintliga.
 
-Knappen **Skicka testnotis** skickar ett testmeddelande till din egen e-postadress så att du kan kontrollera att konfigurationen fungerar.
+Knappen **Skicka testnotis** skickar ett testmeddelande till din notise-postadress så att du kan kontrollera att konfigurationen fungerar.
+
+### Google Chat
+
+*(Kräver utrustningsansvarig och Google Workspace)*
+
+Under **Profil → Kårinställningar → Google Chat** kan du koppla ett tjänstkonto som gör att systemet kan skicka notiser direkt till Google Chat-rum. Se installationsguiden för steg-för-steg-instruktioner för hur du skapar och konfigurerar tjänstkontot.
+
+När Google Chat är anslutet kan du under **Avdelningskopplingar** länka varje avdelning till ett specifikt Google Chat-rum. Systemet skickar då ett samlat kort till rummet vid varje händelse (som en avdelningsmedlem får notis om), med länk till bokningen eller ärendet.
 
 ## På gång
 
 Funktioner som planeras men inte är byggda ännu:
 
 - Paket: färdiga utrustningsset för vanliga scenarier (t.ex. "hajk för 8 utmanare")
-- Schemalagda notifieringar (påminnelser och förseningsvarningar skickas ännu inte automatiskt)
 - Artikelbilder vid felrapportering (med nedladdning som JPEG)
 - Inventariehantering i appen (skapa/redigera artiklar, bulk-åtgärder, CSV-import/-export)
 - Utskriftsvänlig hämtlista

@@ -12,6 +12,21 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const clearUserNotificationEmail = `-- name: ClearUserNotificationEmail :exec
+UPDATE users SET notification_email = NULL, updated_at = now()
+WHERE id = $1 AND group_id = $2
+`
+
+type ClearUserNotificationEmailParams struct {
+	ID      string `json:"id"`
+	GroupID string `json:"group_id"`
+}
+
+func (q *Queries) ClearUserNotificationEmail(ctx context.Context, arg ClearUserNotificationEmailParams) error {
+	_, err := q.db.Exec(ctx, clearUserNotificationEmail, arg.ID, arg.GroupID)
+	return err
+}
+
 const clearUserNotificationPrefs = `-- name: ClearUserNotificationPrefs :exec
 UPDATE users SET notification_prefs = '{}', updated_at = now()
 WHERE id = $1 AND group_id = $2
@@ -28,7 +43,7 @@ func (q *Queries) ClearUserNotificationPrefs(ctx context.Context, arg ClearUserN
 }
 
 const getGroupManagers = `-- name: GetGroupManagers :many
-SELECT id, name, email, language, max_access_level, notification_prefs FROM users
+SELECT id, name, email, language, max_access_level, notification_prefs, notification_email FROM users
 WHERE group_id = $1 AND max_access_level = 'manager'
 ORDER BY name
 `
@@ -40,6 +55,7 @@ type GetGroupManagersRow struct {
 	Language          pgtype.Text     `json:"language"`
 	MaxAccessLevel    string          `json:"max_access_level"`
 	NotificationPrefs json.RawMessage `json:"notification_prefs"`
+	NotificationEmail pgtype.Text     `json:"notification_email"`
 }
 
 func (q *Queries) GetGroupManagers(ctx context.Context, groupID string) ([]GetGroupManagersRow, error) {
@@ -58,6 +74,7 @@ func (q *Queries) GetGroupManagers(ctx context.Context, groupID string) ([]GetGr
 			&i.Language,
 			&i.MaxAccessLevel,
 			&i.NotificationPrefs,
+			&i.NotificationEmail,
 		); err != nil {
 			return nil, err
 		}
@@ -70,7 +87,7 @@ func (q *Queries) GetGroupManagers(ctx context.Context, groupID string) ([]GetGr
 }
 
 const getTeamMembersWithEmails = `-- name: GetTeamMembersWithEmails :many
-SELECT id, name, email, language, max_access_level, notification_prefs FROM users
+SELECT id, name, email, language, max_access_level, notification_prefs, notification_email FROM users
 WHERE group_id = $1 AND $2::uuid = ANY(team_ids)
 ORDER BY name
 `
@@ -87,6 +104,7 @@ type GetTeamMembersWithEmailsRow struct {
 	Language          pgtype.Text     `json:"language"`
 	MaxAccessLevel    string          `json:"max_access_level"`
 	NotificationPrefs json.RawMessage `json:"notification_prefs"`
+	NotificationEmail pgtype.Text     `json:"notification_email"`
 }
 
 func (q *Queries) GetTeamMembersWithEmails(ctx context.Context, arg GetTeamMembersWithEmailsParams) ([]GetTeamMembersWithEmailsRow, error) {
@@ -105,6 +123,7 @@ func (q *Queries) GetTeamMembersWithEmails(ctx context.Context, arg GetTeamMembe
 			&i.Language,
 			&i.MaxAccessLevel,
 			&i.NotificationPrefs,
+			&i.NotificationEmail,
 		); err != nil {
 			return nil, err
 		}
@@ -117,7 +136,7 @@ func (q *Queries) GetTeamMembersWithEmails(ctx context.Context, arg GetTeamMembe
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, group_id, name, email, active_group_id, created_at, updated_at, language, max_access_level, notification_prefs, team_ids FROM users
+SELECT id, group_id, name, email, active_group_id, created_at, updated_at, language, max_access_level, notification_prefs, team_ids, notification_email FROM users
 WHERE id = $1 AND group_id = $2
 `
 
@@ -141,6 +160,7 @@ func (q *Queries) GetUser(ctx context.Context, arg GetUserParams) (User, error) 
 		&i.MaxAccessLevel,
 		&i.NotificationPrefs,
 		&i.TeamIds,
+		&i.NotificationEmail,
 	)
 	return i, err
 }
@@ -222,6 +242,22 @@ func (q *Queries) ResetAllNotificationPrefs(ctx context.Context, groupID string)
 	return reset_count, err
 }
 
+const setUserNotificationEmail = `-- name: SetUserNotificationEmail :exec
+UPDATE users SET notification_email = $1, updated_at = now()
+WHERE id = $2 AND group_id = $3
+`
+
+type SetUserNotificationEmailParams struct {
+	NotificationEmail pgtype.Text `json:"notification_email"`
+	ID                string      `json:"id"`
+	GroupID           string      `json:"group_id"`
+}
+
+func (q *Queries) SetUserNotificationEmail(ctx context.Context, arg SetUserNotificationEmailParams) error {
+	_, err := q.db.Exec(ctx, setUserNotificationEmail, arg.NotificationEmail, arg.ID, arg.GroupID)
+	return err
+}
+
 const setUserNotificationPrefs = `-- name: SetUserNotificationPrefs :exec
 UPDATE users SET notification_prefs = $1, updated_at = now()
 WHERE id = $2 AND group_id = $3
@@ -262,7 +298,7 @@ ON CONFLICT (id) DO UPDATE SET
     max_access_level = EXCLUDED.max_access_level,
     team_ids = EXCLUDED.team_ids,
     updated_at = now()
-RETURNING id, group_id, name, email, active_group_id, created_at, updated_at, language, max_access_level, notification_prefs, team_ids
+RETURNING id, group_id, name, email, active_group_id, created_at, updated_at, language, max_access_level, notification_prefs, team_ids, notification_email
 `
 
 type UpsertUserParams struct {
@@ -296,6 +332,7 @@ func (q *Queries) UpsertUser(ctx context.Context, arg UpsertUserParams) (User, e
 		&i.MaxAccessLevel,
 		&i.NotificationPrefs,
 		&i.TeamIds,
+		&i.NotificationEmail,
 	)
 	return i, err
 }
