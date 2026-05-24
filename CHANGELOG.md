@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.9.1](https://github.com/malarscouterna/scoutrustning/compare/v0.9.0...v0.9.1) (2026-05-24)
+
+
+### Miscellaneous
+
+* add dependabot + update all dependencies ([2145820](https://github.com/malarscouterna/scoutrustning/commit/2145820c0fc409ccd648df26dddd63d928dab927))
+* **deps-dev:** bump @sveltejs/kit from 2.55.0 to 2.60.1 in /web ([5b9c435](https://github.com/malarscouterna/scoutrustning/commit/5b9c435541ffd812a01026caf592d9e5e60b9b3f))
+* **deps:** batch dependabot + apply safe updates ([7ce602b](https://github.com/malarscouterna/scoutrustning/commit/7ce602b648cfdd12a772e1816069e681f7e7194e))
+* expand release-please changelog sections ([7d4774f](https://github.com/malarscouterna/scoutrustning/commit/7d4774f656a6a0b6893bf4cb5b832ee49608dd9e))
+* rename project to scoutrustning ([8d1c93c](https://github.com/malarscouterna/scoutrustning/commit/8d1c93c5e0c1b46b5bef40a4a56214dde9d415a8))
+
+
+### Documentation
+
+* move AI assistant setup into Contributing section ([c245419](https://github.com/malarscouterna/scoutrustning/commit/c24541959e8b1834d389d8c25325b2961b2f643f))
+* relicense from AGPL-3.0 to MIT ([bdd0bcd](https://github.com/malarscouterna/scoutrustning/commit/bdd0bcd2de455fcba662fab3876094a2797c3cb7))
+* update project name to scoutrustning across README and docs ([5837d76](https://github.com/malarscouterna/scoutrustning/commit/5837d76d59faf96e44bf8a623b6571e42d5e7ce8))
+
 ## [0.9.0](https://github.com/malarscouterna/ms-utrustning/compare/v0.8.1...v0.9.0) (2026-05-24)
 
 
