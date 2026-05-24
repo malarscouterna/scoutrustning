@@ -14,7 +14,7 @@
   "dependencies": {
     "@auth/sveltekit": "^1.11.2",
     "@inlang/paraglide-sveltekit": "^0.16.1",
-    "@scouterna/design-tokens": "^0.0.5",
+    "@scouterna/design-tokens": "^0.0.6",
     "@scouterna/tailwind-theme": "^0.0.4",
     "@scouterna/ui-webc": "^3.2.0",
     "marked": "^17.0.6",

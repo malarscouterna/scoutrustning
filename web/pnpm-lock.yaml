@@ -15,8 +15,8 @@ importers:
         specifier: ^0.16.1
         version: 0.16.1(@sveltejs/kit@2.61.1(@sveltejs/vite-plugin-svelte@7.1.2(svelte@5.55.9(@typescript-eslint/types@8.58.0))(vite@8.0.14(@types/node@25.9.1)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.3)))(svelte@5.55.9(@typescript-eslint/types@8.58.0))(typescript@5.9.3)(vite@8.0.14(@types/node@25.9.1)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.3)))(@typescript-eslint/types@8.58.0)
       '@scouterna/design-tokens':
-        specifier: ^0.0.5
-        version: 0.0.5
+        specifier: ^0.0.6
+        version: 0.0.6
       '@scouterna/tailwind-theme':
         specifier: ^0.0.4
         version: 0.0.4
@@ -855,6 +855,9 @@ packages:
 
   '@scouterna/design-tokens@0.0.5':
     resolution: {integrity: sha512-gZ72hGch5tBi+yItQ52S8uDimQ/m8LvSe42tLyfE9tdHUYYCRrQ60vnYS4y2K1Yymxy7K6SDKHBu/pPDLxahAw==}
+
+  '@scouterna/design-tokens@0.0.6':
+    resolution: {integrity: sha512-wgqjEkTiSv+mfnpYBHkIpArRuZotZMJles+F4vhgBxsFO3p6t++jbIrp7IHh4BzsF9Du4HdTnzmqlFsCirSXag==}
 
   '@scouterna/tailwind-theme@0.0.4':
     resolution: {integrity: sha512-RIDYKRWYxDfmwEoIEbGc1zyIaanjCdw9ehrJEfahZjqyBtHq5nWTyrPMiTBBO1lh4z7c53Ymwr2rYAUOrf5AXQ==}
@@ -3560,6 +3563,10 @@ snapshots:
     optional: true
 
   '@scouterna/design-tokens@0.0.5':
+    dependencies:
+      glob: 13.0.6
+
+  '@scouterna/design-tokens@0.0.6':
     dependencies:
       glob: 13.0.6
 
