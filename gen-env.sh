@@ -65,6 +65,8 @@ case "$MODE" in
     SETTINGS_ENCRYPTION_KEY=$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | xxd -p)
     API_IMAGE="ms-utrustning-api"
     WEB_IMAGE="ms-utrustning-web"
+    DEMO_URL="https://demo.scoutrustning.se"
+    PROD_URL="https://scoutrustning.se"
     ;;
   demo)
     DEV_MODE=true
@@ -78,6 +80,8 @@ case "$MODE" in
     SETTINGS_ENCRYPTION_KEY=$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | xxd -p)
     API_IMAGE="ghcr.io/malarscouterna/ms-utrustning-api:latest"
     WEB_IMAGE="ghcr.io/malarscouterna/ms-utrustning-web:latest"
+    DEMO_URL=""
+    PROD_URL="https://scoutrustning.se"
     ;;
   prod)
     DEV_MODE=false
@@ -91,6 +95,8 @@ case "$MODE" in
     SETTINGS_ENCRYPTION_KEY=$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | xxd -p)
     API_IMAGE="ghcr.io/malarscouterna/ms-utrustning-api:latest"
     WEB_IMAGE="ghcr.io/malarscouterna/ms-utrustning-web:latest"
+    DEMO_URL="https://demo.scoutrustning.se"
+    PROD_URL=""
     ;;
 esac
 
@@ -150,6 +156,8 @@ WEB_PORT=3000
 # ── URLs ──────────────────────────────────────────────────
 ORIGIN=$ORIGIN
 JWKS_URL=https://dev.id.scouterna.se/realms/scoutnet/protocol/openid-connect/certs
+DEMO_URL=$DEMO_URL
+PROD_URL=$PROD_URL
 
 # ── Auth (OIDC via ScoutID/Keycloak) ─────────────────────
 AUTH_SECRET=$AUTH_SECRET

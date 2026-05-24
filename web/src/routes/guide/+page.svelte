@@ -12,6 +12,14 @@
 			<p class="text-sm text-adventurerorange-800 mb-3">
 				Detta är en demomiljö. Använd personaväljaren (övre högra hörnet på mobil, nedre högra på dator) för att byta mellan olika roller och se systemet från olika perspektiv. Data kan återställas när som helst.
 			</p>
+			{#if data.prodUrl}
+				<a
+					href={data.prodUrl}
+					class="inline-block text-sm font-medium bg-white border border-adventurerorange-300 text-adventurerorange-900 rounded-lg px-4 py-2 hover:bg-adventurerorange-100 transition-colors mb-3"
+				>
+					Besök den riktiga tjänsten på {data.prodUrl.replace('https://', '')} →
+				</a>
+			{/if}
 			<details class="text-sm">
 				<summary class="cursor-pointer font-medium text-adventurerorange-800 mb-2">Tillgängliga personas</summary>
 				<table class="w-full text-xs mt-2 border-collapse">

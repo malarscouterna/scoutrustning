@@ -3,6 +3,8 @@ import { resolve } from 'path';
 import { marked } from 'marked';
 import type { PageServerLoad } from './$types';
 
+const PROD_URL = process.env.PROD_URL || 'https://scoutrustning.se';
+
 let cachedHtml: string | null = null;
 
 export const load: PageServerLoad = async () => {
@@ -14,5 +16,5 @@ export const load: PageServerLoad = async () => {
 			cachedHtml = '<p>Guiden kunde inte laddas.</p>';
 		}
 	}
-	return { html: cachedHtml };
+	return { html: cachedHtml, prodUrl: PROD_URL };
 };
