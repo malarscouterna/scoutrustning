@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.3](https://github.com/malarscouterna/scoutrustning/compare/v0.9.2...v0.9.3) (2026-05-24)
+
+
+### Bug Fixes
+
+* support multiple domains for OIDC auth, fix login page links ([421c3f3](https://github.com/malarscouterna/scoutrustning/commit/421c3f3daa1b96c7bfa137389f412a4a4c1d8fc2))
+
 ## [0.9.2](https://github.com/malarscouterna/scoutrustning/compare/v0.9.1...v0.9.2) (2026-05-24)
 
 
