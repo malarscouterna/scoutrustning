@@ -2,6 +2,21 @@
 
 Deferred work items - things to grab when there's time, smaller tasks set aside during major work. When an item is completed, move it to [accomplished.md](accomplished.md).
 
+## Migrate Paraglide to v2
+
+`@inlang/paraglide-sveltekit@0.16.1` is deprecated. The replacement is `@inlang/paraglide-js` v2+ — the SvelteKit adapter is no longer needed.
+
+**What changes:**
+- Remove `@inlang/paraglide-sveltekit`, add `@inlang/paraglide-js` v2
+- Delete `src/lib/i18n.ts` and the `createI18n` setup
+- Remove `<ParaglideJS>` wrapper from `+layout.svelte`
+- Replace `i18n.handle()` in `hooks.server.ts` with v2 hook
+- Cookie-based language detection (no URL prefixing) must be explicitly configured as a custom `languageTag` strategy — v2 defaults to URL-based routing
+
+Message imports (`import * as m from '$lib/paraglide/messages.js'`) and the 637 message functions should survive unchanged. The tricky part is preserving the `paraglide_lang` cookie approach without URL prefixes.
+
+Do this as its own focused PR, after the rename.
+
 ## English user guide
 
 `docs/guide.md` is the source for the in-app guide page and is currently written in Swedish only. An English version is needed once the English UI is fully rolled out. Deferred — low priority until there are actual English-speaking users.
