@@ -11,6 +11,7 @@ export interface User {
 	group_name: string;
 	name: string;
 	email: string;
+	notification_email: string | null;
 	language: string;
 	teams: TeamMembership[];
 	max_access: 'view' | 'book' | 'trusted' | 'manager';

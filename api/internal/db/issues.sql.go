@@ -151,6 +151,22 @@ func (q *Queries) CreateIssueEvent(ctx context.Context, arg CreateIssueEventPara
 	return i, err
 }
 
+const deleteIssueAssignee = `-- name: DeleteIssueAssignee :exec
+DELETE FROM issue_assignees
+WHERE issue_id = $1 AND user_id = $2 AND group_id = $3
+`
+
+type DeleteIssueAssigneeParams struct {
+	IssueID pgtype.UUID `json:"issue_id"`
+	UserID  string      `json:"user_id"`
+	GroupID string      `json:"group_id"`
+}
+
+func (q *Queries) DeleteIssueAssignee(ctx context.Context, arg DeleteIssueAssigneeParams) error {
+	_, err := q.db.Exec(ctx, deleteIssueAssignee, arg.IssueID, arg.UserID, arg.GroupID)
+	return err
+}
+
 const deriveArticleStatus = `-- name: DeriveArticleStatus :one
 SELECT CASE
     WHEN EXISTS (
@@ -251,6 +267,23 @@ func (q *Queries) GetIssue(ctx context.Context, arg GetIssueParams) (GetIssueRow
 		&i.ReporterName,
 	)
 	return i, err
+}
+
+const insertIssueAssignee = `-- name: InsertIssueAssignee :exec
+INSERT INTO issue_assignees (issue_id, user_id, group_id)
+VALUES ($1, $2, $3)
+`
+
+type InsertIssueAssigneeParams struct {
+	IssueID pgtype.UUID `json:"issue_id"`
+	UserID  string      `json:"user_id"`
+	GroupID string      `json:"group_id"`
+}
+
+// Like AddIssueAssignee but errors on duplicate (for 409 response).
+func (q *Queries) InsertIssueAssignee(ctx context.Context, arg InsertIssueAssigneeParams) error {
+	_, err := q.db.Exec(ctx, insertIssueAssignee, arg.IssueID, arg.UserID, arg.GroupID)
+	return err
 }
 
 const listIssueArticles = `-- name: ListIssueArticles :many

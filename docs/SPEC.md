@@ -324,8 +324,9 @@ All tables have `group_id` (text, FK → groups). Omitted below for brevity.
 | id | text | PK, Keycloak member ID (e.g. "3000924") |
 | name | text | From token, updated on login |
 | email | text | From token |
-| notification_channel | text | 'email' or 'gchat' |
-| gchat_webhook_url | text | Nullable |
+| language | text | Nullable, user language preference (sv/en) |
+| max_access_level | text | Denormalized highest access level across all teams, updated on login |
+| notification_prefs | jsonb | Per-user notification preference overrides (falls back to group defaults, then system defaults) |
 | created_at / updated_at | timestamptz | |
 
 ### locations
@@ -354,7 +355,7 @@ All tables have `group_id` (text, FK → groups). Omitted below for brevity.
 | status | text | Condition enum: ok, reported_usable, incoming, reported_unusable, under_repair, lost, archived |
 | individually_tracked | boolean | |
 | approval_level | text | none, low, high - controls booking approval flow |
-| image_path | text | Nullable, per commercial_name + location_id (shared by all articles of that type at that location) |
+| image_ids | text[] | Ordered list of image UUIDs from the `product_images` table; shared per commercial_name + location_id |
 | description | text | |
 | instructions | text | |
 | purchase_date | date | Nullable |
@@ -441,15 +442,57 @@ All tables have `group_id` (text, FK → groups). Omitted below for brevity.
 | metadata | jsonb | Structured data (items added/removed, old/new dates, etc.) |
 | created_at | timestamptz | |
 
+### product_images
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| group_id | text | FK → groups |
+| file_id | uuid | UUID of the image files on disk (`{file_id}.webp`, `{file_id}_thumb.webp`). Multiple rows can reference the same file_id (shared images). |
+| title | text | |
+| description | text | |
+| format | text | `landscape`, `portrait`, `square` — determines pixel dimensions |
+| shared | boolean | Whether the image is visible in the shared browser for other groups to reuse |
+| attribution_mode | text | `first_name`, `full_name`, `custom` |
+| attribution_name | text | Nullable, used when attribution_mode is `custom` |
+| uploaded_by | text | FK → users |
+| created_at | timestamptz | |
+
+Images are stored on disk as `{file_id}.webp` (source) and `{file_id}_thumb.webp` (thumbnail) in a Docker volume. The `image_ids` column on articles (array of product_image UUIDs) is shared across all articles with the same `commercial_name + location_id`. Upload permission is controlled by `group_settings.image_upload_role`.
+
 ### group_settings
 | Column | Type | Notes |
 |---|---|---|
 | group_id | text | PK, FK → groups |
 | notification_email_from | text | Email from-address for this group |
-| smtp_key_encrypted | bytea | Nullable, AES-256-GCM encrypted SMTP API key |
+| smtp_host | text | SMTP server hostname |
+| smtp_port | integer | SMTP port (default 587) |
+| smtp_tls | text | `starttls` or `tls` (implicit) |
+| smtp_user | text | SMTP username |
+| smtp_key_encrypted | bytea | Nullable, AES-256-GCM encrypted SMTP password |
+| notification_defaults | jsonb | Per-group notification preference defaults (overrides system defaults for all users without personal prefs) |
+| logo_file_id | uuid | Nullable. Files at `{IMAGE_DIR}/logos/{id}.webp` (web) and `.png` (email) |
 | gchat_webhook_url | text | Google Chat webhook URL |
 | default_approval_level | text | Default for new articles: none/low/high |
+| default_language | text | Default language for the group (sv/en) |
+| image_upload_role | text | Minimum access level to upload images (any/leader/trusted/manager) |
 | created_at / updated_at | timestamptz | |
+
+**Note**: A system-wide SMTP fallback can be configured via `SMTP_DEFAULT_*` environment variables. Per-group settings override the system fallback. See [notifications.md](notifications.md).
+
+### notification_log
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| group_id | text | FK → groups |
+| user_id | text | FK → users |
+| event_type | text | e.g. `booking_confirmed`, `issue_created` |
+| entity_id | uuid | booking_id or issue_id |
+| channel | text | `email` |
+| status | text | `sent`, `failed`, `skipped` |
+| error | text | Nullable, error message if failed |
+| created_at | timestamptz | |
+
+Deduplication table for scheduled notification jobs — prevents sending the same notification twice (e.g. overdue reminders).
 
 ### issue_reports
 | Column | Type | Notes |
@@ -749,44 +792,42 @@ CSV column mapping:
 - Integration tests: 9 subtests covering all approval level × role combinations
 - **UPDATE**: Originally planned as simple boolean `requires_approval`. Evolved to three-level model with booking events for conversation history. See [article-status-refactor.md](docs/article-status-refactor.md) for the status changes that accompanied this.
 
-#### Step 2: Equipment manager - inventory management (in progress)
+#### Step 2: Equipment manager - inventory management ✅ (mostly done)
 See [inventory-management.md](docs/inventory-management.md) for full design doc.
-- Browse page "Hanteringsläge" toggle (session state) for inline manager controls: bulk actions, edit links, checkboxes per group/article
-- Bulk actions toolbar: status change, location move, archive with conflict detection + auto-replacement in active bookings, comment input for events
-- Article create/edit forms at `/articles/*` (manager-guarded), article detail page at `/articles/[id]` (all users)
-- `manager_notes` field on articles - private notes only visible to equipment managers, amber-highlighted in UI
-- Quantity tracked group edit: count field, create/archive records, single `count_changed` article event, per-physical-item list with status/purchase info
-- Shared field propagation: saving an individually tracked article propagates description, instructions, manager_notes, category_id to siblings (approval_level and location are per-item)
-- Article detail page: quantity tracked status summary, aggregated purchase info, collapsed group events, comment input
-- Settings as "Gruppinställningar" tab on profile page (`/profile`): locations, categories, CSV import, group settings
-- `group_settings` table with explicit columns: notification_email_from, smtp_key_encrypted (AES-256-GCM, key in `.env`), gchat_webhook_url, default_approval_level
-- Location/category deletion blocked if articles reference them (409 with count)
-- CSV import reads `instructions` and `manager_notes` columns
-- Shared `$lib/labels.ts` module replacing duplicated constants across pages
-- Integration tests: inventory management (6 subtests), browse manager mode (9 subtests)
+- Browse page "Hanteringsläge" toggle (session state) for inline manager controls: bulk actions, edit links, checkboxes per group/article ✅
+- Bulk actions toolbar: status change, location move, archive with conflict detection + auto-replacement in active bookings, comment input for events ✅
+- Article create/edit forms at `/articles/*` (manager-guarded), article detail page at `/articles/[id]` (all users) ✅
+- `manager_notes` field on articles - private notes only visible to equipment managers, amber-highlighted in UI ✅
+- Quantity tracked group edit: count field, create/archive records, single `count_changed` article event, per-physical-item list with status/purchase info ✅
+- Shared field propagation: saving an individually tracked article propagates description, instructions, manager_notes, category_id to siblings (approval_level and location are per-item) ✅
+- Article detail page: quantity tracked status summary, aggregated purchase info, collapsed group events, comment input ✅
+- Settings as "Gruppinställningar" tab on profile page (`/profile`): locations, categories, CSV import, group settings ✅
+- `group_settings` table with explicit columns: notification_email_from, smtp_key_encrypted (AES-256-GCM, key in `.env`), gchat_webhook_url, default_approval_level ✅
+- Location/category deletion blocked if articles reference them (409 with count) ✅
+- CSV import reads `instructions` and `manager_notes` columns ✅
+- Shared `$lib/labels.ts` → replaced with Paraglide message calls (see i18n Phase 3) ✅
+- Integration tests: inventory management (6 subtests), browse manager mode (9 subtests) ✅
 
 Remaining:
 - CSV import two-phase flow: preview (dry run with per-row duplicate detection) → confirm. Revertable via import batch tracking. Duplicate matching on `common_name + group_id`
 - CSV export on browse page (client-side, import-compatible columns), booking export on booking detail
 - Print-friendly fetch list on booking detail (`@media print`, grouped by location)
 
-#### Step 3: Image upload (in progress)
+#### Step 3: Image upload ✅
 See [images.md](docs/images.md) for full design doc.
-- Server-side image processing via govips: JPEG/PNG/WebP/HEIC input, EXIF strip, auto-rotate, 4:3 center crop (product), resize to source (2560px/q85, 2048px for square) + thumbnail (400px height/q75) WebP variants
-- On-demand JPEG conversion for download (`?format=jpeg`)
-- Byte-level MIME detection including HEIC ftyp box and WebP RIFF header sniffing
-- Product image upload (manager-only), issue image upload (any user), serve with immutable caching, delete with file cleanup
-- `image_path` on articles, propagated to all articles sharing `commercial_name + location_id`
-- Docker: libvips in API image, `images` Docker volume for persistent storage
-- Frontend: thumbnails in browse page expanded info section and article detail page, with dialog-based lightbox viewer (tap to view full size, download as JPEG)
-- Seed script uploads images from `docs/seed-images/` directory
-- Integration tests: 8 subtests covering upload, serve, replace, delete, access control, JPEG download
-
-Remaining:
-- Product image upload UI (manager, from article edit and browse pages)
-- Issue report image attachment (any user, from report form)
-- Client-side 4:3 crop (cropperjs) before product image upload
-- Multiple images per product (gallery with horizontal scroll + fullscreen viewer)
+- Server-side image processing via govips: JPEG/PNG/WebP/HEIC input, EXIF strip, auto-rotate, client-side crop with selectable format (landscape 4:3, portrait 3:4, square 1:1), resize to source (1920px/q80) + thumbnail (300px height/q70) WebP variants ✅
+- On-demand JPEG conversion for download (`?format=jpeg`) ✅
+- Byte-level MIME detection including HEIC ftyp box and WebP RIFF header sniffing ✅
+- Product image upload (configurable per group via `image_upload_role`), issue image upload (any user), serve with immutable caching, delete with ref-count cleanup ✅
+- `image_ids` array on articles (replaces `image_path`), shared across all articles with same `commercial_name + location_id` ✅
+- `product_images` table for per-image metadata (title, description, format, shared flag, attribution) ✅
+- Shared image browser: managers can reuse images across article groups; cross-group shared browsing ✅
+- Image metadata editing (title, description, attribution, shared flag) by uploader or manager ✅
+- Docker: libvips in API image, `images` Docker volume for persistent storage ✅
+- Frontend: `ImageCropDialog` (cropperjs with format switcher), `ImageUploadDialog`, `ImageViewer` (PhotoSwipe lightbox gallery) ✅
+- "Mina bilder" section on profile page: user's uploads with article links, usage counts, delete ✅
+- Seed script uploads images from `docs/seed-images/` directory ✅
+- Integration tests: upload, serve WebP/JPEG, delete with ref counting, access control, shared image browsing ✅
 
 ### Phase 3 - Production auth + notifications
 
@@ -807,16 +848,34 @@ Connect real OIDC, add notifications, and make the system usable by actual users
 - Expired token detection - stale sessions trigger re-auth instead of 500s
 - Dev seed script checks for dev mode before running
 
-#### Step 2: Notifications
-- Email notifications (approval requests, booking confirmations, overdue reminders)
-- Google Chat webhook notifications (per-unit spaces, admin space)
-- Per-user notification channel preference (email / Google Chat)
+#### Step 2: Notifications ✅
+See [notifications.md](docs/notifications.md) for the full design.
 
-#### Step 3: Deployment + CI/CD
-- CI/CD pipeline: Jenkins builds, Docker image tagging, push to registry
-- Production Docker Compose with reverse proxy, TLS
-- Deployment automation (webhook or manual trigger)
-- User profile page (notification preferences)
+- Migration: `users.max_access_level`, `users.notification_prefs` (JSONB), `users.team_ids`, `group_settings` SMTP fields + `notification_defaults` (JSONB), `notification_log`, `group_settings.logo_file_id` ✅
+- Group members API: `GET /api/v0/users?access_levels=...` (manager only), demo mode protection ✅
+- Issue assignee API: `POST/DELETE /api/v0/issues/{id}/assignees`, assignment events in issue history ✅
+- Assignee picker UI on issue detail page (manager: searchable dropdown + remove chips; non-manager: read-only) ✅
+- Notification preference data layer + API: `GET/PUT/DELETE /me/notification-prefs`, `GET/PUT /group-settings/notification-defaults`, `ResolvePrefs` with user → group → system fallback ✅
+- Notification preferences UI on profile page: semantic table with Bokningar/Ärenden groups, inheritance hints, "Återställ" button ✅
+- `SMTPNotifier`: per-group SMTP config → `SMTP_DEFAULT_*` env fallback; `NoopNotifier` for demo mode; `CapturingNotifier` for tests ✅
+- Event-triggered sends (fire-and-forget goroutines): all 9 booking + issue events ✅
+- Demo mode: `NoopNotifier` for event sends, `SMTPNotifier` for test-email endpoint; "Skicka testnotis" button in profile ✅
+- MJML email templates: branded header (blue-700), event banner (color-coded), booking card with items + notes, issue card with event history, plain-text alternative, Source Sans 3 font ✅
+- Scheduled jobs: daily reminders (`start_date = tomorrow`) and overdue alerts (`end_date < today`), deduplicated via `notification_log`, fired at `NOTIFICATION_REMINDER_TIME` (default `08:00`) ✅
+- Group notification defaults UI + SMTP settings UI in group settings (manager only) ✅
+- Group logo upload: `POST/DELETE /api/v0/group-settings/logo`; public serve at `/api/v0/public/groups/{id}/logo` (WebP) and `/logo.png` (email); shown in email header ✅
+
+Remaining (frontend only):
+- Web header logo display: fetch `logo_url` from group settings and render in top nav when present
+
+#### Step 3: Deployment + CI/CD ✅
+- Docker Compose setup with dev/demo/prod environment modes via `gen-env.sh` ✅
+- GitHub Actions CI: Go integration tests + lint on push, Playwright E2E on PR to main ✅
+- Release Please for automated versioning + changelog from Conventional Commits ✅
+- Docker image builds on release, tagged with version + `latest`, pushed to GitHub Container Registry ✅
+- `init-group` CLI for bootstrapping groups and manager teams (idempotent) ✅
+- User profile page with notification preferences, language switching, team membership ✅
+- Deployment is manual: pull new images on VPS, `docker compose up -d` ✅
 
 ### Phase 4 - Packages + polish
 - Package CRUD (org-wide + personal)
@@ -885,9 +944,7 @@ A more visual browse and booking experience: user first picks a category (e.g. "
 
 ## Open / TBD
 
-- Overdue reminder schedule (daily? configurable?)
-- Whether booking date granularity needs to go below day level in the future
-- Token refresh - currently the access token from initial login is used until expiry, then the user is redirected to re-authenticate. Auth.js token rotation could be added to refresh tokens silently.
-- Per-organisation role mapping - currently hardcoded in `role-mapping.json`, eventually needs a dynamic admin UI for group/role management (see backlog: "Admin UI for group/role management")
-- **UPDATE**: Implemented. `role-mapping.json` replaced by DB-driven `team_claim_mappings` with per-team access levels. Manager settings UI with kanban-style columns for access level management. See [access-levels.md](docs/access-levels.md).
-- `SETTINGS_ENCRYPTION_KEY` in `.env` for encrypting per-group SMTP keys - migrate to Docker secret in Phase 3
+- Overdue reminder schedule: daily at `NOTIFICATION_REMINDER_TIME` (env var, default `08:00`). Whether to make this configurable per group is TBD.
+- Whether booking date granularity needs to go below day level in the future.
+- Token refresh — currently the access token from initial login is used until expiry, then the user is redirected to re-authenticate. Auth.js token rotation could be added to refresh tokens silently.
+- `SETTINGS_ENCRYPTION_KEY` in `.env` for encrypting per-group SMTP keys — migrate to Docker secret in a future phase.

@@ -4,7 +4,80 @@ A living log of completed work — what was built, when, and why. Major features
 
 When finishing a backlog item or spec milestone, log it here and remove it from the backlog / mark it done in the spec.
 
+## 2026-05-24
+
+### Notifications — post-review refactor (send.go + group_settings)
+
+Addressed all open items from the notifications code review (`docs/notifications-review.md`). See that doc for the full resolved list.
+
+**`send.go` duplication removed**: Extracted `sendBookingToTeam` (used by `SendBookingConfirmed` and `SendBookingCancelled`); replaced `issueBroadcastTexts` + `issueBroadcastEmail` (two independent `fetchIssueEmailData` calls) with a single `issueBroadcastData` returning `(msg, opener, detail)`; extracted `langOrDefault(pgtype.Text)` used by all three `from*Row` helpers.
+
+**`teamIDStr` → `formatUUID`**: Renamed across `prefs.go`, `send.go`, `scheduler.go` — the old name implied team IDs but the function was used on booking and issue UUIDs too.
+
+**`Update` handler atomicity**: `GroupSettingsHandler` now holds `Pool *pgxpool.Pool`. The `Update` method wraps `UpsertGroupSettings` + `UpdateSmtpSettings` in a single `pgx.Tx` — both writes commit or roll back together.
+
+**SMTP masked value stored at write time**: Migration `00012_smtp_key_masked.sql` adds `smtp_key_masked TEXT NOT NULL DEFAULT ''`. Computed once via `crypto.MaskKey` when the key is written; `settingsToResponse` reads from the column directly — no decrypt on every GET.
+
 Newest first.
+
+---
+
+## 2026-05-04
+
+### feat/notifications branch — pre-merge fixes
+
+Resolved all issues identified in the branch review (`docs/notifications-branch-review.md`).
+
+**Critical — personal notification prefs end-to-end fix**
+
+The Phase 3.6 JSONB shape (`{personal_email_policy, gruppkanal}`) was implemented in the backend but `PutMe` still accepted and stored the old `{email: bool}` per-channel format, silently discarding every user preference write. Fixed:
+
+- `PutMe` in `notification_prefs.go` now accepts `map[string]*PerEventPrefs` (null removes user override for that event), matching the same format as the team/group settings endpoints.
+- TypeScript `NotificationPrefs` type updated from `Record<string, Record<string, ChannelPref>>` to `Record<string, ResolvedPref>` where `ResolvedPref = {policy, source, default_policy}`.
+- Profile page helpers (`notifEnabled`, `teamEventRadio`, `toggleNotif`, `setTeamEventRadio`) updated to read and write the new shape.
+- `notification_prefs_test.go` fully rewritten — all 8 subtests pass against the live DB.
+- Stale pref format in `scheduled_notifications_test.go` updated (`{"email":false}` → `{"personal_email_policy":"never"}`).
+- Stale `gchat_webhook_url` reference removed from `inventory_test.go` (column dropped in migration 00009).
+- GChat code review: booking events are fully wired; issue events have no GChat broadcast path and GChat key management endpoints lack integration tests — documented in `docs/notifications-phase35.md` and `docs/BACKLOG.md`.
+
+**High — dead code removed**
+
+`sendTestEmail` (unexported, never called in `send.go`) deleted along with its stale `html` import.
+
+**Medium**
+
+- Reminder deduplication: `sendReminderForBooking` now calls `HasNotificationBeenSent` before sending, preventing double-sends on server restart at the reminder window (mirrors the overdue-alert path).
+- Migrations 00009 and 00010 now have `-- +goose Down` stub sections so `goose down` no longer errors.
+- Unchecked `LogNotification` error in `scheduler.go` made consistent with `_ =` (all other call sites).
+
+**Low — cleanup**
+
+- `ResolvePrefs` signature simplified: removed unused `channels []string` and `isManager bool` parameters; call site in `GetMe` updated.
+- `var timeNow = time.Now` and its `time` import removed from `template.go`.
+- Empty `web/gchat-manager-guide.md` deleted.
+- `docs/API.md` updated to document the current `PUT /me/notification-prefs` and `GET /me/notification-prefs` shapes.
+
+---
+
+## 2026-04-24
+
+### Notifications - Steps 1-6
+
+See [notifications.md](notifications.md) for the full design.
+
+Steps 1-6 of the notification system are complete. Steps 7+ (actual sending, scheduled jobs, group defaults UI) are pending.
+
+**Step 1 - Migration**: `users.max_access_level`, `users.notification_prefs` (JSONB), `group_settings.smtp_host/port/tls/user`, `group_settings.notification_defaults` (JSONB), `notification_log` table. (`migrations/00005_notifications.sql`)
+
+**Step 2 - Group members API**: `GET /api/v0/users?access_levels=trusted,manager` - manager only. Demo mode protection: only persona IDs returned when `DEMO_MODE=true`. `GET /group-settings` now includes `notification_channels: ["email"]`.
+
+**Step 3 - Issue assignee API**: `POST /api/v0/issues/{id}/assignees` and `DELETE /api/v0/issues/{id}/assignees/{userId}`. Assignment and removal each create an `issue_events` row with `event_type = "assignment"` and `metadata.action = "added"|"removed"`. Returns 409 on duplicate assignment.
+
+**Step 4 - Assignee picker UI**: Issue detail page. Managers see chips with remove buttons plus a searchable "Tilldela" dropdown loaded from `GET /users`. Non-managers see read-only chip list. Access level shown in Swedish below each name.
+
+**Step 5 - Preference data layer + API**: `internal/notifications/prefs.go` - event key constants, `systemDefaults`, `ResolvePrefs`, `IsEnabled`. Five endpoints: `GET/PUT/DELETE /me/notification-prefs` and `GET/PUT /group-settings/notification-defaults`. Partial merge on user PUT; full replacement on group PUT. `source` field (`user`|`group_default`|`system_default`) returned on GET.
+
+**Step 6 - Preference UI**: "Notiser" section on the profile page. Semantic table with Bokningar/Ärenden groups. Columns driven by `notification_channels` from group settings (auto-adds new channels). Manager-only rows hidden for non-managers. `issue_assigned_to_me` is a locked informational row. Inheritance hint shown when source is not `user`. "Återställ till standard" resets and re-fetches. Toggles update immediately via `PUT /me/notification-prefs`.
 
 ---
 

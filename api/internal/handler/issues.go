@@ -1,22 +1,28 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/malarscouterna/ms-utrustning/api/internal/auth"
 	"github.com/malarscouterna/ms-utrustning/api/internal/db"
 	"github.com/malarscouterna/ms-utrustning/api/internal/i18n"
+	"github.com/malarscouterna/ms-utrustning/api/internal/notifications"
 )
 
 type IssueHandler struct {
-	Q     *db.Queries
-	Perms *PermissionCache
+	Q             *db.Queries
+	Perms         *PermissionCache
+	Notifier      notifications.Notifier
+	GChatNotifier notifications.Notifier
+	BaseURL       string
 }
 
 func (h *IssueHandler) Routes() chi.Router {
@@ -27,6 +33,8 @@ func (h *IssueHandler) Routes() chi.Router {
 	r.Put("/{id}", h.Update)
 	r.Post("/{id}/comments", h.AddComment)
 	r.Put("/{id}/assignees", h.ReplaceAssignees)
+	r.Post("/{id}/assignees", h.AddAssignee)
+	r.Delete("/{id}/assignees/{userId}", h.RemoveAssignee)
 	r.Post("/{id}/articles", h.AddArticle)
 	r.Delete("/{id}/articles/{articleId}", h.RemoveArticle)
 	return r
@@ -224,6 +232,11 @@ func (h *IssueHandler) Create(w http.ResponseWriter, r *http.Request) {
 		GroupID: claims.GroupID,
 	})
 
+	if h.Notifier != nil {
+		iss, n, gn, q := issue, h.Notifier, h.GChatNotifier, h.Q
+		go notifications.SendIssueCreated(context.Background(), q, n, gn, iss, h.BaseURL)
+	}
+
 	issueDetail, _ := h.buildIssueDetail(r, claims, issue.ID)
 	WriteJSON(w, http.StatusCreated, issueDetail)
 }
@@ -324,6 +337,19 @@ func (h *IssueHandler) Update(w http.ResponseWriter, r *http.Request) {
 				h.reapplyDerivedStatus(r, claims, artID)
 			}
 		}
+
+		if h.Notifier != nil && *req.Status == "resolved" {
+			if iss, err := h.Q.GetIssue(r.Context(), db.GetIssueParams{ID: id, GroupID: claims.GroupID}); err == nil {
+				issue := db.IssueReport{
+					ID: iss.ID, GroupID: iss.GroupID, Title: iss.Title,
+					ReporterID: iss.ReporterID, Severity: iss.Severity, Status: iss.Status,
+					Description: iss.Description, BookingID: iss.BookingID,
+					CreatedAt: iss.CreatedAt, UpdatedAt: iss.UpdatedAt,
+				}
+				n, gn, q := h.Notifier, h.GChatNotifier, h.Q
+				go notifications.SendIssueResolved(context.Background(), q, n, gn, issue, h.BaseURL)
+			}
+		}
 	}
 
 	detail, _ := h.buildIssueDetail(r, claims, id)
@@ -367,6 +393,19 @@ func (h *IssueHandler) AddComment(w http.ResponseWriter, r *http.Request) {
 
 	// Touch updated_at
 	h.Q.UpdateIssue(r.Context(), db.UpdateIssueParams{ID: id, GroupID: claims.GroupID})
+
+	if h.Notifier != nil {
+		if iss, err := h.Q.GetIssue(r.Context(), db.GetIssueParams{ID: id, GroupID: claims.GroupID}); err == nil {
+			issue := db.IssueReport{
+				ID: iss.ID, GroupID: iss.GroupID, Title: iss.Title,
+				ReporterID: iss.ReporterID, Severity: iss.Severity, Status: iss.Status,
+				Description: iss.Description, BookingID: iss.BookingID,
+				CreatedAt: iss.CreatedAt, UpdatedAt: iss.UpdatedAt,
+			}
+			n, gn, q := h.Notifier, h.GChatNotifier, h.Q
+			go notifications.SendIssueCommented(context.Background(), q, n, gn, issue, h.BaseURL)
+		}
+	}
 
 	detail, _ := h.buildIssueDetail(r, claims, id)
 	WriteJSON(w, http.StatusCreated, detail)
@@ -431,6 +470,113 @@ func (h *IssueHandler) ReplaceAssignees(w http.ResponseWriter, r *http.Request) 
 		assignees = []db.ListIssueAssigneesRow{}
 	}
 	WriteJSON(w, http.StatusOK, assignees)
+}
+
+func (h *IssueHandler) AddAssignee(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	if !claims.IsManager() {
+		WriteError(w, http.StatusForbidden, "forbidden")
+		return
+	}
+
+	var req struct {
+		UserID string `json:"user_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.UserID == "" {
+		WriteError(w, http.StatusBadRequest, "user_id required")
+		return
+	}
+
+	if _, err := h.Q.GetIssue(r.Context(), db.GetIssueParams{ID: id, GroupID: claims.GroupID}); err != nil {
+		WriteError(w, http.StatusNotFound, "issue not found")
+		return
+	}
+
+	if err := h.Q.InsertIssueAssignee(r.Context(), db.InsertIssueAssigneeParams{
+		IssueID: id, UserID: req.UserID, GroupID: claims.GroupID,
+	}); err != nil {
+		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23505" {
+			WriteError(w, http.StatusConflict, "already_assigned")
+			return
+		}
+		WriteError(w, http.StatusInternalServerError, "failed to add assignee")
+		return
+	}
+
+	assigneeName := req.UserID
+	if u, err := h.Q.GetUser(r.Context(), db.GetUserParams{ID: req.UserID, GroupID: claims.GroupID}); err == nil {
+		assigneeName = u.Name
+	}
+	meta, _ := json.Marshal(map[string]string{"user_id": req.UserID, "user_name": assigneeName, "action": "added"})
+	h.Q.CreateIssueEvent(r.Context(), db.CreateIssueEventParams{
+		IssueID:   id,
+		GroupID:   claims.GroupID,
+		ActorID:   claims.MemberID,
+		EventType: "assignment",
+		Metadata:  meta,
+	})
+	h.Q.UpdateIssue(r.Context(), db.UpdateIssueParams{ID: id, GroupID: claims.GroupID})
+
+	if h.Notifier != nil {
+		if iss, err := h.Q.GetIssue(r.Context(), db.GetIssueParams{ID: id, GroupID: claims.GroupID}); err == nil {
+			issue := db.IssueReport{ID: iss.ID, GroupID: iss.GroupID, Title: iss.Title, ReporterID: iss.ReporterID, Severity: iss.Severity, Status: iss.Status}
+			assigneeID, n, q := req.UserID, h.Notifier, h.Q
+			go notifications.SendIssueAssignedToMe(context.Background(), q, n, issue, assigneeID, h.BaseURL)
+		}
+	}
+
+	detail, _ := h.buildIssueDetail(r, claims, id)
+	WriteJSON(w, http.StatusCreated, detail)
+}
+
+func (h *IssueHandler) RemoveAssignee(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	if !claims.IsManager() {
+		WriteError(w, http.StatusForbidden, "forbidden")
+		return
+	}
+
+	userID := chi.URLParam(r, "userId")
+
+	if _, err := h.Q.GetIssue(r.Context(), db.GetIssueParams{ID: id, GroupID: claims.GroupID}); err != nil {
+		WriteError(w, http.StatusNotFound, "issue not found")
+		return
+	}
+
+	if err := h.Q.DeleteIssueAssignee(r.Context(), db.DeleteIssueAssigneeParams{
+		IssueID: id, UserID: userID, GroupID: claims.GroupID,
+	}); err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to remove assignee")
+		return
+	}
+
+	removedName := userID
+	if u, err := h.Q.GetUser(r.Context(), db.GetUserParams{ID: userID, GroupID: claims.GroupID}); err == nil {
+		removedName = u.Name
+	}
+	meta, _ := json.Marshal(map[string]string{"user_id": userID, "user_name": removedName, "action": "removed"})
+	h.Q.CreateIssueEvent(r.Context(), db.CreateIssueEventParams{
+		IssueID:   id,
+		GroupID:   claims.GroupID,
+		ActorID:   claims.MemberID,
+		EventType: "assignment",
+		Metadata:  meta,
+	})
+	h.Q.UpdateIssue(r.Context(), db.UpdateIssueParams{ID: id, GroupID: claims.GroupID})
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *IssueHandler) AddArticle(w http.ResponseWriter, r *http.Request) {

@@ -6,16 +6,6 @@ Deferred work items - things to grab when there's time, smaller tasks set aside 
 
 `docs/guide.md` is the source for the in-app guide page and is currently written in Swedish only. An English version is needed once the English UI is fully rolled out. Deferred — low priority until there are actual English-speaking users.
 
-## Group members API + assignee picker
-
-Add `GET /api/v0/users` (manager only) that returns all users who have ever logged in to the group. Used by:
-1. The issue detail page assignee picker - managers can add/remove assignees by selecting group members.
-2. A new "Medlemmar" section on the group settings page so managers can see who has accounts in the group.
-
-In demo mode (`DEMO_MODE=true`), the endpoint should return the configured personas from `dev-personas.json` instead of real users, so demo environments do not expose real member data.
-
-Response shape: `[{ "id": "string", "name": "string", "email": "string" }]`
-
 ## Auth redirect loop - remove debug logging
 
 `hooks.server.ts` logs `[auth] redirect to login` and `[auth] stale session cookie detected` on every unauthenticated request. Once the fix has been confirmed stable in production, remove these `console.log` calls or gate them behind a `DEBUG_AUTH` env flag.
@@ -35,7 +25,7 @@ Remaining from the original item:
 
 ## Mention users in issue comments
 
-Ability to add another user (manager or trusted) to an issue by mentioning them in a comment. Requires `GET /api/v0/users` (blocked on Group members API above) and notification infrastructure.
+Ability to add another user (manager or trusted) to an issue by mentioning them in a comment. Requires notification infrastructure (Step 7+).
 
 ## Date change conflict UX
 
@@ -212,6 +202,16 @@ Add a visible sort/filter for approval level in the browse view. The default vie
 
 Bookings list should be sorted: submitted first, then approved/confirmed, then picked_up, then draft, then returned/rejected/cancelled. Within each status group, sort ascending by start_date. Currently the list is unsorted (server return order).
 
+## Bokningar page - Additional fields
+It should be possible to create additional fields about each object. The user chooses between a few pre-made ones (like Aktivitet, Kommentar), or to make a custom field. It should be possible to add multiple "columns" to the booking. Concerning filtering and sorting, it should be possible to filter and sort by these custom fields as well. And they should be included at export, when copying the booking etc.
+
+## Bokningar booking flow - Distinguish comments from Beskrivning
+Each booking gets their notes, which should be renamed as beskrivning/description. In addition, we also have the comments flow already implemented. It should be possible to add commments while a booking is in draft state. To avoid mistakes, we remove the Skicka button from the cart, users should always go to the proper booking page to review it before they send it in, which is also their chance to write a comment about the booking. Imagine a group setting up their booking, they should be able to write about the booking while it is in draft, and then send it in.
+
+## Assign people to a booking
+Similar to issues, it should be possible to assign (and unassigne) a person or a group to a booking, so they also can see and make edits to it, and get update notifications. Use cases:
+- asking a specific manager questions about a booking
+- collaboration between groups, where they own a booking together
 
 ## Group settings on tab bar
 
@@ -244,3 +244,33 @@ When a user wants to consolidate two active pickups into one, there is no merge 
 ## Personal booking deprecation
 
 Managers cannot distinguish personal bookings (no team, no external name) from other users' personal bookings. Options: show creator name always (requires backend name join on booking response), remove personal booking creation from the UI, or deprecate the concept in favour of external-name bookings.
+
+## Notifications — blocking gaps (feat/notifications branch)
+
+These must be resolved before the `feat/notifications` branch can merge.
+
+**GChat broadcast for issue events** — Partially fixed (IssueHandler gained `GChatNotifier`; `SendIssueCreated/Resolved/Commented` call `sendBroadcastGChat`). Full resolution tracked in Phase 3.7: `issue_resolved` and `issue_commented` need Gruppkanal system defaults, `sendBroadcastEmail` for all issue events, and teamID plumbing for personal email policy. See `docs/notifications-phase35.md` Phase 3.7.
+
+**Integration tests for GChat key management** — `POST /gchat-key`, `DELETE /gchat-key`, `GET /gchat-spaces`, `PUT /teams/{id}/gchat-space`, and `DELETE /teams/{id}/gchat-space` have zero test coverage. A mock `GChatNotifier` (similar to `CapturingNotifier`) seeded with fake credentials would cover the happy path without a real Google account.
+
+**Integration tests for team notification settings** — `GET /teams/{id}/notification-settings` and `PUT /teams/{id}/notification-settings` (team email, prefs, gruppkanal_channels) have zero test coverage. No external dependencies — same pattern as `notification_prefs_test.go`. Should cover: team member can read/write, non-member is rejected, gruppkanal_channels NULL/empty/explicit values resolve correctly.
+
+**Integration tests for force-notification-defaults** — `POST /group-settings/force-notification-defaults` has zero test coverage. Should verify: all users in the group have `notification_prefs` reset to `{}`, all teams have `gruppkanal_channels` reset to NULL, response contains correct reset counts.
+
+**Integration test for PUT /teams/{id}/name** — trivial, no external dependencies.
+
+## Notifications — deferred items
+
+**Personal notification email override** — Users should be able to set a custom notification email in their profile, defaulting to their Keycloak-provisioned `email`. Requires: `notification_email` column on `users` (nullable); a new endpoint or extending `PUT /me`; UI field in the personal profile tab pre-filled from Keycloak email. Dispatch reads a `user.NotificationEmail()` helper that falls back to `users.email`.
+
+**GChat card richness (Cards v2)** — `GChatNotifier.Send` currently posts plain text. Upgrade to `cardsV2` with a colour-coded header band (matching email event colours), key-value field widgets (dates, team, status, item count), and a CTA button row. All data is available from `BookingEmailData` / `IssueEmailData`. Phase 3.7 already adds the two-message thread structure (opener + detail) — card formatting is a pure visual upgrade on top of that and can be dropped in without structural changes.
+
+**Personal GChat DMs** — Broadcast-only for now. Personal DMs require storing the user's Google identity at login (only feasible if the OIDC provider is Google Workspace).
+
+**Slack / Teams** — Follow the same additive pattern as GChat: new `Notifier`, append channel id to `enabled_channels`, setup UI section in Integrationer. No other changes needed.
+
+**Push notifications** — Requires service worker registration, push subscription storage per user/device, and a Web Push API sender. Channel taxonomy already documented in Phase 3.6 to keep the data model extensible.
+
+**Group logo in web header** — Frontend should fetch `logo_url` from group settings and render it in place of the text group name in the top nav when present.
+
+**Email MJML logo cleanup** — The logo `<img>` is currently injected into a `<mj-text>` wrapper. A future pass should use a proper `<mj-image>` section with a conditional raw block for the text fallback.

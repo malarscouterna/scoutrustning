@@ -1,5 +1,41 @@
 # Changelog
 
+## [0.9.0](https://github.com/malarscouterna/ms-utrustning/compare/v0.8.1...v0.9.0) (2026-05-24)
+
+
+### Features
+
+* **api:** notifications step 1-3 — migration, group members API, issue assignees ([242db0c](https://github.com/malarscouterna/ms-utrustning/commit/242db0c010e74a7d4fea695abe5575871a9dd279))
+* **api:** notifications step 4.5–5 — demo mode protection, MeHandler, notification prefs API ([4643d77](https://github.com/malarscouterna/ms-utrustning/commit/4643d7783cbe8626ae9c84f3248ebfa0a13c7129))
+* **api:** notifications step 4.5–5 — demo mode protection, MeHandler, notification prefs API ([e52b8ec](https://github.com/malarscouterna/ms-utrustning/commit/e52b8ec11569dce476aa7c65273b5b8036f63c78))
+* notification preferences UI ([c01ede7](https://github.com/malarscouterna/ms-utrustning/commit/c01ede77ec024ead81109b39dec4abe9e0db441c))
+* **notifications:** GChat team mapper UI + member space linking ([6555d9f](https://github.com/malarscouterna/ms-utrustning/commit/6555d9fd2f38c45ab66846b0e12f60dad66214b0))
+* **notifications:** personal notif email override + UX & terminology polish ([4da5ba2](https://github.com/malarscouterna/ms-utrustning/commit/4da5ba2b4b1d67681c0d2d0374531308aee94bf6))
+* **notifications:** phase 3.5a backend — three-tier prefs, threading, broadcast, team settings ([6efe9bb](https://github.com/malarscouterna/ms-utrustning/commit/6efe9bb9d5866ec4c4431fc8215772d236b437e9))
+* **notifications:** phase 3.5a UI — team settings, team_default label, force defaults ([7d767d3](https://github.com/malarscouterna/ms-utrustning/commit/7d767d3a37f1e38253656a1ca05af0bd27a24608))
+* **notifications:** phase 3.5b — GChat bot, team settings UI, group defaults, notification UX fixes ([3b39ecc](https://github.com/malarscouterna/ms-utrustning/commit/3b39ecc8e2509a7853bd2cf794f8e068321450bb))
+* **notifications:** phase 3.6 — Gruppkanal, personal email policy, nullable team channel selection ([36d4134](https://github.com/malarscouterna/ms-utrustning/commit/36d4134fc87ade8a637528cf40db2b0ce1aad722))
+* **notifications:** Phase 3.7 — issue broadcast parity + GChat two-message threading ([15c830d](https://github.com/malarscouterna/ms-utrustning/commit/15c830dc1fd8f6be062d40530d3c7974a48fe6e2))
+* **notifications:** SMTP settings, group defaults by role, dev email infra ([54baa60](https://github.com/malarscouterna/ms-utrustning/commit/54baa604d85ca2819b679f74006aca81046ec8f6))
+* **notifications:** step 10 - email body templates (in progress) ([efacd1d](https://github.com/malarscouterna/ms-utrustning/commit/efacd1d44f56b287ccab5e33f23f1981dc3dadbc))
+* **notifications:** step 10 - email template polish and bug fixes ([d40c970](https://github.com/malarscouterna/ms-utrustning/commit/d40c97019f785aac9d239ae37b6723f7662792db))
+* **notifications:** step 6.5 + 7 — team_ids, SMTP notifier, event-triggered sends ([4c595d7](https://github.com/malarscouterna/ms-utrustning/commit/4c595d759cd62f4fa21aba7c5e13837d4485c166))
+* **notifications:** steps 7.5 + 9 — test email, SMTP UI, group defaults UI ([68cee00](https://github.com/malarscouterna/ms-utrustning/commit/68cee00a7d3f646612d14574dbb927deb0c8027b))
+* **notifications:** steps 8 + 11 — scheduler and group logo ([c13dfae](https://github.com/malarscouterna/ms-utrustning/commit/c13dfaeb5c7f0bf1fc32ef591cbf6f12cdce8487))
+* **notifications:** team email edit for members + demo mode guards ([6602ce9](https://github.com/malarscouterna/ms-utrustning/commit/6602ce90c8b02baa640e191db173b3fce3ee4a0d))
+* **web:** issue assignee picker UI (step 4) ([82272b9](https://github.com/malarscouterna/ms-utrustning/commit/82272b97e7dd66631ebae928dedfe87e09abf48b))
+
+
+### Bug Fixes
+
+* add structured API errors with i18n translations on the frontend ([e5ca6b8](https://github.com/malarscouterna/ms-utrustning/commit/e5ca6b85247b2898212105cc6e7738eee9b53853))
+* **frontend:** resolve svelte-check errors in profile/+page.svelte ([d938471](https://github.com/malarscouterna/ms-utrustning/commit/d938471cf3dcc1cb563d5b7201a89daec4cb8824))
+* **notifications:** align prefs API with phase 3.6 shape; document GChat gaps ([ceac8b3](https://github.com/malarscouterna/ms-utrustning/commit/ceac8b3c032feb7b052e77efcb7fbbb3dc6d944f))
+* **notifications:** harden demo mode + add dev GChat seed support ([0843c22](https://github.com/malarscouterna/ms-utrustning/commit/0843c226ab4df08dbd61ec6dfbd8eb7330206edf))
+* **notifications:** issue dispatch, GChat threading + link formatting ([8bd8f11](https://github.com/malarscouterna/ms-utrustning/commit/8bd8f115c06e840e9d32d4f7f7780b164ec822bb))
+* **notifications:** render test email with branded template ([c9d4fdd](https://github.com/malarscouterna/ms-utrustning/commit/c9d4fdd8758b2c2527ae7f3c7e5229f8b7f44be7))
+* **notifications:** simplify team notif UI, fix gruppkanal empty-array bug ([30c74a2](https://github.com/malarscouterna/ms-utrustning/commit/30c74a20d916c0bf991d36fc1814eef72820b7bd))
+
 ## [0.8.1](https://github.com/malarscouterna/ms-utrustning/compare/v0.8.0...v0.8.1) (2026-04-22)
 
 

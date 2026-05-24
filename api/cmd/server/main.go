@@ -21,8 +21,8 @@ import (
 	"github.com/malarscouterna/ms-utrustning/api/internal/auth"
 	"github.com/malarscouterna/ms-utrustning/api/internal/db"
 	"github.com/malarscouterna/ms-utrustning/api/internal/handler"
-	"github.com/malarscouterna/ms-utrustning/api/internal/i18n"
 	"github.com/malarscouterna/ms-utrustning/api/internal/images"
+	"github.com/malarscouterna/ms-utrustning/api/internal/notifications"
 )
 
 func main() {
@@ -39,6 +39,7 @@ func main() {
 
 	dbURL := getenv("DATABASE_URL", "postgres://utrustning:utrustning@localhost:5432/utrustning?sslmode=disable")
 	devMode := getenv("DEV_MODE", "false") == "true"
+	demoMode := getenv("DEMO_MODE", "false") == "true"
 	imageDir := getenv("IMAGE_DIR", "/data/images")
 
 	images.InitVips()
@@ -81,99 +82,62 @@ func main() {
 
 		permCache := handler.NewPermissionCache(queries)
 
-		// User info (returns resolved claims)
-		r.Get("/me", func(w http.ResponseWriter, r *http.Request) {
-			claims, ok := auth.ClaimsFromContext(r.Context())
-			if !ok {
-				handler.WriteError(w, http.StatusUnauthorized, "unauthorized")
-				return
-			}
-			groupName := ""
-			if g, err := queries.GetGroup(r.Context(), claims.GroupID); err == nil {
-				groupName = g.Name
-			}
-			perms := permCache.Get(r, claims.GroupID)
+		personaIDs := buildPersonaIDs(demoMode, getenv("DEV_PERSONAS_PATH", "dev-personas.json"))
+		smtpNotifier := &notifications.SMTPNotifier{Q: queries}
+		gchatNotifier := &notifications.GChatNotifier{Q: queries, LabelTeam: devMode}
 
-			// Resolve language: user preference → group default → 'sv'
-			lang := "sv"
-			if settings, err := queries.GetGroupSettings(r.Context(), claims.GroupID); err == nil {
-				lang = settings.DefaultLanguage
-			}
-			if user, err := queries.GetUser(r.Context(), db.GetUserParams{
-				ID:      claims.MemberID,
-				GroupID: claims.GroupID,
-			}); err == nil && user.Language.Valid && i18n.Supported(user.Language.String) {
-				lang = user.Language.String
-			}
+		// In demo mode, event sends from handlers are suppressed via NoopNotifier.
+		// The test-email endpoint always uses smtpNotifier directly so demo visitors
+		// can verify SMTP config is working.
+		var eventNotifier notifications.Notifier = smtpNotifier
+		var eventGChatNotifier notifications.Notifier = gchatNotifier
+		if demoMode {
+			eventNotifier = notifications.NoopNotifier{}
+			eventGChatNotifier = notifications.NoopNotifier{}
+		}
 
-			handler.WriteJSON(w, http.StatusOK, map[string]any{
-				"member_id":  claims.MemberID,
-				"group_id":   claims.GroupID,
-				"group_name": groupName,
-				"name":       claims.Name,
-				"email":      claims.Email,
-				"teams":      claims.Teams,
-				"max_access": claims.MaxAccess,
-				"language":   lang,
-				"permissions": map[string]string{
-					"image_upload":  perms.ImageUpload,
-					"booking":       perms.Booking,
-					"article_edit":  perms.ArticleEdit,
-					"issue_resolve": perms.IssueResolve,
-					"manager_notes": perms.ManagerNotes,
-				},
-			})
-		})
+		notifPrefsHandler := &handler.NotificationPrefsHandler{Q: queries}
+		appBaseURL := getenv("APP_BASE_URL", "http://localhost:5173")
+		meHandler := &handler.MeHandler{Q: queries, Perms: permCache, NotifPrefs: notifPrefsHandler, Notifier: smtpNotifier, PersonaIDs: personaIDs, DemoMode: demoMode, BaseURL: appBaseURL}
 
-		r.Put("/me/language", func(w http.ResponseWriter, r *http.Request) {
-				claims, ok := auth.ClaimsFromContext(r.Context())
-				if !ok {
-					handler.WriteError(w, http.StatusUnauthorized, "unauthorized")
-					return
-				}
-				var req struct {
-					Language *string `json:"language"`
-				}
-				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-					handler.WriteError(w, http.StatusBadRequest, "invalid request body")
-					return
-				}
-				var lang pgtype.Text
-				if req.Language != nil {
-					if *req.Language != "" && !i18n.Supported(*req.Language) {
-						handler.WriteError(w, http.StatusBadRequest, "unsupported language")
-						return
-					}
-					lang = pgtype.Text{String: *req.Language, Valid: *req.Language != ""}
-				}
-				if err := queries.UpdateUserLanguage(r.Context(), db.UpdateUserLanguageParams{
-					Language: lang,
-					ID:       claims.MemberID,
-				}); err != nil {
-					handler.WriteError(w, http.StatusInternalServerError, "failed to update language")
-					return
-				}
-				w.WriteHeader(http.StatusNoContent)
-			})
-
-			articles := &handler.ArticleHandler{Q: queries, Perms: permCache}
+		articles := &handler.ArticleHandler{Q: queries, Perms: permCache}
 		locations := &handler.LocationHandler{Q: queries}
 		categories := &handler.CategoryHandler{Q: queries}
-		bookings := &handler.BookingHandler{Q: queries}
-		teams := &handler.TeamHandler{Q: queries}
-		groupSettings := &handler.GroupSettingsHandler{Q: queries, Perms: permCache}
-		issueHandler := &handler.IssueHandler{Q: queries, Perms: permCache}
-		imageHandler := &images.Handler{Q: queries, ImageDir: imageDir}
 
+		bookings := &handler.BookingHandler{Q: queries, Notifier: eventNotifier, GChatNotifier: eventGChatNotifier, BaseURL: appBaseURL}
+		teams := &handler.TeamHandler{Q: queries, DemoMode: demoMode}
+		groupSettings := &handler.GroupSettingsHandler{Q: queries, Pool: pool, Perms: permCache, DemoMode: demoMode}
+		issueHandler := &handler.IssueHandler{Q: queries, Perms: permCache, Notifier: eventNotifier, GChatNotifier: eventGChatNotifier, BaseURL: appBaseURL}
+		imageHandler := &images.Handler{Q: queries, ImageDir: imageDir}
+		userHandler := &handler.UserHandler{Q: queries, DemoMode: demoMode, PersonaIDs: personaIDs}
+		logoHandler := &handler.LogoHandler{Q: queries, ImageDir: imageDir}
+
+		r.Mount("/me", meHandler.Routes())
 		r.Mount("/articles", articles.Routes())
 		r.Mount("/locations", locations.Routes())
 		r.Mount("/categories", categories.Routes())
 		r.Mount("/bookings", bookings.Routes())
 		r.Mount("/teams", teams.Routes())
 		r.Mount("/group-settings", groupSettings.Routes())
+		r.Mount("/group-settings/notification-defaults", notifPrefsHandler.GroupRoutes())
+		r.Mount("/group-settings/force-notification-defaults", notifPrefsHandler.ForceDefaultsRoute())
+		r.Mount("/group-settings/logo", logoHandler.Routes())
 		r.Mount("/issues", issueHandler.Routes())
 		r.Mount("/images", imageHandler.Routes())
+		r.Mount("/users", userHandler.Routes())
 	})
+
+	// Public endpoints — no authentication required.
+	logoHandler := &handler.LogoHandler{Q: queries, ImageDir: imageDir}
+	r.Mount("/api/v0/public/groups", logoHandler.PublicLogoRoutes())
+
+	// Daily notification scheduler (reminders + overdue alerts).
+	// In demo mode, use NoopNotifier so scheduled sends never fire.
+	var schedulerNotifier notifications.Notifier = &notifications.SMTPNotifier{Q: queries}
+	if demoMode {
+		schedulerNotifier = notifications.NoopNotifier{}
+	}
+	notifications.StartScheduler(queries, schedulerNotifier, getenv("APP_BASE_URL", "http://localhost:5173"))
 
 	addr := getenv("ADDR", ":8080")
 	srv := &http.Server{Addr: addr, Handler: r}
@@ -199,7 +163,7 @@ func main() {
 	}()
 
 	go func() {
-		slog.Info("starting server", "addr", addr, "dev_mode", devMode)
+		slog.Info("starting server", "addr", addr, "dev_mode", devMode, "demo_mode", demoMode)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("server error", "error", err)
 			os.Exit(1)
@@ -240,6 +204,31 @@ func runMigrations(dbURL string) error {
 	}
 	slog.Info("migrations applied")
 	return nil
+}
+
+func buildPersonaIDs(demoMode bool, personasPath string) map[string]bool {
+	if !demoMode {
+		return nil
+	}
+	data, err := os.ReadFile(personasPath)
+	if err != nil {
+		slog.Warn("demo mode: could not load personas", "path", personasPath, "error", err)
+		return map[string]bool{}
+	}
+	var pf struct {
+		Personas map[string]struct {
+			MemberID string `json:"member_id"`
+		} `json:"personas"`
+	}
+	if err := json.Unmarshal(data, &pf); err != nil {
+		slog.Warn("demo mode: could not parse personas", "error", err)
+		return map[string]bool{}
+	}
+	ids := make(map[string]bool, len(pf.Personas))
+	for _, p := range pf.Personas {
+		ids[p.MemberID] = true
+	}
+	return ids
 }
 
 func getenv(key, fallback string) string {

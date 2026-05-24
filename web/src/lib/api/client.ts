@@ -46,6 +46,22 @@ export interface Team {
 	type: string;
 	access_level: string;
 	claim_mappings: { claim_scope: string; claim_id: string }[];
+	gchat_space_id?: string | null;
+}
+
+export interface PerEventPrefs {
+	gruppkanal?: boolean;
+	personal_email_policy?: 'always' | 'if_no_broadcast' | 'never';
+}
+
+export interface TeamNotifSettings {
+	notification_email: string;
+	notification_prefs: Record<string, PerEventPrefs>;
+	gchat_space_id: string;
+	/** null = inherit group default; [] = explicit opt-out; [...] = explicit selection */
+	gruppkanal_channels: string[] | null;
+	/** Group-level default, returned alongside the team's own settings for display purposes. */
+	default_gruppkanal_channels: string[];
 }
 
 export interface Booking {
@@ -122,9 +138,16 @@ export interface AvailabilityGroup {
 
 export interface GroupSettings {
 	notification_email_from: string;
+	smtp_host: string;
+	smtp_port: number;
+	smtp_tls: string;
+	smtp_user: string;
 	smtp_key_set: boolean;
 	smtp_key_masked: string;
-	gchat_webhook_url: string;
+	system_smtp_configured: boolean;
+	system_smtp_from: string;
+	gchat_configured: boolean;
+	gchat_admin_email: string;
 	default_approval_level: string;
 	default_access_unknown: string;
 	default_access_troop: string;
@@ -135,6 +158,23 @@ export interface GroupSettings {
 	issue_resolve_role: string;
 	manager_notes_role: string;
 	default_language: string;
+	notification_channels: string[];
+}
+
+export interface ResolvedPref {
+	policy: 'always' | 'if_no_broadcast' | 'never';
+	source: 'user' | 'team_default' | 'group_default' | 'system_default';
+	default_policy: 'always' | 'if_no_broadcast' | 'never';
+}
+
+export type NotificationPrefs = Record<string, ResolvedPref>;
+
+export interface GChatSpace {
+	name: string;
+	displayName: string;
+	spaceType: string;
+	can_auto_add: boolean;
+	bot_is_member: boolean;
 }
 
 export interface IssueArticle {
@@ -149,6 +189,13 @@ export interface IssueAssignee {
 	user_id: string;
 	user_name: string;
 	assigned_at: string;
+}
+
+export interface GroupMember {
+	id: string;
+	name: string;
+	email: string;
+	access_level: string;
 }
 
 export interface IssueEvent {
@@ -245,7 +292,7 @@ async function requestMut<T>(path: string, method: string, body: unknown, opts: 
 
 export function createApiClient(opts: FetchOptions = {}) {
 	return {
-		getMe: () => request<{ member_id: string; group_id: string; group_name: string; name: string; email: string; teams: { team_id: string; team_name: string; team_type: string; access_level: string }[]; max_access: string }>('/me', opts),
+		getMe: () => request<{ member_id: string; group_id: string; group_name: string; name: string; email: string; notification_email: string | null; teams: { team_id: string; team_name: string; team_type: string; access_level: string }[]; max_access: string }>('/me', opts),
 		listArticles: (params?: { search?: string; category_id?: string; location_id?: string; status?: string; mine?: boolean; with_availability?: boolean; date?: string }) => {
 			const query = new URLSearchParams();
 			if (params?.search) query.set('search', params.search);
@@ -346,10 +393,46 @@ export function createApiClient(opts: FetchOptions = {}) {
 
 		// Group settings
 		getGroupSettings: () => request<GroupSettings>('/group-settings', opts),
-		updateGroupSettings: (data: { notification_email_from?: string; smtp_key?: string | null; gchat_webhook_url?: string; default_approval_level?: string; default_language?: string }) =>
+		updateGroupSettings: (data: { notification_email_from?: string; smtp_host?: string; smtp_port?: number; smtp_tls?: string; smtp_user?: string; smtp_key?: string | null; default_approval_level?: string; default_language?: string }) =>
 			requestMut<GroupSettings>('/group-settings', 'PUT', data, opts),
-		updateLanguage: (language: string | null) =>
+		uploadGchatKey: (keyJson: string, adminEmail: string) =>
+			requestMut<{ gchat_configured: boolean; gchat_admin_email: string; spaces: GChatSpace[] }>('/group-settings/gchat-key', 'POST', { key_json: JSON.parse(keyJson), admin_email: adminEmail }, opts),
+		deleteGchatKey: () =>
+			requestMut<void>('/group-settings/gchat-key', 'DELETE', undefined, opts),
+		listGchatSpaces: () =>
+			request<GChatSpace[]>('/group-settings/gchat-spaces', opts),
+		setTeamGchatSpace: (teamId: string, gchatSpaceId: string) =>
+			requestMut<void>(`/teams/${teamId}/gchat-space`, 'PUT', { gchat_space_id: gchatSpaceId }, opts),
+		clearTeamGchatSpace: (teamId: string) =>
+			requestMut<void>(`/teams/${teamId}/gchat-space`, 'DELETE', undefined, opts),
+updateLanguage: (language: string | null) =>
 			requestMut<void>('/me/language', 'PUT', { language }, opts),
+		getNotificationPrefs: () =>
+			request<{ prefs: NotificationPrefs }>('/me/notification-prefs', opts),
+		updateNotificationPrefs: (data: Record<string, PerEventPrefs | null>) =>
+			requestMut<void>('/me/notification-prefs', 'PUT', data, opts),
+		resetNotificationPrefs: () =>
+			requestMut<void>('/me/notification-prefs', 'DELETE', undefined, opts),
+		setNotificationEmail: (email: string | null) =>
+			requestMut<{ sent?: boolean; cleared?: boolean; skipped?: boolean }>('/me/notification-email', 'PUT', { email: email ?? '' }, opts),
+		sendTestEmail: () =>
+			requestMut<{ sent?: boolean; skipped?: boolean }>('/me/test-email', 'POST', undefined, opts),
+		getGroupNotificationDefaults: () =>
+			request<{
+				defaults: Record<string, PerEventPrefs>;
+				system_defaults: Record<string, PerEventPrefs>;
+				default_gruppkanal_channels: string[];
+			}>('/group-settings/notification-defaults', opts),
+		updateGroupNotificationDefaults: (data: { defaults: Record<string, PerEventPrefs>; default_gruppkanal_channels: string[] }) =>
+			requestMut<void>('/group-settings/notification-defaults', 'PUT', data, opts),
+		forceGroupNotificationDefaults: () =>
+			requestMut<{ reset_user_count: number; reset_team_count: number }>('/group-settings/force-notification-defaults', 'POST', undefined, opts),
+		getTeamNotificationSettings: (id: string) =>
+			request<TeamNotifSettings>(`/teams/${id}/notification-settings`, opts),
+		updateTeamNotificationSettings: (id: string, data: Partial<Pick<TeamNotifSettings, 'notification_email' | 'notification_prefs' | 'gruppkanal_channels'>>) =>
+			requestMut<void>(`/teams/${id}/notification-settings`, 'PUT', data, opts),
+		updateTeamName: (id: string, name: string) =>
+			requestMut<Team>(`/teams/${id}/name`, 'PUT', { name }, opts),
 
 		// Article CRUD
 		getArticle: (id: string) => request<Article>(`/articles/${id}`, opts),
@@ -493,6 +576,12 @@ export function createApiClient(opts: FetchOptions = {}) {
 			requestMut<IssueDetail>(`/issues/${id}/comments`, 'POST', data, opts),
 		replaceIssueAssignees: (id: string, userIds: string[]) =>
 			requestMut<IssueDetail>(`/issues/${id}/assignees`, 'PUT', { user_ids: userIds }, opts),
+		addIssueAssignee: (id: string, userId: string) =>
+			requestMut<void>(`/issues/${id}/assignees`, 'POST', { user_id: userId }, opts),
+		removeIssueAssignee: (id: string, userId: string) =>
+			requestMut<void>(`/issues/${id}/assignees/${userId}`, 'DELETE', undefined, opts),
+		listGroupMembers: (accessLevels?: string) =>
+			request<GroupMember[]>(`/users${accessLevels ? `?access_levels=${accessLevels}` : ''}`, opts),
 		addIssueArticle: (id: string, articleId: string) =>
 			requestMut<IssueDetail>(`/issues/${id}/articles`, 'POST', { article_id: articleId }, opts),
 		removeIssueArticle: (id: string, articleId: string) =>

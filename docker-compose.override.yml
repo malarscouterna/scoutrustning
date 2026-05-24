@@ -1,0 +1,42 @@
+# Dev-only overrides. Auto-loaded by docker compose in dev mode.
+# Committed to the repo — this is the standard local dev setup.
+# Not used in demo/prod (those use docker-compose.yml only).
+#
+# Adds: local builds from source, source code mounts (hot reload),
+# Postgres port exposure, Mailpit for email testing, and dev-specific paths.
+services:
+  db:
+    ports:
+      - "5432:5432"
+
+  api:
+    build:
+      context: ./api
+      target: ${BUILD_TARGET:-dev}
+    volumes:
+      - ./api:/src
+      - ./dev-personas.json:/src/dev-personas.json:ro
+      - ./data/images:/data/images
+    environment:
+      MIGRATIONS_DIR: /src/migrations
+      DEV_PERSONAS_PATH: /src/dev-personas.json
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web UI — http://localhost:8025
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      target: ${BUILD_TARGET:-dev}
+    environment:
+      CI: "true"
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+      - ./dev-personas.json:/app/dev-personas.json:ro
+      - ./docs/guide.md:/app/guide.md:ro
+      - ./docs/gchat-manager-guide.md:/app/gchat-manager-guide.md:ro

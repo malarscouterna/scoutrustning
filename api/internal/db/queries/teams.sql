@@ -31,6 +31,34 @@ UPDATE teams SET
 WHERE id = @id AND group_id = @group_id
 RETURNING *;
 
+-- name: UpdateTeamNotificationSettings :one
+UPDATE teams SET
+    notification_email = @notification_email,
+    notification_prefs = @notification_prefs,
+    gruppkanal_channels = @gruppkanal_channels
+WHERE id = @id AND group_id = @group_id
+RETURNING *;
+
+-- name: SetTeamGruppkanalChannels :exec
+UPDATE teams SET gruppkanal_channels = @gruppkanal_channels
+WHERE id = @id AND group_id = @group_id;
+
+-- name: GetTeamNotificationSettings :one
+SELECT notification_email, notification_prefs, gchat_space_id, gruppkanal_channels
+FROM teams
+WHERE id = @id AND group_id = @group_id;
+
+-- name: UpdateTeamName :one
+UPDATE teams SET name = @name
+WHERE id = @id AND group_id = @group_id
+RETURNING *;
+
+-- name: IsTeamMember :one
+SELECT EXISTS(
+    SELECT 1 FROM users
+    WHERE id = @user_id AND group_id = @group_id AND @team_id::uuid = ANY(team_ids)
+) AS is_member;
+
 -- name: DeleteTeam :exec
 DELETE FROM teams
 WHERE id = @id AND group_id = @group_id;
@@ -44,6 +72,32 @@ AND status NOT IN ('returned', 'cancelled');
 SELECT count(*) FROM teams
 WHERE group_id = @group_id AND access_level = 'manager';
 
+-- name: GetManagerTeam :one
+SELECT id FROM teams
+WHERE group_id = @group_id AND access_level = 'manager'
+LIMIT 1;
+
 -- name: ListTeamsByNames :many
 SELECT * FROM teams
 WHERE group_id = @group_id AND name = ANY(@names::text[]);
+
+-- name: SetTeamGchatSpace :exec
+UPDATE teams SET gchat_space_id = @gchat_space_id
+WHERE id = @id AND group_id = @group_id;
+
+-- name: ClearTeamGchatSpace :exec
+UPDATE teams SET gchat_space_id = NULL
+WHERE id = @id AND group_id = @group_id;
+
+-- name: ListTeamsWithGchatInfo :many
+SELECT id, name, gchat_space_id FROM teams
+WHERE group_id = @group_id
+ORDER BY name;
+
+-- name: ResetAllTeamGruppkanalChannels :one
+WITH updated AS (
+  UPDATE teams SET gruppkanal_channels = NULL
+  WHERE group_id = @group_id
+  RETURNING id
+)
+SELECT count(*) AS reset_count FROM updated;

@@ -13,10 +13,14 @@ import (
 
 	"github.com/malarscouterna/ms-utrustning/api/internal/auth"
 	"github.com/malarscouterna/ms-utrustning/api/internal/db"
+	"github.com/malarscouterna/ms-utrustning/api/internal/notifications"
 )
 
 type BookingHandler struct {
-	Q *db.Queries
+	Q             *db.Queries
+	Notifier      notifications.Notifier
+	GChatNotifier notifications.Notifier
+	BaseURL       string
 }
 
 func (h *BookingHandler) Routes() chi.Router {
@@ -609,6 +613,16 @@ func (h *BookingHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	if h.Notifier != nil {
+		b, n, gn, q, u := updated, h.Notifier, h.GChatNotifier, h.Q, h.BaseURL
+		if newStatus == "submitted" {
+			go notifications.SendBookingNeedsApproval(context.Background(), q, n, gn, b, u)
+		} else {
+			go notifications.SendBookingConfirmed(context.Background(), q, n, gn, b, u)
+			go notifications.SendBookingSubmittedNoApproval(context.Background(), q, n, gn, b, u)
+		}
+	}
+
 	WriteJSON(w, http.StatusOK, updated)
 }
 
@@ -643,6 +657,11 @@ func (h *BookingHandler) Approve(w http.ResponseWriter, r *http.Request) {
 		Message: req.Message,
 	})
 
+	if h.Notifier != nil {
+		b, n, gn, q, u := updated, h.Notifier, h.GChatNotifier, h.Q, h.BaseURL
+		go notifications.SendBookingConfirmed(context.Background(), q, n, gn, b, u)
+	}
+
 	WriteJSON(w, http.StatusOK, updated)
 }
 
@@ -676,6 +695,11 @@ func (h *BookingHandler) Reject(w http.ResponseWriter, r *http.Request) {
 			Metadata: []byte("{}"),
 		Message: req.Message,
 	})
+
+	if h.Notifier != nil {
+		b, n, gn, q, u := updated, h.Notifier, h.GChatNotifier, h.Q, h.BaseURL
+		go notifications.SendBookingRejected(context.Background(), q, n, gn, b, u)
+	}
 
 	WriteJSON(w, http.StatusOK, updated)
 }
@@ -780,6 +804,12 @@ func (h *BookingHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusInternalServerError, "failed to cancel booking")
 		return
 	}
+
+	if h.Notifier != nil {
+		b, n, gn, q, u := updated, h.Notifier, h.GChatNotifier, h.Q, h.BaseURL
+		go notifications.SendBookingCancelled(context.Background(), q, n, gn, b, u)
+	}
+
 	WriteJSON(w, http.StatusOK, updated)
 }
 

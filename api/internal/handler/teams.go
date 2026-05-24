@@ -1,18 +1,27 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/malarscouterna/ms-utrustning/api/internal/auth"
+	"github.com/malarscouterna/ms-utrustning/api/internal/crypto"
 	"github.com/malarscouterna/ms-utrustning/api/internal/db"
+	"github.com/malarscouterna/ms-utrustning/api/internal/notifications"
 )
 
 type TeamHandler struct {
-	Q *db.Queries
+	Q        *db.Queries
+	DemoMode bool
+	// AddBotFn is called to add the service account bot to a GChat space.
+	// Defaults to notifications.AddBotToSpace when nil.
+	AddBotFn func(ctx context.Context, saJSON []byte, adminEmail, spaceID, teamName string) error
 }
 
 func (h *TeamHandler) Routes() chi.Router {
@@ -21,7 +30,55 @@ func (h *TeamHandler) Routes() chi.Router {
 	r.With(auth.RequireRole("equipment_manager")).Post("/", h.Create)
 	r.With(auth.RequireRole("equipment_manager")).Put("/{id}", h.Update)
 	r.With(auth.RequireRole("equipment_manager")).Delete("/{id}", h.Delete)
+	r.Get("/{id}/notification-settings", h.GetNotificationSettings)
+	r.Put("/{id}/notification-settings", h.UpdateNotificationSettings)
+	r.Put("/{id}/name", h.UpdateName)
+	r.Put("/{id}/gchat-space", h.SetGChatSpace)
+	r.Delete("/{id}/gchat-space", h.ClearGChatSpace)
 	return r
+}
+
+// requireTeamMembership returns true if the requesting user is a member of the
+// given team (via users.team_ids) OR is an equipment manager in the group.
+func (h *TeamHandler) requireTeamMembership(ctx context.Context, claims auth.Claims, teamID pgtype.UUID) bool {
+	if claims.IsManager() {
+		return true
+	}
+	ok, err := h.Q.IsTeamMember(ctx, db.IsTeamMemberParams{
+		UserID:  claims.MemberID,
+		GroupID: claims.GroupID,
+		TeamID:  teamID,
+	})
+	return err == nil && ok
+}
+
+// PUT /teams/{id}/name — update team name; accessible to team members and managers.
+func (h *TeamHandler) UpdateName(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	if !h.requireTeamMembership(r.Context(), claims, id) {
+		WriteError(w, http.StatusForbidden, "you are not a member of this team")
+		return
+	}
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" {
+		WriteError(w, http.StatusBadRequest, "name required")
+		return
+	}
+	team, err := h.Q.UpdateTeamName(r.Context(), db.UpdateTeamNameParams{
+		ID: id, GroupID: claims.GroupID, Name: req.Name,
+	})
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to update team name")
+		return
+	}
+	WriteJSON(w, http.StatusOK, team)
 }
 
 func (h *TeamHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -188,4 +245,223 @@ func (h *TeamHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 func validAccessLevel(level string) bool {
 	return level == "view" || level == "book" || level == "trusted" || level == "manager"
+}
+
+// GET /teams/{id}/notification-settings — accessible to team members and managers.
+func (h *TeamHandler) GetNotificationSettings(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	if !h.requireTeamMembership(r.Context(), claims, id) {
+		WriteError(w, http.StatusForbidden, "you are not a member of this team")
+		return
+	}
+	row, err := h.Q.GetTeamNotificationSettings(r.Context(), db.GetTeamNotificationSettingsParams{
+		ID: id, GroupID: claims.GroupID,
+	})
+	if err != nil {
+		WriteError(w, http.StatusNotFound, "team not found")
+		return
+	}
+	groupDefaultsRow, _ := h.Q.GetGroupNotificationDefaults(r.Context(), claims.GroupID)
+	WriteJSON(w, http.StatusOK, map[string]any{
+		"notification_email":          row.NotificationEmail.String,
+		"notification_prefs":          row.NotificationPrefs,
+		"gchat_space_id":              row.GchatSpaceID.String,
+		"gruppkanal_channels":         row.GruppkanalChannels,
+		"default_gruppkanal_channels": groupDefaultsRow.DefaultGruppkanalChannels,
+	})
+}
+
+// PUT /teams/{id}/notification-settings — accessible to team members and managers.
+func (h *TeamHandler) UpdateNotificationSettings(w http.ResponseWriter, r *http.Request) {
+	if h.DemoMode {
+		WriteError(w, http.StatusForbidden, "not_allowed_in_demo")
+		return
+	}
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	if !h.requireTeamMembership(r.Context(), claims, id) {
+		WriteError(w, http.StatusForbidden, "you are not a member of this team")
+		return
+	}
+
+	var req struct {
+		NotificationEmail  *string                              `json:"notification_email"`
+		NotificationPrefs  notifications.NotificationPrefs      `json:"notification_prefs"`
+		GruppkanalChannels *[]string                            `json:"gruppkanal_channels"` // null = reset to inherit
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	// Load existing to merge partial updates.
+	existing, err := h.Q.GetTeamNotificationSettings(r.Context(), db.GetTeamNotificationSettingsParams{
+		ID: id, GroupID: claims.GroupID,
+	})
+	if err != nil {
+		WriteError(w, http.StatusNotFound, "team not found")
+		return
+	}
+
+	email := existing.NotificationEmail
+	if req.NotificationEmail != nil {
+		email = pgtype.Text{String: *req.NotificationEmail, Valid: *req.NotificationEmail != ""}
+	}
+
+	prefsJSON := existing.NotificationPrefs
+	if req.NotificationPrefs != nil {
+		// Validate that any Gruppkanal channels are actually available for this team.
+		encoded, err := json.Marshal(req.NotificationPrefs)
+		if err != nil {
+			WriteError(w, http.StatusInternalServerError, "failed to encode prefs")
+			return
+		}
+		prefsJSON = encoded
+	}
+
+	// Resolve Gruppkanal channels: keep existing if not provided.
+	gruppkanalChannels := existing.GruppkanalChannels
+	if req.GruppkanalChannels != nil {
+		// Validate that requested channels are available (notification_email or gchat_space_id must be set).
+		requested := *req.GruppkanalChannels
+		var validated []string
+		for _, ch := range requested {
+			switch ch {
+			case "email":
+				if email.Valid && email.String != "" {
+					validated = append(validated, ch)
+				}
+			case "gchat":
+				if existing.GchatSpaceID.Valid && existing.GchatSpaceID.String != "" {
+					validated = append(validated, ch)
+				}
+			}
+		}
+		if validated == nil {
+			validated = []string{}
+		}
+		gruppkanalChannels = validated
+	}
+
+	_, err = h.Q.UpdateTeamNotificationSettings(r.Context(), db.UpdateTeamNotificationSettingsParams{
+		ID:                 id,
+		GroupID:            claims.GroupID,
+		NotificationEmail:  email,
+		NotificationPrefs:  prefsJSON,
+		GruppkanalChannels: gruppkanalChannels,
+	})
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to update notification settings")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// SetGChatSpace links a team to a Google Chat Space, adds the bot, and posts a welcome card.
+// Accessible to team members and managers. Auto-add requires the stored admin account to be
+// a member of the space; if not, the caller gets a clear error with manual-add instructions.
+func (h *TeamHandler) SetGChatSpace(w http.ResponseWriter, r *http.Request) {
+	if h.DemoMode {
+		WriteError(w, http.StatusForbidden, "not_allowed_in_demo")
+		return
+	}
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	if !h.requireTeamMembership(r.Context(), claims, id) {
+		WriteError(w, http.StatusForbidden, "not a member of this team")
+		return
+	}
+
+	var req struct {
+		GchatSpaceID string `json:"gchat_space_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.GchatSpaceID == "" {
+		WriteError(w, http.StatusBadRequest, "gchat_space_id required")
+		return
+	}
+
+	team, err := h.Q.GetTeam(r.Context(), db.GetTeamParams{ID: id, GroupID: claims.GroupID})
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to look up team")
+		return
+	}
+
+	creds, err := h.Q.GetGchatCredentials(r.Context(), claims.GroupID)
+	if err != nil || len(creds.GchatServiceAccountJsonEncrypted) == 0 {
+		WriteError(w, http.StatusBadRequest, "gchat not configured for this group")
+		return
+	}
+	saJSON, err := crypto.Decrypt(creds.GchatServiceAccountJsonEncrypted)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to decrypt credentials")
+		return
+	}
+
+	addBot := h.AddBotFn
+	if addBot == nil {
+		addBot = notifications.AddBotToSpace
+	}
+	if err := addBot(r.Context(), saJSON, creds.GchatAdminEmail, req.GchatSpaceID, team.Name); err != nil {
+		slog.Error("gchat add bot to space failed", "err", err, "space", req.GchatSpaceID)
+		WriteError(w, http.StatusBadGateway, gchatAddBotError(err))
+		return
+	}
+
+	if err := h.Q.SetTeamGchatSpace(r.Context(), db.SetTeamGchatSpaceParams{
+		GchatSpaceID: pgtype.Text{String: req.GchatSpaceID, Valid: true},
+		ID:           id,
+		GroupID:      claims.GroupID,
+	}); err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to set gchat space")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// gchatAddBotError converts a raw AddBotToSpace error into a user-readable message.
+func gchatAddBotError(err error) string {
+	msg := err.Error()
+	if strings.Contains(msg, "PERMISSION_DENIED") || strings.Contains(msg, "403") {
+		return "Kunde inte lägga till boten automatiskt — administratörskontot är inte medlem i det här utrymmet. " +
+			"Lägg till appen manuellt i Google Chat-utrymmet och försök igen."
+	}
+	return "could not add bot to space: " + msg
+}
+
+// ClearGChatSpace unlinks a team from its Google Chat Space.
+// Accessible to team members and managers.
+func (h *TeamHandler) ClearGChatSpace(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	if !h.requireTeamMembership(r.Context(), claims, id) {
+		WriteError(w, http.StatusForbidden, "not a member of this team")
+		return
+	}
+
+	if err := h.Q.ClearTeamGchatSpace(r.Context(), db.ClearTeamGchatSpaceParams{
+		ID: id, GroupID: claims.GroupID,
+	}); err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to clear gchat space")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }

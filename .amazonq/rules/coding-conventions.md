@@ -10,6 +10,19 @@ High — follow these unless they conflict with an explicit user instruction.
 
 ## Instructions
 
+### Generated files
+
+Never edit generated files directly - always edit the source and regenerate:
+
+| Generated file(s) | Source | Regenerate with | Committed |
+|---|---|---|---|
+| `api/internal/db/*.sql.go`, `api/internal/db/models.go` | `api/internal/db/queries/*.sql` + `api/sqlc.yaml` | `cd api && sqlc generate` | yes |
+| `api/internal/notifications/templates/*.html` | `web/src/lib/emails/*.mjml` | `cd web && pnpm compile-emails` | yes |
+| `web/src/lib/paraglide/` | `api/internal/i18n/messages/{sv,en}.json` | `cd web && pnpm build` (or Vite HMR in dev) | no (gitignored) |
+| `web/.svelte-kit/` | SvelteKit routes and config | `cd web && pnpm build` | no (gitignored) |
+
+Committed generated files must never be edited by hand - always edit the source and regenerate. Gitignored generated files are rebuilt automatically during `pnpm build` or dev mode.
+
 ### Go (api/)
 
 - Use stdlib `net/http` types in handlers. Chi for routing only.
@@ -94,7 +107,7 @@ High — follow these unless they conflict with an explicit user instruction.
 - In Svelte files: `import * as m from '$lib/paraglide/messages.js'` for static keys, `import { msg } from '$lib/msg'` for dynamic keys constructed at runtime (e.g. `msg('article_status_' + status)`).
 - Non-translatable style maps (Tailwind classes, colors) live in `web/src/lib/styles.ts`, not in message files.
 - Arrays/objects that contain translatable labels (e.g. status option lists) must use `$derived` so they react to language changes - not `const`.
-- After adding keys to the JSON files, run `pnpm run build` from `web/` (or let Vite HMR pick up the change in dev) to regenerate Paraglide types.
+- After adding keys to the JSON files, run `pnpm run build` from `web/` to regenerate the Paraglide output files (`src/lib/paraglide/messages.js`, `messages/sv.js`, `messages/en.js`). In dev mode, Vite HMR picks up changes automatically — a server restart may be needed if new keys don't appear.
 
 ## Error Handling
 

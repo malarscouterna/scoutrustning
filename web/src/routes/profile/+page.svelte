@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { createApiClient, type Location, type Category, type GroupSettings, type Team } from '$lib/api/client';
+	import { createApiClient, type Location, type Category, type GroupSettings, type Team, type TeamNotifSettings, type NotificationPrefs, type PerEventPrefs } from '$lib/api/client';
 	import { browser } from '$app/environment';
 	import CrudList from '$lib/components/CrudList.svelte';
 	import type { PageData } from './$types';
@@ -185,21 +185,30 @@
 		if (tab === 'profile') loadMyImages();
 	});
 
-	type Tab = 'profile' | 'group';
+	type Tab = 'profile' | 'teams' | 'group';
 	let tab = $state<Tab>('profile');
 
 	// --- Settings state (local mutable copies, synced from server data) ---
 	let locations = $state<Location[]>([]);
 	let categories = $state<Category[]>([]);
 	let groupSettings = $state<GroupSettings | null>(null);
+	const roleRank: Record<string, number> = { view: 0, book: 1, trusted: 2, manager: 3 };
+	let canBeAssignedIssue = $derived(
+		roleRank[user?.max_access ?? 'view'] >= roleRank[groupSettings?.issue_resolve_role ?? 'manager']
+	);
 
 	$effect(() => {
 		locations = data.locations;
 		categories = data.categories;
 		groupSettings = data.groupSettings;
 		if (data.groupSettings) {
-			settingsForm.notification_email_from = data.groupSettings.notification_email_from;
-			settingsForm.gchat_webhook_url = data.groupSettings.gchat_webhook_url;
+			const gs = data.groupSettings;
+			settingsForm.notification_email_from = gs.notification_email_from;
+			settingsForm.smtp_host = gs.smtp_host ?? '';
+			settingsForm.smtp_port = gs.smtp_port ?? 587;
+			settingsForm.smtp_tls = gs.smtp_tls ?? 'starttls';
+			settingsForm.smtp_user = gs.smtp_user ?? '';
+			useGroupSmtp = !!(gs.smtp_host);
 		}
 	});
 
@@ -210,9 +219,13 @@
 	let importError = $state('');
 
 	// Group notification settings
+	let useGroupSmtp = $state(false);
 	let settingsForm = $state({
 		notification_email_from: '',
-		gchat_webhook_url: '',
+		smtp_host: '',
+		smtp_port: 587,
+		smtp_tls: 'starttls',
+		smtp_user: '',
 		smtp_key: ''
 	});
 
@@ -297,6 +310,376 @@
 		importLoading = false;
 	}
 
+	// --- Notification preferences ---
+	type EventRow = { key: string; label: () => string; locked?: boolean };
+
+	// Broadcast (team/role) events for the group defaults table — personal events excluded.
+	const allBookingEvents: EventRow[] = [
+		{ key: 'booking_confirmed', label: m.notif_booking_confirmed },
+		{ key: 'booking_cancelled', label: m.notif_booking_cancelled },
+		{ key: 'booking_reminder', label: m.notif_booking_reminder },
+		{ key: 'booking_overdue', label: m.notif_booking_overdue },
+		{ key: 'booking_needs_approval', label: m.notif_booking_needs_approval },
+		{ key: 'booking_submitted_no_approval', label: m.notif_booking_submitted_no_approval },
+		{ key: 'booking_any_created', label: m.notif_booking_any_created },
+	];
+	const allIssueEvents: EventRow[] = [
+		{ key: 'issue_created', label: m.notif_issue_created },
+		{ key: 'issue_resolved', label: m.notif_issue_resolved },
+		{ key: 'issue_commented', label: m.notif_issue_commented },
+	];
+
+	// Personal events: user is the named subject — simple on/off toggle.
+	const personalEvents: EventRow[] = [
+		{ key: 'booking_rejected', label: m.notif_booking_rejected },
+		{ key: 'issue_assigned_to_me', label: m.notif_issue_assigned_to_me, locked: true },
+	];
+
+	// Team/role events: user notified as a team or role member — three-column radio.
+	// Manager-only rows are hidden for non-managers.
+	const teamEvents: EventRow[] = [
+		{ key: 'booking_confirmed', label: m.notif_booking_confirmed },
+		{ key: 'booking_cancelled', label: m.notif_booking_cancelled },
+		{ key: 'booking_reminder', label: m.notif_booking_reminder },
+		{ key: 'booking_overdue', label: m.notif_booking_overdue },
+		{ key: 'booking_needs_approval', label: m.notif_booking_needs_approval },
+		{ key: 'booking_submitted_no_approval', label: m.notif_booking_submitted_no_approval },
+		{ key: 'booking_any_created', label: m.notif_booking_any_created },
+		{ key: 'issue_created', label: m.notif_issue_created },
+		{ key: 'issue_resolved', label: m.notif_issue_resolved },
+		{ key: 'issue_commented', label: m.notif_issue_commented },
+	];
+	const managerOnlyKeys = new Set(['booking_needs_approval', 'booking_submitted_no_approval', 'booking_any_created', 'issue_created', 'issue_resolved', 'issue_commented']);
+
+	let notifPrefs = $state<NotificationPrefs | null>(null);
+	$effect(() => { notifPrefs = data.notificationPrefs; });
+
+	let notifEmailOverride = $state(false);
+	let notifEmailInput = $state('');
+	let notifEmailSaving = $state(false);
+	let notifEmailMessage = $state<'sent' | 'cleared' | 'error' | null>(null);
+	$effect(() => {
+		const override = data.user?.notification_email ?? null;
+		notifEmailOverride = override !== null;
+		notifEmailInput = override ?? '';
+	});
+
+	// channels from group settings, fallback to ['email']
+	let notifChannels = $derived(data.groupSettings?.notification_channels ?? ['email']);
+
+	function notifEnabled(key: string, _ch: string): boolean {
+		return (notifPrefs?.[key]?.policy ?? 'always') !== 'never';
+	}
+
+	// Three-column radio value for team/role events.
+	// 'always' = explicit user always, 'never' = explicit user never, 'follow' = no user override.
+	function teamEventRadio(key: string): 'always' | 'follow' | 'never' {
+		const pref = notifPrefs?.[key];
+		if (!pref || pref.source !== 'user') return 'follow';
+		return pref.policy === 'always' ? 'always' : 'never';
+	}
+
+	async function saveNotifEmail() {
+		notifEmailSaving = true;
+		notifEmailMessage = null;
+		try {
+			const email = notifEmailOverride ? notifEmailInput.trim() : null;
+			const result = await api.setNotificationEmail(email);
+			notifEmailMessage = result.cleared ? 'cleared' : 'sent';
+		} catch {
+			notifEmailMessage = 'error';
+		} finally {
+			notifEmailSaving = false;
+		}
+	}
+
+	async function toggleNotif(key: string, _ch: string, value: boolean) {
+		try {
+			await api.updateNotificationPrefs({ [key]: { personal_email_policy: value ? 'always' : 'never' } });
+			const result = await api.getNotificationPrefs();
+			notifPrefs = result.prefs;
+		} catch { /* ignore */ }
+	}
+
+	async function setTeamEventRadio(key: string, value: 'always' | 'follow' | 'never') {
+		try {
+			if (value === 'always') {
+				await api.updateNotificationPrefs({ [key]: { personal_email_policy: 'always' } });
+			} else if (value === 'never') {
+				await api.updateNotificationPrefs({ [key]: { personal_email_policy: 'never' } });
+			} else {
+				// null removes the explicit user override, reverting to team/group/system default
+				await api.updateNotificationPrefs({ [key]: null });
+			}
+			const result = await api.getNotificationPrefs();
+			notifPrefs = result.prefs;
+		} catch { /* ignore */ }
+	}
+
+	let notifRestoring = $state(false);
+	async function restoreNotifDefaults() {
+		notifRestoring = true;
+		try {
+			await api.resetNotificationPrefs();
+			const result = await api.getNotificationPrefs();
+			notifPrefs = result.prefs;
+		} catch { /* ignore */ } finally {
+			notifRestoring = false;
+		}
+	}
+
+	// --- Teams tab state ---
+	let selectedUserTeamId = $state<string | null>(null);
+	let userTeamSettings = $state<TeamNotifSettings | null>(null);
+	let userTeamSettingsLoading = $state(false);
+	let userTeamSettingsError = $state('');
+	let userTeamNameEdit = $state('');
+	let userTeamNameSaving = $state(false);
+	let userTeamNameMessage = $state('');
+	let userTeamNotifSaving = $state(false);
+
+	function switchToTeamsTab() {
+		tab = 'teams';
+		if (!selectedUserTeamId && user && user.teams?.length > 0) {
+			const first = user.teams[0];
+			selectUserTeam(first.team_id, first.team_name);
+		}
+	}
+
+	async function selectUserTeam(teamId: string, teamName: string) {
+		selectedUserTeamId = teamId;
+		userTeamNameEdit = teamName;
+		userTeamSettings = null;
+		userTeamSettingsError = '';
+		userTeamSettingsLoading = true;
+		memberEmailEditing = false;
+		memberEmailPending = '';
+		memberGchatEditing = false;
+		memberGchatPending = '';
+		memberGchatStatus = null;
+		memberGchatError = '';
+		memberGchatLoaded = false;
+		memberGchatConfigured = false;
+		memberGchatSpaces = [];
+		try {
+			userTeamSettings = await api.getTeamNotificationSettings(teamId);
+			if (groupSettings?.gchat_configured && !memberGchatLoaded) {
+				try {
+					memberGchatSpaces = await api.listGchatSpaces();
+					memberGchatConfigured = true;
+				} catch { /* gchat not accessible */ }
+				memberGchatLoaded = true;
+			}
+		} catch {
+			userTeamSettingsError = 'Kunde inte ladda avdelningsinställningar.';
+		} finally {
+			userTeamSettingsLoading = false;
+		}
+	}
+
+	async function saveUserTeamName() {
+		if (!selectedUserTeamId || !userTeamNameEdit.trim()) return;
+		userTeamNameSaving = true;
+		userTeamNameMessage = '';
+		try {
+			await api.updateTeamName(selectedUserTeamId, userTeamNameEdit.trim());
+			userTeamNameMessage = 'Sparat!';
+			setTimeout(() => userTeamNameMessage = '', 3000);
+		} catch (e) {
+			userTeamNameMessage = translateError(e);
+		} finally {
+			userTeamNameSaving = false;
+		}
+	}
+
+	async function saveUserTeamNotifSettings(patch: Parameters<typeof api.updateTeamNotificationSettings>[1]) {
+		if (!selectedUserTeamId) return;
+		userTeamNotifSaving = true;
+		try {
+			await api.updateTeamNotificationSettings(selectedUserTeamId, patch);
+			userTeamSettings = await api.getTeamNotificationSettings(selectedUserTeamId);
+		} catch { /* ignore */ } finally {
+			userTeamNotifSaving = false;
+		}
+	}
+
+	let memberEmailEditing = $state(false);
+	let memberEmailPending = $state('');
+	let memberEmailSaving = $state(false);
+
+	let memberGchatSpaces = $state<import('$lib/api/client').GChatSpace[]>([]);
+	let memberGchatLoaded = $state(false);
+	let memberGchatConfigured = $state(false);
+	let memberGchatEditing = $state(false);
+	let memberGchatPending = $state('');
+	let memberGchatSaving = $state(false);
+	let memberGchatStatus = $state<'success' | 'error' | null>(null);
+	let memberGchatError = $state('');
+
+	async function openMemberGchatEditor(initialPending = '') {
+		memberGchatEditing = true;
+		memberGchatPending = initialPending;
+		memberGchatStatus = null;
+		memberGchatError = '';
+		if (memberGchatLoaded) return;
+		try {
+			memberGchatSpaces = await api.listGchatSpaces();
+			memberGchatConfigured = true;
+		} catch { /* gchat not configured for this group */ }
+		memberGchatLoaded = true;
+	}
+
+	async function linkMemberGchatSpace() {
+		if (!selectedUserTeamId) return;
+		memberGchatSaving = true;
+		memberGchatStatus = null;
+		memberGchatError = '';
+		try {
+			if (memberGchatPending) {
+				await api.setTeamGchatSpace(selectedUserTeamId, memberGchatPending);
+			} else {
+				await api.clearTeamGchatSpace(selectedUserTeamId);
+			}
+			userTeamSettings = await api.getTeamNotificationSettings(selectedUserTeamId);
+			memberGchatStatus = 'success';
+			memberGchatPending = '';
+			memberGchatEditing = false;
+		} catch (e) {
+			memberGchatStatus = 'error';
+			memberGchatError = e instanceof Error ? e.message : String(e);
+		} finally {
+			memberGchatSaving = false;
+		}
+	}
+
+	// Team broadcast-channel events: shown in the team tab for broadcast toggles.
+	// Visibility is per access_level: all teams see booking events; manager teams also see manager events.
+	function teamTabEvents(accessLevel: string): EventRow[] {
+		const base: EventRow[] = [
+			{ key: 'booking_confirmed', label: m.notif_booking_confirmed },
+			{ key: 'booking_cancelled', label: m.notif_booking_cancelled },
+			{ key: 'booking_reminder', label: m.notif_booking_reminder },
+			{ key: 'booking_overdue', label: m.notif_booking_overdue },
+		];
+		if (accessLevel === 'manager') {
+			base.push(
+				{ key: 'booking_needs_approval', label: m.notif_booking_needs_approval },
+				{ key: 'booking_submitted_no_approval', label: m.notif_booking_submitted_no_approval },
+				{ key: 'booking_any_created', label: m.notif_booking_any_created },
+				{ key: 'issue_created', label: m.notif_issue_created },
+				{ key: 'issue_resolved', label: m.notif_issue_resolved },
+				{ key: 'issue_commented', label: m.notif_issue_commented },
+			);
+		}
+		return base;
+	}
+
+	// --- GChat group settings state ---
+	let gchatKeyJson = $state('');
+	let gchatAdminEmail = $state('');
+	let gchatConnecting = $state(false);
+	let gchatError = $state('');
+	let gchatSpaces = $state<import('$lib/api/client').GChatSpace[]>([]);
+	let gchatTeamMapperOpen = $state(false);
+	let gchatTeams = $state<{ id: string; name: string; gchat_space_id: string }[]>([]);
+	let gchatTeamSaving = $state<Record<string, boolean>>({});
+	let gchatTeamPending = $state<Record<string, string>>({});
+	let gchatTeamStatus = $state<Record<string, 'success' | 'error'>>({});
+	let gchatTeamError = $state<Record<string, string>>({});
+
+	async function connectGChat() {
+		gchatConnecting = true;
+		gchatError = '';
+		try {
+			const result = await api.uploadGchatKey(gchatKeyJson, gchatAdminEmail);
+			gchatSpaces = result.spaces;
+			gchatKeyJson = '';
+			gchatAdminEmail = '';
+			groupSettings = await api.getGroupSettings();
+		} catch (e) {
+			const detail = (e as { message?: string })?.message;
+			gchatError = detail ? `${m.page_profile_gchat_error_connect()} (${detail})` : m.page_profile_gchat_error_connect();
+		} finally {
+			gchatConnecting = false;
+		}
+	}
+
+	async function disconnectGChat() {
+		if (!confirm(m.page_profile_gchat_disconnect_confirm())) return;
+		try {
+			await api.deleteGchatKey();
+			groupSettings = await api.getGroupSettings();
+			gchatSpaces = [];
+			gchatTeamMapperOpen = false;
+		} catch { /* ignore */ }
+	}
+
+	async function loadGchatSpaces() {
+		try {
+			gchatSpaces = await api.listGchatSpaces();
+		} catch { /* ignore */ }
+	}
+
+	async function loadGchatTeams() {
+		try {
+			const teams = await api.listTeams();
+			gchatTeams = teams.map(t => ({
+				id: t.id,
+				name: t.name,
+				gchat_space_id: t.gchat_space_id ?? ''
+			}));
+		} catch (e) { console.error('loadGchatTeams failed', e); }
+	}
+
+async function linkGchatTeamSpace(teamId: string) {
+		const spaceId = gchatTeamPending[teamId] ?? gchatTeams.find(t => t.id === teamId)?.gchat_space_id ?? '';
+		gchatTeamSaving = { ...gchatTeamSaving, [teamId]: true };
+		gchatTeamStatus = { ...gchatTeamStatus, [teamId]: undefined as any };
+		gchatTeamError = { ...gchatTeamError, [teamId]: '' };
+		try {
+			if (spaceId) {
+				await api.setTeamGchatSpace(teamId, spaceId);
+			} else {
+				await api.clearTeamGchatSpace(teamId);
+			}
+			await loadGchatTeams();
+			gchatTeamStatus = { ...gchatTeamStatus, [teamId]: 'success' };
+		} catch (e) {
+			gchatTeamStatus = { ...gchatTeamStatus, [teamId]: 'error' };
+			gchatTeamError = { ...gchatTeamError, [teamId]: e instanceof Error ? e.message : String(e) };
+		} finally {
+			gchatTeamSaving = { ...gchatTeamSaving, [teamId]: false };
+		}
+	}
+
+	$effect(() => {
+		if (mgr && groupSettings?.gchat_configured && gchatTeamMapperOpen && gchatTeams.length === 0) {
+			loadGchatSpaces();
+			loadGchatTeams();
+		}
+	});
+
+	let testEmailSending = $state(false);
+	let testEmailMessage = $state('');
+	let testEmailError = $state(false);
+	async function sendTestEmail() {
+		testEmailSending = true;
+		testEmailMessage = '';
+		testEmailError = false;
+		try {
+			const result = await api.sendTestEmail();
+			testEmailMessage = result.skipped
+				? m.page_profile_notifs_send_test_skipped()
+				: m.page_profile_notifs_send_test_sent();
+		} catch {
+			testEmailMessage = m.page_profile_notifs_send_test_error();
+			testEmailError = true;
+		} finally {
+			testEmailSending = false;
+			setTimeout(() => testEmailMessage = '', 5000);
+		}
+	}
+
 	// --- User language preference ---
 	let userLanguage = $state<string>('sv');
 	$effect(() => { userLanguage = data.user?.language ?? 'sv'; });
@@ -338,12 +721,16 @@
 		settingsError = '';
 		try {
 			const payload: Record<string, any> = {
-				notification_email_from: settingsForm.notification_email_from,
-				gchat_webhook_url: settingsForm.gchat_webhook_url,
-				default_approval_level: 'none'
+				notification_email_from: useGroupSmtp ? settingsForm.notification_email_from : '',
+				smtp_host: useGroupSmtp ? settingsForm.smtp_host : '',
+				smtp_port: useGroupSmtp ? settingsForm.smtp_port : 587,
+				smtp_tls: useGroupSmtp ? settingsForm.smtp_tls : 'starttls',
+				smtp_user: useGroupSmtp ? settingsForm.smtp_user : '',
 			};
-			if (settingsForm.smtp_key) {
+			if (useGroupSmtp && settingsForm.smtp_key) {
 				payload.smtp_key = settingsForm.smtp_key;
+			} else if (!useGroupSmtp) {
+				payload.smtp_key = '';  // clear key when disabling group SMTP
 			}
 			groupSettings = await api.updateGroupSettings(payload);
 			settingsForm.smtp_key = '';
@@ -351,6 +738,99 @@
 		} catch (e: any) {
 			settingsError = translateError(e);
 		}
+	}
+
+	// --- Group notification defaults ---
+	let groupNotifDefaults = $state<Record<string, PerEventPrefs>>({});
+	let groupSysDefaults = $state<Record<string, PerEventPrefs>>({});
+	let groupDefaultGruppkanalChannels = $state<string[]>([]);
+	let groupNotifDefaultsMessage = $state('');
+	let groupNotifDefaultsError = $state(false);
+
+	async function loadGroupNotifDefaults() {
+		try {
+			const result = await api.getGroupNotificationDefaults();
+			groupNotifDefaults = result.defaults ?? {};
+			groupSysDefaults = result.system_defaults ?? {};
+			groupDefaultGruppkanalChannels = result.default_gruppkanal_channels ?? [];
+		} catch {}
+	}
+
+	$effect(() => {
+		if (mgr) loadGroupNotifDefaults();
+	});
+
+	async function saveGroupDefaults(patch: Partial<{ defaults: Record<string, PerEventPrefs>; default_gruppkanal_channels: string[] }>) {
+		const payload = {
+			defaults: patch.defaults ?? groupNotifDefaults,
+			default_gruppkanal_channels: patch.default_gruppkanal_channels ?? groupDefaultGruppkanalChannels,
+		};
+		try {
+			await api.updateGroupNotificationDefaults(payload);
+			groupNotifDefaults = payload.defaults;
+			groupDefaultGruppkanalChannels = payload.default_gruppkanal_channels;
+			groupNotifDefaultsError = false;
+			flash(v => groupNotifDefaultsMessage = v, m.common_saved());
+		} catch (e: any) {
+			groupNotifDefaultsError = true;
+			groupNotifDefaultsMessage = m.page_profile_error_prefix() + translateError(e);
+		}
+	}
+
+	let forceDefaultsRunning = $state(false);
+	async function forceNotificationDefaults() {
+		if (!confirm(m.page_profile_notif_force_defaults_confirm_v2())) return;
+		forceDefaultsRunning = true;
+		try {
+			const result = await api.forceGroupNotificationDefaults();
+			flash(v => groupNotifDefaultsMessage = v, m.page_profile_notif_force_defaults_done_v2({ user_count: String(result.reset_user_count), team_count: String(result.reset_team_count) }));
+			groupNotifDefaultsError = false;
+		} catch (e: any) {
+			groupNotifDefaultsError = true;
+			groupNotifDefaultsMessage = m.page_profile_error_prefix() + translateError(e);
+		} finally {
+			forceDefaultsRunning = false;
+		}
+	}
+
+	// --- Team notification settings ---
+	let teamNotifSettings = $state<TeamNotifSettings | null>(null);
+	let teamNotifSaving = $state(false);
+	let teamNotifMessage = $state('');
+	let teamNotifError = $state(false);
+
+	$effect(() => {
+		if (selectedTeamId && mgr) {
+			teamNotifSettings = null;
+			api.getTeamNotificationSettings(selectedTeamId).then(s => { teamNotifSettings = s; }).catch(() => {});
+		} else {
+			teamNotifSettings = null;
+		}
+	});
+
+	async function saveTeamNotifSettings(patch: Partial<Pick<TeamNotifSettings, 'notification_email' | 'notification_prefs' | 'gruppkanal_channels'>>) {
+		if (!selectedTeamId) return;
+		teamNotifSaving = true;
+		try {
+			await api.updateTeamNotificationSettings(selectedTeamId, patch);
+			teamNotifSettings = { ...teamNotifSettings!, ...patch };
+			teamNotifError = false;
+			flash(v => teamNotifMessage = v, m.common_saved());
+		} catch (e: any) {
+			teamNotifError = true;
+			teamNotifMessage = m.page_profile_error_prefix() + translateError(e);
+		} finally {
+			teamNotifSaving = false;
+		}
+	}
+
+	async function toggleTeamNotifPref(key: string, ch: string, value: boolean) {
+		if (!teamNotifSettings) return;
+		const updated = {
+			...teamNotifSettings.notification_prefs,
+			[key]: { ...(teamNotifSettings.notification_prefs[key] ?? {}), [ch]: value }
+		};
+		await saveTeamNotifSettings({ notification_prefs: updated });
 	}
 </script>
 
@@ -369,6 +849,12 @@
 			onclick={() => tab = 'profile'}
 			class="px-3 py-2 text-sm -mb-px {tab === 'profile' ? 'border-b-2 border-blue-700 font-medium text-blue-700' : 'text-neutral-500'}"
 		>{m.page_profile_tab_profile()}</button>
+		{#if user && user.teams?.length > 0}
+			<button
+				onclick={() => switchToTeamsTab()}
+				class="px-3 py-2 text-sm -mb-px {tab === 'teams' ? 'border-b-2 border-blue-700 font-medium text-blue-700' : 'text-neutral-500'}"
+			>{m.page_profile_tab_teams()}</button>
+		{/if}
 		{#if mgr}
 			<button
 				onclick={() => tab = 'group'}
@@ -382,7 +868,7 @@
 		<section class="mb-6 border rounded-lg p-4">
 			<h2 class="font-medium mb-3">{m.page_profile_permissions_heading()}</h2>
 
-			{#if user.teams.length === 0}
+			{#if user.teams?.length === 0}
 				<p class="text-sm text-neutral-500">{m.page_profile_no_teams()}</p>
 			{:else}
 				<div class="space-y-3">
@@ -419,6 +905,129 @@
 			</div>
 			<p class="text-xs text-neutral-400 mt-2">{m.page_profile_language_hint()}</p>
 		</section>
+
+		<!-- Notification preferences -->
+		{#if notifPrefs}
+		<section class="mb-6 border rounded-lg p-4">
+			<h2 class="font-medium mb-4">{m.page_profile_notifs_heading()}</h2>
+
+			<!-- Notification email override -->
+			<div class="mb-5 pb-5 border-b border-neutral-100">
+				<p class="text-sm text-neutral-600 mb-1">
+					<span class="font-medium">{m.page_profile_notifs_email_label()}:</span>
+					<span class="ml-1 text-neutral-500">{data.user?.email}</span>
+				</p>
+				<label class="flex items-center gap-2 text-sm text-neutral-700 mb-2 cursor-pointer">
+					<input type="checkbox" bind:checked={notifEmailOverride} onchange={() => { notifEmailMessage = null; if (!notifEmailOverride) notifEmailInput = ''; }} class="h-4 w-4 accent-blue-700" />
+					{m.page_profile_notifs_email_override_checkbox()}
+				</label>
+				{#if notifEmailOverride}
+				<div class="flex items-center gap-2 mt-1">
+					<input
+						type="email"
+						bind:value={notifEmailInput}
+						class="border rounded px-2 py-1 text-sm w-64"
+						placeholder="din@epost.se"
+					/>
+					<button onclick={saveNotifEmail} disabled={notifEmailSaving || !notifEmailInput.trim()} class="text-sm bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50">
+						{notifEmailSaving ? m.page_profile_notifs_email_saving() : m.page_profile_notifs_email_save_btn()}
+					</button>
+				</div>
+				{:else if notifEmailOverride === false && notifEmailMessage === null}
+					<!-- nothing when unchecked and no message -->
+				{/if}
+				{#if !notifEmailOverride && data.user?.notification_email}
+				<button onclick={saveNotifEmail} disabled={notifEmailSaving} class="text-xs text-neutral-500 hover:underline mt-1">
+					{notifEmailSaving ? m.page_profile_notifs_email_saving() : '↩ ' + m.page_profile_notifs_email_cleared()}
+				</button>
+				{/if}
+				{#if notifEmailMessage === 'sent'}
+					<p class="text-sm text-green-700 mt-1">{m.page_profile_notifs_email_sent()}</p>
+				{:else if notifEmailMessage === 'cleared'}
+					<p class="text-sm text-green-700 mt-1">{m.page_profile_notifs_email_cleared()}</p>
+				{:else if notifEmailMessage === 'error'}
+					<p class="text-sm text-red-600 mt-1">{m.page_profile_notifs_email_error()}</p>
+				{/if}
+			</div>
+
+			<!-- Personal events: simple on/off -->
+			<h3 class="text-sm font-semibold text-neutral-600 mb-2">{m.page_profile_notifs_personal_heading()}</h3>
+			<p class="text-xs text-neutral-500 mb-3">{m.page_profile_notifs_personal_help()}</p>
+			<table class="w-full text-sm border-collapse mb-6">
+				<thead>
+					<tr>
+						<th class="text-left pb-1 pr-3 font-normal text-xs text-neutral-400 w-full"></th>
+						<th class="pb-1 px-3 font-normal text-xs text-neutral-400 whitespace-nowrap text-center">{m.page_profile_notifs_channel_email()}</th>
+					</tr>
+				</thead>
+				<tbody>
+					{#each personalEvents as row}
+					{#if row.key !== 'issue_assigned_to_me' || canBeAssignedIssue}
+					<tr class="border-t border-neutral-100">
+						<td class="py-1.5 pr-3 w-full">
+							<span>{row.label()}</span>
+							{#if row.locked}
+								<span class="text-xs text-neutral-400 ml-1" title={m.page_profile_notifs_assigned_locked()}>🔒</span>
+							{/if}
+						</td>
+						<td class="py-1.5 px-3 text-center">
+							{#if row.locked}
+								<input type="checkbox" checked disabled class="h-4 w-4 accent-blue-700 opacity-50 cursor-not-allowed" />
+							{:else}
+								<input
+									type="checkbox"
+									checked={notifEnabled(row.key, 'email')}
+									onchange={(e) => toggleNotif(row.key, 'email', e.currentTarget.checked)}
+									class="h-4 w-4 accent-blue-700"
+								/>
+							{/if}
+						</td>
+					</tr>
+					{/if}
+					{/each}
+				</tbody>
+			</table>
+
+			<!-- Team/role events: three-column radio -->
+			<div class="flex items-center justify-between mb-2">
+				<h3 class="text-sm font-semibold text-neutral-600">{m.page_profile_notifs_team_heading()}</h3>
+				{#if user && user.teams?.length > 0}
+					<button
+						onclick={() => switchToTeamsTab()}
+						class="text-xs text-blue-700 underline"
+					>{m.page_profile_notifs_manage_teams_link()}</button>
+				{/if}
+			</div>
+			<p class="text-xs text-neutral-500 mb-3">{m.page_profile_notifs_team_help()}</p>
+			<div class="space-y-0">
+				{#each teamEvents as row}
+					{#if !managerOnlyKeys.has(row.key) || mgr}
+					<div class="border-t border-neutral-100 py-2 flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-0">
+						<span class="text-sm flex-1 pr-3">{row.label()}</span>
+						<div class="flex gap-1">
+							{#each [
+								['always', m.page_profile_notifs_always_short()],
+								['follow', m.page_profile_notifs_follow_short()],
+								['never', m.page_profile_notifs_no_email_short()],
+							] as [val, label]}
+								<button
+									onclick={() => setTeamEventRadio(row.key, val as 'always' | 'follow' | 'never')}
+									class="px-2 py-0.5 text-xs rounded border whitespace-nowrap {teamEventRadio(row.key) === val ? 'bg-blue-700 text-white border-blue-700' : 'bg-white text-neutral-600 border-neutral-300 hover:border-blue-400'}"
+								>{label}</button>
+							{/each}
+						</div>
+					</div>
+					{/if}
+				{/each}
+			</div>
+
+			<div class="mt-3">
+				<button onclick={restoreNotifDefaults} disabled={notifRestoring} class="text-sm text-neutral-500 underline disabled:opacity-50">
+					{m.page_profile_notifs_restore()}
+				</button>
+			</div>
+		</section>
+		{/if}
 
 		<section class="mb-6 border rounded-lg p-4">
 			<h2 class="font-medium mb-3">{m.page_profile_images_heading()}</h2>
@@ -525,6 +1134,284 @@
 			<button type="submit" class="text-sm text-red-600 hover:underline">{m.page_profile_btn_logout()}</button>
 		</form>
 
+	<!-- Teams tab -->
+	{:else if tab === 'teams'}
+		{#if !user || user.teams?.length === 0}
+			<p class="text-sm text-neutral-500">{m.page_profile_teams_no_teams()}</p>
+		{:else}
+			<!-- Team picker -->
+			<div class="flex flex-wrap gap-2 mb-6">
+				{#each user.teams as membership}
+					<button
+						onclick={() => selectUserTeam(membership.team_id, membership.team_name)}
+						class="px-3 py-1.5 text-sm rounded-full border {selectedUserTeamId === membership.team_id ? 'bg-blue-700 text-white border-blue-700' : 'bg-white text-neutral-700 border-neutral-300 hover:border-blue-400'}"
+					>
+						{membership.team_name}
+						<span class="ml-1 opacity-60 text-xs">{membership.team_type === 'troop' ? m.team_type_troop() : m.team_type_role()}</span>
+					</button>
+				{/each}
+			</div>
+
+			{#if selectedUserTeamId}
+				{@const selectedMembership = user.teams.find(t => t.team_id === selectedUserTeamId)}
+				<div class="border rounded-lg divide-y">
+
+					<!-- Team name -->
+					<div class="p-4">
+						<label class="block" for="user-team-name">
+							<span class="text-sm font-medium text-neutral-700 block mb-1">{m.page_profile_team_name_label()}</span>
+						</label>
+						<div class="flex gap-2 items-center">
+							<input
+								id="user-team-name"
+								type="text"
+								bind:value={userTeamNameEdit}
+								class="border rounded px-2 py-1 text-sm w-full max-w-xs"
+							/>
+							<button
+								onclick={saveUserTeamName}
+								disabled={userTeamNameSaving}
+								class="text-sm bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50"
+							>{userTeamNameSaving ? m.btn_saving() : m.btn_save()}</button>
+							{#if userTeamNameMessage}
+								<span class="text-sm text-green-600">{userTeamNameMessage}</span>
+							{/if}
+						</div>
+					</div>
+
+					<!-- Notification settings -->
+					<div class="p-4">
+						<div class="flex items-center justify-between mb-3">
+							<h3 class="text-sm font-semibold text-neutral-700">{m.page_profile_teams_notif_heading()}</h3>
+							<button
+								onclick={() => saveUserTeamNotifSettings({ notification_prefs: {}, gruppkanal_channels: null })}
+								class="text-xs text-neutral-400 hover:text-red-600"
+							>{m.page_profile_teams_notif_reset()}</button>
+						</div>
+
+						{#if userTeamSettingsLoading}
+							<p class="text-sm text-neutral-400">{m.btn_loading()}</p>
+						{:else if userTeamSettingsError}
+							<p class="text-sm text-red-600">{userTeamSettingsError}</p>
+						{:else if userTeamSettings}
+							{@const effectiveGruppkanal = userTeamSettings.gruppkanal_channels ?? userTeamSettings.default_gruppkanal_channels}
+							{@const hasGroupEmail = !!userTeamSettings.notification_email}
+							{@const hasGChat = !!userTeamSettings.gchat_space_id}
+							{@const availableChannels = [
+								...(hasGroupEmail ? ['email'] : []),
+								...(hasGChat ? ['gchat'] : []),
+							]}
+
+							<!-- Gruppkanal composition -->
+							<div class="mb-5">
+								<h4 class="text-sm font-medium text-neutral-700 mb-1">{m.page_profile_teams_gruppkanal_heading()}</h4>
+								<p class="text-xs text-neutral-400 mb-3">{m.page_profile_teams_gruppkanal_help()}</p>
+
+								{#if availableChannels.length === 0}
+									<p class="text-sm text-neutral-400 italic">{m.page_profile_teams_gruppkanal_no_channels()}</p>
+								{:else}
+									{#each availableChannels as ch}
+										{@const checked = effectiveGruppkanal.includes(ch)}
+										<label class="flex items-center gap-2 mb-1 cursor-pointer">
+											<input
+												type="checkbox"
+												{checked}
+												onchange={(e) => {
+													const current = userTeamSettings!.gruppkanal_channels ?? [...userTeamSettings!.default_gruppkanal_channels];
+													const updated = e.currentTarget.checked
+														? [...current, ch]
+														: current.filter(c => c !== ch);
+													saveUserTeamNotifSettings({ gruppkanal_channels: updated });
+												}}
+												class="h-4 w-4 accent-blue-700"
+											/>
+											<span class="text-sm text-neutral-700">
+												{ch === 'email' ? m.page_profile_teams_gruppkanal_channel_email() : m.page_profile_teams_gruppkanal_channel_gchat()}
+												{#if ch === 'email' && userTeamSettings.notification_email}
+													<span class="text-neutral-400 text-xs ml-1">({userTeamSettings.notification_email})</span>
+												{/if}
+											</span>
+										</label>
+									{/each}
+								{/if}
+							</div>
+
+							<!-- Per-event table: context-aware personal email toggle + Gruppkanal checkbox -->
+							{@const tabEvents = teamTabEvents(selectedMembership?.access_level ?? 'book')}
+							{@const showGruppkanalCol = effectiveGruppkanal.some(ch => availableChannels.includes(ch))}
+							<div class="mb-3">
+								<h4 class="text-sm font-medium text-neutral-700 mb-1">{m.page_profile_teams_notif_col_personal()}</h4>
+								<p class="text-xs text-neutral-400">{showGruppkanalCol ? m.page_profile_teams_notif_per_event_desc_with_channel() : m.page_profile_teams_notif_per_event_desc_no_channel()}</p>
+							</div>
+							<table class="w-full text-sm border-collapse">
+								<thead>
+									<tr>
+										<th class="text-left py-1 pr-3 font-normal text-neutral-500 w-full"></th>
+										<th class="text-center py-1 px-2 font-normal text-neutral-500 whitespace-nowrap">{m.page_profile_teams_notif_col_personal()}</th>
+										{#if showGruppkanalCol}
+											<th class="text-center py-1 px-3 font-normal text-neutral-500 whitespace-nowrap">{m.page_profile_teams_notif_col_gruppkanal()}</th>
+										{/if}
+									</tr>
+								</thead>
+								<tbody>
+									{#each tabEvents as row}
+									{@const ep = userTeamSettings.notification_prefs?.[row.key]}
+									{@const policy = ep?.personal_email_policy ?? ''}
+									{@const grEnabled = ep?.gruppkanal ?? null}
+									<tr class="border-t border-neutral-100">
+										<td class="py-2 pr-3">{row.label()}</td>
+										<!-- Personal email: off → "never"; on without Gruppkanal → omit (default sends); on with Gruppkanal → "always" -->
+										<td class="py-2 px-2 text-center">
+											<input
+												type="checkbox"
+												checked={showGruppkanalCol ? policy === 'always' : policy !== 'never'}
+												onchange={(e) => {
+													const prefs = { ...userTeamSettings!.notification_prefs };
+													if (e.currentTarget.checked) {
+														if (showGruppkanalCol) {
+															prefs[row.key] = { ...(prefs[row.key] ?? {}), personal_email_policy: 'always' };
+														} else {
+															const { personal_email_policy: _, ...rest } = prefs[row.key] ?? {};
+															prefs[row.key] = Object.keys(rest).length ? rest : undefined as any;
+														}
+													} else {
+														if (showGruppkanalCol) {
+															const { personal_email_policy: _, ...rest } = prefs[row.key] ?? {};
+															prefs[row.key] = Object.keys(rest).length ? rest : undefined as any;
+														} else {
+															prefs[row.key] = { ...(prefs[row.key] ?? {}), personal_email_policy: 'never' };
+														}
+													}
+													saveUserTeamNotifSettings({ notification_prefs: prefs });
+												}}
+												class="h-4 w-4 accent-blue-700"
+											/>
+										</td>
+										<!-- Gruppkanal checkbox: only when channels available -->
+										{#if showGruppkanalCol}
+										<td class="py-2 px-3 text-center">
+											<input
+												type="checkbox"
+												checked={grEnabled ?? true}
+												onchange={(e) => {
+													const prefs = { ...userTeamSettings!.notification_prefs };
+													prefs[row.key] = { ...(prefs[row.key] ?? {}), gruppkanal: e.currentTarget.checked };
+													saveUserTeamNotifSettings({ notification_prefs: prefs });
+												}}
+												class="h-4 w-4 accent-blue-700"
+											/>
+										</td>
+										{/if}
+									</tr>
+									{/each}
+								</tbody>
+							</table>
+						{/if}
+					</div>
+
+					<!-- Integrations -->
+					<div class="p-4">
+						<h3 class="text-sm font-semibold text-neutral-700 mb-2">{m.page_profile_teams_integrations_heading()}</h3>
+						{#if userTeamSettings}
+							<div class="text-sm text-neutral-600 space-y-2">
+								<div>
+									<span class="text-neutral-400 block mb-1">{m.page_profile_teams_notif_email_edit_label()}:</span>
+									{#if memberEmailEditing}
+										<div class="flex gap-2 items-center">
+											<input
+												type="email"
+												bind:value={memberEmailPending}
+												placeholder="avdelning@example.com"
+												class="border rounded px-2 py-1 text-sm flex-1 max-w-xs"
+											/>
+											<button
+												onclick={async () => {
+													memberEmailSaving = true;
+													await saveUserTeamNotifSettings({ notification_email: memberEmailPending });
+													memberEmailEditing = false;
+													memberEmailSaving = false;
+												}}
+												disabled={memberEmailSaving}
+												class="text-sm bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50"
+											>{m.btn_save()}</button>
+											<button onclick={() => memberEmailEditing = false} class="text-xs text-neutral-500 hover:underline">{m.btn_cancel()}</button>
+										</div>
+									{:else}
+										<span>{userTeamSettings.notification_email || '–'}</span>
+										<button
+											onclick={() => { memberEmailPending = userTeamSettings?.notification_email ?? ''; memberEmailEditing = true; }}
+											disabled={data.demo}
+											class="text-xs text-blue-700 ml-2 hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
+										>{m.btn_edit()}</button>
+									{/if}
+								</div>
+								<div>
+									<span class="text-neutral-400 block mb-1">{m.page_profile_teams_gchat_space_label()}:</span>
+									{#if !memberGchatEditing}
+										<!-- Read-only view — immediate, no loading -->
+										{#if userTeamSettings.gchat_space_id}
+											{@const spaceId = userTeamSettings.gchat_space_id}
+											{@const linkedSpace = memberGchatSpaces.find(s => s.name === spaceId)}
+											{@const spaceRawId = spaceId.replace(/^spaces\//, '')}
+											{#if linkedSpace}
+												<a href="https://mail.google.com/mail/u/0/#chat/space/{spaceRawId}" target="_blank" rel="noopener noreferrer" class="text-sm font-medium text-blue-700 hover:underline">{linkedSpace.displayName}</a>
+												<p class="text-xs text-neutral-400">{spaceId}</p>
+											{:else}
+												<p class="text-sm font-medium">{spaceId}</p>
+											{/if}
+											<button onclick={() => openMemberGchatEditor(spaceId)} disabled={data.demo} class="text-xs text-blue-700 mt-1 hover:underline disabled:opacity-40 disabled:cursor-not-allowed">{m.page_profile_gchat_change_space()}</button>
+										{:else}
+											<p class="text-sm text-neutral-500">{m.page_profile_teams_gchat_space_none()}</p>
+											<button onclick={() => openMemberGchatEditor()} disabled={data.demo} class="text-xs text-blue-700 mt-1 hover:underline disabled:opacity-40 disabled:cursor-not-allowed">{m.page_profile_gchat_link_btn()}</button>
+										{/if}
+									{:else}
+										<!-- Editor — loads spaces lazily -->
+										{#if !memberGchatLoaded}
+											<p class="text-xs text-neutral-400">{m.btn_loading()}</p>
+										{:else if !memberGchatConfigured}
+											<p class="text-xs text-neutral-400 mt-1">{m.page_profile_teams_gchat_space_self_help()}</p>
+											<button onclick={() => memberGchatEditing = false} class="text-xs text-neutral-500 mt-1 hover:underline">{m.btn_cancel()}</button>
+										{:else}
+											{@const connectedSpace = memberGchatSpaces.find(s => s.name === userTeamSettings?.gchat_space_id)}
+											{#if connectedSpace && memberGchatPending === userTeamSettings?.gchat_space_id}
+												<!-- Show friendly name once spaces loaded -->
+											{/if}
+											<div class="flex items-center gap-2">
+												<select bind:value={memberGchatPending} disabled={memberGchatSaving} class="border rounded px-2 py-1 text-sm flex-1 max-w-xs disabled:opacity-50">
+													<option value="">{m.page_profile_gchat_space_none_option()}</option>
+													{#if memberGchatSpaces.some(s => s.bot_is_member)}
+														<optgroup label={m.page_profile_gchat_space_group_bot_member()}>
+															{#each memberGchatSpaces.filter(s => s.bot_is_member) as space}
+																<option value={space.name}>{space.displayName}</option>
+															{/each}
+														</optgroup>
+													{/if}
+													{#if memberGchatSpaces.some(s => s.can_auto_add && !s.bot_is_member)}
+														<optgroup label={m.page_profile_gchat_space_group_auto_add()}>
+															{#each memberGchatSpaces.filter(s => s.can_auto_add && !s.bot_is_member) as space}
+																<option value={space.name}>{space.displayName}</option>
+															{/each}
+														</optgroup>
+													{/if}
+												</select>
+												<button onclick={linkMemberGchatSpace} disabled={memberGchatSaving || (memberGchatPending === (userTeamSettings?.gchat_space_id ?? ''))} class="text-sm bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50">{m.page_profile_gchat_link_btn()}</button>
+												<button onclick={() => { memberGchatEditing = false; memberGchatPending = ''; }} class="text-xs text-neutral-500 hover:underline">{m.btn_cancel()}</button>
+											</div>
+											<p class="text-xs text-neutral-400 mt-2">{m.page_profile_teams_gchat_space_self_help()}</p>
+										{/if}
+										{#if memberGchatStatus === 'error'}
+											<p class="text-xs text-red-600 mt-1">{memberGchatError || m.page_profile_gchat_link_error()}</p>
+										{/if}
+									{/if}
+								</div>
+							</div>
+						{/if}
+					</div>
+
+				</div>
+			{/if}
+		{/if}
+
 	<!-- Group settings tab (manager only) -->
 	{:else if tab === 'group'}
 
@@ -604,6 +1491,94 @@
 								</label>
 								<button onclick={() => { editingTeamId = team.id; editingTeamName = team.name; }} class="text-sm text-blue-700 underline">{m.page_profile_btn_rename()}</button>
 								<button onclick={() => deleteTeam(team.id, team.name)} class="text-sm text-red-600 underline">{m.btn_delete()}</button>
+							</div>
+						{/if}
+
+						<!-- Team notification settings -->
+						{#if editingTeamId !== team.id}
+							<div class="border-t pt-3 mt-1">
+								<h4 class="text-sm font-medium mb-2">{m.page_profile_team_notif_heading()}</h4>
+								{#if teamNotifSettings}
+									{#if teamNotifMessage}
+										<p class="text-sm mb-2 {teamNotifError ? 'text-red-600' : 'text-green-600'}">{teamNotifMessage}</p>
+									{/if}
+									<div class="space-y-3">
+										<label class="flex flex-col gap-0.5">
+											<span class="text-xs text-neutral-500">{m.page_profile_team_notif_broadcast_email()}</span>
+											<div class="flex gap-2">
+												<input
+													type="email"
+													value={teamNotifSettings.notification_email}
+													oninput={(e) => { teamNotifSettings = { ...teamNotifSettings!, notification_email: e.currentTarget.value }; }}
+													placeholder="team@example.com"
+													class="border rounded px-2 py-1 text-sm w-full max-w-sm"
+												/>
+												<button
+													onclick={() => saveTeamNotifSettings({ notification_email: teamNotifSettings!.notification_email })}
+													disabled={teamNotifSaving}
+													class="text-sm bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50"
+												>{m.btn_save()}</button>
+											</div>
+											<span class="text-xs text-neutral-400">{m.page_profile_team_notif_broadcast_email_help()}</span>
+										</label>
+
+										<div>
+											<p class="text-xs text-neutral-500 mb-1.5">{m.page_profile_team_notif_prefs_help()}</p>
+											<table class="w-full text-sm border-collapse">
+												<thead>
+													<tr>
+														<th class="text-left py-1 pr-3 font-normal text-neutral-500 w-full"></th>
+														<th class="text-center py-1 px-2 font-normal text-neutral-500 whitespace-nowrap text-xs">{m.page_profile_teams_notif_col_gruppkanal()}</th>
+													</tr>
+												</thead>
+												<tbody>
+													<tr>
+														<td colspan="2" class="py-1 text-xs font-semibold text-neutral-400 uppercase tracking-wide">{m.page_profile_notifs_bookings_group()}</td>
+													</tr>
+													{#each allBookingEvents as row}
+														<tr class="border-t border-neutral-100">
+															<td class="py-1.5 pr-3 text-sm">{row.label()}</td>
+															<td class="py-1.5 px-2 text-center">
+																<input
+																	type="checkbox"
+																	checked={teamNotifSettings.notification_prefs[row.key]?.gruppkanal ?? true}
+																	onchange={(e) => {
+																		const prefs = { ...teamNotifSettings!.notification_prefs };
+																		prefs[row.key] = { ...(prefs[row.key] ?? {}), gruppkanal: e.currentTarget.checked };
+																		saveTeamNotifSettings({ notification_prefs: prefs });
+																	}}
+																	class="h-4 w-4 accent-blue-700"
+																/>
+															</td>
+														</tr>
+													{/each}
+													<tr>
+														<td colspan="2" class="pt-2 pb-1 text-xs font-semibold text-neutral-400 uppercase tracking-wide">{m.page_profile_notifs_issues_group()}</td>
+													</tr>
+													{#each allIssueEvents as row}
+														<tr class="border-t border-neutral-100">
+															<td class="py-1.5 pr-3 text-sm">{row.label()}</td>
+															<td class="py-1.5 px-2 text-center">
+																<input
+																	type="checkbox"
+																	checked={teamNotifSettings.notification_prefs[row.key]?.gruppkanal ?? true}
+																	onchange={(e) => {
+																		const prefs = { ...teamNotifSettings!.notification_prefs };
+																		prefs[row.key] = { ...(prefs[row.key] ?? {}), gruppkanal: e.currentTarget.checked };
+																		saveTeamNotifSettings({ notification_prefs: prefs });
+																	}}
+																	class="h-4 w-4 accent-blue-700"
+																/>
+															</td>
+														</tr>
+													{/each}
+												</tbody>
+											</table>
+										</div>
+									</div>
+								{:else}
+									<p class="text-xs text-neutral-400">{m.btn_loading()}</p>
+								{/if}
 							</div>
 						{/if}
 					</div>
@@ -779,7 +1754,7 @@
 			</div>
 		</section>
 
-		<!-- Notifications -->
+		<!-- SMTP settings -->
 		<section class="mb-6 border rounded-lg p-4">
 			<h3 class="font-medium mb-2">{m.page_profile_notifications_heading()}</h3>
 			{#if settingsMessage}
@@ -788,27 +1763,309 @@
 			{#if settingsError}
 				<div class="bg-red-50 border border-red-200 rounded p-2 mb-2 text-red-800 text-sm">{settingsError}</div>
 			{/if}
-			<div class="space-y-3">
-				<label class="block">
-					<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_email_from()}</span>
-					<input type="email" bind:value={settingsForm.notification_email_from} placeholder="utrustning@example.com" class="border rounded px-2 py-1 text-sm w-full" />
-				</label>
-				<label class="block">
-					<span class="text-sm text-neutral-600 block mb-1">
-						{m.page_profile_smtp_key()}
-						{#if groupSettings?.smtp_key_set}
-							<span class="text-neutral-400 ml-1">({groupSettings.smtp_key_masked})</span>
+				<div class="space-y-3">
+					<label class="flex items-center gap-2 text-sm cursor-pointer">
+						<input type="checkbox" bind:checked={useGroupSmtp} class="h-4 w-4 accent-blue-700" />
+						{m.page_profile_smtp_use_group()}
+					</label>
+					{#if !useGroupSmtp}
+						{#if groupSettings?.system_smtp_from}
+							<p class="text-sm text-neutral-600">
+								{m.page_profile_smtp_system_sender()}: <span class="font-mono">{groupSettings.system_smtp_from}</span>
+							</p>
+						{:else}
+							<p class="text-sm text-amber-700">{m.page_profile_smtp_system_not_configured()}</p>
 						{/if}
-					</span>
-					<input type="password" bind:value={settingsForm.smtp_key} placeholder={groupSettings?.smtp_key_set ? m.page_profile_leave_blank() : m.page_profile_smtp_enter()} class="border rounded px-2 py-1 text-sm w-full" />
-				</label>
-				<label class="block">
-					<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_webhook_url()}</span>
-					<input type="url" bind:value={settingsForm.gchat_webhook_url} placeholder="https://chat.googleapis.com/v1/spaces/..." class="border rounded px-2 py-1 text-sm w-full" />
-				</label>
+					{/if}
+					{#if useGroupSmtp}
+					<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+						<label class="block sm:col-span-2">
+							<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_email_from()}</span>
+							<input type="email" bind:value={settingsForm.notification_email_from} placeholder="utrustning@example.com" class="border rounded px-2 py-1 text-sm w-full max-w-sm" />
+						</label>
+						<label class="block">
+							<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_smtp_host()}</span>
+							<input type="text" bind:value={settingsForm.smtp_host} placeholder="smtp.example.com" class="border rounded px-2 py-1 text-sm w-full" />
+						</label>
+						<label class="block">
+							<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_smtp_user()}</span>
+							<input type="text" bind:value={settingsForm.smtp_user} placeholder="apikey" class="border rounded px-2 py-1 text-sm w-full" />
+						</label>
+						<label class="block">
+							<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_smtp_port()}</span>
+							<input type="number" bind:value={settingsForm.smtp_port} min="1" max="65535" class="border rounded px-2 py-1 text-sm w-full" />
+						</label>
+						<label class="block">
+							<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_smtp_tls()}</span>
+							<select bind:value={settingsForm.smtp_tls} class="border rounded px-2 py-1 text-sm w-full">
+								<option value="starttls">{m.page_profile_smtp_tls_starttls()}</option>
+								<option value="tls">{m.page_profile_smtp_tls_tls()}</option>
+							</select>
+						</label>
+					</div>
+					<label class="block">
+						<span class="text-sm text-neutral-600 block mb-1">
+							{m.page_profile_smtp_key()}
+							{#if groupSettings?.smtp_key_set}
+								<span class="text-neutral-400 ml-1">({groupSettings.smtp_key_masked})</span>
+							{/if}
+						</span>
+						<input type="password" bind:value={settingsForm.smtp_key} placeholder={groupSettings?.smtp_key_set ? m.page_profile_leave_blank() : m.page_profile_smtp_enter()} class="border rounded px-2 py-1 text-sm w-full max-w-sm" />
+					</label>
+					{/if}
 				<button onclick={saveSettings} class="text-sm bg-blue-700 text-white px-4 py-2 rounded">{m.btn_save()}</button>
+				<div class="pt-2 border-t flex flex-wrap items-center gap-3">
+					<button onclick={sendTestEmail} disabled={testEmailSending} class="text-sm text-blue-700 border border-blue-200 bg-blue-50 rounded px-3 py-1 hover:bg-blue-100 disabled:opacity-50">
+						{testEmailSending ? m.page_profile_notifs_send_test_sending() : m.page_profile_notifs_send_test()}
+					</button>
+					<span class="text-xs text-neutral-400">{user.email}</span>
+					{#if testEmailMessage}
+						<span class="text-sm {testEmailError ? 'text-red-600' : 'text-green-600'}">{testEmailMessage}</span>
+					{/if}
+				</div>
 			</div>
 		</section>
+
+			<!-- Google Chat integration -->
+			<section class="mb-6 border rounded-lg p-4">
+				<h3 class="font-medium mb-3">{m.page_profile_gchat_heading()}</h3>
+				{#if groupSettings?.gchat_configured}
+					<div class="flex items-center gap-3 mb-4">
+						<span class="text-sm text-green-700 font-medium">{m.page_profile_gchat_connected_status()}</span>
+						<span class="text-sm text-neutral-500">{m.page_profile_gchat_admin_email_label()}: {groupSettings.gchat_admin_email}</span>
+						<button
+							onclick={disconnectGChat}
+							class="ml-auto text-sm text-red-600 border border-red-200 rounded px-3 py-1 hover:bg-red-50"
+						>{m.page_profile_gchat_disconnect()}</button>
+					</div>
+
+					<!-- Team-space mapper (collapsible) -->
+					<div class="border rounded">
+						<button
+							onclick={() => { gchatTeamMapperOpen = !gchatTeamMapperOpen; }}
+							class="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
+						>
+							{m.page_profile_gchat_team_mapper_heading()}
+							<span class="text-neutral-400">{gchatTeamMapperOpen ? '▲' : '▼'}</span>
+						</button>
+						{#if gchatTeamMapperOpen}
+							<div class="border-t p-3">
+								{#if gchatTeams.length === 0}
+									<p class="text-sm text-neutral-400">{m.btn_loading()}</p>
+								{:else}
+									<table class="w-full text-sm">
+										<thead>
+											<tr>
+												<th class="text-left py-1 pr-3 font-normal text-neutral-500">{m.page_profile_gchat_team_column()}</th>
+												<th class="text-left py-1 font-normal text-neutral-500">{m.page_profile_gchat_space_column()}</th>
+												<th></th>
+											</tr>
+										</thead>
+										<tbody>
+											{#each gchatTeams as gt}
+											{@const pending = gchatTeamPending[gt.id] ?? gt.gchat_space_id}
+											<tr class="border-t border-neutral-100">
+												<td class="py-1.5 pr-3">{gt.name}</td>
+												<td class="py-1.5 pr-2">
+													<select
+														value={pending}
+														onchange={(e) => { gchatTeamPending = { ...gchatTeamPending, [gt.id]: e.currentTarget.value }; gchatTeamStatus = { ...gchatTeamStatus, [gt.id]: undefined as any }; }}
+														disabled={gchatTeamSaving[gt.id]}
+														class="border rounded px-2 py-1 text-sm w-full max-w-xs disabled:opacity-50"
+													>
+														<option value="">{m.page_profile_gchat_space_none_option()}</option>
+														{#if gchatSpaces.some(s => s.bot_is_member)}
+															<optgroup label={m.page_profile_gchat_space_group_bot_member()}>
+																{#each gchatSpaces.filter(s => s.bot_is_member) as space}
+																	<option value={space.name}>{space.displayName}</option>
+																{/each}
+															</optgroup>
+														{/if}
+														{#if gchatSpaces.some(s => s.can_auto_add && !s.bot_is_member)}
+															<optgroup label={m.page_profile_gchat_space_group_auto_add()}>
+																{#each gchatSpaces.filter(s => s.can_auto_add && !s.bot_is_member) as space}
+																	<option value={space.name}>{space.displayName}</option>
+																{/each}
+															</optgroup>
+														{/if}
+													</select>
+												</td>
+												<td class="py-1.5 whitespace-nowrap">
+													<button
+														onclick={() => linkGchatTeamSpace(gt.id)}
+														disabled={gchatTeamSaving[gt.id]}
+														class="text-sm bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50"
+													>{m.page_profile_gchat_link_btn()}</button>
+													{#if gchatTeamStatus[gt.id] === 'success'}
+														<span class="ml-2 text-sm text-green-700">{m.page_profile_gchat_link_success()}</span>
+													{:else if gchatTeamStatus[gt.id] === 'error'}
+														<span class="ml-2 text-sm text-red-600">{gchatTeamError[gt.id] || m.page_profile_gchat_link_error()}</span>
+													{/if}
+																			</td>
+											</tr>
+											{/each}
+										</tbody>
+									</table>
+									<p class="text-xs text-neutral-400 mt-3">{m.page_profile_gchat_manual_add_hint()}</p>
+								{/if}
+							</div>
+						{/if}
+					</div>
+				{:else}
+					<p class="text-sm text-neutral-500 mb-3">
+						{m.page_profile_gchat_paste_hint()}
+						<a href="/docs/gchat" target="_blank" class="text-blue-700 underline ml-1">{m.page_profile_gchat_setup_guide()}</a>
+					</p>
+					<label class="block mb-3" for="gchat-key-json">
+						<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_gchat_paste_label()}</span>
+						<textarea
+							id="gchat-key-json"
+							bind:value={gchatKeyJson}
+							rows={3}
+							class="border rounded px-2 py-1 text-sm w-full font-mono"
+							placeholder='{"{"}  "type": "service_account", ...'
+						></textarea>
+					</label>
+					<label class="block mb-3" for="gchat-admin-email">
+						<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_gchat_admin_email_label()}</span>
+						<input
+							id="gchat-admin-email"
+							type="email"
+							bind:value={gchatAdminEmail}
+							class="border rounded px-2 py-1 text-sm w-full"
+							placeholder="admin@yourgroup.se"
+						/>
+					</label>
+					{#if gchatError}
+						<p class="text-sm text-red-600 mb-2">{gchatError}</p>
+					{/if}
+					<button
+						onclick={connectGChat}
+						disabled={gchatConnecting || !gchatKeyJson.trim() || !gchatAdminEmail.trim()}
+						class="text-sm bg-blue-700 text-white px-4 py-2 rounded disabled:opacity-50"
+					>{gchatConnecting ? m.page_profile_gchat_connecting() : m.page_profile_gchat_connect()}</button>
+				{/if}
+			</section>
+
+			<!-- Group notification defaults -->
+			<section class="mb-6 border rounded-lg p-4">
+				<h3 class="font-medium mb-1">{m.page_profile_notif_defaults_heading()}</h3>
+				<p class="text-xs text-neutral-500 mb-3">{m.page_profile_notif_defaults_help()}</p>
+				{#if groupNotifDefaultsMessage}
+					<p class="text-sm mb-2 {groupNotifDefaultsError ? 'text-red-600' : 'text-green-600'}">{groupNotifDefaultsMessage}</p>
+				{/if}
+
+				<!-- Default Gruppkanal composition -->
+				<div class="mb-5">
+					<h4 class="text-sm font-medium text-neutral-700 mb-1">{m.page_profile_group_defaults_gruppkanal_heading()}</h4>
+					<p class="text-xs text-neutral-400 mb-2">{m.page_profile_group_defaults_gruppkanal_help()}</p>
+					{#each notifChannels as ch}
+						<label class="flex items-center gap-2 mb-1 cursor-pointer">
+							<input
+								type="checkbox"
+								checked={groupDefaultGruppkanalChannels.includes(ch)}
+								onchange={(e) => {
+									const updated = e.currentTarget.checked
+										? [...groupDefaultGruppkanalChannels, ch]
+										: groupDefaultGruppkanalChannels.filter(c => c !== ch);
+									saveGroupDefaults({ default_gruppkanal_channels: updated });
+								}}
+								class="h-4 w-4 accent-blue-700"
+							/>
+							<span class="text-sm text-neutral-700">
+								{ch === 'email' ? m.page_profile_teams_gruppkanal_channel_email() : m.page_profile_teams_gruppkanal_channel_gchat()}
+							</span>
+						</label>
+					{/each}
+				</div>
+
+				<!-- Per-event defaults table -->
+				<div class="mb-3">
+					<h4 class="text-sm font-medium text-neutral-700 mb-1">{m.page_profile_teams_notif_col_personal()}</h4>
+					<p class="text-xs text-neutral-400">{m.page_profile_teams_notif_per_event_desc_with_channel()}</p>
+				</div>
+				<div class="overflow-x-auto">
+				<table class="w-full text-sm border-collapse">
+					<thead>
+						<tr>
+							<th class="text-left py-1 pr-3 font-normal text-neutral-500 w-full"></th>
+							<th class="text-center py-1 px-2 font-normal text-neutral-500 whitespace-nowrap">{m.page_profile_teams_notif_col_personal()}</th>
+							<th class="text-center py-1 px-3 font-normal text-neutral-500 whitespace-nowrap">{m.page_profile_teams_notif_col_gruppkanal()}</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td colspan="3" class="py-1.5 text-xs font-semibold text-neutral-500 uppercase tracking-wide">{m.page_profile_notifs_bookings_group()}</td>
+						</tr>
+						{#each allBookingEvents.filter(r => !managerOnlyKeys.has(r.key)) as row}
+						{@const ep = groupNotifDefaults[row.key]}
+						{@const sysEp = groupSysDefaults[row.key]}
+						{@const policy = ep?.personal_email_policy ?? ''}
+						{@const grEnabled = ep?.gruppkanal}
+						<tr class="border-t border-neutral-100">
+							<td class="py-1.5 pr-3">{row.label()}</td>
+							<td class="py-1.5 px-2">
+								<div class="flex gap-1 justify-center">
+									{#each [['always', m.page_profile_teams_notif_personal_always()], ['if_no_broadcast', m.page_profile_group_defaults_notif_personal_prefer_broadcast()], ['never', m.page_profile_teams_notif_personal_never()]] as [val, label]}
+										<button
+											onclick={() => saveGroupDefaults({ defaults: { ...groupNotifDefaults, [row.key]: { ...(groupNotifDefaults[row.key] ?? {}), personal_email_policy: val as 'always' | 'if_no_broadcast' | 'never' } } })}
+											class="px-2 py-0.5 text-xs rounded border {(policy || sysEp?.personal_email_policy || 'if_no_broadcast') === val ? 'bg-blue-700 text-white border-blue-700' : 'bg-white text-neutral-600 border-neutral-300 hover:border-blue-400'}"
+										>{label}</button>
+									{/each}
+								</div>
+							</td>
+							<td class="py-1.5 px-3 text-center">
+								<input
+									type="checkbox"
+									checked={grEnabled ?? sysEp?.gruppkanal ?? true}
+									onchange={(e) => saveGroupDefaults({ defaults: { ...groupNotifDefaults, [row.key]: { ...(groupNotifDefaults[row.key] ?? {}), gruppkanal: e.currentTarget.checked } } })}
+									class="h-4 w-4 accent-blue-700"
+								/>
+							</td>
+						</tr>
+						{/each}
+						<tr>
+							<td colspan="3" class="pt-3 pb-1.5 text-xs font-semibold text-neutral-500 uppercase tracking-wide">{m.page_profile_notif_defaults_section_manager()}</td>
+						</tr>
+						{#each [...allBookingEvents.filter(r => managerOnlyKeys.has(r.key)), ...allIssueEvents] as row}
+						{@const ep = groupNotifDefaults[row.key]}
+						{@const sysEp = groupSysDefaults[row.key]}
+						{@const policy = ep?.personal_email_policy ?? ''}
+						{@const grEnabled = ep?.gruppkanal}
+						<tr class="border-t border-neutral-100">
+							<td class="py-1.5 pr-3">{row.label()}</td>
+							<td class="py-1.5 px-2">
+								<div class="flex gap-1 justify-center">
+									{#each [['always', m.page_profile_teams_notif_personal_always()], ['if_no_broadcast', m.page_profile_group_defaults_notif_personal_prefer_broadcast()], ['never', m.page_profile_teams_notif_personal_never()]] as [val, label]}
+										<button
+											onclick={() => saveGroupDefaults({ defaults: { ...groupNotifDefaults, [row.key]: { ...(groupNotifDefaults[row.key] ?? {}), personal_email_policy: val as 'always' | 'if_no_broadcast' | 'never' } } })}
+											class="px-2 py-0.5 text-xs rounded border {(policy || sysEp?.personal_email_policy || 'if_no_broadcast') === val ? 'bg-blue-700 text-white border-blue-700' : 'bg-white text-neutral-600 border-neutral-300 hover:border-blue-400'}"
+										>{label}</button>
+									{/each}
+								</div>
+							</td>
+							<td class="py-1.5 px-3 text-center">
+								<input
+									type="checkbox"
+									checked={grEnabled ?? sysEp?.gruppkanal ?? true}
+									onchange={(e) => saveGroupDefaults({ defaults: { ...groupNotifDefaults, [row.key]: { ...(groupNotifDefaults[row.key] ?? {}), gruppkanal: e.currentTarget.checked } } })}
+									class="h-4 w-4 accent-blue-700"
+								/>
+							</td>
+						</tr>
+						{/each}
+					</tbody>
+				</table>
+				</div>
+				<div class="mt-4 pt-3 border-t flex flex-wrap items-center gap-3">
+					<button
+						onclick={forceNotificationDefaults}
+						disabled={forceDefaultsRunning}
+						class="text-sm text-orange-700 border border-orange-200 bg-orange-50 rounded px-3 py-1.5 hover:bg-orange-100 disabled:opacity-50"
+					>{forceDefaultsRunning ? m.btn_saving() : m.page_profile_notif_force_defaults_btn()}</button>
+					<span class="text-xs text-neutral-400">{m.page_profile_notif_force_defaults_help()}</span>
+				</div>
+			</section>
 	{/if}
 </div>
 {/if}

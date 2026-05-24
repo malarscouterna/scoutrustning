@@ -218,6 +218,95 @@ func resizeLongestEdge(img *vips.ImageRef, maxEdge int) error {
 	return img.Resize(scale, vips.KernelLanczos3)
 }
 
+// LogoMaxWidth / LogoMaxHeight define the bounding box for the web WebP variant.
+// Height is the binding constraint for typical wide logos.
+const (
+	LogoMaxWidth  = 1600
+	LogoMaxHeight = 300
+	// Email PNG is sized for display at ~60px rendered height (2x retina).
+	LogoEmailMaxWidth  = 600
+	LogoEmailMaxHeight = 120
+)
+
+// LogoResult holds both variants produced from one govips decode pass.
+type LogoResult struct {
+	ID   string
+	WebP []byte // for web display (lossless WebP)
+	PNG  []byte // for email (universal client support)
+}
+
+// ProcessLogoImage decodes an uploaded logo, strips EXIF, and produces:
+//   - a lossless WebP sized to fit within LogoMaxWidth × LogoMaxHeight
+//   - a PNG sized to fit within LogoEmailMaxWidth × LogoEmailMaxHeight
+//
+// Both are derived from the same in-memory decoded image — no re-encoding chain.
+func ProcessLogoImage(r io.Reader) (*LogoResult, error) {
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return nil, fmt.Errorf("read input: %w", err)
+	}
+
+	img, err := vips.NewImageFromBuffer(data)
+	if err != nil {
+		return nil, fmt.Errorf("decode image: %w", err)
+	}
+	defer img.Close()
+
+	if err := img.AutoRotate(); err != nil {
+		return nil, fmt.Errorf("auto-rotate: %w", err)
+	}
+	img.RemoveMetadata()
+
+	id := uuid.New().String()
+
+	// Web variant: lossless WebP, fit within LogoMaxWidth × LogoMaxHeight
+	webImg, err := img.Copy()
+	if err != nil {
+		return nil, fmt.Errorf("copy for webp: %w", err)
+	}
+	defer webImg.Close()
+	if err := fitWithin(webImg, LogoMaxWidth, LogoMaxHeight); err != nil {
+		return nil, fmt.Errorf("resize webp: %w", err)
+	}
+	webpBytes, _, err := webImg.ExportWebp(&vips.WebpExportParams{Lossless: true})
+	if err != nil {
+		return nil, fmt.Errorf("encode webp: %w", err)
+	}
+
+	// Email variant: PNG, fit within LogoEmailMaxWidth × LogoEmailMaxHeight
+	emailImg, err := img.Copy()
+	if err != nil {
+		return nil, fmt.Errorf("copy for png: %w", err)
+	}
+	defer emailImg.Close()
+	if err := fitWithin(emailImg, LogoEmailMaxWidth, LogoEmailMaxHeight); err != nil {
+		return nil, fmt.Errorf("resize png: %w", err)
+	}
+	pngBytes, _, err := emailImg.ExportPng(&vips.PngExportParams{})
+	if err != nil {
+		return nil, fmt.Errorf("encode png: %w", err)
+	}
+
+	return &LogoResult{ID: id, WebP: webpBytes, PNG: pngBytes}, nil
+}
+
+// fitWithin resizes img to fit within maxW × maxH preserving aspect ratio.
+// Does nothing if the image already fits.
+func fitWithin(img *vips.ImageRef, maxW, maxH int) error {
+	w := img.Width()
+	h := img.Height()
+	if w <= maxW && h <= maxH {
+		return nil
+	}
+	scaleW := float64(maxW) / float64(w)
+	scaleH := float64(maxH) / float64(h)
+	scale := scaleW
+	if scaleH < scaleW {
+		scale = scaleH
+	}
+	return img.Resize(scale, vips.KernelLanczos3)
+}
+
 // ConvertToJPEG converts WebP bytes to JPEG for download/sharing.
 func ConvertToJPEG(webpData []byte) ([]byte, error) {
 	img, err := vips.NewImageFromBuffer(webpData)

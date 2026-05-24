@@ -21,7 +21,8 @@ Critical — these override all other rules.
 
 - Multi-tenancy is non-negotiable. Every new table gets `group_id`. Every new query filters on it. No shortcuts.
 - Before modifying a handler, read the existing handler file and the corresponding query file to understand current patterns.
-- After changing sqlc queries, regenerate with `sqlc generate`.
+- After changing sqlc queries, regenerate with `sqlc generate`. Do not edit generated files in `internal/db/` by hand.
+- After adding i18n keys to `sv.json`/`en.json`, run `pnpm run build` (from `web/`) to compile Paraglide. Do not edit generated files in `web/src/lib/paraglide/` by hand — they are overwritten on every build.
 - Modify files with a clear intent per modification. Don't make all changes at the same time, but also don't divide same file edits into too small chunks.
 - Try avoiding asking for permission more than needed. Structure your queries so that you need less follow up queries, if they need approval.
 
