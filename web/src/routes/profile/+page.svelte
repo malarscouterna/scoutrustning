@@ -620,9 +620,7 @@
 			gchatTeams = teams.map(t => ({
 				id: t.id,
 				name: t.name,
-				gchat_space_id: (typeof t.gchat_space_id === 'object' && t.gchat_space_id !== null)
-					? (t.gchat_space_id as any).String ?? ''
-					: (t.gchat_space_id ?? '')
+				gchat_space_id: t.gchat_space_id ?? ''
 			}));
 		} catch (e) { console.error('loadGchatTeams failed', e); }
 	}
@@ -1319,15 +1317,16 @@ async function linkGchatTeamSpace(teamId: string) {
 									{#if !memberGchatEditing}
 										<!-- Read-only view — immediate, no loading -->
 										{#if userTeamSettings.gchat_space_id}
-											{@const linkedSpace = memberGchatSpaces.find(s => s.name === userTeamSettings.gchat_space_id)}
-											{@const spaceRawId = (userTeamSettings.gchat_space_id ?? '').replace(/^spaces\//, '')}
+											{@const spaceId = userTeamSettings.gchat_space_id}
+											{@const linkedSpace = memberGchatSpaces.find(s => s.name === spaceId)}
+											{@const spaceRawId = spaceId.replace(/^spaces\//, '')}
 											{#if linkedSpace}
 												<a href="https://mail.google.com/mail/u/0/#chat/space/{spaceRawId}" target="_blank" rel="noopener noreferrer" class="text-sm font-medium text-blue-700 hover:underline">{linkedSpace.displayName}</a>
-												<p class="text-xs text-neutral-400">{userTeamSettings.gchat_space_id}</p>
+												<p class="text-xs text-neutral-400">{spaceId}</p>
 											{:else}
-												<p class="text-sm font-medium">{userTeamSettings.gchat_space_id}</p>
+												<p class="text-sm font-medium">{spaceId}</p>
 											{/if}
-											<button onclick={() => openMemberGchatEditor(userTeamSettings?.gchat_space_id ?? '')} class="text-xs text-blue-700 mt-1 hover:underline">{m.page_profile_gchat_change_space()}</button>
+											<button onclick={() => openMemberGchatEditor(spaceId)} class="text-xs text-blue-700 mt-1 hover:underline">{m.page_profile_gchat_change_space()}</button>
 										{:else}
 											<p class="text-sm text-neutral-500">{m.page_profile_teams_gchat_space_none()}</p>
 											<button onclick={() => openMemberGchatEditor()} class="text-xs text-blue-700 mt-1 hover:underline">{m.page_profile_gchat_link_btn()}</button>

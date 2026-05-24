@@ -46,6 +46,7 @@ export interface Team {
 	type: string;
 	access_level: string;
 	claim_mappings: { claim_scope: string; claim_id: string }[];
+	gchat_space_id?: string | null;
 }
 
 export interface PerEventPrefs {
