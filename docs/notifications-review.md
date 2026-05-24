@@ -99,13 +99,6 @@ The headline number (16k insertions) is inflated by several categories that need
 
 ## Remaining work (post-refactor)
 
-### Minor — `Update` handler in `group_settings.go` makes two separate DB writes without a transaction
-
-`UpsertGroupSettings` followed by `UpdateSmtpSettings`. If the second write fails, non-SMTP fields are already persisted. Requires either combining into one SQL query or wrapping in a `pgx.Tx`. The handler currently only holds `*db.Queries`; passing the pool through would enable transactions.
-
-### Minor — SMTP key is decrypted on every `GET /group-settings`
-
-`settingsToResponse` (`group_settings.go:434–437`) decrypts the full key on every admin GET solely to produce the masked display value. Store the masked value in the DB alongside the encrypted blob (computed once on write) to avoid a crypto round-trip on every read.
 
 ### Minor — profile page `+page.svelte` should be split into components
 
@@ -117,6 +110,16 @@ The headline number (16k insertions) is inflated by several categories that need
 ---
 
 ## Review findings (resolved)
+
+### Atomicity — `Update` handler in `group_settings.go` made two separate DB writes
+
+Added `Pool *pgxpool.Pool` to `GroupSettingsHandler`. `Update` now opens a `pgx.Tx`, runs `UpsertGroupSettings` and `UpdateSmtpSettings` inside it, and commits — so both writes either succeed or roll back together.
+
+### Performance — SMTP key was decrypted on every `GET /group-settings`
+
+Added migration `00012_smtp_key_masked.sql` (`smtp_key_masked TEXT NOT NULL DEFAULT ''`). The masked value is now computed once at write time (`crypto.MaskKey`) and stored alongside the encrypted blob. `settingsToResponse` reads directly from `s.SmtpKeyMasked` — no crypto on GET.
+
+---
 
 ### Duplication — `SendBookingConfirmed` and `SendBookingCancelled` are near-identical
 

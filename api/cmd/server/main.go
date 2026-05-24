@@ -106,7 +106,7 @@ func main() {
 
 		bookings := &handler.BookingHandler{Q: queries, Notifier: eventNotifier, GChatNotifier: eventGChatNotifier, BaseURL: appBaseURL}
 		teams := &handler.TeamHandler{Q: queries}
-		groupSettings := &handler.GroupSettingsHandler{Q: queries, Perms: permCache, DemoMode: demoMode}
+		groupSettings := &handler.GroupSettingsHandler{Q: queries, Pool: pool, Perms: permCache, DemoMode: demoMode}
 		issueHandler := &handler.IssueHandler{Q: queries, Perms: permCache, Notifier: eventNotifier, GChatNotifier: eventGChatNotifier, BaseURL: appBaseURL}
 		imageHandler := &images.Handler{Q: queries, ImageDir: imageDir}
 		userHandler := &handler.UserHandler{Q: queries, DemoMode: demoMode, PersonaIDs: personaIDs}

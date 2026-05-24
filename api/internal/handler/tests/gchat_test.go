@@ -36,6 +36,7 @@ func mountGChatRoutes(env *testutil.TestEnv, gs *handler.GroupSettingsHandler) {
 func newGChatHandler(env *testutil.TestEnv) *handler.GroupSettingsHandler {
 	return &handler.GroupSettingsHandler{
 		Q:     env.Queries,
+		Pool:  env.Pool,
 		Perms: handler.NewPermissionCache(env.Queries),
 		ListSpacesFn: func(_ context.Context, _ []byte, _ string) ([]notifications.GChatSpace, error) {
 			// Return fresh copies so the handler's BotIsMember mutations don't persist.
