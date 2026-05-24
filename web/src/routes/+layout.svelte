@@ -29,12 +29,17 @@
 	</a>
 {/if}
 
-{#if !data.user && data.oidcName}
+{#if !data.user && (data.oidcName || data.dev)}
 	<div class="flex flex-col items-center justify-center min-h-screen px-4 bg-white text-neutral-900">
 		<img src="/PNG Utrustningsgruppen - Logotyp.png" alt="Utrustningsgruppen" class="w-48 mb-6" />
-		<h1 class="text-xl font-bold mb-2">Hej {data.oidcName}!</h1>
+		{#if data.oidcName}
+			<h1 class="text-xl font-bold mb-2">Hej {data.oidcName}!</h1>
+		{/if}
 		{#if data.demo}
 			<p class="text-sm text-neutral-600 mb-4 max-w-sm text-center">Din scoutkår är inte konfigurerad i den här demomiljön. Använd persona-väljaren nedan för att testa systemet.</p>
+			{#if data.dev}
+				<DevPersonaSwitcher personas={data.dev.personas} currentPersona={data.dev.currentPersona} user={null} />
+			{/if}
 		{:else}
 			<p class="text-sm text-neutral-600 mb-4 max-w-sm text-center">Din scoutkår är inte konfigurerad för det här systemet. Kontakta din utrustningsansvarige om du tror att det är fel.</p>
 		{/if}
@@ -66,7 +71,7 @@
 {/if}
 
 <div>
-	{#if !data.oidcName || data.user}
+	{#if data.user || (!data.oidcName && !data.dev)}
 		{@render children()}
 	{/if}
 </div>

@@ -6,6 +6,8 @@ export const load: PageServerLoad = async ({ fetch, parent }) => {
 	const api = createApiClient({ fetch });
 	const { user } = await parent();
 
+	if (!user) return { bookings: [], myIssues: [], managerIssues: [], pendingApprovals: [] };
+
 	const [bookings, myIssues] = await Promise.all([
 		api.listBookings(),
 		api.listIssues({ mine: true, status: 'open,in_progress' })

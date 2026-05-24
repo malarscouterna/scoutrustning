@@ -87,16 +87,14 @@ export const load: LayoutServerLoad = async ({ cookies, locals, url, fetch: skFe
 				setLangCookie(cookies, user.language);
 				return { user, dev: { personas, currentPersona: null }, demo: DEMO_MODE, oidcName: null };
 			}
-			// Logged in via OIDC but group not found — show friendly message
+			// Logged in via OIDC but group not found — show friendly message + persona switcher in demo
 			const oidcName = extractNameFromToken(session.accessToken);
-			if (oidcName) {
-				if (url.pathname !== '/') throw redirect(302, '/');
-				return { user: null, dev: { personas, currentPersona: null }, demo: DEMO_MODE, oidcName };
-			}
+			if (url.pathname !== '/') throw redirect(302, '/');
+			return { user: null, dev: DEV_MODE ? { personas, currentPersona: null } : null, demo: DEMO_MODE, oidcName };
 		}
 
 		if (DEMO_MODE) {
-			return { user: null, dev: { personas, currentPersona: null }, demo: true, oidcName: null };
+			return { user: null, dev: null, demo: true, oidcName: null };
 		}
 
 		// Dev fallback to default persona — set cookie so hooks proxy sends it
