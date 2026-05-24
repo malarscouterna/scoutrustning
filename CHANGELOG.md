@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.9.2](https://github.com/malarscouterna/scoutrustning/compare/v0.9.1...v0.9.2) (2026-05-24)
+
+
+### Bug Fixes
+
+* support alternate domains without CSRF errors, fix gen-env bare rerun ([1fdc53c](https://github.com/malarscouterna/scoutrustning/commit/1fdc53c8df6b5cc8066bbc70eb975fb3b75edbd4))
+
+
+### Miscellaneous
+
+* overhaul gen-env.sh value preservation and mode-switch guard ([27d8a1d](https://github.com/malarscouterna/scoutrustning/commit/27d8a1d94cb97be9d8292002a71a43c4c35e9fc8))
+
+
+### Documentation
+
+* **web:** enrich login page with description, links, and open /guide publicly ([92d9429](https://github.com/malarscouterna/scoutrustning/commit/92d94299a799e51a61b161f335b529bedaf6b727))
+
 ## [0.9.1](https://github.com/malarscouterna/scoutrustning/compare/v0.9.0...v0.9.1) (2026-05-24)
 
 
