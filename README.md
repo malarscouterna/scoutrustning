@@ -151,6 +151,20 @@ docker compose exec api /bin/server init-group \
 
 Updates: `docker compose pull && docker compose up -d`. Migrations run automatically on startup.
 
+### Multiple domains
+
+The service can be reached on multiple domains simultaneously (e.g. `utrustning.malarscouterna.se` and `scoutrustning.se` pointing to the same instance). The reverse proxy should rewrite the `Origin` header to the canonical domain before forwarding to SvelteKit, so that `ORIGIN` in `.env` stays a single value and CSRF protection works correctly regardless of which domain the user hit.
+
+```caddyfile
+utrustning.example.com, scoutrustning.se {
+    reverse_proxy localhost:3000 {
+        header_up Origin "https://utrustning.malarscouterna.se"
+    }
+}
+```
+
+Set `ORIGIN=https://utrustning.malarscouterna.se` in `.env`. Caddy handles TLS for both domains automatically.
+
 For full deployment details, security model, and reverse proxy setup see the [Deployment section in the old README](docs/SPEC.md) or `docker-compose.yml` and `gen-env.sh`.
 
 ## License

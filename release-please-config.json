@@ -3,6 +3,18 @@
   "bump-minor-pre-major": true,
   "initial-version": "0.1.0",
   "packages": {
-    ".": {}
+    ".": {
+      "changelog-sections": [
+        {"type": "feat", "section": "Features"},
+        {"type": "fix", "section": "Bug Fixes"},
+        {"type": "perf", "section": "Performance"},
+        {"type": "refactor", "section": "Refactoring"},
+        {"type": "build", "section": "Build"},
+        {"type": "chore", "section": "Miscellaneous"},
+        {"type": "docs", "section": "Documentation"},
+        {"type": "test", "section": "Tests", "hidden": true},
+        {"type": "ci", "section": "CI", "hidden": true}
+      ]
+    }
   }
 }
