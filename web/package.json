@@ -16,8 +16,8 @@
     "@inlang/paraglide-sveltekit": "^0.16.1",
     "@scouterna/design-tokens": "^0.0.6",
     "@scouterna/tailwind-theme": "^0.0.5",
-    "@scouterna/ui-webc": "^3.2.0",
-    "marked": "^17.0.6",
+    "@scouterna/ui-webc": "^4.3.5",
+    "marked": "^18.0.4",
     "photoswipe": "^5.4.4",
     "svelte-easy-crop": "^5.0.1"
   },
