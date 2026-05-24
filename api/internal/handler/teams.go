@@ -17,7 +17,8 @@ import (
 )
 
 type TeamHandler struct {
-	Q *db.Queries
+	Q        *db.Queries
+	DemoMode bool
 	// AddBotFn is called to add the service account bot to a GChat space.
 	// Defaults to notifications.AddBotToSpace when nil.
 	AddBotFn func(ctx context.Context, saJSON []byte, adminEmail, spaceID, teamName string) error
@@ -277,6 +278,10 @@ func (h *TeamHandler) GetNotificationSettings(w http.ResponseWriter, r *http.Req
 
 // PUT /teams/{id}/notification-settings — accessible to team members and managers.
 func (h *TeamHandler) UpdateNotificationSettings(w http.ResponseWriter, r *http.Request) {
+	if h.DemoMode {
+		WriteError(w, http.StatusForbidden, "not_allowed_in_demo")
+		return
+	}
 	claims, _ := auth.ClaimsFromContext(r.Context())
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
@@ -365,6 +370,10 @@ func (h *TeamHandler) UpdateNotificationSettings(w http.ResponseWriter, r *http.
 // Accessible to team members and managers. Auto-add requires the stored admin account to be
 // a member of the space; if not, the caller gets a clear error with manual-add instructions.
 func (h *TeamHandler) SetGChatSpace(w http.ResponseWriter, r *http.Request) {
+	if h.DemoMode {
+		WriteError(w, http.StatusForbidden, "not_allowed_in_demo")
+		return
+	}
 	claims, _ := auth.ClaimsFromContext(r.Context())
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
