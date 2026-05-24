@@ -181,4 +181,21 @@ All contributions must include a [Developer Certificate of Origin](DCO) sign-off
 git commit -s -m "feat: add new feature"
 ```
 
-PRs with unsigned commits will not be accepted. AI-assisted contributions are welcome; you are responsible for what you submit.
+PRs with unsigned commits will not be accepted. AI-assisted contributions are welcome; you are responsible for reviewing and understanding what you submit — do not merge AI-generated code you cannot explain.
+
+### AI assistant setup
+
+Rules live in `.ai/` as the single source of truth. After cloning, wire up your agent of choice. Edit only the files in `.ai/` — then re-run the relevant command to update the agent config. `CLAUDE.md`, `.amazonq/rules/`, and `.github/copilot-instructions.md` are gitignored.
+
+```bash
+# Claude
+cat .ai/project-context.md .ai/workflow.md .ai/coding-conventions.md > CLAUDE.md
+
+# Amazon Q
+ln -sf ../../.ai/project-context.md .amazonq/rules/project-context.md
+ln -sf ../../.ai/workflow.md .amazonq/rules/workflow.md
+ln -sf ../../.ai/coding-conventions.md .amazonq/rules/coding-conventions.md
+
+# GitHub Copilot
+cat .ai/project-context.md .ai/workflow.md .ai/coding-conventions.md > .github/copilot-instructions.md
+```

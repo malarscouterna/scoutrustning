@@ -25,6 +25,10 @@ web/.pnpm-store
 docs/*.xlsx
 docs/*.xlsx - *.csv
 
+# AI rules — source of truth is .ai/, generated/symlinked files are ignored
+CLAUDE.md
+.amazonq/rules/
+
 # IDE
 .idea/
 .vscode/
