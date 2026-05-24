@@ -385,7 +385,7 @@
   "page_profile_notif_defaults_help": "Standardvärden för grupputskick när ett lag saknar egna kanalinställningar.",
   "page_profile_notif_defaults_section_manager": "Ansvariga / rollgrupper",
   "page_profile_webhook_url": "Google Chat webhook-URL",
-  "page_login_title": "ms-utrustning",
+  "page_login_title": "scoutrustning",
   "page_login_subtitle": "Utrustningsbokning för Mälarscouterna",
   "page_login_demo_heading": "Demo",
   "page_login_demo_desc": "Logga in med ditt ScoutID för att testa. Du kan byta roll med persona-väljaren efter inloggning.",

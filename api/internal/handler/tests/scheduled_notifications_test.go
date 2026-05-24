@@ -7,8 +7,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/malarscouterna/ms-utrustning/api/internal/notifications"
-	"github.com/malarscouterna/ms-utrustning/api/internal/testutil"
+	"github.com/malarscouterna/scoutrustning/api/internal/notifications"
+	"github.com/malarscouterna/scoutrustning/api/internal/testutil"
 )
 
 // seedSchedulerUsers inserts users with the team_ids and notification_prefs

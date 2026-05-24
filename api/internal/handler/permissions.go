@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/malarscouterna/ms-utrustning/api/internal/auth"
-	"github.com/malarscouterna/ms-utrustning/api/internal/db"
+	"github.com/malarscouterna/scoutrustning/api/internal/auth"
+	"github.com/malarscouterna/scoutrustning/api/internal/db"
 )
 
 // Permissions holds the configurable permission levels for a group.

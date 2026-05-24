@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/malarscouterna/ms-utrustning/api/internal/testutil"
+	"github.com/malarscouterna/scoutrustning/api/internal/testutil"
 )
 
 func TestMain(m *testing.M) {

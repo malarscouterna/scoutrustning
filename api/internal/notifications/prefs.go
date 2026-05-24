@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/malarscouterna/ms-utrustning/api/internal/db"
+	"github.com/malarscouterna/scoutrustning/api/internal/db"
 )
 
 // EventKey identifies a notification event type.

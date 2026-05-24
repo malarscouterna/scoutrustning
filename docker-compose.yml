@@ -14,7 +14,7 @@ services:
       retries: 5
 
   api:
-    image: ${API_IMAGE:-ms-utrustning-api}
+    image: ${API_IMAGE:-scoutrustning-api}
     build:
       context: ./api
       target: ${BUILD_TARGET:-production}
@@ -43,7 +43,7 @@ services:
         condition: service_healthy
 
   web:
-    image: ${WEB_IMAGE:-ms-utrustning-web}
+    image: ${WEB_IMAGE:-scoutrustning-web}
     build:
       context: .
       dockerfile: web/Dockerfile

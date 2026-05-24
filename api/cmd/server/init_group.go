@@ -14,7 +14,7 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 
-	"github.com/malarscouterna/ms-utrustning/api/internal/db"
+	"github.com/malarscouterna/scoutrustning/api/internal/db"
 )
 
 func runInitGroup(args []string) {

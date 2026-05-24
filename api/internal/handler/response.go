@@ -8,8 +8,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/malarscouterna/ms-utrustning/api/internal/auth"
-	"github.com/malarscouterna/ms-utrustning/api/internal/db"
+	"github.com/malarscouterna/scoutrustning/api/internal/auth"
+	"github.com/malarscouterna/scoutrustning/api/internal/db"
 )
 
 func WriteJSON(w http.ResponseWriter, status int, v any) {

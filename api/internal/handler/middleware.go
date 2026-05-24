@@ -8,8 +8,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/malarscouterna/ms-utrustning/api/internal/auth"
-	"github.com/malarscouterna/ms-utrustning/api/internal/db"
+	"github.com/malarscouterna/scoutrustning/api/internal/auth"
+	"github.com/malarscouterna/scoutrustning/api/internal/db"
 )
 
 func UpsertUserMiddleware(queries *db.Queries) func(http.Handler) http.Handler {

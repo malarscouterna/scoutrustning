@@ -24,9 +24,9 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 
-	"github.com/malarscouterna/ms-utrustning/api/internal/auth"
-	"github.com/malarscouterna/ms-utrustning/api/internal/db"
-	"github.com/malarscouterna/ms-utrustning/api/internal/handler"
+	"github.com/malarscouterna/scoutrustning/api/internal/auth"
+	"github.com/malarscouterna/scoutrustning/api/internal/db"
+	"github.com/malarscouterna/scoutrustning/api/internal/handler"
 )
 
 // shared holds the single Postgres container reused across all tests.

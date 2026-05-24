@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/malarscouterna/ms-utrustning/api/internal/auth"
-	"github.com/malarscouterna/ms-utrustning/api/internal/db"
+	"github.com/malarscouterna/scoutrustning/api/internal/auth"
+	"github.com/malarscouterna/scoutrustning/api/internal/db"
 )
 
 // DBTeamResolver implements auth.TeamResolver using database queries.

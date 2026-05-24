@@ -9,8 +9,8 @@ import (
 
 	"github.com/wneessen/go-mail"
 
-	"github.com/malarscouterna/ms-utrustning/api/internal/crypto"
-	"github.com/malarscouterna/ms-utrustning/api/internal/db"
+	"github.com/malarscouterna/scoutrustning/api/internal/crypto"
+	"github.com/malarscouterna/scoutrustning/api/internal/db"
 )
 
 // smtpConfig holds resolved SMTP settings for a single send.

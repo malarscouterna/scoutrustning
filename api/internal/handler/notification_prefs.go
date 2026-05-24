@@ -6,9 +6,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/malarscouterna/ms-utrustning/api/internal/auth"
-	"github.com/malarscouterna/ms-utrustning/api/internal/db"
-	"github.com/malarscouterna/ms-utrustning/api/internal/notifications"
+	"github.com/malarscouterna/scoutrustning/api/internal/auth"
+	"github.com/malarscouterna/scoutrustning/api/internal/db"
+	"github.com/malarscouterna/scoutrustning/api/internal/notifications"
 )
 
 type NotificationPrefsHandler struct {

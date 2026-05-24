@@ -7,9 +7,9 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/malarscouterna/ms-utrustning/api/internal/db"
-	"github.com/malarscouterna/ms-utrustning/api/internal/notifications"
-	"github.com/malarscouterna/ms-utrustning/api/internal/testutil"
+	"github.com/malarscouterna/scoutrustning/api/internal/db"
+	"github.com/malarscouterna/scoutrustning/api/internal/notifications"
+	"github.com/malarscouterna/scoutrustning/api/internal/testutil"
 )
 
 // dispatchEnv holds the minimal entities needed to exercise notification dispatch.

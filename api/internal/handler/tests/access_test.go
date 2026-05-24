@@ -9,9 +9,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/malarscouterna/ms-utrustning/api/internal/auth"
-	"github.com/malarscouterna/ms-utrustning/api/internal/handler"
-	"github.com/malarscouterna/ms-utrustning/api/internal/testutil"
+	"github.com/malarscouterna/scoutrustning/api/internal/auth"
+	"github.com/malarscouterna/scoutrustning/api/internal/handler"
+	"github.com/malarscouterna/scoutrustning/api/internal/testutil"
 )
 
 func mountAll(env *testutil.TestEnv) {

@@ -7,8 +7,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/malarscouterna/ms-utrustning/api/internal/db"
-	"github.com/malarscouterna/ms-utrustning/api/internal/i18n"
+	"github.com/malarscouterna/scoutrustning/api/internal/db"
+	"github.com/malarscouterna/scoutrustning/api/internal/i18n"
 )
 
 // recipient is a minimal view of a user needed to send a notification.

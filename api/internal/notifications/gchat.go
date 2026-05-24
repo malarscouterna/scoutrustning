@@ -16,8 +16,8 @@ import (
 
 	jwt "github.com/golang-jwt/jwt/v5"
 
-	"github.com/malarscouterna/ms-utrustning/api/internal/crypto"
-	"github.com/malarscouterna/ms-utrustning/api/internal/db"
+	"github.com/malarscouterna/scoutrustning/api/internal/crypto"
+	"github.com/malarscouterna/scoutrustning/api/internal/db"
 )
 
 // GChatNotifier sends broadcast card messages to Google Chat Spaces via the REST API.

@@ -10,9 +10,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/malarscouterna/ms-utrustning/api/internal/handler"
-	"github.com/malarscouterna/ms-utrustning/api/internal/notifications"
-	"github.com/malarscouterna/ms-utrustning/api/internal/testutil"
+	"github.com/malarscouterna/scoutrustning/api/internal/handler"
+	"github.com/malarscouterna/scoutrustning/api/internal/notifications"
+	"github.com/malarscouterna/scoutrustning/api/internal/testutil"
 )
 
 // stubSpaces is returned by the fake ListSpacesFn.

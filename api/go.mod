@@ -1,4 +1,4 @@
-module github.com/malarscouterna/ms-utrustning/api
+module github.com/malarscouterna/scoutrustning/api
 
 go 1.26
 

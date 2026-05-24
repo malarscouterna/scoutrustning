@@ -385,7 +385,7 @@
   "page_profile_notif_defaults_help": "Broadcast defaults used when a team has no explicit channel settings.",
   "page_profile_notif_defaults_section_manager": "Managers / role teams",
   "page_profile_webhook_url": "Google Chat webhook URL",
-  "page_login_title": "ms-utrustning",
+  "page_login_title": "scoutrustning",
   "page_login_subtitle": "Equipment booking for Mälarscouterna",
   "page_login_demo_heading": "Demo",
   "page_login_demo_desc": "Log in with your ScoutID to try it out. You can switch role using the persona switcher after login.",

@@ -10,8 +10,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/malarscouterna/ms-utrustning/api/internal/handler"
-	"github.com/malarscouterna/ms-utrustning/api/internal/testutil"
+	"github.com/malarscouterna/scoutrustning/api/internal/handler"
+	"github.com/malarscouterna/scoutrustning/api/internal/testutil"
 )
 
 // setupPickupEnv creates a confirmed booking with 2 Sibley tents ready for pickup.

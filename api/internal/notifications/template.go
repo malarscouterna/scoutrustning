@@ -10,8 +10,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/malarscouterna/ms-utrustning/api/internal/db"
-	"github.com/malarscouterna/ms-utrustning/api/internal/i18n"
+	"github.com/malarscouterna/scoutrustning/api/internal/db"
+	"github.com/malarscouterna/scoutrustning/api/internal/i18n"
 )
 
 //go:embed templates/booking.html
