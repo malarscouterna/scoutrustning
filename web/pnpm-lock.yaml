@@ -21,8 +21,8 @@ importers:
         specifier: ^0.0.4
         version: 0.0.4
       '@scouterna/ui-webc':
-        specifier: ^3.2.0
-        version: 3.2.0(@stencil/core@4.43.3)(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+        specifier: ^4.3.5
+        version: 4.3.5(@stencil/core@4.43.3)(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       marked:
         specifier: ^17.0.6
         version: 17.0.6
@@ -856,11 +856,14 @@ packages:
   '@scouterna/design-tokens@0.0.5':
     resolution: {integrity: sha512-gZ72hGch5tBi+yItQ52S8uDimQ/m8LvSe42tLyfE9tdHUYYCRrQ60vnYS4y2K1Yymxy7K6SDKHBu/pPDLxahAw==}
 
+  '@scouterna/design-tokens@0.0.6':
+    resolution: {integrity: sha512-wgqjEkTiSv+mfnpYBHkIpArRuZotZMJles+F4vhgBxsFO3p6t++jbIrp7IHh4BzsF9Du4HdTnzmqlFsCirSXag==}
+
   '@scouterna/tailwind-theme@0.0.4':
     resolution: {integrity: sha512-RIDYKRWYxDfmwEoIEbGc1zyIaanjCdw9ehrJEfahZjqyBtHq5nWTyrPMiTBBO1lh4z7c53Ymwr2rYAUOrf5AXQ==}
 
-  '@scouterna/ui-webc@3.2.0':
-    resolution: {integrity: sha512-d413xeShkaLAKBNMPQSjHuJt0tXknVx9LU+oN150GzbXLyc8ybIPhOIdhYE3w+u7Nwu3Oiglr0e0L1PsQDIrZQ==}
+  '@scouterna/ui-webc@4.3.5':
+    resolution: {integrity: sha512-oxAtlU7h870A2o6R1mJ3EJEbTfvmYMZnqdNwlEoc3wpr1cLlM2wwdjLLTmG7xz4f2Nir4QcS8cXTnf+oH/5ogQ==}
 
   '@sinclair/typebox@0.31.28':
     resolution: {integrity: sha512-/s55Jujywdw/Jpan+vsy6JZs1z2ZTGxTmbZTPiuSL2wz9mfzA2gN1zzaqmvfi4pq+uOt7Du85fkiwv5ymW84aQ==}
@@ -1401,6 +1404,9 @@ packages:
   devalue@5.8.1:
     resolution: {integrity: sha512-4CXDYRBGqN+57wVJkuXBYmpAVUSg3L6JAQa/DFqm238G73E1wuyc/JhGQJzN7vUf/CMphYau2zXbfWzDR5aTEw==}
 
+  dom-focus-lock@1.1.0:
+    resolution: {integrity: sha512-KDJb48vxT2XmyETTFUobMizW4uRA6Riyr8nwdcAApnhl8UsY5QkpCq8f+3EDQX8REyddLtUaj0Tsx9rMJiW+CQ==}
+
   dom-serializer@1.4.1:
     resolution: {integrity: sha512-VHwB3KfrcOOkelEG2ZOfxqLZdfkil8PtJi4P8N2MMXucZq2yLp75ClViUlOVwyoHEDjYU433Aq+5zWP61+RGag==}
 
@@ -1551,6 +1557,10 @@ packages:
   fill-range@7.1.1:
     resolution: {integrity: sha512-YsGpe3WHLK8ZYi4tWDg2Jy3ebRz2rXowDxnld4bkQB00cc/1Zw9AWnC0i9ztDJitivtQvaI9KaLyKrc+hBW0yg==}
     engines: {node: '>=8'}
+
+  focus-lock@0.11.6:
+    resolution: {integrity: sha512-KSuV3ur4gf2KqMNoZx3nXNVhqCkn42GuTYCX4tXPEwf0MjpFQmNMiN6m7dXaUXgIoivL6/65agoUMg4RLS0Vbg==}
+    engines: {node: '>=10'}
 
   follow-redirects@1.16.0:
     resolution: {integrity: sha512-y5rN/uOsadFT/JfYwhxRS5R7Qce+g3zG97+JrtFZlC9klX/W5hD7iiLzScI4nZqUS7DNUdhPgw4xI8W2LuXlUw==}
@@ -3563,17 +3573,22 @@ snapshots:
     dependencies:
       glob: 13.0.6
 
+  '@scouterna/design-tokens@0.0.6':
+    dependencies:
+      glob: 13.0.6
+
   '@scouterna/tailwind-theme@0.0.4':
     dependencies:
       '@scouterna/design-tokens': 0.0.5
 
-  '@scouterna/ui-webc@3.2.0(@stencil/core@4.43.3)(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
+  '@scouterna/ui-webc@4.3.5(@stencil/core@4.43.3)(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
     dependencies:
-      '@scouterna/design-tokens': 0.0.5
+      '@scouterna/design-tokens': 0.0.6
       '@stencil/react-output-target': 1.5.2(@stencil/core@4.43.3)(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@tabler/icons': 3.44.0
       class-variance-authority: 0.7.1
       clsx: 2.1.1
+      dom-focus-lock: 1.1.0
       iconoir: 7.11.0
     transitivePeerDependencies:
       - '@stencil/core'
@@ -4104,6 +4119,10 @@ snapshots:
 
   devalue@5.8.1: {}
 
+  dom-focus-lock@1.1.0:
+    dependencies:
+      focus-lock: 0.11.6
+
   dom-serializer@1.4.1:
     dependencies:
       domelementtype: 2.3.0
@@ -4270,6 +4289,10 @@ snapshots:
   fill-range@7.1.1:
     dependencies:
       to-regex-range: 5.0.1
+
+  focus-lock@0.11.6:
+    dependencies:
+      tslib: 2.8.1
 
   follow-redirects@1.16.0: {}
 
@@ -5702,8 +5725,7 @@ snapshots:
       '@ts-morph/common': 0.23.0
       code-block-writer: 13.0.3
 
-  tslib@2.8.1:
-    optional: true
+  tslib@2.8.1: {}
 
   tsx@4.22.3:
     dependencies:
