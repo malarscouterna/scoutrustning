@@ -14,8 +14,8 @@
   "dependencies": {
     "@auth/sveltekit": "^1.11.2",
     "@inlang/paraglide-sveltekit": "^0.16.1",
-    "@scouterna/design-tokens": "^0.0.5",
-    "@scouterna/tailwind-theme": "^0.0.4",
+    "@scouterna/design-tokens": "^0.0.6",
+    "@scouterna/tailwind-theme": "^0.0.5",
     "@scouterna/ui-webc": "^3.2.0",
     "marked": "^17.0.6",
     "photoswipe": "^5.4.4",
@@ -30,10 +30,10 @@
     "@types/node": "^25.9.1",
     "mjml": "^5.2.2",
     "svelte": "^5.55.9",
-    "svelte-check": "^3.8.6",
+    "svelte-check": "^4.4.8",
     "tailwindcss": "^4.3.0",
     "tsx": "^4.22.3",
-    "typescript": "^5.9.3",
+    "typescript": "^6.0.3",
     "vite": "^8.0.14"
   },
   "pnpm": {
