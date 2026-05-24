@@ -632,7 +632,8 @@
 
   "page_profile_teams_gruppkanal_heading": "Gemensam kanal",
   "page_profile_teams_gruppkanal_help": "Välj vilka kanaler som ingår i avdelningens gemensamma kanal. Ett samlat utskick skickas per händelse till valda kanaler.",
-  "page_profile_teams_gruppkanal_no_channels": "Inga gemensamma kanaler kopplade — kontakta en ansvarig.",
+  "page_profile_teams_gruppkanal_no_channels": "Inga gemensamma kanaler kopplade — lägg till e-post eller chat-rum under Integrationer nedan.",
+  "page_profile_teams_notif_email_edit_label": "Gemensam e-postadress för avdelningen",
   "page_profile_teams_gruppkanal_channel_email": "Grupp-e-post",
   "page_profile_teams_gruppkanal_channel_gchat": "Google Chat",
   "page_profile_teams_gruppkanal_inherited": "(standard)",

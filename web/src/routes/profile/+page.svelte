@@ -452,6 +452,8 @@
 		userTeamSettings = null;
 		userTeamSettingsError = '';
 		userTeamSettingsLoading = true;
+		memberEmailEditing = false;
+		memberEmailPending = '';
 		memberGchatEditing = false;
 		memberGchatPending = '';
 		memberGchatStatus = null;
@@ -500,6 +502,10 @@
 			userTeamNotifSaving = false;
 		}
 	}
+
+	let memberEmailEditing = $state(false);
+	let memberEmailPending = $state('');
+	let memberEmailSaving = $state(false);
 
 	let memberGchatSpaces = $state<import('$lib/api/client').GChatSpace[]>([]);
 	let memberGchatLoaded = $state(false);
@@ -1309,8 +1315,35 @@ async function linkGchatTeamSpace(teamId: string) {
 						{#if userTeamSettings}
 							<div class="text-sm text-neutral-600 space-y-2">
 								<div>
-									<span class="text-neutral-400">{m.page_profile_teams_notif_email_label()}:</span>
-									{userTeamSettings.notification_email || '–'}
+									<span class="text-neutral-400 block mb-1">{m.page_profile_teams_notif_email_edit_label()}:</span>
+									{#if memberEmailEditing}
+										<div class="flex gap-2 items-center">
+											<input
+												type="email"
+												bind:value={memberEmailPending}
+												placeholder="avdelning@example.com"
+												class="border rounded px-2 py-1 text-sm flex-1 max-w-xs"
+											/>
+											<button
+												onclick={async () => {
+													memberEmailSaving = true;
+													await saveUserTeamNotifSettings({ notification_email: memberEmailPending });
+													memberEmailEditing = false;
+													memberEmailSaving = false;
+												}}
+												disabled={memberEmailSaving}
+												class="text-sm bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50"
+											>{m.btn_save()}</button>
+											<button onclick={() => memberEmailEditing = false} class="text-xs text-neutral-500 hover:underline">{m.btn_cancel()}</button>
+										</div>
+									{:else}
+										<span>{userTeamSettings.notification_email || '–'}</span>
+										<button
+											onclick={() => { memberEmailPending = userTeamSettings?.notification_email ?? ''; memberEmailEditing = true; }}
+											disabled={data.demo}
+											class="text-xs text-blue-700 ml-2 hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
+										>{m.btn_edit()}</button>
+									{/if}
 								</div>
 								<div>
 									<span class="text-neutral-400 block mb-1">{m.page_profile_teams_gchat_space_label()}:</span>
@@ -1326,10 +1359,10 @@ async function linkGchatTeamSpace(teamId: string) {
 											{:else}
 												<p class="text-sm font-medium">{spaceId}</p>
 											{/if}
-											<button onclick={() => openMemberGchatEditor(spaceId)} class="text-xs text-blue-700 mt-1 hover:underline">{m.page_profile_gchat_change_space()}</button>
+											<button onclick={() => openMemberGchatEditor(spaceId)} disabled={data.demo} class="text-xs text-blue-700 mt-1 hover:underline disabled:opacity-40 disabled:cursor-not-allowed">{m.page_profile_gchat_change_space()}</button>
 										{:else}
 											<p class="text-sm text-neutral-500">{m.page_profile_teams_gchat_space_none()}</p>
-											<button onclick={() => openMemberGchatEditor()} class="text-xs text-blue-700 mt-1 hover:underline">{m.page_profile_gchat_link_btn()}</button>
+											<button onclick={() => openMemberGchatEditor()} disabled={data.demo} class="text-xs text-blue-700 mt-1 hover:underline disabled:opacity-40 disabled:cursor-not-allowed">{m.page_profile_gchat_link_btn()}</button>
 										{/if}
 									{:else}
 										<!-- Editor — loads spaces lazily -->

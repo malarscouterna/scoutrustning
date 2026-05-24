@@ -632,7 +632,8 @@
 
   "page_profile_teams_gruppkanal_heading": "Shared channel",
   "page_profile_teams_gruppkanal_help": "Choose which channels are included in the team's shared channel. One combined message is sent per event to the selected channels.",
-  "page_profile_teams_gruppkanal_no_channels": "No shared channels connected — contact a manager.",
+  "page_profile_teams_gruppkanal_no_channels": "No shared channels connected — add an email address or Google Chat room under Integrations below.",
+  "page_profile_teams_notif_email_edit_label": "Shared email address for the team",
   "page_profile_teams_gruppkanal_channel_email": "Group email",
   "page_profile_teams_gruppkanal_channel_gchat": "Google Chat",
   "page_profile_teams_gruppkanal_inherited": "(default)",
