@@ -96,7 +96,7 @@ export const load: LayoutServerLoad = async ({ cookies, locals, url, fetch: skFe
 		}
 
 		if (DEMO_MODE) {
-			return { user: null, dev: null, demo: true, oidcName: null };
+			return { user: null, dev: { personas, currentPersona: null }, demo: true, oidcName: null };
 		}
 
 		// Dev fallback to default persona — set cookie so hooks proxy sends it

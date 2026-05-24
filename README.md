@@ -146,7 +146,6 @@ docker compose exec api /bin/server init-group \
   --group-id YOUR_ORG_ID --group-name "Your Scout Group" \
   --manager-claim "group:YOUR_ORG_ID:material_responsible" \
   --team-name "Equipment Managers"
-./dev-seed.sh path/to/your-inventory.csv
 ```
 
 Updates: `docker compose pull && docker compose up -d`. Migrations run automatically on startup.
