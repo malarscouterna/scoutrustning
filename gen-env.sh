@@ -8,10 +8,11 @@
 #   ./gen-env.sh prod             # Production deployment
 #
 # Flags:
-#   --force   Overwrite existing .env (preserves user-edited values)
+#   --force   Required when switching modes. Same-mode reruns work without it.
 #   --local   Use local image names and localhost origin (for testing on dev machine)
 #
-# Writes to .env in the current directory.
+# Writes to .env in the current directory. On rerun, all user-edited values are
+# preserved. Only AUTH_SECRET is always regenerated (security).
 
 set -e
 
@@ -28,18 +29,21 @@ if [[ "$MODE" != "dev" && "$MODE" != "demo" && "$MODE" != "prod" ]]; then
   exit 1
 fi
 
-# Read values from existing .env before overwriting
-OLD_ORIGIN=""
-OLD_KEYCLOAK_SECRET=""
-OLD_PG_PASSWORD=""
+# Read all existing key=value pairs before overwriting
+declare -A OLD_VALUES
 if [[ -f .env ]]; then
-  OLD_ORIGIN=$(grep -E '^ORIGIN=' .env | cut -d= -f2- || true)
-  OLD_KEYCLOAK_SECRET=$(grep -E '^AUTH_KEYCLOAK_SECRET=' .env | cut -d= -f2- || true)
-  OLD_PG_PASSWORD=$(grep -E '^POSTGRES_PASSWORD=' .env | cut -d= -f2- || true)
+  while IFS='=' read -r key rest; do
+    [[ "$key" =~ ^[[:space:]]*# || -z "$key" ]] && continue
+    OLD_VALUES["$key"]="$rest"
+  done < .env
 fi
 
-if [[ -f .env && "$FORCE" != true ]]; then
-  echo ".env already exists. Use --force to overwrite."
+OLD_MODE="${OLD_VALUES[GEN_ENV_MODE]:-}"
+OLD_PG_PASSWORD="${OLD_VALUES[POSTGRES_PASSWORD]:-}"
+
+# Switching modes requires --force as an explicit acknowledgment
+if [[ -f .env && -n "$OLD_MODE" && "$OLD_MODE" != "$MODE" && "$FORCE" != true ]]; then
+  echo "Existing .env was generated for '$OLD_MODE'. Switching to '$MODE' requires --force."
   exit 1
 fi
 
@@ -51,7 +55,7 @@ random_password() {
   openssl rand -hex 16 2>/dev/null || head -c 16 /dev/urandom | xxd -p
 }
 
-# Mode-specific defaults
+# Mode-specific defaults (used only when no old value exists to restore)
 case "$MODE" in
   dev)
     DEV_MODE=true
@@ -76,8 +80,8 @@ case "$MODE" in
     AUTH_SECRET=$(random_secret)
     ORIGIN="CHANGEME_https://your-demo-domain.example.com"
     AUTH_KEYCLOAK_SECRET="CHANGEME_keycloak-client-secret"
-    POSTGRES_PASSWORD=$(random_password)
-    SETTINGS_ENCRYPTION_KEY=$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | xxd -p)
+    POSTGRES_PASSWORD="${OLD_PG_PASSWORD:-$(random_password)}"
+    SETTINGS_ENCRYPTION_KEY="${OLD_VALUES[SETTINGS_ENCRYPTION_KEY]:-$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | xxd -p)}"
     API_IMAGE="ghcr.io/malarscouterna/ms-utrustning-api:latest"
     WEB_IMAGE="ghcr.io/malarscouterna/ms-utrustning-web:latest"
     DEMO_URL=""
@@ -91,8 +95,8 @@ case "$MODE" in
     AUTH_SECRET=$(random_secret)
     ORIGIN="CHANGEME_https://your-domain.example.com"
     AUTH_KEYCLOAK_SECRET="CHANGEME_keycloak-client-secret"
-    POSTGRES_PASSWORD=$(random_password)
-    SETTINGS_ENCRYPTION_KEY=$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | xxd -p)
+    POSTGRES_PASSWORD="${OLD_PG_PASSWORD:-$(random_password)}"
+    SETTINGS_ENCRYPTION_KEY="${OLD_VALUES[SETTINGS_ENCRYPTION_KEY]:-$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | xxd -p)}"
     API_IMAGE="ghcr.io/malarscouterna/ms-utrustning-api:latest"
     WEB_IMAGE="ghcr.io/malarscouterna/ms-utrustning-web:latest"
     DEMO_URL="https://demo.scoutrustning.se"
@@ -108,15 +112,7 @@ if [[ "$LOCAL" == true && "$MODE" != "dev" ]]; then
   WEB_IMAGE="ms-utrustning-web"
 fi
 
-# Preserve user-edited values from old .env
-if [[ -n "$OLD_ORIGIN" && "$OLD_ORIGIN" != CHANGEME_* && "$LOCAL" != true ]]; then
-  ORIGIN="$OLD_ORIGIN"
-fi
-if [[ -n "$OLD_KEYCLOAK_SECRET" && "$OLD_KEYCLOAK_SECRET" != CHANGEME_* ]]; then
-  AUTH_KEYCLOAK_SECRET="$OLD_KEYCLOAK_SECRET"
-fi
-
-# Detect Postgres password change
+# Detect Postgres password change (before we might restore the old value)
 PG_CHANGED=false
 if [[ -n "$OLD_PG_PASSWORD" && "$OLD_PG_PASSWORD" != "$POSTGRES_PASSWORD" ]]; then
   PG_CHANGED=true
@@ -135,6 +131,7 @@ cat > .env << EOF
 # │ AUTH_SECRET  │ static    │ generated │ generated  │
 # │ PG password  │ static    │ generated │ generated  │
 # └──────────────┴───────────┴───────────┴────────────┘
+GEN_ENV_MODE=$MODE
 
 # ── Compose ───────────────────────────────────────────────
 COMPOSE_FILE=$COMPOSE_FILE
@@ -170,7 +167,6 @@ API_IMAGE=$API_IMAGE
 WEB_IMAGE=$WEB_IMAGE
 EOF
 
-# Append encryption key and SMTP config
 if [[ "$MODE" == "dev" ]]; then
   cat >> .env << EOF
 
@@ -216,6 +212,22 @@ SMTP_DEFAULT_KEY=CHANGEME_your-smtp-api-key
 APP_BASE_URL=CHANGEME_https://utrustning.yourscoutgroup.se
 EOF
 fi
+
+# Restore user-edited values from the old .env by patching the generated file.
+# Every non-empty, non-CHANGEME_ value is preserved. AUTH_SECRET is always
+# regenerated for security. --local skips ORIGIN and POSTGRES_PASSWORD since
+# those were intentionally forced to localhost values above.
+NEVER_RESTORE="AUTH_SECRET GEN_ENV_MODE"
+LOCAL_SKIP="ORIGIN POSTGRES_PASSWORD"
+
+for key in "${!OLD_VALUES[@]}"; do
+  old_val="${OLD_VALUES[$key]}"
+  [[ -z "$old_val" || "$old_val" == CHANGEME_* ]] && continue
+  [[ " $NEVER_RESTORE " == *" $key "* ]] && continue
+  [[ "$LOCAL" == true && " $LOCAL_SKIP " == *" $key "* ]] && continue
+  grep -qE "^${key}=" .env || continue
+  sed -i "s|^${key}=.*|${key}=${old_val}|" .env
+done
 
 echo "Generated .env for: $MODE$([ "$LOCAL" = true ] && echo " (local)")"
 
