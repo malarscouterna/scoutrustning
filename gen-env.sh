@@ -66,7 +66,6 @@ case "$MODE" in
     BUILD_TARGET=dev
     COMPOSE_FILE="docker-compose.yml:docker-compose.override.yml"
     AUTH_SECRET="dev-secret-not-for-production"
-    ORIGIN="http://localhost:3000"
     AUTH_KEYCLOAK_SECRET=""
     POSTGRES_PASSWORD="utrustning"
     SETTINGS_ENCRYPTION_KEY=$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | xxd -p)
@@ -81,7 +80,6 @@ case "$MODE" in
     BUILD_TARGET=production
     COMPOSE_FILE="docker-compose.yml"
     AUTH_SECRET=$(random_secret)
-    ORIGIN="CHANGEME_https://your-demo-domain.example.com"
     AUTH_KEYCLOAK_SECRET="CHANGEME_keycloak-client-secret"
     POSTGRES_PASSWORD="${OLD_PG_PASSWORD:-$(random_password)}"
     SETTINGS_ENCRYPTION_KEY="${OLD_VALUES[SETTINGS_ENCRYPTION_KEY]:-$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | xxd -p)}"
@@ -96,7 +94,6 @@ case "$MODE" in
     BUILD_TARGET=production
     COMPOSE_FILE="docker-compose.yml"
     AUTH_SECRET=$(random_secret)
-    ORIGIN="CHANGEME_https://your-domain.example.com"
     AUTH_KEYCLOAK_SECRET="CHANGEME_keycloak-client-secret"
     POSTGRES_PASSWORD="${OLD_PG_PASSWORD:-$(random_password)}"
     SETTINGS_ENCRYPTION_KEY="${OLD_VALUES[SETTINGS_ENCRYPTION_KEY]:-$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | xxd -p)}"
@@ -109,7 +106,6 @@ esac
 
 # --local: override for testing on dev machine
 if [[ "$LOCAL" == true && "$MODE" != "dev" ]]; then
-  ORIGIN="http://localhost:3000"
   POSTGRES_PASSWORD="utrustning"
   API_IMAGE="ms-utrustning-api"
   WEB_IMAGE="ms-utrustning-web"
@@ -154,10 +150,6 @@ API_PORT=8080
 WEB_PORT=3000
 
 # ── URLs ──────────────────────────────────────────────────
-ORIGIN=$ORIGIN
-# Comma-separated alternate origins that share this instance (e.g. https://scoutrustning.se).
-# Requests from these origins are rewritten to ORIGIN before SvelteKit's CSRF check.
-ALLOWED_ORIGINS=
 JWKS_URL=https://dev.id.scouterna.se/realms/scoutnet/protocol/openid-connect/certs
 DEMO_URL=$DEMO_URL
 PROD_URL=$PROD_URL
@@ -221,10 +213,10 @@ fi
 
 # Restore user-edited values from the old .env by patching the generated file.
 # Every non-empty, non-CHANGEME_ value is preserved. AUTH_SECRET is always
-# regenerated for security. --local skips ORIGIN and POSTGRES_PASSWORD since
-# those were intentionally forced to localhost values above.
+# regenerated for security. --local skips POSTGRES_PASSWORD since it was
+# intentionally forced to a localhost value above.
 NEVER_RESTORE="AUTH_SECRET GEN_ENV_MODE"
-LOCAL_SKIP="ORIGIN POSTGRES_PASSWORD"
+LOCAL_SKIP="POSTGRES_PASSWORD"
 
 for key in "${!OLD_VALUES[@]}"; do
   old_val="${OLD_VALUES[$key]}"
@@ -254,8 +246,3 @@ if grep -q "CHANGEME" .env; then
   echo "Replace CHANGEME_... with real values before starting."
 fi
 
-if [[ "$ORIGIN" == http://* && "$ORIGIN" != "http://localhost"* ]]; then
-  echo ""
-  echo "⚠  ORIGIN uses http:// — OIDC requires https:// in demo/production."
-  echo "   Current: $ORIGIN"
-fi

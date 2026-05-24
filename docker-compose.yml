@@ -51,7 +51,8 @@ services:
     ports:
       - "${WEB_PORT:-3000}:3000"
     environment:
-      ORIGIN: ${ORIGIN}
+      PROTOCOL_HEADER: X-Forwarded-Proto
+      HOST_HEADER: host
       API_URL: http://api:8080
       DEV_MODE: ${DEV_MODE}
       DEMO_MODE: ${DEMO_MODE:-false}

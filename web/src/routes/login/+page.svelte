@@ -40,8 +40,8 @@
 	<div class="border-t border-neutral-100 bg-neutral-50 px-4 py-10">
 		<div class="max-w-2xl mx-auto space-y-8">
 
-			<!-- Prod link (demo mode) or demo link (prod mode) — shown above description -->
-			{#if (data.dev || data.demo) && data.prodUrl}
+			<!-- Dev: both links. Demo: prod link only. Prod: demo link only. -->
+			{#if (data.demo || data.dev) && data.prodUrl}
 				<a
 					href={data.prodUrl}
 					class="flex items-center justify-between gap-4 border border-neutral-300 rounded-xl px-4 py-3 text-sm text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100 transition-colors"
@@ -50,7 +50,7 @@
 					<span class="text-neutral-400">→</span>
 				</a>
 			{/if}
-			{#if (data.dev || !data.demo) && data.demoUrl}
+			{#if (!data.demo || data.dev) && data.demoUrl}
 				<a
 					href={data.demoUrl}
 					class="flex items-center justify-between gap-4 border border-neutral-300 rounded-xl px-4 py-3 text-sm text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100 transition-colors"
