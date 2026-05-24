@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.2](https://github.com/malarscouterna/ms-utrustning/compare/v0.8.1...v0.8.2) (2026-05-24)
+
+
+### Bug Fixes
+
+* add structured API errors with i18n translations on the frontend ([e5ca6b8](https://github.com/malarscouterna/ms-utrustning/commit/e5ca6b85247b2898212105cc6e7738eee9b53853))
+
 ## [0.8.1](https://github.com/malarscouterna/ms-utrustning/compare/v0.8.0...v0.8.1) (2026-04-22)
 
 
