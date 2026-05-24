@@ -10,6 +10,7 @@ import (
 	"slices"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/malarscouterna/ms-utrustning/api/internal/auth"
 	"github.com/malarscouterna/ms-utrustning/api/internal/crypto"
@@ -19,6 +20,7 @@ import (
 
 type GroupSettingsHandler struct {
 	Q        *db.Queries
+	Pool     *pgxpool.Pool
 	Perms    *PermissionCache
 	DemoMode bool
 	// ListSpacesFn is called to validate a service account key and list spaces.
@@ -193,6 +195,7 @@ func (h *GroupSettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	// Handle SMTP key: nil = don't change, empty string = clear, non-empty = encrypt and store
 	var smtpKeyEncrypted []byte
+	var smtpKeyMasked string
 	if req.SmtpKey != nil {
 		if *req.SmtpKey != "" {
 			encrypted, err := crypto.Encrypt([]byte(*req.SmtpKey))
@@ -201,20 +204,41 @@ func (h *GroupSettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			smtpKeyEncrypted = encrypted
+			smtpKeyMasked = crypto.MaskKey(*req.SmtpKey)
 		}
-		// empty string = clear (smtpKeyEncrypted stays nil)
+		// empty string = clear (smtpKeyEncrypted and smtpKeyMasked stay zero values)
 	} else {
 		// nil = preserve existing
 		existing, err := h.Q.GetGroupSettings(r.Context(), claims.GroupID)
 		if err == nil {
 			smtpKeyEncrypted = existing.SmtpKeyEncrypted
+			smtpKeyMasked = existing.SmtpKeyMasked
 		}
 	}
 
-	if _, err := h.Q.UpsertGroupSettings(r.Context(), db.UpsertGroupSettingsParams{
+	smtpPort := req.SmtpPort
+	if smtpPort == 0 {
+		smtpPort = 587
+	}
+	smtpTls := req.SmtpTls
+	if smtpTls == "" {
+		smtpTls = "starttls"
+	}
+
+	tx, err := h.Pool.Begin(r.Context())
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to start transaction")
+		return
+	}
+	defer tx.Rollback(r.Context()) //nolint:errcheck
+
+	txQ := db.New(tx)
+
+	if _, err := txQ.UpsertGroupSettings(r.Context(), db.UpsertGroupSettingsParams{
 		GroupID:               claims.GroupID,
 		NotificationEmailFrom: req.NotificationEmailFrom,
 		SmtpKeyEncrypted:      smtpKeyEncrypted,
+		SmtpKeyMasked:         smtpKeyMasked,
 		DefaultApprovalLevel:  approvalLevel,
 		DefaultAccessUnknown:  defaultAccessUnknown,
 		DefaultAccessTroop:    defaultAccessTroop,
@@ -230,15 +254,7 @@ func (h *GroupSettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	smtpPort := req.SmtpPort
-	if smtpPort == 0 {
-		smtpPort = 587
-	}
-	smtpTls := req.SmtpTls
-	if smtpTls == "" {
-		smtpTls = "starttls"
-	}
-	settings, err := h.Q.UpdateSmtpSettings(r.Context(), db.UpdateSmtpSettingsParams{
+	settings, err := txQ.UpdateSmtpSettings(r.Context(), db.UpdateSmtpSettingsParams{
 		GroupID:               claims.GroupID,
 		NotificationEmailFrom: req.NotificationEmailFrom,
 		SmtpHost:              req.SmtpHost,
@@ -248,6 +264,11 @@ func (h *GroupSettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, "failed to save smtp settings")
+		return
+	}
+
+	if err := tx.Commit(r.Context()); err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to commit settings")
 		return
 	}
 
@@ -431,11 +452,6 @@ func settingsToResponse(s db.GroupSetting) groupSettingsResponse {
 	if s.LogoFileID.Valid {
 		resp.LogoURL = "/api/v0/public/groups/" + s.GroupID + "/logo"
 	}
-	if len(s.SmtpKeyEncrypted) > 0 {
-		decrypted, err := crypto.Decrypt(s.SmtpKeyEncrypted)
-		if err == nil {
-			resp.SmtpKeyMasked = crypto.MaskKey(string(decrypted))
-		}
-	}
+	resp.SmtpKeyMasked = s.SmtpKeyMasked
 	return resp
 }

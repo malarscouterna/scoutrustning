@@ -83,7 +83,7 @@ const createGroupSettingsDefaults = `-- name: CreateGroupSettingsDefaults :one
 INSERT INTO group_settings (group_id)
 VALUES ($1)
 ON CONFLICT (group_id) DO NOTHING
-RETURNING group_id, notification_email_from, smtp_key_encrypted, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults, logo_file_id, enabled_channels, gchat_service_account_json_encrypted, gchat_admin_email, default_gruppkanal_channels
+RETURNING group_id, notification_email_from, smtp_key_encrypted, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults, logo_file_id, enabled_channels, gchat_service_account_json_encrypted, gchat_admin_email, default_gruppkanal_channels, smtp_key_masked
 `
 
 func (q *Queries) CreateGroupSettingsDefaults(ctx context.Context, groupID string) (GroupSetting, error) {
@@ -115,6 +115,7 @@ func (q *Queries) CreateGroupSettingsDefaults(ctx context.Context, groupID strin
 		&i.GchatServiceAccountJsonEncrypted,
 		&i.GchatAdminEmail,
 		&i.DefaultGruppkanalChannels,
+		&i.SmtpKeyMasked,
 	)
 	return i, err
 }
@@ -165,7 +166,7 @@ func (q *Queries) GetGroupNotificationDefaults(ctx context.Context, groupID stri
 }
 
 const getGroupSettings = `-- name: GetGroupSettings :one
-SELECT group_id, notification_email_from, smtp_key_encrypted, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults, logo_file_id, enabled_channels, gchat_service_account_json_encrypted, gchat_admin_email, default_gruppkanal_channels FROM group_settings
+SELECT group_id, notification_email_from, smtp_key_encrypted, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults, logo_file_id, enabled_channels, gchat_service_account_json_encrypted, gchat_admin_email, default_gruppkanal_channels, smtp_key_masked FROM group_settings
 WHERE group_id = $1
 `
 
@@ -198,6 +199,7 @@ func (q *Queries) GetGroupSettings(ctx context.Context, groupID string) (GroupSe
 		&i.GchatServiceAccountJsonEncrypted,
 		&i.GchatAdminEmail,
 		&i.DefaultGruppkanalChannels,
+		&i.SmtpKeyMasked,
 	)
 	return i, err
 }
@@ -279,7 +281,7 @@ UPDATE group_settings SET
     smtp_user = $5,
     updated_at = now()
 WHERE group_id = $6
-RETURNING group_id, notification_email_from, smtp_key_encrypted, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults, logo_file_id, enabled_channels, gchat_service_account_json_encrypted, gchat_admin_email, default_gruppkanal_channels
+RETURNING group_id, notification_email_from, smtp_key_encrypted, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults, logo_file_id, enabled_channels, gchat_service_account_json_encrypted, gchat_admin_email, default_gruppkanal_channels, smtp_key_masked
 `
 
 type UpdateSmtpSettingsParams struct {
@@ -327,44 +329,47 @@ func (q *Queries) UpdateSmtpSettings(ctx context.Context, arg UpdateSmtpSettings
 		&i.GchatServiceAccountJsonEncrypted,
 		&i.GchatAdminEmail,
 		&i.DefaultGruppkanalChannels,
+		&i.SmtpKeyMasked,
 	)
 	return i, err
 }
 
 const upsertGroupSettings = `-- name: UpsertGroupSettings :one
 INSERT INTO group_settings (
-    group_id, notification_email_from, smtp_key_encrypted,
+    group_id, notification_email_from, smtp_key_encrypted, smtp_key_masked,
     default_approval_level, default_access_unknown, default_access_troop,
     default_access_role, image_upload_role, booking_role, article_edit_role,
     issue_resolve_role, manager_notes_role, default_language
 )
 VALUES (
-    $1, $2, $3,
-    $4, $5, $6,
-    $7, $8, $9, $10,
-    $11, $12, $13
+    $1, $2, $3, $4,
+    $5, $6, $7,
+    $8, $9, $10, $11,
+    $12, $13, $14
 )
 ON CONFLICT (group_id) DO UPDATE SET
     notification_email_from = $2,
     smtp_key_encrypted = $3,
-    default_approval_level = $4,
-    default_access_unknown = $5,
-    default_access_troop = $6,
-    default_access_role = $7,
-    image_upload_role = $8,
-    booking_role = $9,
-    article_edit_role = $10,
-    issue_resolve_role = $11,
-    manager_notes_role = $12,
-    default_language = $13,
+    smtp_key_masked = $4,
+    default_approval_level = $5,
+    default_access_unknown = $6,
+    default_access_troop = $7,
+    default_access_role = $8,
+    image_upload_role = $9,
+    booking_role = $10,
+    article_edit_role = $11,
+    issue_resolve_role = $12,
+    manager_notes_role = $13,
+    default_language = $14,
     updated_at = now()
-RETURNING group_id, notification_email_from, smtp_key_encrypted, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults, logo_file_id, enabled_channels, gchat_service_account_json_encrypted, gchat_admin_email, default_gruppkanal_channels
+RETURNING group_id, notification_email_from, smtp_key_encrypted, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults, logo_file_id, enabled_channels, gchat_service_account_json_encrypted, gchat_admin_email, default_gruppkanal_channels, smtp_key_masked
 `
 
 type UpsertGroupSettingsParams struct {
 	GroupID               string `json:"group_id"`
 	NotificationEmailFrom string `json:"notification_email_from"`
 	SmtpKeyEncrypted      []byte `json:"smtp_key_encrypted"`
+	SmtpKeyMasked         string `json:"smtp_key_masked"`
 	DefaultApprovalLevel  string `json:"default_approval_level"`
 	DefaultAccessUnknown  string `json:"default_access_unknown"`
 	DefaultAccessTroop    string `json:"default_access_troop"`
@@ -382,6 +387,7 @@ func (q *Queries) UpsertGroupSettings(ctx context.Context, arg UpsertGroupSettin
 		arg.GroupID,
 		arg.NotificationEmailFrom,
 		arg.SmtpKeyEncrypted,
+		arg.SmtpKeyMasked,
 		arg.DefaultApprovalLevel,
 		arg.DefaultAccessUnknown,
 		arg.DefaultAccessTroop,
@@ -420,6 +426,7 @@ func (q *Queries) UpsertGroupSettings(ctx context.Context, arg UpsertGroupSettin
 		&i.GchatServiceAccountJsonEncrypted,
 		&i.GchatAdminEmail,
 		&i.DefaultGruppkanalChannels,
+		&i.SmtpKeyMasked,
 	)
 	return i, err
 }

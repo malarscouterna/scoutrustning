@@ -4,6 +4,20 @@ A living log of completed work — what was built, when, and why. Major features
 
 When finishing a backlog item or spec milestone, log it here and remove it from the backlog / mark it done in the spec.
 
+## 2026-05-24
+
+### Notifications — post-review refactor (send.go + group_settings)
+
+Addressed all open items from the notifications code review (`docs/notifications-review.md`). See that doc for the full resolved list.
+
+**`send.go` duplication removed**: Extracted `sendBookingToTeam` (used by `SendBookingConfirmed` and `SendBookingCancelled`); replaced `issueBroadcastTexts` + `issueBroadcastEmail` (two independent `fetchIssueEmailData` calls) with a single `issueBroadcastData` returning `(msg, opener, detail)`; extracted `langOrDefault(pgtype.Text)` used by all three `from*Row` helpers.
+
+**`teamIDStr` → `formatUUID`**: Renamed across `prefs.go`, `send.go`, `scheduler.go` — the old name implied team IDs but the function was used on booking and issue UUIDs too.
+
+**`Update` handler atomicity**: `GroupSettingsHandler` now holds `Pool *pgxpool.Pool`. The `Update` method wraps `UpsertGroupSettings` + `UpdateSmtpSettings` in a single `pgx.Tx` — both writes commit or roll back together.
+
+**SMTP masked value stored at write time**: Migration `00012_smtp_key_masked.sql` adds `smtp_key_masked TEXT NOT NULL DEFAULT ''`. Computed once via `crypto.MaskKey` when the key is written; `settingsToResponse` reads from the column directly — no decrypt on every GET.
+
 Newest first.
 
 ---

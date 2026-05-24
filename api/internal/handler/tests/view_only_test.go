@@ -21,7 +21,7 @@ func TestAccess_ViewOnlyRestrictions(t *testing.T) {
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
 		r.Mount("/teams", (&handler.TeamHandler{Q: env.Queries}).Routes())
-		r.Mount("/group-settings", (&handler.GroupSettingsHandler{Q: env.Queries, Perms: perms}).Routes())
+		r.Mount("/group-settings", (&handler.GroupSettingsHandler{Q: env.Queries, Pool: env.Pool, Perms: perms}).Routes())
 		r.Mount("/issues", (&handler.IssueHandler{Q: env.Queries, Perms: perms}).Routes())
 	})
 
