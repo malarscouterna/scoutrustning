@@ -169,13 +169,13 @@ For full deployment details, security model, and reverse proxy setup see the [De
 
 ## License
 
-Copyright © 2025 Teo Elmfeldt (<teo.elmfeldt@malarscouterna.se>)
+Copyright 2025 Teo Elmfeldt
 
-Licensed under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).
+Licensed under the [MIT License](LICENSE).
 
 ## Contributing
 
-All contributions must include a [Developer Certificate of Origin](DCO) sign-off:
+All contributions must include a [Developer Certificate of Origin](DCO) sign-off to certify that you have the right to submit the code under the MIT license:
 
 ```bash
 git commit -s -m "feat: add new feature"
