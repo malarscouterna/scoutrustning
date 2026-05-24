@@ -29,7 +29,7 @@
     "@types/mjml": "^5.0.0",
     "@types/node": "^25.6.0",
     "mjml": "^5.1.0",
-    "svelte": "^5.55.1",
+    "svelte": "^5.55.7",
     "svelte-check": "^3.8.6",
     "tailwindcss": "^4.2.2",
     "tsx": "^4.21.0",
