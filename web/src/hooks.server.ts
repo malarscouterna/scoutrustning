@@ -9,6 +9,15 @@ const DEV_MODE = process.env.DEV_MODE === 'true';
 const DEMO_MODE = process.env.DEMO_MODE === 'true';
 const PERSONA_COOKIE = 'dev-persona';
 const DEFAULT_PERSONA = 'leader-yggdrasil';
+const CANONICAL_ORIGIN = process.env.ORIGIN || '';
+// Comma-separated list of alternate domains that should be treated as the
+// canonical origin. Used when multiple domains point to the same instance.
+const ALLOWED_ORIGINS = new Set(
+	(process.env.ALLOWED_ORIGINS || '')
+		.split(',')
+		.map((o) => o.trim())
+		.filter(Boolean)
+);
 
 function isPublicPath(pathname: string): boolean {
 	return pathname.startsWith('/auth/') || pathname === '/login' || pathname === '/guide';
@@ -36,6 +45,17 @@ async function getAccessToken(event: any): Promise<string | null> {
 }
 
 const appHandle: Handle = async ({ event, resolve }) => {
+	// Normalize Origin header for alternate domains so SvelteKit's CSRF check
+	// passes when multiple domains point to the same instance.
+	if (CANONICAL_ORIGIN && ALLOWED_ORIGINS.size > 0) {
+		const origin = event.request.headers.get('origin');
+		if (origin && ALLOWED_ORIGINS.has(origin)) {
+			const headers = new Headers(event.request.headers);
+			headers.set('origin', CANONICAL_ORIGIN);
+			event.request = new Request(event.request, { headers });
+		}
+	}
+
 	// Dev mode: POST /dev/persona — set or clear the active persona cookie
 	if (DEV_MODE && event.url.pathname === '/dev/persona' && event.request.method === 'POST') {
 		const { persona } = await event.request.json();

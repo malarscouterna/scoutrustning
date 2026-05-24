@@ -16,18 +16,12 @@
 
 set -e
 
-MODE="${1:-dev}"
 FORCE=false
 LOCAL=false
 for arg in "$@"; do
   [[ "$arg" == "--force" ]] && FORCE=true
   [[ "$arg" == "--local" ]] && LOCAL=true
 done
-
-if [[ "$MODE" != "dev" && "$MODE" != "demo" && "$MODE" != "prod" ]]; then
-  echo "Usage: $0 [dev|demo|prod] [--force] [--local]"
-  exit 1
-fi
 
 # Read all existing key=value pairs before overwriting
 declare -A OLD_VALUES
@@ -40,6 +34,15 @@ fi
 
 OLD_MODE="${OLD_VALUES[GEN_ENV_MODE]:-}"
 OLD_PG_PASSWORD="${OLD_VALUES[POSTGRES_PASSWORD]:-}"
+
+# Default to the existing mode so bare reruns always use the right mode.
+# An explicit argument overrides this.
+MODE="${1:-${OLD_MODE:-dev}}"
+
+if [[ "$MODE" != "dev" && "$MODE" != "demo" && "$MODE" != "prod" ]]; then
+  echo "Usage: $0 [dev|demo|prod] [--force] [--local]"
+  exit 1
+fi
 
 # Switching modes requires --force as an explicit acknowledgment
 if [[ -f .env && -n "$OLD_MODE" && "$OLD_MODE" != "$MODE" && "$FORCE" != true ]]; then
@@ -152,6 +155,9 @@ WEB_PORT=3000
 
 # ── URLs ──────────────────────────────────────────────────
 ORIGIN=$ORIGIN
+# Comma-separated alternate origins that share this instance (e.g. https://scoutrustning.se).
+# Requests from these origins are rewritten to ORIGIN before SvelteKit's CSRF check.
+ALLOWED_ORIGINS=
 JWKS_URL=https://dev.id.scouterna.se/realms/scoutnet/protocol/openid-connect/certs
 DEMO_URL=$DEMO_URL
 PROD_URL=$PROD_URL
@@ -225,6 +231,8 @@ for key in "${!OLD_VALUES[@]}"; do
   [[ -z "$old_val" || "$old_val" == CHANGEME_* ]] && continue
   [[ " $NEVER_RESTORE " == *" $key "* ]] && continue
   [[ "$LOCAL" == true && " $LOCAL_SKIP " == *" $key "* ]] && continue
+  # Never restore DEV_* vars into a non-dev .env
+  [[ "$MODE" != "dev" && "$key" == DEV_* ]] && continue
   grep -qE "^${key}=" .env || continue
   sed -i "s|^${key}=.*|${key}=${old_val}|" .env
 done
