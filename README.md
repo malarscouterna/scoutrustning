@@ -1,4 +1,4 @@
-# ms-utrustning
+# scoutrustning
 
 Equipment booking service for scout groups. Leaders book scouting gear (tents, stoves, knives, etc.), pick it up with a checklist, and return it. Equipment managers run the inventory, approve bookings, and handle issue reports.
 
@@ -30,9 +30,9 @@ Managers get a full inventory UI: create and edit articles, bulk-move items betw
 
 The system is built around the way Swedish scout organizations are structured. A few things reflect that context and would need work before the service is usable outside it:
 
-- **Authentication is ScoutID-only.** Login goes through Keycloak with a specific claim format used by Scoutnet (`group:766:material_responsible`, `troop:17443:vice_leader`). There is no local username/password option. Deploying for a non-Swedish organization would require either connecting to a compatible Keycloak/OIDC provider or adding an alternative auth path.
+- **Authentication is ScoutID-only.** Login goes through Keycloak with a specific claim format used by Scoutnet (`group:766:material_responsible`, `troop:17443:vice_leader`). There is no local username/password option. Deploying for a non-Swedish-scout organization would require either connecting to a compatible Keycloak/OIDC provider or adding an alternative auth path.
 - **UI components are from @scouterna/ui-webc.** The design system (`@scouterna/ui-webc`, `@scouterna/tailwind-theme`) is the Swedish scouting design system. The components work well but carry Scouternas visual identity. Swapping them out is possible but non-trivial.
-- **The UI is Swedish-first.** Swedish is the default language and all user-visible strings exist in Swedish. English is fully supported and can be set per user or per group, but the default experience is Swedish.
+- **The UI is Swedish-first.** Swedish is the default language and all user-visible strings exist in Swedish. English is fully supported and can be set per user or per group, but the default experience is Swedish. The interface may use terms that make sense only in a Swedish scout environment.
 
 The data model and multi-tenancy architecture are not tied to Sweden — multiple groups with different access configurations can run in the same deployment — but the auth and UI layers reflect the original context.
 

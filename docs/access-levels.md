@@ -113,7 +113,7 @@ The landing page shows which group the user is logged in as:
 
 ```
 [Logo]
-ms-utrustning
+scoutrustning
 Utrustningsbokning för {group_name}
 ```
 

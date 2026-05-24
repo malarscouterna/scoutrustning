@@ -1,6 +1,6 @@
 # Användarguide
 
-Välkommen till ms-utrustning, bokningssystemet för Mälarscouternas utrustning. Här kan du bläddra bland tält, kök, verktyg och annan utrustning, boka det du behöver, och hantera utlämning och återlämning.
+Välkommen till Scoutrustning, bokningssystemet där du bokar utrustning från din scoutkår. Utvecklat av och för Mälarscouterna, men byggt för scoutsverige. Här kan du bläddra bland tält, kök, verktyg och annan utrustning, boka det du behöver, och hantera utlämning och återlämning.
 
 ## Navigering
 

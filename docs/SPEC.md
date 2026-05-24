@@ -1,4 +1,4 @@
-# ms-utrustning - Equipment Booking Service
+# scoutrustning - Equipment Booking Service
 
 An equipment booking service for Mälarscouterna (and eventually other scout groups). Leaders book scouting equipment (tents, stoves, knives, etc.), pick it up with a checklist, and return it. Equipment managers maintain inventory and handle issue reports.
 
@@ -683,8 +683,8 @@ Releases are managed by [Release Please](https://github.com/googleapis/release-p
 
 ### Docker image tags
 
-- `ms-utrustning-api:v1.3.0` / `ms-utrustning-api:latest`
-- `ms-utrustning-web:v1.3.0` / `ms-utrustning-web:latest`
+- `scoutrustning-api:v1.3.0` / `scoutrustning-api:latest`
+- `scoutrustning-web:v1.3.0` / `scoutrustning-web:latest`
 
 ### Seed data
 
@@ -930,11 +930,11 @@ Swedish (`sv`) and English (`en`) are supported. Swedish is the default.
 
 ## Analytics
 
-Usage analytics are handled by a separate, decoupled service - not part of ms-utrustning itself. The plan is to run a self-hosted analytics tool (e.g. Umami or Plausible CE) as its own Docker Compose stack with its own database, shared across multiple sites (ms-utrustning + other web properties like the Joomla-based main website).
+Usage analytics are handled by a separate, decoupled service - not part of scoutrustning itself. The plan is to run a self-hosted analytics tool (e.g. Umami or Plausible CE) as its own Docker Compose stack with its own database, shared across multiple sites (scoutrustning + other web properties like the Joomla-based main website).
 
-Integration with ms-utrustning is minimal: a `<script>` tag in `web/src/app.html` pointing to the analytics instance. Custom events (e.g. "booking created", "pickup completed") can be added in SvelteKit code. If the analytics service is down, nothing breaks - the tracking script fails silently.
+Integration with scoutrustning is minimal: a `<script>` tag in `web/src/app.html` pointing to the analytics instance. Custom events (e.g. "booking created", "pickup completed") can be added in SvelteKit code. If the analytics service is down, nothing breaks - the tracking script fails silently.
 
-This is not part of the ms-utrustning deployment or release cycle.
+This is not part of the scoutrustning deployment or release cycle.
 
 ## Future Ideas
 
