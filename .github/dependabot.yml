@@ -4,11 +4,19 @@ updates:
     directory: /api
     schedule:
       interval: weekly
+    groups:
+      go-deps:
+        patterns:
+          - "*"
 
   - package-ecosystem: npm
     directory: /web
     schedule:
       interval: weekly
+    groups:
+      npm-deps:
+        patterns:
+          - "*"
 
   - package-ecosystem: docker
     directory: /api
