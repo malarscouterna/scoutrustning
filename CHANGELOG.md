@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.5](https://github.com/malarscouterna/scoutrustning/compare/v0.9.4...v0.9.5) (2026-05-24)
+
+
+### Bug Fixes
+
+* **web:** show persona switcher for unregistered demo users, fix 500 on / ([b52bc96](https://github.com/malarscouterna/scoutrustning/commit/b52bc969c60cb2ef385a8637f0ee9fc756b716d8))
+
 ## [0.9.4](https://github.com/malarscouterna/scoutrustning/compare/v0.9.3...v0.9.4) (2026-05-24)
 
 
