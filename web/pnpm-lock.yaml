@@ -18,8 +18,8 @@ importers:
         specifier: ^0.0.5
         version: 0.0.5
       '@scouterna/tailwind-theme':
-        specifier: ^0.0.4
-        version: 0.0.4
+        specifier: ^0.0.5
+        version: 0.0.5
       '@scouterna/ui-webc':
         specifier: ^3.2.0
         version: 3.2.0(@stencil/core@4.43.3)(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -856,8 +856,11 @@ packages:
   '@scouterna/design-tokens@0.0.5':
     resolution: {integrity: sha512-gZ72hGch5tBi+yItQ52S8uDimQ/m8LvSe42tLyfE9tdHUYYCRrQ60vnYS4y2K1Yymxy7K6SDKHBu/pPDLxahAw==}
 
-  '@scouterna/tailwind-theme@0.0.4':
-    resolution: {integrity: sha512-RIDYKRWYxDfmwEoIEbGc1zyIaanjCdw9ehrJEfahZjqyBtHq5nWTyrPMiTBBO1lh4z7c53Ymwr2rYAUOrf5AXQ==}
+  '@scouterna/design-tokens@0.0.6':
+    resolution: {integrity: sha512-wgqjEkTiSv+mfnpYBHkIpArRuZotZMJles+F4vhgBxsFO3p6t++jbIrp7IHh4BzsF9Du4HdTnzmqlFsCirSXag==}
+
+  '@scouterna/tailwind-theme@0.0.5':
+    resolution: {integrity: sha512-4zh2xpvNuAlBRv5SzIgbm9h4KyQ+QOtpbbLapLyWAMtCLIXM6dsGBvQeQ52s1Q6uzrqO25KLD43+L/FBV10Obw==}
 
   '@scouterna/ui-webc@3.2.0':
     resolution: {integrity: sha512-d413xeShkaLAKBNMPQSjHuJt0tXknVx9LU+oN150GzbXLyc8ybIPhOIdhYE3w+u7Nwu3Oiglr0e0L1PsQDIrZQ==}
@@ -3563,9 +3566,13 @@ snapshots:
     dependencies:
       glob: 13.0.6
 
-  '@scouterna/tailwind-theme@0.0.4':
+  '@scouterna/design-tokens@0.0.6':
     dependencies:
-      '@scouterna/design-tokens': 0.0.5
+      glob: 13.0.6
+
+  '@scouterna/tailwind-theme@0.0.5':
+    dependencies:
+      '@scouterna/design-tokens': 0.0.6
 
   '@scouterna/ui-webc@3.2.0(@stencil/core@4.43.3)(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
     dependencies:
