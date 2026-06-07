@@ -218,7 +218,7 @@ The reverse proxy only forwards to the SvelteKit container (port 3000). SvelteKi
 3. Keycloak authenticates, redirects back with code
 4. SvelteKit exchanges code for tokens, stores in httpOnly cookie
 5. On API calls, SvelteKit passes the access token to Go API
-6. Go API validates JWT using Keycloak's JWKS endpoint, extracts claims (member_id, name, email, roles, units, projects, group_id)
+6. Go API validates JWT using Keycloak's JWKS endpoint, extracts claims (member_id, name, email, memberships) and resolves the active group
 7. Go API upserts user record (member_id + cached profile) and scopes all queries to the user's group. If the group doesn't exist in the database, returns 403 with `group_not_found` - the frontend shows a friendly message instead of crashing.
 
 ### Image Handling
@@ -841,6 +841,7 @@ Connect real OIDC, add notifications, and make the system usable by actual users
   - `group:GROUP_ID:ROLE` → group ID + admin/project roles
   - `troop:TROOP_ID:ROLE` → leader role + unit membership
 - **UPDATE**: `role-mapping.json` replaced by `team_claim_mappings` table + `init-group` CLI. OIDC claims are now resolved to teams with configurable access levels at login time. Teams are auto-created on first login or pre-created by managers. See [access-levels.md](docs/access-levels.md).
+- **UPDATE**: Token claim format changed from flat `roles` string array to structured `memberships` JSON object. Group membership is now in `memberships.groups`, troop membership in `memberships.troops` (with optional `groupId`). Auth middleware parses the `memberships` claim directly. Troops are only auto-created when their `groupId` matches the active group; troops with unknown `groupId` still resolve if already mapped in `team_claim_mappings`.
 - Login page at `/login` with ScoutID branding, auto-redirects unauthenticated users
 - User profile page at `/profile` showing teams and access levels
 - Sign-out from profile page (clears Auth.js session)

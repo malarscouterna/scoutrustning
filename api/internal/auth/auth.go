@@ -7,12 +7,34 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/MicahParks/keyfunc/v3"
+	"github.com/golang-jwt/jwt/v5"
 )
+
+// Token memberships claim structures (unexported, only used for JWT parsing).
+type tokenMembershipRole struct {
+	Key  string `json:"key"`
+	Name string `json:"name"`
+}
+
+type tokenGroupMembership struct {
+	Roles []tokenMembershipRole `json:"roles"`
+}
+
+type tokenTroopMembership struct {
+	Name    string               `json:"name"`
+	GroupID *int                 `json:"groupId"`
+	Roles   []tokenMembershipRole `json:"roles"`
+}
+
+type tokenMemberships struct {
+	Groups map[string]tokenGroupMembership `json:"groups"`
+	Troops map[string]tokenTroopMembership `json:"troops"`
+}
 
 type contextKey string
 
@@ -223,7 +245,6 @@ func Middleware(cfg MiddlewareConfig) func(http.Handler) http.Handler {
 			name := getStringClaim(mapClaims, "name")
 			email := getStringClaim(mapClaims, "email")
 			preferredUsername := getStringClaim(mapClaims, "preferred_username")
-			tokenRoles := getStringSliceClaim(mapClaims, "roles")
 
 			// Extract member ID from preferred_username ("scoutnet|3169207" → "3169207")
 			memberID := preferredUsername
@@ -231,33 +252,18 @@ func Middleware(cfg MiddlewareConfig) func(http.Handler) http.Handler {
 				memberID = parts[1]
 			}
 
-			// Parse OIDC claims and determine group
-			var oidcClaims []OIDCClaim
-			groupIDs := map[string]bool{}
-			for _, role := range tokenRoles {
-				parts := strings.SplitN(role, ":", 3)
-				if len(parts) != 3 {
-					continue
-				}
-				scope, id, roleName := parts[0], parts[1], parts[2]
-				if scope == "group" || scope == "troop" {
-					// For group claims, claim_id is the role name (identifies the team).
-					// For troop claims, claim_id is the troop ID.
-					claimID := id
-					if scope == "group" {
-						claimID = roleName
-					}
-					oidcClaims = append(oidcClaims, OIDCClaim{Scope: scope, ID: claimID, RoleName: roleName})
-				}
-				if scope == "group" {
-					groupIDs[id] = true
+			// Parse memberships claim
+			var ms tokenMemberships
+			if raw, ok := mapClaims["memberships"]; ok {
+				if b, err := json.Marshal(raw); err == nil {
+					json.Unmarshal(b, &ms) //nolint:errcheck
 				}
 			}
 
-			// Determine which group to use
+			// Determine which group to use: find first group from memberships that exists in DB
 			var groupID string
 			if cfg.Resolver != nil {
-				for gid := range groupIDs {
+				for gid := range ms.Groups {
 					exists, _ := cfg.Resolver.GroupExists(r.Context(), gid)
 					if exists {
 						groupID = gid
@@ -266,9 +272,38 @@ func Middleware(cfg MiddlewareConfig) func(http.Handler) http.Handler {
 				}
 			}
 			if groupID == "" {
-				slog.Warn("no configured group found in token", "preferred_username", preferredUsername, "group_ids", groupIDs)
+				slog.Warn("no configured group found in token", "preferred_username", preferredUsername)
 				http.Error(w, `{"error":"group_not_found"}`, http.StatusForbidden)
 				return
+			}
+
+			// Build OIDC claims from memberships
+			var oidcClaims []OIDCClaim
+
+			// One claim per role the user holds in the active group
+			if gm, ok := ms.Groups[groupID]; ok {
+				for _, role := range gm.Roles {
+					oidcClaims = append(oidcClaims, OIDCClaim{
+						Scope:    "group",
+						ID:       role.Key,
+						RoleName: role.Key,
+						Name:     role.Name,
+					})
+				}
+			}
+
+			// One claim per troop; pass groupId so auto-create can gate on it
+			for troopID, tm := range ms.Troops {
+				var troopGroupID string
+				if tm.GroupID != nil {
+					troopGroupID = strconv.Itoa(*tm.GroupID)
+				}
+				oidcClaims = append(oidcClaims, OIDCClaim{
+					Scope:        "troop",
+					ID:           troopID,
+					Name:         tm.Name,
+					TroopGroupID: troopGroupID,
+				})
 			}
 
 			// Resolve teams from claim mappings
@@ -420,22 +455,3 @@ func getStringClaim(m jwt.MapClaims, key string) string {
 	return ""
 }
 
-func getStringSliceClaim(m jwt.MapClaims, key string) []string {
-	v, ok := m[key]
-	if !ok {
-		return nil
-	}
-	switch val := v.(type) {
-	case []interface{}:
-		var result []string
-		for _, item := range val {
-			if s, ok := item.(string); ok {
-				result = append(result, s)
-			}
-		}
-		return result
-	case []string:
-		return val
-	}
-	return nil
-}
