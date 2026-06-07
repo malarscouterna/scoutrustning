@@ -19,25 +19,26 @@ import (
 
 func runInitGroup(args []string) {
 	fs := flag.NewFlagSet("init-group", flag.ExitOnError)
-	groupID := fs.String("group-id", "", "Keycloak org ID (required)")
-	groupName := fs.String("group-name", "", "Display name for the group (required)")
-	managerClaim := fs.String("manager-claim", "", "OIDC claim for the manager team, e.g. group:766:it_manager (required)")
-	teamName := fs.String("team-name", "", "Name for the manager team (required)")
+	groupID := fs.String("group-id", "", "Scoutnet group number (required)")
+	groupName := fs.String("group-name", "", "Display name for the group (only used on first run; ignored if group already exists)")
+	roleKey := fs.String("role-key", "", "Scoutnet role key granting manager access, e.g. it_manager (required)")
+	teamName := fs.String("team-name", "", "Name for the manager team (optional; defaults to role key)")
 	seedLocations := fs.Bool("seed-locations", false, "Create default locations for Mälarscouterna")
 	fs.Parse(args)
 
-	if *groupID == "" || *groupName == "" || *managerClaim == "" || *teamName == "" {
+	if *groupID == "" || *roleKey == "" {
 		fs.Usage()
-		fmt.Fprintln(os.Stderr, "\nAll of --group-id, --group-name, --manager-claim, --team-name are required")
+		fmt.Fprintln(os.Stderr, "\n--group-id and --role-key are required")
 		os.Exit(1)
 	}
 
-	// Parse claim: "group:766:it_manager" → scope="group", id="766"
-	scope, claimID, err := parseClaim(*managerClaim)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Invalid --manager-claim: %v\n", err)
-		os.Exit(1)
+	resolvedTeamName := *teamName
+	if resolvedTeamName == "" {
+		resolvedTeamName = *roleKey
 	}
+
+	scope := "group"
+	claimID := *roleKey
 
 	dbURL := getenv("DATABASE_URL", "postgres://utrustning:utrustning@localhost:5432/utrustning?sslmode=disable")
 
@@ -57,18 +58,26 @@ func runInitGroup(args []string) {
 
 	q := db.New(pool)
 
-	// 1. Create group (idempotent)
-	_, err = q.CreateGroup(ctx, db.CreateGroupParams{ID: *groupID, Name: *groupName})
-	if err != nil {
-		// CreateGroup uses ON CONFLICT DO NOTHING, so no row returned means it exists
+	// 1. Create group (idempotent; name only applied on first run)
+	if *groupName != "" {
+		_, err = q.CreateGroup(ctx, db.CreateGroupParams{ID: *groupID, Name: *groupName})
+		if err != nil {
+			existing, getErr := q.GetGroup(ctx, *groupID)
+			if getErr != nil {
+				fmt.Fprintf(os.Stderr, "Failed to create/get group: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Printf("Group already exists: %s (%s) — name not changed\n", existing.ID, existing.Name)
+		} else {
+			fmt.Printf("Created group: %s (%s)\n", *groupID, *groupName)
+		}
+	} else {
 		existing, getErr := q.GetGroup(ctx, *groupID)
 		if getErr != nil {
-			fmt.Fprintf(os.Stderr, "Failed to create/get group: %v\n", err)
+			fmt.Fprintln(os.Stderr, "Group does not exist and --group-name was not provided; cannot create it")
 			os.Exit(1)
 		}
-		fmt.Printf("Group already exists: %s (%s)\n", existing.ID, existing.Name)
-	} else {
-		fmt.Printf("Created group: %s (%s)\n", *groupID, *groupName)
+		fmt.Printf("Group exists: %s (%s)\n", existing.ID, existing.Name)
 	}
 
 	// 2. Create group_settings with defaults (idempotent)
@@ -94,16 +103,16 @@ func runInitGroup(args []string) {
 	}
 
 	// 4. Create manager team (idempotent — check by name)
-	team, err := q.GetTeamByName(ctx, db.GetTeamByNameParams{GroupID: *groupID, Name: *teamName})
+	team, err := q.GetTeamByName(ctx, db.GetTeamByNameParams{GroupID: *groupID, Name: resolvedTeamName})
 	if err != nil {
 		team, err = q.CreateTeam(ctx, db.CreateTeamParams{
-			GroupID: *groupID, Name: *teamName, Type: "role", AccessLevel: "manager",
+			GroupID: *groupID, Name: resolvedTeamName, Type: "role", AccessLevel: "manager",
 		})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to create team: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Printf("Created team: %s (manager)\n", *teamName)
+		fmt.Printf("Created team: %s (manager)\n", resolvedTeamName)
 	} else {
 		fmt.Printf("Team already exists: %s (access_level=%s)\n", team.Name, team.AccessLevel)
 	}
@@ -136,53 +145,6 @@ func runInitGroup(args []string) {
 	fmt.Println("Done.")
 }
 
-func parseClaim(claim string) (scope, claimID string, err error) {
-	// "group:766:it_manager" → scope="group", claimID="it_manager"
-	// "troop:17443:leader"   → scope="troop", claimID="17443"
-	// For group claims, the claim_id is the role name (identifies the team within the group).
-	// For troop claims, the claim_id is the troop ID (identifies which troop).
-	parts := splitN(claim, ":", 3)
-	if len(parts) < 3 {
-		return "", "", fmt.Errorf("expected format scope:id:role, got %q", claim)
-	}
-	scope = parts[0]
-	if scope != "group" && scope != "troop" {
-		return "", "", fmt.Errorf("scope must be 'group' or 'troop', got %q", scope)
-	}
-	switch scope {
-	case "group":
-		claimID = parts[2] // role name
-	case "troop":
-		claimID = parts[1] // troop ID
-	}
-	if claimID == "" {
-		return "", "", fmt.Errorf("claim ID is empty")
-	}
-	return scope, claimID, nil
-}
-
-func splitN(s, sep string, n int) []string {
-	var result []string
-	for i := 0; i < n-1; i++ {
-		idx := indexOf(s, sep)
-		if idx < 0 {
-			break
-		}
-		result = append(result, s[:idx])
-		s = s[idx+len(sep):]
-	}
-	result = append(result, s)
-	return result
-}
-
-func indexOf(s, sub string) int {
-	for i := 0; i <= len(s)-len(sub); i++ {
-		if s[i:i+len(sub)] == sub {
-			return i
-		}
-	}
-	return -1
-}
 
 func runMigrationsForInit(dbURL string) error {
 	migrationsDir := getenv("MIGRATIONS_DIR", "migrations")

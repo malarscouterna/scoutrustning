@@ -30,7 +30,7 @@ Managers get a full inventory UI: create and edit articles, bulk-move items betw
 
 The system is built around the way Swedish scout organizations are structured. A few things reflect that context and would need work before the service is usable outside it:
 
-- **Authentication is ScoutID-only.** Login goes through Keycloak with a specific claim format used by Scoutnet (`group:766:material_responsible`, `troop:17443:vice_leader`). There is no local username/password option. Deploying for a non-Swedish-scout organization would require either connecting to a compatible Keycloak/OIDC provider or adding an alternative auth path.
+- **Authentication is ScoutID-only.** Login goes through Keycloak using the Scoutnet `memberships` JWT claim — a structured JSON object containing group roles (e.g. `it_manager`) and troop memberships (e.g. troop `17443`). There is no local username/password option. Deploying for a non-Swedish-scout organization would require either connecting to a compatible Keycloak/OIDC provider or adding an alternative auth path.
 - **UI components are from @scouterna/ui-webc.** The design system (`@scouterna/ui-webc`, `@scouterna/tailwind-theme`) is the Swedish scouting design system. The components work well but carry Scouternas visual identity. Swapping them out is possible but non-trivial.
 - **The UI is Swedish-first.** Swedish is the default language and all user-visible strings exist in Swedish. English is fully supported and can be set per user or per group, but the default experience is Swedish. The interface may use terms that make sense only in a Swedish scout environment.
 
@@ -142,13 +142,31 @@ Requires Docker, Docker Compose, a reverse proxy (nginx, Caddy, Traefik) for TLS
 ./gen-env.sh prod
 # Fill in AUTH_KEYCLOAK_SECRET in .env
 docker compose pull && docker compose up -d
-docker compose exec api /bin/server init-group \
-  --group-id YOUR_ORG_ID --group-name "Your Scout Group" \
-  --manager-claim "group:YOUR_ORG_ID:material_responsible" \
-  --team-name "Equipment Managers"
 ```
 
-Updates: `docker compose pull && docker compose up -d`. Migrations run automatically on startup.
+Migrations run automatically on startup.
+
+### Bootstrapping a group
+
+Every scout group (scoutkår) that should have access needs to be bootstrapped with `init-group`. This creates the group record, default settings, and a manager team mapped to a Scoutnet role. The command is idempotent — safe to re-run to add more manager teams.
+
+```bash
+docker compose exec api /bin/server init-group \
+  --group-id   YOUR_GROUP_NUMBER \
+  --group-name "Your Scout Group" \
+  --role-key   ROLE_KEY
+```
+
+- `--group-id` — the Scoutnet group number (e.g. `766` for Mälarscouterna). Find it in Scoutnet.
+- `--group-name` — display name shown in the UI. Only applied on the first run; ignored if the group already exists, so it can be omitted on reruns.
+- `--role-key` — the Scoutnet role key that should grant manager access (e.g. `it_manager`, `material_responsible`).
+- `--team-name` — optional name for the manager team in the UI. Defaults to the role key if omitted. Managers can rename teams in the settings UI at any time.
+
+To add a second manager team for a different role, re-run with the same `--group-id` and a new `--role-key`. To seed default storage locations (Mälarscouterna-specific), add `--seed-locations` on the first run.
+
+Once bootstrapped, all other teams (troops, other roles) are auto-created on first login from Scoutnet claims. Managers can adjust access levels in the settings UI.
+
+Updates: `docker compose pull && docker compose up -d`.
 
 ### Multiple domains
 
