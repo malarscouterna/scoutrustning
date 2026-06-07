@@ -8,6 +8,7 @@ const API_URL = process.env.API_URL || 'http://localhost:8080';
 const DEV_MODE = process.env.DEV_MODE === 'true';
 const DEMO_MODE = process.env.DEMO_MODE === 'true';
 const PERSONA_COOKIE = 'dev-persona';
+const ACTIVE_GROUP_COOKIE = 'active-group';
 const DEFAULT_PERSONA = 'leader-yggdrasil';
 
 function isPublicPath(pathname: string): boolean {
@@ -36,6 +37,19 @@ async function getAccessToken(event: any): Promise<string | null> {
 }
 
 const appHandle: Handle = async ({ event, resolve }) => {
+	// POST /switch-group — set the active group cookie
+	if (event.url.pathname === '/switch-group' && event.request.method === 'POST') {
+		const { groupId } = await event.request.json();
+		const maxAge = 60 * 60 * 24 * 365;
+		const cookie = groupId
+			? `${ACTIVE_GROUP_COOKIE}=${groupId}; Path=/; Max-Age=${maxAge}; SameSite=Lax`
+			: `${ACTIVE_GROUP_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax`;
+		return new Response(JSON.stringify({ ok: true }), {
+			status: 200,
+			headers: { 'Content-Type': 'application/json', 'Set-Cookie': cookie }
+		});
+	}
+
 	// Dev mode: POST /dev/persona — set or clear the active persona cookie
 	if (DEV_MODE && event.url.pathname === '/dev/persona' && event.request.method === 'POST') {
 		const { persona } = await event.request.json();
@@ -113,12 +127,17 @@ const appHandle: Handle = async ({ event, resolve }) => {
 		// Strip auth and identity headers from client — only the server decides these
 		headers.delete('Authorization');
 		headers.delete('X-Dev-Role-Override');
+		headers.delete('X-Active-Group');
 		headers.delete('X-Language');
 
 		if (authMode === 'persona') {
 			headers.set('X-Dev-Role-Override', personaKey!);
 		} else if (authMode === 'oidc' && accessToken) {
 			headers.set('Authorization', `Bearer ${accessToken}`);
+			const activeGroup = event.cookies.get(ACTIVE_GROUP_COOKIE);
+			if (activeGroup) {
+				headers.set('X-Active-Group', activeGroup);
+			}
 		}
 
 		const res = await fetch(target, {

@@ -31,6 +31,7 @@ type MeHandler struct {
 func (h *MeHandler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Get("/", h.Get)
+	r.Get("/groups", h.GetGroups)
 	r.Put("/language", h.PutLanguage)
 	r.Put("/notification-email", h.PutNotificationEmail)
 	r.Post("/test-email", h.PostTestEmail)
@@ -77,6 +78,7 @@ func (h *MeHandler) Get(w http.ResponseWriter, r *http.Request) {
 		"teams":              claims.Teams,
 		"max_access":         claims.MaxAccess,
 		"language":           lang,
+		"available_groups":   claims.AvailableGroups,
 		"permissions": map[string]string{
 			"image_upload":  perms.ImageUpload,
 			"booking":       perms.Booking,
@@ -85,6 +87,15 @@ func (h *MeHandler) Get(w http.ResponseWriter, r *http.Request) {
 			"manager_notes": perms.ManagerNotes,
 		},
 	})
+}
+
+func (h *MeHandler) GetGroups(w http.ResponseWriter, r *http.Request) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		WriteError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	WriteJSON(w, http.StatusOK, claims.AvailableGroups)
 }
 
 func (h *MeHandler) PostTestEmail(w http.ResponseWriter, r *http.Request) {
@@ -236,6 +247,7 @@ func (h *MeHandler) PutLanguage(w http.ResponseWriter, r *http.Request) {
 	if err := h.Q.UpdateUserLanguage(r.Context(), db.UpdateUserLanguageParams{
 		Language: lang,
 		ID:       claims.MemberID,
+		GroupID:  claims.GroupID,
 	}); err != nil {
 		WriteError(w, http.StatusInternalServerError, "failed to update language")
 		return

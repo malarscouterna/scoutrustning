@@ -73,12 +73,12 @@ func (r *DBTeamResolver) DefaultAccessForUnknown(ctx context.Context, groupID st
 	return settings.DefaultAccessUnknown, nil
 }
 
-func (r *DBTeamResolver) GroupExists(ctx context.Context, groupID string) (bool, error) {
-	_, err := r.Q.GetGroup(ctx, groupID)
+func (r *DBTeamResolver) GetGroup(ctx context.Context, groupID string) (auth.GroupSummary, bool, error) {
+	g, err := r.Q.GetGroup(ctx, groupID)
 	if err != nil {
-		return false, nil
+		return auth.GroupSummary{}, false, nil
 	}
-	return true, nil
+	return auth.GroupSummary{ID: g.ID, Name: g.Name}, true, nil
 }
 
 func (r *DBTeamResolver) AutoCreateTeams(ctx context.Context, groupID string, claims []auth.OIDCClaim) ([]auth.TeamMembership, error) {

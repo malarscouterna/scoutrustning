@@ -67,13 +67,19 @@ type TeamMembership struct {
 	AccessLevel string `json:"access_level"`
 }
 
+type GroupSummary struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
 type Claims struct {
-	MemberID  string           `json:"member_id"`
-	GroupID   string           `json:"group_id"`
-	Name      string           `json:"name"`
-	Email     string           `json:"email"`
-	Teams     []TeamMembership `json:"teams"`
-	MaxAccess string           `json:"max_access"`
+	MemberID        string           `json:"member_id"`
+	GroupID         string           `json:"group_id"`
+	Name            string           `json:"name"`
+	Email           string           `json:"email"`
+	Teams           []TeamMembership `json:"teams"`
+	MaxAccess       string           `json:"max_access"`
+	AvailableGroups []GroupSummary   `json:"available_groups"`
 }
 
 func (c Claims) IsManager() bool {
@@ -260,22 +266,26 @@ func Middleware(cfg MiddlewareConfig) func(http.Handler) http.Handler {
 				}
 			}
 
-			// Determine which group to use: find first group from memberships that exists in DB
-			var groupID string
+			// Collect all groups from the token that exist in our DB.
+			var availableGroups []GroupSummary
 			if cfg.Resolver != nil {
 				for gid := range ms.Groups {
-					exists, _ := cfg.Resolver.GroupExists(r.Context(), gid)
-					if exists {
-						groupID = gid
-						break
+					if gs, ok, _ := cfg.Resolver.GetGroup(r.Context(), gid); ok {
+						availableGroups = append(availableGroups, gs)
 					}
 				}
 			}
-			if groupID == "" {
+			if len(availableGroups) == 0 {
 				slog.Warn("no configured group found in token", "preferred_username", preferredUsername)
 				http.Error(w, `{"error":"group_not_found"}`, http.StatusForbidden)
 				return
 			}
+
+			// Determine active group. Priority:
+			//   1. X-Active-Group header (user has switched explicitly) — validated against available groups
+			//   2. primary_group_no claim from token
+			//   3. First match
+			groupID := pickActiveGroup(r.Header.Get("X-Active-Group"), getStringClaim(mapClaims, "primary_group_no"), availableGroups)
 
 			// Build OIDC claims from memberships
 			var oidcClaims []OIDCClaim
@@ -338,12 +348,13 @@ func Middleware(cfg MiddlewareConfig) func(http.Handler) http.Handler {
 			}
 
 			claims := Claims{
-				MemberID:  memberID,
-				GroupID:   groupID,
-				Name:      name,
-				Email:     email,
-				Teams:     teams,
-				MaxAccess: maxAccess,
+				MemberID:        memberID,
+				GroupID:         groupID,
+				Name:            name,
+				Email:           email,
+				Teams:           teams,
+				MaxAccess:       maxAccess,
+				AvailableGroups: availableGroups,
 			}
 
 			r = r.WithContext(withClaims(r.Context(), claims))
@@ -446,6 +457,26 @@ func RequireRole(role string) func(http.Handler) http.Handler {
 	default:
 		return RequireAccess(AccessManager)
 	}
+}
+
+// pickActiveGroup selects the active group ID from the available groups.
+// Priority: explicit header (validated) → primary_group_no from token → first available.
+func pickActiveGroup(headerVal, primaryGroupNo string, available []GroupSummary) string {
+	inAvailable := func(id string) bool {
+		for _, g := range available {
+			if g.ID == id {
+				return true
+			}
+		}
+		return false
+	}
+	if headerVal != "" && inAvailable(headerVal) {
+		return headerVal
+	}
+	if primaryGroupNo != "" && inAvailable(primaryGroupNo) {
+		return primaryGroupNo
+	}
+	return available[0].ID
 }
 
 func getStringClaim(m jwt.MapClaims, key string) string {

@@ -2,6 +2,7 @@
 	import '../app.css';
 	import { page } from '$app/stores';
 	import DevPersonaSwitcher from '$lib/components/DevPersonaSwitcher.svelte';
+	import GroupSwitcher from '$lib/components/GroupSwitcher.svelte';
 	import FloatingCart from '$lib/components/FloatingCart.svelte';
 	import { ParaglideJS } from '@inlang/paraglide-sveltekit';
 	import { i18n } from '$lib/i18n';
@@ -62,6 +63,9 @@
 						{/if}
 					{/if}
 				</div>
+				{#if data.user.available_groups.length > 1}
+					<GroupSwitcher user={data.user} />
+				{/if}
 				{#if data.dev && data.user}
 					<DevPersonaSwitcher personas={data.dev.personas} currentPersona={data.dev.currentPersona} user={data.user} />
 				{/if}

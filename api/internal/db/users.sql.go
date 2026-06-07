@@ -136,7 +136,7 @@ func (q *Queries) GetTeamMembersWithEmails(ctx context.Context, arg GetTeamMembe
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, group_id, name, email, active_group_id, created_at, updated_at, language, max_access_level, notification_prefs, team_ids, notification_email FROM users
+SELECT id, group_id, name, email, created_at, updated_at, language, max_access_level, notification_prefs, team_ids, notification_email FROM users
 WHERE id = $1 AND group_id = $2
 `
 
@@ -153,7 +153,6 @@ func (q *Queries) GetUser(ctx context.Context, arg GetUserParams) (User, error) 
 		&i.GroupID,
 		&i.Name,
 		&i.Email,
-		&i.ActiveGroupID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Language,
@@ -276,29 +275,30 @@ func (q *Queries) SetUserNotificationPrefs(ctx context.Context, arg SetUserNotif
 
 const updateUserLanguage = `-- name: UpdateUserLanguage :exec
 UPDATE users SET language = $1, updated_at = now()
-WHERE id = $2
+WHERE id = $2 AND group_id = $3
 `
 
 type UpdateUserLanguageParams struct {
 	Language pgtype.Text `json:"language"`
 	ID       string      `json:"id"`
+	GroupID  string      `json:"group_id"`
 }
 
 func (q *Queries) UpdateUserLanguage(ctx context.Context, arg UpdateUserLanguageParams) error {
-	_, err := q.db.Exec(ctx, updateUserLanguage, arg.Language, arg.ID)
+	_, err := q.db.Exec(ctx, updateUserLanguage, arg.Language, arg.ID, arg.GroupID)
 	return err
 }
 
 const upsertUser = `-- name: UpsertUser :one
 INSERT INTO users (id, group_id, name, email, max_access_level, team_ids)
 VALUES ($1, $2, $3, $4, $5, $6::uuid[])
-ON CONFLICT (id) DO UPDATE SET
+ON CONFLICT (id, group_id) DO UPDATE SET
     name = EXCLUDED.name,
     email = EXCLUDED.email,
     max_access_level = EXCLUDED.max_access_level,
     team_ids = EXCLUDED.team_ids,
     updated_at = now()
-RETURNING id, group_id, name, email, active_group_id, created_at, updated_at, language, max_access_level, notification_prefs, team_ids, notification_email
+RETURNING id, group_id, name, email, created_at, updated_at, language, max_access_level, notification_prefs, team_ids, notification_email
 `
 
 type UpsertUserParams struct {
@@ -325,7 +325,6 @@ func (q *Queries) UpsertUser(ctx context.Context, arg UpsertUserParams) (User, e
 		&i.GroupID,
 		&i.Name,
 		&i.Email,
-		&i.ActiveGroupID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Language,

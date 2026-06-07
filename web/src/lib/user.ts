@@ -1,3 +1,8 @@
+export interface GroupSummary {
+	id: string;
+	name: string;
+}
+
 export interface TeamMembership {
 	team_id: string;
 	team_name: string;
@@ -15,6 +20,7 @@ export interface User {
 	language: string;
 	teams: TeamMembership[];
 	max_access: 'view' | 'book' | 'trusted' | 'manager';
+	available_groups: GroupSummary[];
 	permissions?: {
 		image_upload: string;
 		booking: string;
