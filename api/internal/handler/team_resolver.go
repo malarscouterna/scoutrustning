@@ -112,12 +112,24 @@ func (r *DBTeamResolver) AutoCreateTeams(ctx context.Context, groupID string, cl
 		var teamType, teamName, accessLevel string
 		switch c.Scope {
 		case "troop":
+			// Only create a new troop team if we know it belongs to this group.
+			// If TroopGroupID is empty (null in token), the troop may belong to another
+			// group — skip creation but still resolve via existing mappings.
+			if c.TroopGroupID != groupID {
+				continue
+			}
 			teamType = "troop"
-			teamName = "Avdelning " + c.ID
+			teamName = c.Name
+			if teamName == "" {
+				teamName = "Avdelning " + c.ID
+			}
 			accessLevel = defaultTroop
 		case "group":
 			teamType = "role"
-			teamName = "Roll " + c.RoleName
+			teamName = c.Name
+			if teamName == "" {
+				teamName = "Roll " + c.RoleName
+			}
 			accessLevel = defaultRole
 		default:
 			continue

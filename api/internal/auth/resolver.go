@@ -2,11 +2,13 @@ package auth
 
 import "context"
 
-// OIDCClaim represents a parsed scope:id:role claim from the token.
+// OIDCClaim represents a parsed membership entry from the token.
 type OIDCClaim struct {
-	Scope    string // "group" or "troop"
-	ID       string // e.g. "it_manager", "17443" (role name for group, troop ID for troop)
-	RoleName string // e.g. "it_manager", "leader"
+	Scope        string // "group" or "troop"
+	ID           string // role key for group scope; troop ID for troop scope
+	RoleName     string // role key (same as ID for group scope)
+	Name         string // display name from token (e.g. "IT Manager", "Yggdrasil"); may be empty
+	TroopGroupID string // group ID the troop belongs to (troop scope only; empty if unknown)
 }
 
 // TeamResolver resolves team names or OIDC claims to memberships.
