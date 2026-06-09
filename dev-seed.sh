@@ -64,12 +64,12 @@ echo "Bootstrapping groups..."
 SERVER_BIN=$(docker compose exec -T api sh -c 'test -f ./tmp/server && echo ./tmp/server || echo /bin/server')
 docker compose exec -T api $SERVER_BIN init-group \
   --group-id $GROUP_ID --group-name "$GROUP_NAME" \
-  --manager-claim "group:$GROUP_ID:material_responsible" --team-name "Utrustningsgruppen" \
+  --role-key "material_responsible" --team-name "Utrustningsgruppen" \
   --seed-locations
 
 docker compose exec -T api $SERVER_BIN init-group \
   --group-id $TEST_GROUP_ID --group-name "$TEST_GROUP_NAME" \
-  --manager-claim "group:$TEST_GROUP_ID:admin" --team-name "Admin"
+  --role-key "admin" --team-name "Admin"
 
 # Check that the API is in dev mode (X-Dev-Role-Override must work)
 HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v0/locations" -H "$HEADER")

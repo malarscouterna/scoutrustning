@@ -150,8 +150,17 @@ Migrations run automatically on startup.
 
 Every scout group (scoutkår) that should have access needs to be bootstrapped with `init-group`. This creates the group record, default settings, and a manager team mapped to a Scoutnet role. The command is idempotent — safe to re-run to add more manager teams.
 
+**Production** (`BUILD_TARGET=production`):
 ```bash
 docker compose exec api /bin/server init-group \
+  --group-id   YOUR_GROUP_NUMBER \
+  --group-name "Your Scout Group" \
+  --role-key   ROLE_KEY
+```
+
+**Dev** (`BUILD_TARGET=dev`, Air hot-reload):
+```bash
+docker compose exec api ./tmp/server init-group \
   --group-id   YOUR_GROUP_NUMBER \
   --group-name "Your Scout Group" \
   --role-key   ROLE_KEY
