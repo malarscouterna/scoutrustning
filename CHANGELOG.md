@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.10.0](https://github.com/malarscouterna/scoutrustning/compare/v0.9.5...v0.10.0) (2026-06-09)
+
+
+### Features
+
+* **auth:** adapt to structured memberships claim; improve init-group CLI ([d990a7f](https://github.com/malarscouterna/scoutrustning/commit/d990a7f65648e7965312e53b993f6c7f19adf8dc))
+* **auth:** parse structured memberships claim from OIDC token ([4ee1ab0](https://github.com/malarscouterna/scoutrustning/commit/4ee1ab0fad5fd5a077ffb06d57a9c86ca6bd06a4))
+
+
+### Bug Fixes
+
+* dev-seed fixes for new scoutid format ([374840e](https://github.com/malarscouterna/scoutrustning/commit/374840e8a48f0c1658eba8addc0e9ec5833a7820))
+
 ## [0.9.5](https://github.com/malarscouterna/scoutrustning/compare/v0.9.4...v0.9.5) (2026-05-24)
 
 
