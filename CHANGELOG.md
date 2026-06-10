@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.2](https://github.com/malarscouterna/scoutrustning/compare/v0.10.1...v0.10.2) (2026-06-10)
+
+
+### Bug Fixes
+
+* **web:** implement Auth.js token refresh to prevent session expiry ([5a1d724](https://github.com/malarscouterna/scoutrustning/commit/5a1d72498421e26314fb1240f043824057a75040))
+
 ## [0.10.1](https://github.com/malarscouterna/scoutrustning/compare/v0.10.0...v0.10.1) (2026-06-10)
 
 
