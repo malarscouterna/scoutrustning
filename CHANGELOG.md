@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.1](https://github.com/malarscouterna/scoutrustning/compare/v0.10.0...v0.10.1) (2026-06-10)
+
+
+### Bug Fixes
+
+* convert base64url to standard base64 before decoding. ([2f2d06f](https://github.com/malarscouterna/scoutrustning/commit/2f2d06f8afa1858fa35a69221dd11bdc875805a0))
+* **web:** fix base64url decode in isTokenExpired causing redirect loop ([2f2d06f](https://github.com/malarscouterna/scoutrustning/commit/2f2d06f8afa1858fa35a69221dd11bdc875805a0))
+
 ## [0.10.0](https://github.com/malarscouterna/scoutrustning/compare/v0.9.5...v0.10.0) (2026-06-09)
 
 
