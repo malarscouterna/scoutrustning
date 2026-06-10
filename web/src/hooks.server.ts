@@ -14,24 +14,12 @@ function isPublicPath(pathname: string): boolean {
 	return pathname.startsWith('/auth/') || pathname === '/login' || pathname === '/guide';
 }
 
-function isTokenExpired(token: string): boolean {
-	try {
-		// JWTs use base64url (- and _ instead of + and /); atob() requires standard base64
-		const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-		const payload = JSON.parse(atob(b64));
-		return !payload.exp || payload.exp * 1000 < Date.now();
-	} catch {
-		return true;
-	}
-}
-
-
 async function getAccessToken(event: any): Promise<string | null> {
 	try {
 		const session = await event.locals.auth?.();
-		const token = (session as any)?.accessToken ?? null;
-		if (token && isTokenExpired(token)) return null;
-		return token;
+		if (!session) return null;
+		if ((session as any).error === 'RefreshAccessTokenError') return null;
+		return (session as any).accessToken ?? null;
 	} catch {
 		return null;
 	}
@@ -177,9 +165,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	if (redirectingToLogin) {
 		const hasSessionCookie = requestCookies.includes('authjs.session-token');
-		console.log(`[auth] redirect to login — session cookie present: ${hasSessionCookie}, path: ${event.url.pathname}`);
 		if (hasSessionCookie) {
-			console.log('[auth] stale session cookie detected — clearing');
 			const headers = new Headers(response.headers);
 			headers.append('Set-Cookie', '__Secure-authjs.session-token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax; Secure');
 			headers.append('Set-Cookie', '__Secure-authjs.callback-url=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax; Secure');

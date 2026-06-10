@@ -1,6 +1,34 @@
 import { SvelteKitAuth } from '@auth/sveltekit';
 import Keycloak from '@auth/sveltekit/providers/keycloak';
 
+async function refreshAccessToken(token: any) {
+	try {
+		const issuer = process.env.AUTH_KEYCLOAK_ISSUER!;
+		const res = await fetch(`${issuer}/protocol/openid-connect/token`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+			body: new URLSearchParams({
+				grant_type: 'refresh_token',
+				client_id: process.env.AUTH_KEYCLOAK_ID!,
+				client_secret: process.env.AUTH_KEYCLOAK_SECRET!,
+				refresh_token: token.refreshToken,
+			}),
+		});
+		const tokens = await res.json();
+		if (!res.ok) throw tokens;
+		return {
+			...token,
+			accessToken: tokens.access_token,
+			refreshToken: tokens.refresh_token ?? token.refreshToken,
+			accessTokenExpires: Date.now() + (tokens.expires_in * 1000),
+			error: undefined,
+		};
+	} catch (err) {
+		console.error('[auth] token refresh failed:', err);
+		return { ...token, error: 'RefreshAccessTokenError' };
+	}
+}
+
 export const { handle: authHandle, signIn, signOut } = SvelteKitAuth({
 	providers: [
 		Keycloak({
@@ -13,15 +41,24 @@ export const { handle: authHandle, signIn, signOut } = SvelteKitAuth({
 	trustHost: true,
 	callbacks: {
 		async jwt({ token, account }) {
-			// On initial sign-in, persist the access token
 			if (account) {
-				token.accessToken = account.access_token;
+				return {
+					...token,
+					accessToken: account.access_token,
+					refreshToken: account.refresh_token,
+					accessTokenExpires: account.expires_at
+						? account.expires_at * 1000
+						: Date.now() + ((account.expires_in as number ?? 300) * 1000),
+				};
 			}
-			return token;
+			if (Date.now() < (token.accessTokenExpires as number) - 30_000) {
+				return token;
+			}
+			return refreshAccessToken(token);
 		},
 		async session({ session, token }) {
-			// Expose access token to server-side session
 			(session as any).accessToken = token.accessToken;
+			(session as any).error = token.error;
 			return session;
 		}
 	}
