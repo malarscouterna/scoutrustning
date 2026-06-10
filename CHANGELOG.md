@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.3](https://github.com/malarscouterna/scoutrustning/compare/v0.10.2...v0.10.3) (2026-06-10)
+
+
+### Bug Fixes
+
+* **web:** refresh token error handling ([6aaadcf](https://github.com/malarscouterna/scoutrustning/commit/6aaadcf03734434cb76b670e991c59b85e38da59))
+
 ## [0.10.2](https://github.com/malarscouterna/scoutrustning/compare/v0.10.1...v0.10.2) (2026-06-10)
 
 
