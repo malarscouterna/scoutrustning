@@ -51,9 +51,9 @@ export const { handle: authHandle, signIn, signOut } = SvelteKitAuth({
 						: Date.now() + ((account.expires_in as number ?? 300) * 1000),
 				};
 			}
-			if (Date.now() < (token.accessTokenExpires as number) - 30_000) {
-				return token;
-			}
+			if (token.error === 'RefreshAccessTokenError') return token;
+			if (!token.refreshToken) return { ...token, error: 'RefreshAccessTokenError' };
+			if (Date.now() < (token.accessTokenExpires as number) - 30_000) return token;
 			return refreshAccessToken(token);
 		},
 		async session({ session, token }) {
