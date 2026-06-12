@@ -16,25 +16,25 @@
     "@inlang/paraglide-sveltekit": "^0.16.1",
     "@scouterna/design-tokens": "^0.0.6",
     "@scouterna/tailwind-theme": "^0.0.5",
-    "@scouterna/ui-webc": "^3.2.0",
-    "marked": "^17.0.6",
+    "@scouterna/ui-webc": "^4.4.0",
+    "marked": "^18.0.5",
     "photoswipe": "^5.4.4",
     "svelte-easy-crop": "^5.0.1"
   },
   "devDependencies": {
     "@sveltejs/adapter-node": "^5.5.4",
-    "@sveltejs/kit": "^2.61.1",
+    "@sveltejs/kit": "^2.65.0",
     "@sveltejs/vite-plugin-svelte": "^7.1.2",
     "@tailwindcss/vite": "^4.3.0",
     "@types/mjml": "^5.0.0",
-    "@types/node": "^25.9.1",
-    "mjml": "^5.2.2",
-    "svelte": "^5.55.9",
-    "svelte-check": "^4.4.8",
+    "@types/node": "^25.9.3",
+    "mjml": "^5.3.0",
+    "svelte": "^5.56.3",
+    "svelte-check": "^4.6.0",
     "tailwindcss": "^4.3.0",
-    "tsx": "^4.22.3",
+    "tsx": "^4.22.4",
     "typescript": "^6.0.3",
-    "vite": "^8.0.14"
+    "vite": "^8.0.16"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
