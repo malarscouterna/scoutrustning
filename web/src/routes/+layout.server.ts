@@ -63,7 +63,7 @@ export const load: LayoutServerLoad = async ({ cookies, locals, url, fetch: skFe
 			if (DEMO_MODE) {
 				// Demo: persona cookie only valid with an OIDC session
 				const session = await locals.auth?.() as any;
-				if (!session?.accessToken) {
+				if (!session?.accessToken || session?.error) {
 					cookies.delete(PERSONA_COOKIE, { path: '/' });
 					return { user: null, dev: null, demo: true, oidcName: null };
 				}
@@ -81,7 +81,7 @@ export const load: LayoutServerLoad = async ({ cookies, locals, url, fetch: skFe
 
 		// No persona cookie — try OIDC session
 		const session = await locals.auth?.() as any;
-		if (session?.accessToken) {
+		if (session?.accessToken && !session?.error) {
 			const user = await fetchMe(skFetch);
 			if (user) {
 				setLangCookie(cookies, user.language);
@@ -111,7 +111,7 @@ export const load: LayoutServerLoad = async ({ cookies, locals, url, fetch: skFe
 
 	// Production
 	const session = await locals.auth?.() as any;
-	if (!session?.accessToken) {
+	if (!session?.accessToken || session?.error) {
 		return { user: null, dev: null, demo: false, oidcName: null };
 	}
 	const user = await fetchMe(skFetch);

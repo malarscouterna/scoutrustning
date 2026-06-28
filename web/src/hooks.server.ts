@@ -32,11 +32,17 @@ async function getAuthResult(event: any): Promise<AuthResult> {
 	}
 }
 
-function signoutRedirect(callbackUrl: string): never {
-	// Route through Auth.js's own signout so it clears all its cookies (including
-	// chunked session tokens) reliably, then lands on /login.
-	const loginUrl = `/login?callbackUrl=${encodeURIComponent(callbackUrl)}`;
-	throw redirect(302, `/auth/signout?callbackUrl=${encodeURIComponent(loginUrl)}`);
+function clearSessionAndRedirect(event: any, callbackUrl: string): never {
+	// Delete all Auth.js session cookies via SvelteKit's cookie API.
+	// SvelteKit applies these deletions to the outgoing redirect response,
+	// including chunked token cookies (.0, .1, ...) that manual header
+	// manipulation might miss.
+	for (const cookie of event.cookies.getAll()) {
+		if (cookie.name.includes('authjs')) {
+			event.cookies.delete(cookie.name, { path: '/' });
+		}
+	}
+	throw redirect(302, `/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
 }
 
 const appHandle: Handle = async ({ event, resolve }) => {
@@ -77,7 +83,7 @@ const appHandle: Handle = async ({ event, resolve }) => {
 					authMode = 'persona';
 				} else if (auth.status === 'error') {
 					event.cookies.delete(PERSONA_COOKIE, { path: '/' });
-					signoutRedirect(event.url.pathname + event.url.search);
+					clearSessionAndRedirect(event,event.url.pathname + event.url.search);
 				} else {
 					// Stale persona cookie without OIDC - clear it and redirect to login
 					event.cookies.delete(PERSONA_COOKIE, { path: '/' });
@@ -93,7 +99,7 @@ const appHandle: Handle = async ({ event, resolve }) => {
 				accessToken = auth.token;
 				authMode = 'oidc';
 			} else if (auth.status === 'error') {
-				signoutRedirect(event.url.pathname + event.url.search);
+				clearSessionAndRedirect(event,event.url.pathname + event.url.search);
 			} else if (DEMO_MODE) {
 				// Demo: require OIDC login, no auto-persona fallback
 				const callbackUrl = event.url.pathname + event.url.search;
@@ -111,7 +117,7 @@ const appHandle: Handle = async ({ event, resolve }) => {
 			accessToken = auth.token;
 			authMode = 'oidc';
 		} else if (auth.status === 'error') {
-			signoutRedirect(event.url.pathname + event.url.search);
+			clearSessionAndRedirect(event,event.url.pathname + event.url.search);
 		} else {
 			// Production: redirect to login — stale cookie cleanup handled by the outer wrapper
 			const callbackUrl = event.url.pathname + event.url.search;
