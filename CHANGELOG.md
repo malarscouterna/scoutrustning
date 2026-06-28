@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.5](https://github.com/malarscouterna/scoutrustning/compare/v0.10.4...v0.10.5) (2026-06-28)
+
+
+### Bug Fixes
+
+* **web:** fix infinite redirect loop on refresh token expiry ([6b47a7f](https://github.com/malarscouterna/scoutrustning/commit/6b47a7f53ba8020342528596b6f8b78ab7dd2e31))
+
 ## [0.10.4](https://github.com/malarscouterna/scoutrustning/compare/v0.10.3...v0.10.4) (2026-06-28)
 
 
