@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.4](https://github.com/malarscouterna/scoutrustning/compare/v0.10.3...v0.10.4) (2026-06-28)
+
+
+### Bug Fixes
+
+* **web:** reliably clear chunked Auth.js session cookies on token expiry ([4bc458f](https://github.com/malarscouterna/scoutrustning/commit/4bc458fbe7b36d3fed3ec30c40bfb54eabf0d819))
+
 ## [0.10.3](https://github.com/malarscouterna/scoutrustning/compare/v0.10.2...v0.10.3) (2026-06-10)
 
 
