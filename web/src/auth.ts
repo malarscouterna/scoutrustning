@@ -51,8 +51,10 @@ export const { handle: authHandle, signIn, signOut } = SvelteKitAuth({
 						: Date.now() + ((account.expires_in as number ?? 300) * 1000),
 				};
 			}
-			if (token.error === 'RefreshAccessTokenError') return token;
-			if (!token.refreshToken) return { ...token, error: 'RefreshAccessTokenError' };
+			// Returning null tells Auth.js to destroy the session, clearing all its
+			// cookies (including chunked tokens) via its own signout mechanism.
+			if (token.error === 'RefreshAccessTokenError') return null;
+			if (!token.refreshToken) return null;
 			if (Date.now() < (token.accessTokenExpires as number) - 30_000) return token;
 			return refreshAccessToken(token);
 		},

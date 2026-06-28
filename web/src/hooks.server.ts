@@ -14,15 +14,29 @@ function isPublicPath(pathname: string): boolean {
 	return pathname.startsWith('/auth/') || pathname === '/login' || pathname === '/guide';
 }
 
-async function getAccessToken(event: any): Promise<string | null> {
+type AuthResult =
+	| { status: 'ok'; token: string }
+	| { status: 'error' } // session exists but token is broken — needs signout
+	| { status: 'none' }; // no session at all
+
+async function getAuthResult(event: any): Promise<AuthResult> {
 	try {
 		const session = await event.locals.auth?.();
-		if (!session) return null;
-		if ((session as any).error === 'RefreshAccessTokenError') return null;
-		return (session as any).accessToken ?? null;
+		if (!session) return { status: 'none' };
+		if ((session as any).error) return { status: 'error' };
+		const token = (session as any).accessToken;
+		if (!token) return { status: 'error' };
+		return { status: 'ok', token };
 	} catch {
-		return null;
+		return { status: 'none' };
 	}
+}
+
+function signoutRedirect(callbackUrl: string): never {
+	// Route through Auth.js's own signout so it clears all its cookies (including
+	// chunked session tokens) reliably, then lands on /login.
+	const loginUrl = `/login?callbackUrl=${encodeURIComponent(callbackUrl)}`;
+	throw redirect(302, `/auth/signout?callbackUrl=${encodeURIComponent(loginUrl)}`);
 }
 
 const appHandle: Handle = async ({ event, resolve }) => {
@@ -57,9 +71,13 @@ const appHandle: Handle = async ({ event, resolve }) => {
 		if (personaKey) {
 			if (DEMO_MODE) {
 				// Demo: persona cookie only valid with an OIDC session
-				accessToken = await getAccessToken(event);
-				if (accessToken) {
+				const auth = await getAuthResult(event);
+				if (auth.status === 'ok') {
+					accessToken = auth.token;
 					authMode = 'persona';
+				} else if (auth.status === 'error') {
+					event.cookies.delete(PERSONA_COOKIE, { path: '/' });
+					signoutRedirect(event.url.pathname + event.url.search);
 				} else {
 					// Stale persona cookie without OIDC - clear it and redirect to login
 					event.cookies.delete(PERSONA_COOKIE, { path: '/' });
@@ -70,9 +88,12 @@ const appHandle: Handle = async ({ event, resolve }) => {
 				authMode = 'persona';
 			}
 		} else {
-			accessToken = await getAccessToken(event);
-			if (accessToken) {
+			const auth = await getAuthResult(event);
+			if (auth.status === 'ok') {
+				accessToken = auth.token;
 				authMode = 'oidc';
+			} else if (auth.status === 'error') {
+				signoutRedirect(event.url.pathname + event.url.search);
 			} else if (DEMO_MODE) {
 				// Demo: require OIDC login, no auto-persona fallback
 				const callbackUrl = event.url.pathname + event.url.search;
@@ -85,9 +106,12 @@ const appHandle: Handle = async ({ event, resolve }) => {
 			}
 		}
 	} else {
-		accessToken = await getAccessToken(event);
-		if (accessToken) {
+		const auth = await getAuthResult(event);
+		if (auth.status === 'ok') {
+			accessToken = auth.token;
 			authMode = 'oidc';
+		} else if (auth.status === 'error') {
+			signoutRedirect(event.url.pathname + event.url.search);
 		} else {
 			// Production: redirect to login — stale cookie cleanup handled by the outer wrapper
 			const callbackUrl = event.url.pathname + event.url.search;
@@ -164,12 +188,23 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const redirectingToLogin = response.status >= 300 && response.status < 400 && location.includes('/login');
 
 	if (redirectingToLogin) {
-		const hasSessionCookie = requestCookies.includes('authjs.session-token');
-		if (hasSessionCookie) {
+		// Auth.js splits large JWTs across multiple chunked cookies (.0, .1, ...).
+		// We must delete ALL chunk variants — deleting only the base name leaves chunks
+		// intact, Auth.js reconstructs the session from them, and the loop repeats.
+		const cookieNames = requestCookies.split(';').map((c) => c.trim().split('=')[0]);
+		const sessionCookieNames = cookieNames.filter((n) => n.includes('authjs.session-token'));
+		if (sessionCookieNames.length > 0) {
 			const headers = new Headers(response.headers);
-			headers.append('Set-Cookie', '__Secure-authjs.session-token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax; Secure');
+			for (const name of sessionCookieNames) {
+				const isSecure = name.startsWith('__Secure-');
+				const attrs = isSecure
+					? 'Path=/; Max-Age=0; HttpOnly; SameSite=Lax; Secure'
+					: 'Path=/; Max-Age=0; HttpOnly; SameSite=Lax';
+				headers.append('Set-Cookie', `${name}=; ${attrs}`);
+			}
+			// Also clear the callback-url cookie to avoid stale redirects
 			headers.append('Set-Cookie', '__Secure-authjs.callback-url=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax; Secure');
-			headers.append('Set-Cookie', 'authjs.session-token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax');
+			headers.append('Set-Cookie', 'authjs.callback-url=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax');
 			return new Response(null, { status: response.status, headers });
 		}
 	}
