@@ -460,6 +460,7 @@
   "error_article_group_not_found": "Artikelgruppen hittades inte.",
   "error_booking_is_not_editable": "Bokningen kan inte redigeras.",
   "error_booking_already_completed": "Bokningen är redan avslutad.",
+  "error_booking_is_picked_up": "Bokningen är uthämtad - slutför återlämningen först.",
   "error_booking_must_be_confirmed_or_approved": "Bokningen måste vara bekräftad eller godkänd.",
   "error_booking_must_be_in_picked_up_status": "Bokningen måste vara uthämtad.",
   "error_booking_must_be_in_picked_up_or_returned_status": "Bokningen måste vara uthämtad eller återlämnad.",

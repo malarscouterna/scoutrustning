@@ -84,7 +84,7 @@
 	);
 
 	let cancellable = $derived(
-		booking.status !== 'returned' && booking.status !== 'cancelled'
+		['draft', 'submitted', 'approved', 'confirmed', 'rejected'].includes(booking.status)
 	);
 
 	let anyPickedUp = $derived(items.some((i) => i.pickup_status));
