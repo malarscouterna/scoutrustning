@@ -11,6 +11,7 @@ export interface User {
 	group_name: string;
 	name: string;
 	email: string;
+	picture: string | null;
 	notification_email: string | null;
 	language: string;
 	teams: TeamMembership[];

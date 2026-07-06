@@ -555,7 +555,7 @@ func (q *Queries) GetAllOverdueBookings(ctx context.Context, date pgtype.Date) (
 }
 
 const getBooking = `-- name: GetBooking :one
-SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.notes, b.created_at, b.updated_at, t.name AS team_name, u.name AS creator_name
+SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.notes, b.created_at, b.updated_at, t.name AS team_name, u.name AS creator_name, u.picture AS creator_picture
 FROM bookings b
 LEFT JOIN teams t ON b.used_by_team_id = t.id
 LEFT JOIN users u ON b.created_by = u.id
@@ -582,6 +582,7 @@ type GetBookingRow struct {
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 	TeamName              pgtype.Text        `json:"team_name"`
 	CreatorName           pgtype.Text        `json:"creator_name"`
+	CreatorPicture        pgtype.Text        `json:"creator_picture"`
 }
 
 func (q *Queries) GetBooking(ctx context.Context, arg GetBookingParams) (GetBookingRow, error) {
@@ -602,6 +603,7 @@ func (q *Queries) GetBooking(ctx context.Context, arg GetBookingParams) (GetBook
 		&i.UpdatedAt,
 		&i.TeamName,
 		&i.CreatorName,
+		&i.CreatorPicture,
 	)
 	return i, err
 }
@@ -696,7 +698,7 @@ func (q *Queries) ListAllBookings(ctx context.Context, groupID string) ([]ListAl
 }
 
 const listBookingEvents = `-- name: ListBookingEvents :many
-SELECT be.id, be.group_id, be.booking_id, be.actor_id, be.event_type, be.message, be.metadata, be.created_at, u.name AS actor_name
+SELECT be.id, be.group_id, be.booking_id, be.actor_id, be.event_type, be.message, be.metadata, be.created_at, u.name AS actor_name, u.picture AS actor_picture
 FROM booking_events be
 JOIN users u ON be.actor_id = u.id
 WHERE be.booking_id = $1 AND be.group_id = $2
@@ -709,15 +711,16 @@ type ListBookingEventsParams struct {
 }
 
 type ListBookingEventsRow struct {
-	ID        pgtype.UUID        `json:"id"`
-	GroupID   string             `json:"group_id"`
-	BookingID pgtype.UUID        `json:"booking_id"`
-	ActorID   string             `json:"actor_id"`
-	EventType string             `json:"event_type"`
-	Message   string             `json:"message"`
-	Metadata  json.RawMessage    `json:"metadata"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	ActorName string             `json:"actor_name"`
+	ID           pgtype.UUID        `json:"id"`
+	GroupID      string             `json:"group_id"`
+	BookingID    pgtype.UUID        `json:"booking_id"`
+	ActorID      string             `json:"actor_id"`
+	EventType    string             `json:"event_type"`
+	Message      string             `json:"message"`
+	Metadata     json.RawMessage    `json:"metadata"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	ActorName    string             `json:"actor_name"`
+	ActorPicture pgtype.Text        `json:"actor_picture"`
 }
 
 func (q *Queries) ListBookingEvents(ctx context.Context, arg ListBookingEventsParams) ([]ListBookingEventsRow, error) {
@@ -739,6 +742,7 @@ func (q *Queries) ListBookingEvents(ctx context.Context, arg ListBookingEventsPa
 			&i.Metadata,
 			&i.CreatedAt,
 			&i.ActorName,
+			&i.ActorPicture,
 		); err != nil {
 			return nil, err
 		}

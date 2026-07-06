@@ -269,6 +269,61 @@ func (q *Queries) GetIssue(ctx context.Context, arg GetIssueParams) (GetIssueRow
 	return i, err
 }
 
+const getUserIssues = `-- name: GetUserIssues :many
+SELECT DISTINCT ir.id, ir.title, ir.severity, ir.status, ir.created_at
+FROM issue_reports ir
+WHERE ir.group_id = $1
+  AND ir.status IN ('open', 'in_progress')
+  AND (
+    ir.reporter_id = $2
+    OR ir.id IN (
+      SELECT issue_id FROM issue_assignees WHERE user_id = $2 AND group_id = $1
+    )
+  )
+ORDER BY ir.created_at DESC
+`
+
+type GetUserIssuesParams struct {
+	GroupID string `json:"group_id"`
+	UserID  string `json:"user_id"`
+}
+
+type GetUserIssuesRow struct {
+	ID        pgtype.UUID        `json:"id"`
+	Title     string             `json:"title"`
+	Severity  string             `json:"severity"`
+	Status    string             `json:"status"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+// Open/in-progress issues reported by or assigned to the given user. Used by the
+// user info card - callers must already be gated on issue_resolve permission.
+func (q *Queries) GetUserIssues(ctx context.Context, arg GetUserIssuesParams) ([]GetUserIssuesRow, error) {
+	rows, err := q.db.Query(ctx, getUserIssues, arg.GroupID, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetUserIssuesRow{}
+	for rows.Next() {
+		var i GetUserIssuesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Severity,
+			&i.Status,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const insertIssueAssignee = `-- name: InsertIssueAssignee :exec
 INSERT INTO issue_assignees (issue_id, user_id, group_id)
 VALUES ($1, $2, $3)

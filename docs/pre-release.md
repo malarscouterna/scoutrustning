@@ -19,6 +19,7 @@ Work to complete before moving from `/api/v0/` (pre-release) to v1.0.
 ## Other frontend gaps
 
 - [ ] Web header logo - fetch `logo_url` from group settings and render in top nav when present
+- [ ] Own-profile avatar in top nav - show the logged-in user's picture/initials top-right (e.g. via `UserAvatar`), clicking navigates to `/profile` (which already has language, notification settings, and the logout button) rather than opening the read-only `UserInfoCard`. Must not collide with the dev-mode persona switcher, which currently occupies that corner - needs a layout decision for how the two coexist in dev mode specifically.
 
 ---
 
@@ -32,6 +33,12 @@ Done in `fix(api): apply ExcludingBooking consistently on booking date change`:
 - Root cause was not a missing call site but the query itself: `AvailableArticlesExcludingBooking` had a second exclusion clause that filtered out articles already in the booking being edited - correct for `AddItems`/`SwapItem` (offering *new* items), wrong when `Update` reused it to revalidate the booking's *existing* items against new dates.
 - Fixed by adding an `exclude_own_items` boolean to the single query rather than duplicating it: `false` for `Update`'s own-item revalidation, `true` everywhere items are offered to add (`AddItems`, `SwapItem`, the `articles.go` add-item picker endpoint - the last one was missed on the first pass and caught by the full test suite).
 - Bookings have no `title` field, so that part of the description didn't apply; covered date-change-no-conflict, date-change-real-conflict, and unit-change-no-availability-check instead.
+
+**Regression observed (2026-07-06):** the "Inte tillgänglig för de valda datumen" conflict error reappeared when saving a draft's notes with dates unchanged. Not yet root-caused - reporter noted it may not be specific to a notes-only save, so don't assume the cause is scoped to that one field. One lead worth checking: `Update`'s `datesChanged` check (`api/internal/handler/bookings.go`) compares `pgtype.Date` structs with `!=`, which embeds a `time.Time` - built-in `==`/`!=` on `time.Time` can spuriously report a change even for an identical instant depending on how the two values were constructed (should use `.Time.Equal()` instead, or compare via formatted date strings). Needs proper reproduction and a fix, deferred to the same future commit as the `notes` → `title` rename below since both touch the same code path.
+
+### Booking title field
+
+Bookings currently have a `notes` field, not a `title`. The `book`/booking-detail UI functionally uses it as a title (single-line input, shown prominently), so rename `notes` → `title` end-to-end (migration, sqlc queries, handler request fields, frontend labels/messages, `UserOpenBooking`/`BookingCard` usages) and make it required (non-empty) on submission - currently it's optional and has no validation. Bundle the self-conflict regression fix above into this same commit since both touch `Update`'s request handling for this field.
 
 ### Copy booking flow
 
@@ -62,6 +69,8 @@ The current booking page conflates three distinct concerns into one undifferenti
 **1. Booking details** - title, dates, unit, items. Editable when the booking is in `draft` or `rejected` state.
 
 **2. Comment thread** - always visible, even before the booking is submitted. Users can add context while building the booking in draft. Comments are chronological. Approval events (submit, approve, reject, resubmit) appear inline in the thread as structured entries with a distinct visual style (not plain text bubbles). This makes the full history readable: a rejection followed by a resubmit is visible in order without context loss.
+
+**Essential:** the user must be able to post a comment while the booking is still in `draft`, independent of submitting - i.e. a free-standing "add comment" action in the thread itself, not only the optional message field bundled into the submit action in section 3 below. Without this, there's no way to leave context before the booking is ready to submit (e.g. "waiting on confirmation from X before I finalize dates").
 
 **3. Approval action area** - shown below the thread, contextual per `(status x role)`:
 - `draft` (user): submit button + optional message field. The "Vill ha bekräftelse från ansvarig" checkbox is shown but auto-checked and non-interactive (with hover tooltip explaining why) when any item in the booking requires approval. When no item requires approval, the checkbox is optional.
@@ -163,6 +172,13 @@ Several flows need to show information about another user (current booker, perso
 
 **Profile pictures:** Sourced from the Keycloak OIDC `picture` claim, stored alongside other user claims on login. Initials-based avatar as fallback when the claim is absent.
 
+Done in `feat(api,web): user info card component - full card and compact view`:
+- `users.picture` column added; `picture` OIDC claim parsed in `auth.go` and persisted on the login upsert alongside `name`/`email`; also exposed on `/me`.
+- New `GET /api/v0/users/{id}` endpoint (any authenticated group member) returns name, picture, notification email, team affiliations (`GetUserTeamAffiliations` joining `teams` against the target user's `team_ids`), and open bookings (`GetUserOpenBookings`). A booking is included if the user owns it (`created_by`) or has participated via a non-management action logged on `article_events` (`booked`/`picked_up`/`returned` - add items, pickup, return); submit/approve/reject live on `booking_events` and are intentionally excluded. Removing an item isn't logged as an `article_event` today, so it doesn't yet count as participation - tracked in `docs/BACKLOG.md`. The open-bookings status set depends on the caller's role - managers get all non-terminal statuses including `draft`/`rejected`, others get `submitted, approved, confirmed, picked_up`.
+- The endpoint also returns `issues`: open/in-progress issues the target user reported or is assigned to (`GetUserIssues`), gated on the *viewer's* `issue_resolve` permission (same `PermissionCache` check used elsewhere) - non-managers get an empty list rather than a 403, since the rest of the card is still valid for them.
+- `UserAvatar.svelte` (picture or initials fallback), `UserBadge.svelte` (compact, opens the full card on click), and `UserInfoCard.svelte` (full popup/sheet, fetches on open, highlights the team affiliation matching `contextBookingId` when supplied) added to `web/src/lib/components/`. The card visually splits open bookings into a normal section and a separate "endast synligt för utrustningsansvariga" section for `draft`/`rejected` bookings, so it's clear to a manager why a non-manager viewing the same profile would see fewer rows.
+- Integrated into the booking detail event thread (`bookings/[id]/+page.svelte`), replacing the previous bare `event.actor_name` text - the first real consumer, so items 10 and 11 can build on it directly. `ListBookingEvents` now also joins `actor_picture` so the inline badge (not just the popup) shows the real photo.
+
 ---
 
 ## Phase 2 remaining (inventory management)
@@ -185,7 +201,7 @@ Proposed commit sequence. Each item is a self-contained PR.
 3. ~~`fix(api,web): booking edit - apply ExcludingBooking consistently on date/unit/title change`~~ - Done. Root cause was the query's self-item exclusion, not variant choice; consolidated into a single query with an `exclude_own_items` flag.
 4. ~~`fix(web): cancel button - correct cancellable status allowlist`~~ - Done. Also fixed the `/book` cart page, which had no status check at all - likely the actual "avbokningsknapp saknas" cause.
 5. ~~`feat(api,web): personal bookings - group access switch + server-side approval enforcement`~~ - Done. See Personal bookings section above.
-6. `feat(api,web): user info card component - full card and compact view` - Shared component needed by 10 and 11. Uses Keycloak `picture` claim with initials fallback.
+6. ~~`feat(api,web): user info card component - full card and compact view`~~ - Done. See User info card component section above.
 7. `feat(api,web): booking comment thread and approval flow redesign` - Unified event/comment thread, structured approval events, always-checked confirmation when item requires approval. Depends on 1.
 8. `feat(api,web): booking auto-archive setting` - Group setting, cleanup job, advance notifications. Depends on 7.
 9. `feat(api,web): copy booking UI` - Expose existing API endpoint, date-first flow, unavailable items marked. Independent.
@@ -194,6 +210,7 @@ Proposed commit sequence. Each item is a self-contained PR.
 12. `feat(web): web header logo` - Fetch logo_url from group settings, render in top nav. Independent, can go anywhere.
 13. `feat(api,web): per-item descriptions for individually-tracked articles` - New `description` column on `articles`, edit field in manager article view, display on pickup checklist. Independent.
 14. `feat(web): free-form image crop in issue reporting` - Replace locked-ratio crop with free-form crop in the issue reporting upload flow. Independent.
+15. `fix(api,web): rename booking notes to title, require non-empty, fix self-conflict regression on update` - See Booking title field section above. Independent, but should land before 7 since the redesigned booking details section presents a title.
 
 ---
 

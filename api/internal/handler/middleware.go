@@ -34,6 +34,7 @@ func UpsertUserMiddleware(queries *db.Queries) func(http.Handler) http.Handler {
 				GroupID:        claims.GroupID,
 				Name:           claims.Name,
 				Email:          claims.Email,
+				Picture:        pgtype.Text{String: claims.Picture, Valid: claims.Picture != ""},
 				MaxAccessLevel: claims.MaxAccess,
 				TeamIds:        teamIDs,
 			})

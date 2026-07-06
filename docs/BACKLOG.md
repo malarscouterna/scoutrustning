@@ -25,6 +25,10 @@ Do this as its own focused PR, after the rename.
 
 `hooks.server.ts` logs `[auth] redirect to login` and `[auth] stale session cookie detected` on every unauthenticated request. Once the fix has been confirmed stable in production, remove these `console.log` calls or gate them behind a `DEBUG_AUTH` env flag.
 
+## RemoveItem does not log an article_event
+
+`BookingHandler.RemoveItem` (`api/internal/handler/bookings.go`) removes a booking item but never calls `LogArticleEvent`, unlike add (`booked`), pickup (`picked_up`), and return (`returned`). This means the user info card's "open bookings" participation query (`GetUserOpenBookings`, added in `feat(api,web): user info card component`) can't detect "removed an item" as a reason to list a booking for a non-owner - it only sees add/pickup/return. Add a `LogArticleEvent` call in `RemoveItem` (needs a new `article_events` event type, e.g. `unbooked`, added to the `article_events_type_check` constraint) and include it in `GetUserOpenBookings`'s `event_type IN (...)` list.
+
 ## Tailwind theme integration - dynamic class support
 
 Several badge/status colors are currently hardcoded as inline styles because Tailwind v4 + `@scouterna/tailwind-theme` only includes classes that appear as static strings at build time. Dynamic class composition (e.g. `class={badgeCls}`) gets purged. Affected: approval level badges in browse. Fix: either safelist the relevant color classes in the Tailwind config, or investigate whether the `@scouterna/tailwind-theme` package exposes CSS custom properties that can be used for inline color values instead.

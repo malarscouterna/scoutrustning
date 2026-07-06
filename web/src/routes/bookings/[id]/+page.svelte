@@ -4,6 +4,7 @@
 	import PickupChecklist from '$lib/components/PickupChecklist.svelte';
 	import ReturnChecklist from '$lib/components/ReturnChecklist.svelte';
 	import AddItemSheet from '$lib/components/AddItemSheet.svelte';
+	import UserBadge from '$lib/components/UserBadge.svelte';
 	import { isManager as checkManager } from '$lib/user';
 	import { cart } from '$lib/stores/cart.svelte';
 	import type { PageData } from './$types';
@@ -251,6 +252,13 @@
 				{/if}
 			</p>
 
+			{#if booking.creator_name}
+				<div class="flex items-center gap-2 text-sm text-neutral-500 mb-3">
+					<span>{m.page_booking_created_by_label()}</span>
+					<UserBadge userId={booking.created_by} name={booking.creator_name} picture={booking.creator_picture} contextBookingId={booking.id} size={18} />
+				</div>
+			{/if}
+
 			<!-- Action buttons up top -->
 			{#if booking.status === 'picked_up'}
 				<div class="flex flex-wrap gap-2 mb-4">
@@ -268,7 +276,7 @@
 					{#each bookingEvents as event}
 						<div class="px-4 py-2 text-sm {event.event_type === 'rejected' ? 'bg-red-50' : event.event_type === 'approved' ? 'bg-green-50' : 'bg-neutral-50'}">
 							<div class="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-neutral-500 mb-0.5">
-								<span class="font-medium text-neutral-700">{event.actor_name}</span>
+								<UserBadge userId={event.actor_id} name={event.actor_name} picture={event.actor_picture} contextBookingId={booking.id} size={18} />
 								<span>
 									{({'submitted': m.page_booking_event_submitted(), 'approved': m.page_booking_event_approved(), 'rejected': m.page_booking_event_rejected(), 'cancelled': m.page_booking_event_cancelled(), 'note': m.page_booking_event_commented()} as Record<string,string>)[event.event_type] ?? event.event_type}
 								</span>
