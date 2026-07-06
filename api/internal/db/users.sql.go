@@ -136,7 +136,7 @@ func (q *Queries) GetTeamMembersWithEmails(ctx context.Context, arg GetTeamMembe
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, group_id, name, email, active_group_id, created_at, updated_at, language, max_access_level, notification_prefs, team_ids, notification_email FROM users
+SELECT id, group_id, name, email, active_group_id, created_at, updated_at, language, max_access_level, notification_prefs, team_ids, notification_email, picture FROM users
 WHERE id = $1 AND group_id = $2
 `
 
@@ -161,6 +161,7 @@ func (q *Queries) GetUser(ctx context.Context, arg GetUserParams) (User, error) 
 		&i.NotificationPrefs,
 		&i.TeamIds,
 		&i.NotificationEmail,
+		&i.Picture,
 	)
 	return i, err
 }
@@ -180,6 +181,120 @@ func (q *Queries) GetUserNotificationPrefs(ctx context.Context, arg GetUserNotif
 	var notification_prefs json.RawMessage
 	err := row.Scan(&notification_prefs)
 	return notification_prefs, err
+}
+
+const getUserOpenBookings = `-- name: GetUserOpenBookings :many
+SELECT DISTINCT b.id, b.status, b.start_date, b.end_date, b.used_by_team_id, b.used_by_external, b.notes,
+    t.name AS team_name
+FROM bookings b
+LEFT JOIN teams t ON t.id = b.used_by_team_id
+WHERE b.group_id = $1
+  AND b.status = ANY($2::text[])
+  AND (
+    b.created_by = $3
+    OR EXISTS (
+      SELECT 1 FROM article_events ae
+      WHERE ae.group_id = $1
+        AND ae.actor_id = $3
+        AND ae.event_type IN ('booked', 'picked_up', 'returned')
+        AND ae.metadata->>'booking_id' = b.id::text
+    )
+  )
+ORDER BY b.start_date DESC
+`
+
+type GetUserOpenBookingsParams struct {
+	GroupID  string   `json:"group_id"`
+	Statuses []string `json:"statuses"`
+	ID       string   `json:"id"`
+}
+
+type GetUserOpenBookingsRow struct {
+	ID             pgtype.UUID `json:"id"`
+	Status         string      `json:"status"`
+	StartDate      pgtype.Date `json:"start_date"`
+	EndDate        pgtype.Date `json:"end_date"`
+	UsedByTeamID   pgtype.UUID `json:"used_by_team_id"`
+	UsedByExternal pgtype.Text `json:"used_by_external"`
+	Notes          string      `json:"notes"`
+	TeamName       pgtype.Text `json:"team_name"`
+}
+
+// Bookings the user owns, or has participated in via a non-management action
+// (adding items, pickup, return) logged on article_events. Management actions
+// (submit/approve/reject) live on booking_events and are intentionally excluded.
+func (q *Queries) GetUserOpenBookings(ctx context.Context, arg GetUserOpenBookingsParams) ([]GetUserOpenBookingsRow, error) {
+	rows, err := q.db.Query(ctx, getUserOpenBookings, arg.GroupID, arg.Statuses, arg.ID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetUserOpenBookingsRow{}
+	for rows.Next() {
+		var i GetUserOpenBookingsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Status,
+			&i.StartDate,
+			&i.EndDate,
+			&i.UsedByTeamID,
+			&i.UsedByExternal,
+			&i.Notes,
+			&i.TeamName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUserTeamAffiliations = `-- name: GetUserTeamAffiliations :many
+SELECT t.id, t.name, t.type, t.access_level
+FROM teams t
+JOIN users u ON t.id = ANY(u.team_ids)
+WHERE u.id = $1 AND u.group_id = $2 AND t.group_id = $2
+ORDER BY t.type, t.name
+`
+
+type GetUserTeamAffiliationsParams struct {
+	ID      string `json:"id"`
+	GroupID string `json:"group_id"`
+}
+
+type GetUserTeamAffiliationsRow struct {
+	ID          pgtype.UUID `json:"id"`
+	Name        string      `json:"name"`
+	Type        string      `json:"type"`
+	AccessLevel string      `json:"access_level"`
+}
+
+func (q *Queries) GetUserTeamAffiliations(ctx context.Context, arg GetUserTeamAffiliationsParams) ([]GetUserTeamAffiliationsRow, error) {
+	rows, err := q.db.Query(ctx, getUserTeamAffiliations, arg.ID, arg.GroupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetUserTeamAffiliationsRow{}
+	for rows.Next() {
+		var i GetUserTeamAffiliationsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Type,
+			&i.AccessLevel,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listUsersByGroup = `-- name: ListUsersByGroup :many
@@ -290,15 +405,16 @@ func (q *Queries) UpdateUserLanguage(ctx context.Context, arg UpdateUserLanguage
 }
 
 const upsertUser = `-- name: UpsertUser :one
-INSERT INTO users (id, group_id, name, email, max_access_level, team_ids)
-VALUES ($1, $2, $3, $4, $5, $6::uuid[])
+INSERT INTO users (id, group_id, name, email, picture, max_access_level, team_ids)
+VALUES ($1, $2, $3, $4, $5, $6, $7::uuid[])
 ON CONFLICT (id) DO UPDATE SET
     name = EXCLUDED.name,
     email = EXCLUDED.email,
+    picture = EXCLUDED.picture,
     max_access_level = EXCLUDED.max_access_level,
     team_ids = EXCLUDED.team_ids,
     updated_at = now()
-RETURNING id, group_id, name, email, active_group_id, created_at, updated_at, language, max_access_level, notification_prefs, team_ids, notification_email
+RETURNING id, group_id, name, email, active_group_id, created_at, updated_at, language, max_access_level, notification_prefs, team_ids, notification_email, picture
 `
 
 type UpsertUserParams struct {
@@ -306,6 +422,7 @@ type UpsertUserParams struct {
 	GroupID        string        `json:"group_id"`
 	Name           string        `json:"name"`
 	Email          string        `json:"email"`
+	Picture        pgtype.Text   `json:"picture"`
 	MaxAccessLevel string        `json:"max_access_level"`
 	TeamIds        []pgtype.UUID `json:"team_ids"`
 }
@@ -316,6 +433,7 @@ func (q *Queries) UpsertUser(ctx context.Context, arg UpsertUserParams) (User, e
 		arg.GroupID,
 		arg.Name,
 		arg.Email,
+		arg.Picture,
 		arg.MaxAccessLevel,
 		arg.TeamIds,
 	)
@@ -333,6 +451,7 @@ func (q *Queries) UpsertUser(ctx context.Context, arg UpsertUserParams) (User, e
 		&i.NotificationPrefs,
 		&i.TeamIds,
 		&i.NotificationEmail,
+		&i.Picture,
 	)
 	return i, err
 }

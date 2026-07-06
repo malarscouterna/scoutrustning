@@ -109,7 +109,7 @@ func main() {
 		groupSettings := &handler.GroupSettingsHandler{Q: queries, Pool: pool, Perms: permCache, DemoMode: demoMode}
 		issueHandler := &handler.IssueHandler{Q: queries, Perms: permCache, Notifier: eventNotifier, GChatNotifier: eventGChatNotifier, BaseURL: appBaseURL}
 		imageHandler := &images.Handler{Q: queries, ImageDir: imageDir}
-		userHandler := &handler.UserHandler{Q: queries, DemoMode: demoMode, PersonaIDs: personaIDs}
+		userHandler := &handler.UserHandler{Q: queries, Perms: permCache, DemoMode: demoMode, PersonaIDs: personaIDs}
 		logoHandler := &handler.LogoHandler{Q: queries, ImageDir: imageDir}
 
 		r.Mount("/me", meHandler.Routes())

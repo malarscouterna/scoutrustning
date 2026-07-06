@@ -73,6 +73,7 @@ func (h *MeHandler) Get(w http.ResponseWriter, r *http.Request) {
 		"group_name":         groupName,
 		"name":               claims.Name,
 		"email":              claims.Email,
+		"picture":            claims.Picture,
 		"notification_email": notificationEmail,
 		"teams":              claims.Teams,
 		"max_access":         claims.MaxAccess,

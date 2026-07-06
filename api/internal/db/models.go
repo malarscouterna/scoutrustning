@@ -264,4 +264,5 @@ type User struct {
 	NotificationPrefs json.RawMessage    `json:"notification_prefs"`
 	TeamIds           []pgtype.UUID      `json:"team_ids"`
 	NotificationEmail pgtype.Text        `json:"notification_email"`
+	Picture           pgtype.Text        `json:"picture"`
 }

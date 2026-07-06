@@ -763,6 +763,26 @@ In demo mode, returns only configured personas; real user records are hidden.
 [{"id": "string", "name": "string", "email": "string", "access_level": "trusted"}]
 ```
 
+### `GET /api/v0/users/{id}`
+Returns another group member's info for the user info card: name, profile picture, notification email, team affiliations, and open bookings. Any authenticated group member can call this.
+
+`open_bookings` includes bookings the user owns, or has participated in via a non-management action (add items, pickup, return - logged on `article_events`). Submit/approve/reject don't count. Status filter depends on the caller's role: managers see all non-terminal statuses (`draft, submitted, approved, rejected, confirmed, picked_up`); non-managers see only `submitted, approved, confirmed, picked_up`.
+
+`issues` lists open/in-progress issues the target user reported or is assigned to. Only populated when the *caller* has `issue_resolve` permission - otherwise an empty array (not a 403, since the rest of the response is still valid).
+
+**Response** `200`
+```json
+{
+  "id": "string",
+  "name": "string",
+  "picture": "string | null",
+  "notification_email": "string | null",
+  "teams": [{"id": "string", "name": "string", "type": "troop", "access_level": "trusted"}],
+  "open_bookings": [{"id": "string", "status": "submitted", "start_date": "2026-06-01", "end_date": "2026-06-05", "used_by_team_id": "string", "team_name": "string", "used_by_external": "string", "notes": "string"}],
+  "issues": [{"id": "string", "title": "string", "severity": "unusable", "status": "open", "created_at": "2026-06-01"}]
+}
+```
+
 ---
 
 ## User
@@ -778,6 +798,7 @@ Returns the authenticated user's resolved profile.
   "group_name": "Mälarscouterna",
   "name": "Anna Svensson",
   "email": "anna@example.com",
+  "picture": "string | null",
   "teams": [...],
   "max_access": "manager",
   "language": "sv",

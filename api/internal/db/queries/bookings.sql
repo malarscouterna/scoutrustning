@@ -25,7 +25,7 @@ INSERT INTO bookings (
 RETURNING *;
 
 -- name: GetBooking :one
-SELECT b.*, t.name AS team_name, u.name AS creator_name
+SELECT b.*, t.name AS team_name, u.name AS creator_name, u.picture AS creator_picture
 FROM bookings b
 LEFT JOIN teams t ON b.used_by_team_id = t.id
 LEFT JOIN users u ON b.created_by = u.id
@@ -203,7 +203,7 @@ VALUES (@group_id, @booking_id, @actor_id, @event_type, @message, @metadata)
 RETURNING *;
 
 -- name: ListBookingEvents :many
-SELECT be.*, u.name AS actor_name
+SELECT be.*, u.name AS actor_name, u.picture AS actor_picture
 FROM booking_events be
 JOIN users u ON be.actor_id = u.id
 WHERE be.booking_id = @booking_id AND be.group_id = @group_id

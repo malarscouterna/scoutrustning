@@ -35,6 +35,21 @@ WHERE ir.group_id = @group_id
     ))
 ORDER BY ir.updated_at DESC, ir.created_at DESC;
 
+-- name: GetUserIssues :many
+-- Open/in-progress issues reported by or assigned to the given user. Used by the
+-- user info card - callers must already be gated on issue_resolve permission.
+SELECT DISTINCT ir.id, ir.title, ir.severity, ir.status, ir.created_at
+FROM issue_reports ir
+WHERE ir.group_id = @group_id
+  AND ir.status IN ('open', 'in_progress')
+  AND (
+    ir.reporter_id = @user_id
+    OR ir.id IN (
+      SELECT issue_id FROM issue_assignees WHERE user_id = @user_id AND group_id = @group_id
+    )
+  )
+ORDER BY ir.created_at DESC;
+
 -- name: UpdateIssue :one
 UPDATE issue_reports SET
     title       = COALESCE(sqlc.narg('title')::text, title),

@@ -72,6 +72,7 @@ type Claims struct {
 	GroupID   string           `json:"group_id"`
 	Name      string           `json:"name"`
 	Email     string           `json:"email"`
+	Picture   string           `json:"picture"`
 	Teams     []TeamMembership `json:"teams"`
 	MaxAccess string           `json:"max_access"`
 }
@@ -244,6 +245,7 @@ func Middleware(cfg MiddlewareConfig) func(http.Handler) http.Handler {
 			// Extract raw claims from the token
 			name := getStringClaim(mapClaims, "name")
 			email := getStringClaim(mapClaims, "email")
+			picture := getStringClaim(mapClaims, "picture")
 			preferredUsername := getStringClaim(mapClaims, "preferred_username")
 
 			// Extract member ID from preferred_username ("scoutnet|3169207" → "3169207")
@@ -342,6 +344,7 @@ func Middleware(cfg MiddlewareConfig) func(http.Handler) http.Handler {
 				GroupID:   groupID,
 				Name:      name,
 				Email:     email,
+				Picture:   picture,
 				Teams:     teams,
 				MaxAccess: maxAccess,
 			}

@@ -72,6 +72,7 @@ export interface Booking {
 	used_by_external_contact: string | null;
 	team_name: string | null;
 	creator_name: string | null;
+	creator_picture: string | null;
 	status: string;
 	start_date: string;
 	end_date: string;
@@ -116,6 +117,7 @@ export interface BookingEvent {
 	booking_id: string;
 	actor_id: string;
 	actor_name: string;
+	actor_picture: string | null;
 	event_type: string;
 	message: string;
 	metadata: Record<string, any>;
@@ -198,6 +200,42 @@ export interface GroupMember {
 	name: string;
 	email: string;
 	access_level: string;
+}
+
+export interface UserTeamAffiliation {
+	id: string;
+	name: string;
+	type: string;
+	access_level: string;
+}
+
+export interface UserOpenBooking {
+	id: string;
+	status: string;
+	start_date: string;
+	end_date: string;
+	used_by_team_id?: string;
+	team_name?: string;
+	used_by_external?: string;
+	notes?: string;
+}
+
+export interface UserIssueSummary {
+	id: string;
+	title: string;
+	severity: string;
+	status: string;
+	created_at: string;
+}
+
+export interface UserInfo {
+	id: string;
+	name: string;
+	picture: string | null;
+	notification_email: string | null;
+	teams: UserTeamAffiliation[];
+	open_bookings: UserOpenBooking[];
+	issues: UserIssueSummary[];
 }
 
 export interface IssueEvent {
@@ -294,7 +332,7 @@ async function requestMut<T>(path: string, method: string, body: unknown, opts: 
 
 export function createApiClient(opts: FetchOptions = {}) {
 	return {
-		getMe: () => request<{ member_id: string; group_id: string; group_name: string; name: string; email: string; notification_email: string | null; teams: { team_id: string; team_name: string; team_type: string; access_level: string }[]; max_access: string }>('/me', opts),
+		getMe: () => request<{ member_id: string; group_id: string; group_name: string; name: string; email: string; picture: string | null; notification_email: string | null; teams: { team_id: string; team_name: string; team_type: string; access_level: string }[]; max_access: string }>('/me', opts),
 		listArticles: (params?: { search?: string; category_id?: string; location_id?: string; status?: string; mine?: boolean; with_availability?: boolean; date?: string }) => {
 			const query = new URLSearchParams();
 			if (params?.search) query.set('search', params.search);
@@ -584,6 +622,7 @@ updateLanguage: (language: string | null) =>
 			requestMut<void>(`/issues/${id}/assignees/${userId}`, 'DELETE', undefined, opts),
 		listGroupMembers: (accessLevels?: string) =>
 			request<GroupMember[]>(`/users${accessLevels ? `?access_levels=${accessLevels}` : ''}`, opts),
+		getUserInfo: (id: string) => request<UserInfo>(`/users/${id}`, opts),
 		addIssueArticle: (id: string, articleId: string) =>
 			requestMut<IssueDetail>(`/issues/${id}/articles`, 'POST', { article_id: articleId }, opts),
 		removeIssueArticle: (id: string, articleId: string) =>
