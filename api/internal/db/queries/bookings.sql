@@ -25,15 +25,17 @@ INSERT INTO bookings (
 RETURNING *;
 
 -- name: GetBooking :one
-SELECT b.*, t.name AS team_name
+SELECT b.*, t.name AS team_name, u.name AS creator_name
 FROM bookings b
 LEFT JOIN teams t ON b.used_by_team_id = t.id
+LEFT JOIN users u ON b.created_by = u.id
 WHERE b.id = @id AND b.group_id = @group_id;
 
 -- name: ListBookingsByUser :many
-SELECT b.*, t.name AS team_name
+SELECT b.*, t.name AS team_name, u.name AS creator_name
 FROM bookings b
 LEFT JOIN teams t ON b.used_by_team_id = t.id
+LEFT JOIN users u ON b.created_by = u.id
 WHERE b.group_id = @group_id
     AND (b.created_by = @user_id OR b.used_by_team_id = ANY(
         SELECT tm.id FROM teams tm WHERE tm.group_id = @group_id AND tm.name = ANY(@team_names::text[])
@@ -41,16 +43,18 @@ WHERE b.group_id = @group_id
 ORDER BY b.created_at DESC;
 
 -- name: ListAllBookings :many
-SELECT b.*, t.name AS team_name
+SELECT b.*, t.name AS team_name, u.name AS creator_name
 FROM bookings b
 LEFT JOIN teams t ON b.used_by_team_id = t.id
+LEFT JOIN users u ON b.created_by = u.id
 WHERE b.group_id = @group_id
 ORDER BY b.created_at DESC;
 
 -- name: ListBookingsByStatus :many
-SELECT b.*, t.name AS team_name
+SELECT b.*, t.name AS team_name, u.name AS creator_name
 FROM bookings b
 LEFT JOIN teams t ON b.used_by_team_id = t.id
+LEFT JOIN users u ON b.created_by = u.id
 WHERE b.group_id = @group_id AND b.status = @status
 ORDER BY b.start_date;
 

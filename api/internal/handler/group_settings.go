@@ -62,6 +62,7 @@ type groupSettingsResponse struct {
 	ArticleEditRole       string   `json:"article_edit_role"`
 	IssueResolveRole      string   `json:"issue_resolve_role"`
 	ManagerNotesRole      string   `json:"manager_notes_role"`
+	PersonalBookingRole   string   `json:"personal_booking_role"`
 	DefaultLanguage       string   `json:"default_language"`
 	NotificationChannels  []string `json:"notification_channels"`
 	LogoURL               string   `json:"logo_url"` // empty string when no logo uploaded
@@ -84,6 +85,7 @@ func (h *GroupSettingsHandler) Get(w http.ResponseWriter, r *http.Request) {
 			ArticleEditRole:      "manager",
 			IssueResolveRole:     "manager",
 			ManagerNotesRole:     "manager",
+			PersonalBookingRole:  "book",
 			DefaultLanguage:      "sv",
 			NotificationChannels: []string{"email"},
 			SystemSmtpConfigured: os.Getenv("SMTP_DEFAULT_HOST") != "",
@@ -114,6 +116,7 @@ type groupSettingsRequest struct {
 	ArticleEditRole       string  `json:"article_edit_role"`
 	IssueResolveRole      string  `json:"issue_resolve_role"`
 	ManagerNotesRole      string  `json:"manager_notes_role"`
+	PersonalBookingRole   string  `json:"personal_booking_role"`
 	DefaultLanguage       string  `json:"default_language"`
 }
 
@@ -164,14 +167,16 @@ func (h *GroupSettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	// Validate configurable permission levels with minimum bounds
 	permFields := map[string]*string{
-		"booking_role":       &req.BookingRole,
-		"article_edit_role":  &req.ArticleEditRole,
-		"issue_resolve_role": &req.IssueResolveRole,
-		"manager_notes_role": &req.ManagerNotesRole,
+		"booking_role":          &req.BookingRole,
+		"article_edit_role":     &req.ArticleEditRole,
+		"issue_resolve_role":    &req.IssueResolveRole,
+		"manager_notes_role":    &req.ManagerNotesRole,
+		"personal_booking_role": &req.PersonalBookingRole,
 	}
 	permDefaults := map[string]string{
 		"booking_role": "book", "article_edit_role": "manager",
 		"issue_resolve_role": "manager", "manager_notes_role": "manager",
+		"personal_booking_role": "book",
 	}
 	for key, val := range permFields {
 		if *val == "" {
@@ -248,6 +253,7 @@ func (h *GroupSettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		ArticleEditRole:       req.ArticleEditRole,
 		IssueResolveRole:      req.IssueResolveRole,
 		ManagerNotesRole:      req.ManagerNotesRole,
+		PersonalBookingRole:   req.PersonalBookingRole,
 		DefaultLanguage:       defaultLanguage,
 	}); err != nil {
 		WriteError(w, http.StatusInternalServerError, "failed to save settings")
@@ -446,6 +452,7 @@ func settingsToResponse(s db.GroupSetting) groupSettingsResponse {
 		ArticleEditRole:       s.ArticleEditRole,
 		IssueResolveRole:      s.IssueResolveRole,
 		ManagerNotesRole:      s.ManagerNotesRole,
+		PersonalBookingRole:   s.PersonalBookingRole,
 		DefaultLanguage:       s.DefaultLanguage,
 		NotificationChannels:  s.EnabledChannels,
 	}

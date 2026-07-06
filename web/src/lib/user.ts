@@ -21,6 +21,7 @@ export interface User {
 		article_edit: string;
 		issue_resolve: string;
 		manager_notes: string;
+		personal_booking: string;
 	};
 }
 
@@ -56,6 +57,11 @@ export function canResolveIssues(user: User | null): boolean {
 
 export function canSeeManagerNotes(user: User | null): boolean {
 	const required = user?.permissions?.manager_notes ?? 'manager';
+	return accessAtLeast(user?.max_access, required);
+}
+
+export function canBookPersonal(user: User | null): boolean {
+	const required = user?.permissions?.personal_booking ?? 'book';
 	return accessAtLeast(user?.max_access, required);
 }
 

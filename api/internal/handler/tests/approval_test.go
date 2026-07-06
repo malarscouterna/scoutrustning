@@ -20,7 +20,7 @@ func TestApprovalFlow(t *testing.T) {
 		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
-		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries}).Routes())
+		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/teams", (&handler.TeamHandler{Q: env.Queries}).Routes())
 	})
 
@@ -132,9 +132,18 @@ func TestApprovalFlow(t *testing.T) {
 	}
 
 	t.Run("none approval auto-confirms for leader", func(t *testing.T) {
-		_, status := bookAndSubmit(leader, "FreeGear")
+		// Booked under the leader's own team - personal (no-team) bookings
+		// always require approval regardless of article approval level.
+		_, status := bookAndSubmit(leader, "FreeGear", "Yggdrasil")
 		if status != "confirmed" {
 			t.Errorf("expected confirmed, got %s", status)
+		}
+	})
+
+	t.Run("none approval on personal booking still needs approval", func(t *testing.T) {
+		_, status := bookAndSubmit(leader, "FreeGear")
+		if status != "submitted" {
+			t.Errorf("expected submitted (personal bookings always need approval), got %s", status)
 		}
 	})
 

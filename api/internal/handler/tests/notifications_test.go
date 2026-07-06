@@ -21,7 +21,7 @@ func mountNotifRoutes(env *testutil.TestEnv, notifier *notifications.CapturingNo
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
 		r.Mount("/teams", (&handler.TeamHandler{Q: env.Queries}).Routes())
-		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Notifier: notifier, BaseURL: "http://test.example"}).Routes())
+		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries), Notifier: notifier, BaseURL: "http://test.example"}).Routes())
 		r.Mount("/issues", (&handler.IssueHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries), Notifier: notifier, BaseURL: "http://test.example"}).Routes())
 	})
 }

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { createApiClient, type BookingItem } from '$lib/api/client';
-	import { hasRole } from '$lib/user';
+	import { hasRole, canBookPersonal } from '$lib/user';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { cart } from '$lib/stores/cart.svelte';
@@ -15,6 +15,7 @@
 	const api = createApiClient();
 
 	let isManager = $derived(hasRole($page.data.user, 'equipment_manager'));
+	let canPersonal = $derived(canBookPersonal($page.data.user));
 	let myTeamSet = $derived(new Set(($page.data.user?.teams ?? []).map((t: { team_name: string }) => t.team_name)));
 	let userTeams = $derived.by(() => {
 		const all = isManager ? data.teams : data.teams.filter(u => myTeamSet.has(u.name));
@@ -260,7 +261,9 @@
 					{#each userTeams.filter(u => myTeamSet.has(u.name)) as unit}
 						<option value={unit.id}>{unit.name} ({msg(`team_access_${unit.access_level}`) ?? unit.access_level})</option>
 					{/each}
-					<option value="">{m.page_book_personal()}</option>
+					{#if canPersonal}
+						<option value="">{m.page_book_personal()}</option>
+					{/if}
 					{#if isManager}
 						{@const otherTeams = userTeams.filter(u => !myTeamSet.has(u.name))}
 						{#if otherTeams.length > 0}
@@ -329,7 +332,9 @@
 					{#each userTeams.filter(u => myTeamSet.has(u.name)) as unit}
 						<option value={unit.id}>{unit.name} ({msg(`team_access_${unit.access_level}`) ?? unit.access_level})</option>
 					{/each}
-					<option value="">{m.page_book_personal()}</option>
+					{#if canPersonal}
+						<option value="">{m.page_book_personal()}</option>
+					{/if}
 					{#if isManager}
 						{@const otherTeams = userTeams.filter(u => !myTeamSet.has(u.name))}
 						{#if otherTeams.length > 0}

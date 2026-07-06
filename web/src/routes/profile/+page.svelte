@@ -243,6 +243,7 @@
 		{ key: 'article_edit_role', label: m.page_profile_perm_edit_articles(), min: 'book' },
 		{ key: 'issue_resolve_role', label: m.page_profile_perm_manage_issues(), min: 'book' },
 		{ key: 'manager_notes_role', label: m.page_profile_perm_internal_notes(), min: 'trusted' },
+		{ key: 'personal_booking_role', label: m.page_profile_perm_personal_booking(), min: 'view' },
 	] as const);
 	let defaultAccessConfig = $derived([
 		{ key: 'default_access_unknown', label: m.page_profile_default_unknown() },
@@ -262,6 +263,7 @@
 				article_edit_role: gs.article_edit_role ?? 'manager',
 				issue_resolve_role: gs.issue_resolve_role ?? 'manager',
 				manager_notes_role: gs.manager_notes_role ?? 'manager',
+				personal_booking_role: gs.personal_booking_role ?? 'book',
 				default_access_unknown: gs.default_access_unknown ?? 'view',
 				default_access_troop: gs.default_access_troop ?? 'book',
 				default_access_role: gs.default_access_role ?? 'book',

@@ -88,6 +88,9 @@
 								<span class="text-xs bg-neutral-50 text-neutral-600 px-1.5 py-0.5 rounded">{booking.used_by_external}</span>
 							{:else}
 								<span class="text-xs text-neutral-400">{m.page_bookings_personal()}</span>
+								{#if booking.creator_name}
+									<span class="text-xs text-neutral-400">— {booking.creator_name}</span>
+								{/if}
 							{/if}
 						</div>
 						<span class="text-xs px-2 py-0.5 rounded {bookingStatusColors[booking.status] ?? 'bg-neutral-100'}">

@@ -48,11 +48,14 @@ func setupReturnEnv(t *testing.T, env *testutil.TestEnv, articleCount, bookCount
 		articleIDs = append(articleIDs, article["id"].(string))
 	}
 
-	// Create booking spanning today (realistic for pickup/return)
+	// Create booking spanning today (realistic for pickup/return). Assigned to
+	// the leader's own team so it auto-confirms - personal (no-team) bookings
+	// always require manager approval and are not what this suite tests.
+	teamID := getTeamID(t, leader, "Yggdrasil")
 	now := time.Now()
 	startStr := now.Format("2006-01-02")
 	endStr := now.AddDate(0, 0, 5).Format("2006-01-02")
-	b, _ := json.Marshal(map[string]any{"start_date": startStr, "end_date": endStr})
+	b, _ := json.Marshal(map[string]any{"start_date": startStr, "end_date": endStr, "used_by_team_id": teamID})
 	resp, _ = leader.Post("/api/v0/bookings", bytes.NewReader(b))
 	var booking map[string]any
 	json.NewDecoder(resp.Body).Decode(&booking)
@@ -91,7 +94,8 @@ func mountReturnRoutes(env *testutil.TestEnv) {
 		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
-		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries}).Routes())
+		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
+		r.Mount("/teams", (&handler.TeamHandler{Q: env.Queries}).Routes())
 	})
 }
 

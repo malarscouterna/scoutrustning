@@ -71,6 +71,7 @@ export interface Booking {
 	used_by_external: string | null;
 	used_by_external_contact: string | null;
 	team_name: string | null;
+	creator_name: string | null;
 	status: string;
 	start_date: string;
 	end_date: string;
@@ -157,6 +158,7 @@ export interface GroupSettings {
 	article_edit_role: string;
 	issue_resolve_role: string;
 	manager_notes_role: string;
+	personal_booking_role: string;
 	default_language: string;
 	notification_channels: string[];
 }

@@ -78,11 +78,12 @@ func (h *MeHandler) Get(w http.ResponseWriter, r *http.Request) {
 		"max_access":         claims.MaxAccess,
 		"language":           lang,
 		"permissions": map[string]string{
-			"image_upload":  perms.ImageUpload,
-			"booking":       perms.Booking,
-			"article_edit":  perms.ArticleEdit,
-			"issue_resolve": perms.IssueResolve,
-			"manager_notes": perms.ManagerNotes,
+			"image_upload":     perms.ImageUpload,
+			"booking":          perms.Booking,
+			"article_edit":     perms.ArticleEdit,
+			"issue_resolve":    perms.IssueResolve,
+			"manager_notes":    perms.ManagerNotes,
+			"personal_booking": perms.PersonalBooking,
 		},
 	})
 }

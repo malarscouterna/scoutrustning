@@ -93,8 +93,13 @@ A personal booking covers a member borrowing equipment for scout or external use
 - A group-level access switch controls who can create personal bookings: managers, trusted, bookers, or viewers. Follows the same pattern as the existing per-team access level switches.
 
 **UX:**
-- "Personlig bokning" appears as the last option in the unit dropdown, below a visual divider. For managers, it sits below the divider that separates their own teams from all other teams. For normal users, it is the last item. Less prominent but not hidden.
+- "Personlig bokning" appears as the last option among the user's own units in the unit dropdown, before any other-teams section (managers only see other teams below a divider). No divider is needed between own units and the personal option itself.
 - In the bookings list, personal bookings show the creator's name so managers can distinguish between users' personal bookings.
+
+Done in `fix(web,api): personal bookings - group access switch + server-side approval enforcement`:
+- `needsApprovalForLevel` now forces approval whenever a booking has no team, regardless of article `approval_level` - enforced server-side across create/update/submit/add-item/remove-item flows.
+- New `personal_booking_role` group setting (`view`/`book`/`trusted`/`manager`, default `book`) gates who can create a personal booking at all; checked server-side in `Create`, exposed to all users via `/me` permissions (needed client-side to decide whether to show the dropdown option), and configurable by managers in group settings.
+- Booking list queries now join `users` for `creator_name`, shown on personal bookings in both the dashboard and the full bookings list.
 
 ### Terminology - avdelning/roll
 
@@ -168,9 +173,9 @@ Proposed commit sequence. Each item is a self-contained PR.
 
 1. ~~`fix(web): terminology - replace generic avdelning with enhet in sv.json and UI`~~ - Done as `fix(web): consistent avdelning/roll phrasing, sort troops before roles` (no umbrella term; see Terminology section above).
 2. ~~`feat(web): rename team settings page to Enheter, split by troop/roll`~~ - Covered by commit 1: troop/role division achieved via sort + divider on the existing page, no rename or restructure needed.
-3. `fix(api,web): booking edit - apply ExcludingBooking consistently on date/unit/title change` - API fix + tests. Independent.
-4. `fix(web): cancel button - correct cancellable status allowlist` - After missing-button case reproduced. Independent.
-5. `feat(api,web): personal bookings - group access switch + server-side approval enforcement` - New group setting, API enforcement, UI ordering. Independent.
+3. ~~`fix(api,web): booking edit - apply ExcludingBooking consistently on date/unit/title change`~~ - Done. Root cause was the query's self-item exclusion, not variant choice; consolidated into a single query with an `exclude_own_items` flag.
+4. ~~`fix(web): cancel button - correct cancellable status allowlist`~~ - Done. Also fixed the `/book` cart page, which had no status check at all - likely the actual "avbokningsknapp saknas" cause.
+5. ~~`feat(api,web): personal bookings - group access switch + server-side approval enforcement`~~ - Done. See Personal bookings section above.
 6. `feat(api,web): user info card component - full card and compact view` - Shared component needed by 10 and 11. Uses Keycloak `picture` claim with initials fallback.
 7. `feat(api,web): booking comment thread and approval flow redesign` - Unified event/comment thread, structured approval events, always-checked confirmation when item requires approval. Depends on 1.
 8. `feat(api,web): booking auto-archive setting` - Group setting, cleanup job, advance notifications. Depends on 7.

@@ -555,9 +555,10 @@ func (q *Queries) GetAllOverdueBookings(ctx context.Context, date pgtype.Date) (
 }
 
 const getBooking = `-- name: GetBooking :one
-SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.notes, b.created_at, b.updated_at, t.name AS team_name
+SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.notes, b.created_at, b.updated_at, t.name AS team_name, u.name AS creator_name
 FROM bookings b
 LEFT JOIN teams t ON b.used_by_team_id = t.id
+LEFT JOIN users u ON b.created_by = u.id
 WHERE b.id = $1 AND b.group_id = $2
 `
 
@@ -580,6 +581,7 @@ type GetBookingRow struct {
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 	TeamName              pgtype.Text        `json:"team_name"`
+	CreatorName           pgtype.Text        `json:"creator_name"`
 }
 
 func (q *Queries) GetBooking(ctx context.Context, arg GetBookingParams) (GetBookingRow, error) {
@@ -599,6 +601,7 @@ func (q *Queries) GetBooking(ctx context.Context, arg GetBookingParams) (GetBook
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.TeamName,
+		&i.CreatorName,
 	)
 	return i, err
 }
@@ -632,9 +635,10 @@ func (q *Queries) GetTeamByID(ctx context.Context, arg GetTeamByIDParams) (Team,
 }
 
 const listAllBookings = `-- name: ListAllBookings :many
-SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.notes, b.created_at, b.updated_at, t.name AS team_name
+SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.notes, b.created_at, b.updated_at, t.name AS team_name, u.name AS creator_name
 FROM bookings b
 LEFT JOIN teams t ON b.used_by_team_id = t.id
+LEFT JOIN users u ON b.created_by = u.id
 WHERE b.group_id = $1
 ORDER BY b.created_at DESC
 `
@@ -653,6 +657,7 @@ type ListAllBookingsRow struct {
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 	TeamName              pgtype.Text        `json:"team_name"`
+	CreatorName           pgtype.Text        `json:"creator_name"`
 }
 
 func (q *Queries) ListAllBookings(ctx context.Context, groupID string) ([]ListAllBookingsRow, error) {
@@ -678,6 +683,7 @@ func (q *Queries) ListAllBookings(ctx context.Context, groupID string) ([]ListAl
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.TeamName,
+			&i.CreatorName,
 		); err != nil {
 			return nil, err
 		}
@@ -877,9 +883,10 @@ func (q *Queries) ListBookingTeams(ctx context.Context, groupID string) ([]ListB
 }
 
 const listBookingsByStatus = `-- name: ListBookingsByStatus :many
-SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.notes, b.created_at, b.updated_at, t.name AS team_name
+SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.notes, b.created_at, b.updated_at, t.name AS team_name, u.name AS creator_name
 FROM bookings b
 LEFT JOIN teams t ON b.used_by_team_id = t.id
+LEFT JOIN users u ON b.created_by = u.id
 WHERE b.group_id = $1 AND b.status = $2
 ORDER BY b.start_date
 `
@@ -903,6 +910,7 @@ type ListBookingsByStatusRow struct {
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 	TeamName              pgtype.Text        `json:"team_name"`
+	CreatorName           pgtype.Text        `json:"creator_name"`
 }
 
 func (q *Queries) ListBookingsByStatus(ctx context.Context, arg ListBookingsByStatusParams) ([]ListBookingsByStatusRow, error) {
@@ -928,6 +936,7 @@ func (q *Queries) ListBookingsByStatus(ctx context.Context, arg ListBookingsBySt
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.TeamName,
+			&i.CreatorName,
 		); err != nil {
 			return nil, err
 		}
@@ -940,9 +949,10 @@ func (q *Queries) ListBookingsByStatus(ctx context.Context, arg ListBookingsBySt
 }
 
 const listBookingsByUser = `-- name: ListBookingsByUser :many
-SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.notes, b.created_at, b.updated_at, t.name AS team_name
+SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.notes, b.created_at, b.updated_at, t.name AS team_name, u.name AS creator_name
 FROM bookings b
 LEFT JOIN teams t ON b.used_by_team_id = t.id
+LEFT JOIN users u ON b.created_by = u.id
 WHERE b.group_id = $1
     AND (b.created_by = $2 OR b.used_by_team_id = ANY(
         SELECT tm.id FROM teams tm WHERE tm.group_id = $1 AND tm.name = ANY($3::text[])
@@ -970,6 +980,7 @@ type ListBookingsByUserRow struct {
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 	TeamName              pgtype.Text        `json:"team_name"`
+	CreatorName           pgtype.Text        `json:"creator_name"`
 }
 
 func (q *Queries) ListBookingsByUser(ctx context.Context, arg ListBookingsByUserParams) ([]ListBookingsByUserRow, error) {
@@ -995,6 +1006,7 @@ func (q *Queries) ListBookingsByUser(ctx context.Context, arg ListBookingsByUser
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.TeamName,
+			&i.CreatorName,
 		); err != nil {
 			return nil, err
 		}
