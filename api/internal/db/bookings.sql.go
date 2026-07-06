@@ -1023,7 +1023,7 @@ func (q *Queries) ListBookingsByUser(ctx context.Context, arg ListBookingsByUser
 }
 
 const rejectBooking = `-- name: RejectBooking :one
-UPDATE bookings SET status = 'draft', updated_at = now()
+UPDATE bookings SET status = 'rejected', updated_at = now()
 WHERE id = $1 AND group_id = $2 AND status = 'submitted'
 RETURNING id, group_id, created_by, used_by_team_id, used_by_external, used_by_external_contact, status, start_date, end_date, notes, created_at, updated_at
 `
@@ -1033,6 +1033,8 @@ type RejectBookingParams struct {
 	GroupID string      `json:"group_id"`
 }
 
+// Stays 'rejected' (draft-like editable state) until the user starts editing
+// it (Update/AddItems/RemoveItem transition it to 'draft' at that point).
 func (q *Queries) RejectBooking(ctx context.Context, arg RejectBookingParams) (Booking, error) {
 	row := q.db.QueryRow(ctx, rejectBooking, arg.ID, arg.GroupID)
 	var i Booking

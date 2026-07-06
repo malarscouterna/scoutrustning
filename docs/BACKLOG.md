@@ -2,6 +2,10 @@
 
 Deferred work items - things to grab when there's time, smaller tasks set aside during major work. When an item is completed, move it to [accomplished.md](accomplished.md).
 
+## Clickable item-change entries in booking event thread
+
+The booking comment thread redesign (`docs/pre-release.md`, item 7) wires up `items_changed` events for add/remove/swap so a plain description shows in the thread. Follow-up: make those entries clickable to show an actual diff (which article(s) were added/removed, before/after state) instead of just a text line. Needs a small UI (e.g. expandable row or a modal) and probably the event `metadata` already stores enough (article id/name) to build it without further backend changes.
+
 ## Migrate Paraglide to v2
 
 `@inlang/paraglide-sveltekit@0.16.1` is deprecated. The replacement is `@inlang/paraglide-js` v2+ — the SvelteKit adapter is no longer needed.

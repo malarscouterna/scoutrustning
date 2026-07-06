@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -189,6 +190,127 @@ func TestBookingFlow_FullLifecycle(t *testing.T) {
 		item := items[0].(map[string]any)
 		if item["commercial_name"] == nil {
 			t.Error("expected commercial_name on booking item")
+		}
+	})
+
+	t.Run("get booking includes auto_approves", func(t *testing.T) {
+		resp, _ := leader.Get("/api/v0/bookings/" + bookingID)
+		defer resp.Body.Close()
+
+		var result map[string]any
+		json.NewDecoder(resp.Body).Decode(&result)
+
+		if _, ok := result["auto_approves"].(bool); !ok {
+			t.Fatalf("expected auto_approves boolean field, got %v", result["auto_approves"])
+		}
+	})
+}
+
+func TestBookingFlow_ItemChangeEvents(t *testing.T) {
+	env := testutil.SetupTestEnv(t)
+	env.V1(func(r chi.Router) {
+		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
+		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
+		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
+		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
+		r.Mount("/teams", (&handler.TeamHandler{Q: env.Queries}).Routes())
+	})
+
+	manager := env.ClientAs("manager-equipment")
+	leader := env.ClientAs("leader-yggdrasil")
+
+	resp, _ := manager.Get("/api/v0/locations")
+	var locations []map[string]any
+	json.NewDecoder(resp.Body).Decode(&locations)
+	resp.Body.Close()
+	locID := locations[0]["id"].(string)
+
+	resp, _ = manager.Get("/api/v0/categories")
+	var categories []map[string]any
+	json.NewDecoder(resp.Body).Decode(&categories)
+	resp.Body.Close()
+	catID := categories[0]["id"].(string)
+
+	body := map[string]any{
+		"commercial_name": "Stormkök", "common_name": "Stormkök 1",
+		"category_id": catID, "location_id": locID, "individually_tracked": true,
+	}
+	b, _ := json.Marshal(body)
+	resp, _ = manager.Post("/api/v0/articles", bytes.NewReader(b))
+	resp.Body.Close()
+
+	teamID := getTeamID(t, leader, "Yggdrasil")
+	body = map[string]any{
+		"start_date": "2026-06-01", "end_date": "2026-06-05", "used_by_team_id": teamID,
+	}
+	b, _ = json.Marshal(body)
+	resp, _ = leader.Post("/api/v0/bookings", bytes.NewReader(b))
+	var booking map[string]any
+	json.NewDecoder(resp.Body).Decode(&booking)
+	resp.Body.Close()
+	bookingID := booking["id"].(string)
+
+	body = map[string]any{"commercial_name": "Stormkök", "quantity": 1}
+	b, _ = json.Marshal(body)
+	resp, err := leader.Post("/api/v0/bookings/"+bookingID+"/items", bytes.NewReader(b))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var items []map[string]any
+	json.NewDecoder(resp.Body).Decode(&items)
+	resp.Body.Close()
+	itemID := items[0]["id"].(string)
+
+	t.Run("adding an item logs an items_changed event", func(t *testing.T) {
+		resp, err := leader.Get("/api/v0/bookings/" + bookingID + "/events")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		var events []map[string]any
+		json.NewDecoder(resp.Body).Decode(&events)
+
+		found := false
+		for _, e := range events {
+			if e["event_type"] == "items_changed" && strings.Contains(e["message"].(string), "Stormkök 1") {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("expected items_changed event mentioning Stormkök 1, got %+v", events)
+		}
+	})
+
+	resp, err = leader.Delete("/api/v0/bookings/" + bookingID + "/items/" + itemID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+
+	t.Run("removing an item logs an items_changed event", func(t *testing.T) {
+		resp, err := leader.Get("/api/v0/bookings/" + bookingID + "/events")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		var events []map[string]any
+		json.NewDecoder(resp.Body).Decode(&events)
+
+		addCount, removeCount := 0, 0
+		for _, e := range events {
+			if e["event_type"] != "items_changed" {
+				continue
+			}
+			msg := e["message"].(string)
+			if strings.HasPrefix(msg, "La till") {
+				addCount++
+			}
+			if strings.HasPrefix(msg, "Tog bort") {
+				removeCount++
+			}
+		}
+		if addCount != 1 || removeCount != 1 {
+			t.Errorf("expected 1 add + 1 remove items_changed event, got add=%d remove=%d", addCount, removeCount)
 		}
 	})
 }

@@ -2,6 +2,14 @@
 
 Work to complete before moving from `/api/v0/` (pre-release) to v1.0.
 
+## Working process for this checklist
+
+When picking up an item from this doc:
+
+1. **Ask first.** Read the item's description, then ask clarifying questions about scope, edge cases, and anything ambiguous before writing any code - don't assume. If the item's "Done in ..." notes reveal it's already partially addressed or the description is stale, say so before proceeding.
+2. **Implement.** Once scope is confirmed, build it, update tests, and update this doc's entry with what was actually done (root cause, design decisions, anything that diverged from the original description).
+3. **Tell the user what to check.** After implementing, give concrete steps to verify the change in the running app (which page, which persona/role, what action to take, what result to expect) - not just "tests pass". Flag any manual step needed (rebuild, migration, reseed) explicitly.
+
 ---
 
 ## Notifications
@@ -72,6 +80,8 @@ The current booking page conflates three distinct concerns into one undifferenti
 
 **Essential:** the user must be able to post a comment while the booking is still in `draft`, independent of submitting - i.e. a free-standing "add comment" action in the thread itself, not only the optional message field bundled into the submit action in section 3 below. Without this, there's no way to leave context before the booking is ready to submit (e.g. "waiting on confirmation from X before I finalize dates").
 
+**Also essential:** adding or removing an item from the booking must produce a thread entry (structured event, same visual style as approval events), so it's visible in the history that a user changed the item list - not just that the booking exists in its current state. The `items_changed` event type already exists in the `booking_events` check constraint but is unused; wire it up on `AddItems`/`RemoveItem`/`SwapItem`. Deferred to backlog: making these entries clickable to show an actual diff (which article was added/removed) - for this commit, a plain description (e.g. "La till Sibley 1" / "Tog bort Stormkök 2") is enough.
+
 **3. Approval action area** - shown below the thread, contextual per `(status x role)`:
 - `draft` (user): submit button + optional message field. The "Vill ha bekräftelse från ansvarig" checkbox is shown but auto-checked and non-interactive (with hover tooltip explaining why) when any item in the booking requires approval. When no item requires approval, the checkbox is optional.
 - `submitted` (manager): approve/reject buttons + optional message field.
@@ -85,6 +95,15 @@ The comment thread should be shown on the booking list card as a preview (last c
 
 **Auto-approval visibility:** When submitting, the UI should clearly indicate whether the booking will be auto-approved (trusted team + all items at `low` approval level) or requires manager review. This can be shown as a short confirmation line near the submit button, e.g. "Bokningen godkänns automatiskt" vs "Bokningen skickas för granskning". The "Vill ha bekräftelse" checkbox (when optional) lets the user override auto-approval and request a manual review anyway.
 
+Done in `feat(api,web): booking comment thread and approval flow redesign`:
+- `items_changed` booking events wired up on `AddItems`/`RemoveItem` (plain description, e.g. "La till Sibley 1"/"Tog bort Stormkök 2" - clickable diff still backlogged). `SwapItem` untouched - it's the delayed-pickup swap flow (item 10's concern), not item-list editing.
+- `GetBooking` now returns `auto_approves`, computed the same way `Submit` decides confirm-vs-submit, so the frontend doesn't need a separate endpoint for the confirmation line.
+- **Design correction made while implementing:** `RejectBooking` previously set `status = 'draft'` directly on reject, silently discarding a distinct rejected state. Changed to persist `status = 'rejected'`; it now stays `rejected` until the user actually starts editing (`Update`/`AddItems`/`RemoveItem` reopen it to `draft` via `reopenIfRejected`) - not on view, not on a straight resubmit. This also unblocks the auto-archive item below, whose "timer starts when the booking is rejected" needs a real status transition to hang off of.
+- Frontend (`bookings/[id]/+page.svelte`) restructured into the three sections; comment thread (with the free-standing add-comment box, already functional server-side pre-redesign) always visible above the approval action area, not interleaved with it. `items_changed` events render without the generic action-label prefix since the message is already self-describing.
+- Checkbox lock is a per-item check (`any item.approval_level !== 'none'`), independent of the `auto_approves` confirmation line (which additionally factors in team trust and the personal-booking-always-needs-approval rule) - the two intentionally diverge for a trusted team booking a `low`-level item: checkbox locked-checked (forcing manual review) while, absent the lock, that combination would otherwise auto-approve.
+- **Gap caught during manual verification:** the dashboard's draft quick-link (`web/src/routes/+page.svelte`) goes straight to the `/book` cart builder, not `/bookings/{id}` - so the thread wasn't reachable from there. Rather than redirect that link, extracted the thread into a shared `BookingCommentThread.svelte` component and added it to `/book` as well, so it's visible while actively building a draft, not just from the detail page. Also added a "view full booking" cross-link from `/book` to `/bookings/{id}` (the reverse direction - detail page to cart builder - already existed via the "Redigera" button).
+- List-card comment preview (last comment + unread indicator) split out to its own commit - see Implementation order.
+
 ### Booking auto-archive setting
 
 The existing 48-hour cleanup for empty drafts (no items) stays as a hard-coded system behaviour and is unaffected by group settings.
@@ -93,6 +112,8 @@ Two separate group-level settings cover bookings with items:
 
 - **Draft with items** - default 3 days. Timer starts when the first item is added.
 - **Rejected awaiting resubmission** - default 7 days. Timer starts when the booking is rejected.
+
+**Resolved in item 7:** `RejectBooking` now persists `status = 'rejected'` (previously went straight to `draft`, which this section's "timer starts when the booking is rejected" depends on being a real, distinct status). It stays `rejected` until the user starts editing it - `Update`/`AddItems`/`RemoveItem` transition it to `draft` at that point (`BookingHandler.reopenIfRejected`), not on view or straight resubmit. So the timer for this setting starts at the `rejected` status's `updated_at` (or the most recent `rejected` `booking_events` row, if `updated_at` proves too coarse once other fields can change post-rejection without leaving `rejected` - shouldn't happen given the reopen-on-edit logic, but worth double-checking when implementing this item).
 
 The deadline is fixed from the moment the stage is entered and does not reset on edits. This keeps the countdown predictable and honest - the user knows exactly when their items will be released regardless of what changes they make.
 
@@ -202,15 +223,16 @@ Proposed commit sequence. Each item is a self-contained PR.
 4. ~~`fix(web): cancel button - correct cancellable status allowlist`~~ - Done. Also fixed the `/book` cart page, which had no status check at all - likely the actual "avbokningsknapp saknas" cause.
 5. ~~`feat(api,web): personal bookings - group access switch + server-side approval enforcement`~~ - Done. See Personal bookings section above.
 6. ~~`feat(api,web): user info card component - full card and compact view`~~ - Done. See User info card component section above.
-7. `feat(api,web): booking comment thread and approval flow redesign` - Unified event/comment thread, structured approval events, always-checked confirmation when item requires approval. Depends on 1.
-8. `feat(api,web): booking auto-archive setting` - Group setting, cleanup job, advance notifications. Depends on 7.
-9. `feat(api,web): copy booking UI` - Expose existing API endpoint, date-first flow, unavailable items marked. Independent.
-10. `feat(api,web): delayed return - auto-swap, conflict overview, next-booker notification` - Auto-swap logic, booking page conflict section, notification without names. Depends on 6.
-11. `feat(api,web): collaborative bookings - add enheter and people to a booking` - New participants model, shared pickup rights. Depends on 6 and 7.
-12. `feat(web): web header logo` - Fetch logo_url from group settings, render in top nav. Independent, can go anywhere.
-13. `feat(api,web): per-item descriptions for individually-tracked articles` - New `description` column on `articles`, edit field in manager article view, display on pickup checklist. Independent.
-14. `feat(web): free-form image crop in issue reporting` - Replace locked-ratio crop with free-form crop in the issue reporting upload flow. Independent.
-15. `fix(api,web): rename booking notes to title, require non-empty, fix self-conflict regression on update` - See Booking title field section above. Independent, but should land before 7 since the redesigned booking details section presents a title.
+7. ~~`feat(api,web): booking comment thread and approval flow redesign`~~ - Done. See Booking comment thread and approval flow redesign section above.
+8. **`fix(api,web): rename booking notes to title, require non-empty, fix self-conflict regression on update`** - NEXT PRIORITY. Live bug (self-conflict regression - see Self-conflict on edit section above) bundled with the title rename since both touch `Update`'s request handling for this field.
+9. `feat(api,web): booking auto-archive setting` - Group setting, cleanup job, advance notifications. Depends on 7.
+10. `feat(api,web): copy booking UI` - Expose existing API endpoint, date-first flow, unavailable items marked. Independent.
+11. `feat(api,web): delayed return - auto-swap, conflict overview, next-booker notification` - Auto-swap logic, booking page conflict section, notification without names. Depends on 6.
+12. `feat(api,web): collaborative bookings - add enheter and people to a booking` - New participants model, shared pickup rights. Depends on 6 and 7.
+13. `feat(web): web header logo` - Fetch logo_url from group settings, render in top nav. Independent, can go anywhere.
+14. `feat(api,web): per-item descriptions for individually-tracked articles` - New `description` column on `articles`, edit field in manager article view, display on pickup checklist. Independent.
+15. `feat(web): free-form image crop in issue reporting` - Replace locked-ratio crop with free-form crop in the issue reporting upload flow. Independent.
+16. `feat(web): booking list card comment preview` - Last-comment preview + unread indicator on `BookingCard`. Split out from 7 since it needs a read/seen-state concept that doesn't exist yet. Depends on 7.
 
 ---
 

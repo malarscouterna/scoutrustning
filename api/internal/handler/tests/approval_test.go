@@ -216,7 +216,7 @@ func TestApprovalFlow(t *testing.T) {
 		}
 	})
 
-	t.Run("manager rejects with message reverts to draft", func(t *testing.T) {
+	t.Run("manager rejects with message - stays rejected until user edits", func(t *testing.T) {
 		bookingID, _ := bookAndSubmit(leader, "LowGear")
 
 		b, _ := json.Marshal(map[string]any{"message": "Boka färre, vi har inte tillräckligt"})
@@ -233,8 +233,21 @@ func TestApprovalFlow(t *testing.T) {
 
 		var booking map[string]any
 		json.NewDecoder(resp.Body).Decode(&booking)
-		if booking["status"] != "draft" {
-			t.Errorf("expected draft, got %v", booking["status"])
+		if booking["status"] != "rejected" {
+			t.Errorf("expected rejected, got %v", booking["status"])
+		}
+
+		// Editing the rejected booking reopens it to draft.
+		b, _ = json.Marshal(map[string]any{"notes": "Uppdaterad kommentar"})
+		resp3, err := leader.Put("/api/v0/bookings/"+bookingID, bytes.NewReader(b))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp3.Body.Close()
+		var updated map[string]any
+		json.NewDecoder(resp3.Body).Decode(&updated)
+		if updated["status"] != "draft" {
+			t.Errorf("expected draft after editing rejected booking, got %v", updated["status"])
 		}
 
 		// Verify rejection event
@@ -248,6 +261,33 @@ func TestApprovalFlow(t *testing.T) {
 		}
 		if last["message"] != "Boka färre, vi har inte tillräckligt" {
 			t.Errorf("expected rejection message, got %v", last["message"])
+		}
+	})
+
+	t.Run("adding an item to a rejected booking reopens it to draft", func(t *testing.T) {
+		bookingID, _ := bookAndSubmit(leader, "LowGear")
+		b, _ := json.Marshal(map[string]any{"message": "Nej"})
+		resp, _ := manager.Post("/api/v0/bookings/"+bookingID+"/reject", bytes.NewReader(b))
+		resp.Body.Close()
+
+		b, _ = json.Marshal(map[string]any{"commercial_name": "LowGear", "quantity": 1})
+		resp2, err := leader.Post("/api/v0/bookings/"+bookingID+"/items", bytes.NewReader(b))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp2.Body.Close()
+		if resp2.StatusCode != http.StatusCreated {
+			body, _ := io.ReadAll(resp2.Body)
+			t.Fatalf("expected 201, got %d: %s", resp2.StatusCode, body)
+		}
+
+		resp3, _ := leader.Get("/api/v0/bookings/" + bookingID)
+		defer resp3.Body.Close()
+		var result map[string]any
+		json.NewDecoder(resp3.Body).Decode(&result)
+		booking := result["booking"].(map[string]any)
+		if booking["status"] != "draft" {
+			t.Errorf("expected draft after adding item to rejected booking, got %v", booking["status"])
 		}
 	})
 
@@ -332,14 +372,21 @@ func TestApprovalFlow(t *testing.T) {
 		defer resp.Body.Close()
 		var events []map[string]any
 		json.NewDecoder(resp.Body).Decode(&events)
-		if len(events) != 1 {
-			t.Fatalf("expected 1 event, got %d", len(events))
+		// Adding the item also logs an items_changed event alongside the submit.
+		if len(events) != 2 {
+			t.Fatalf("expected 2 events, got %d", len(events))
 		}
-		if events[0]["event_type"] != "submitted" {
-			t.Errorf("expected submitted event, got %v", events[0]["event_type"])
+		var submitted map[string]any
+		for _, e := range events {
+			if e["event_type"] == "submitted" {
+				submitted = e
+			}
 		}
-		if events[0]["message"] != "Vi behöver detta för hajk, kort varsel" {
-			t.Errorf("expected message, got %v", events[0]["message"])
+		if submitted == nil {
+			t.Fatalf("expected a submitted event, got %+v", events)
+		}
+		if submitted["message"] != "Vi behöver detta för hajk, kort varsel" {
+			t.Errorf("expected message, got %v", submitted["message"])
 		}
 	})
 
@@ -404,19 +451,19 @@ func TestApprovalFlow(t *testing.T) {
 			t.Fatalf("expected 201, got %d: %s", resp3.StatusCode, body)
 		}
 
-		// Verify events: submitted, note, approved, note
+		// Verify events: items_changed, submitted, note, approved, note
 		resp4, _ := manager.Get("/api/v0/bookings/" + bookingID + "/events")
 		defer resp4.Body.Close()
 		var events []map[string]any
 		json.NewDecoder(resp4.Body).Decode(&events)
-		if len(events) != 4 {
-			t.Fatalf("expected 4 events, got %d", len(events))
+		if len(events) != 5 {
+			t.Fatalf("expected 5 events, got %d", len(events))
 		}
-		if events[1]["event_type"] != "note" {
-			t.Errorf("expected event 1 to be note, got %v", events[1]["event_type"])
+		if events[2]["event_type"] != "note" {
+			t.Errorf("expected event 2 to be note, got %v", events[2]["event_type"])
 		}
-		if events[3]["event_type"] != "note" {
-			t.Errorf("expected event 3 to be note, got %v", events[3]["event_type"])
+		if events[4]["event_type"] != "note" {
+			t.Errorf("expected event 4 to be note, got %v", events[4]["event_type"])
 		}
 	})
 
@@ -458,14 +505,15 @@ func TestApprovalFlow(t *testing.T) {
 
 		var events []map[string]any
 		json.NewDecoder(resp.Body).Decode(&events)
-		if len(events) != 4 {
-			t.Fatalf("expected 4 events (submit, reject, resubmit, approve), got %d", len(events))
+		if len(events) != 5 {
+			t.Fatalf("expected 5 events (items_changed, submit, reject, resubmit, approve), got %d", len(events))
 		}
 
 		expected := []struct {
 			eventType string
 			message   string
 		}{
+			{"items_changed", ""},
 			{"submitted", "Behöver detta för hajk"},
 			{"rejected", "Boka färre"},
 			{"submitted", "Ändrat, tack för tipset!"},
@@ -475,7 +523,7 @@ func TestApprovalFlow(t *testing.T) {
 			if events[i]["event_type"] != exp.eventType {
 				t.Errorf("event %d: expected type %q, got %q", i, exp.eventType, events[i]["event_type"])
 			}
-			if events[i]["message"] != exp.message {
+			if exp.message != "" && events[i]["message"] != exp.message {
 				t.Errorf("event %d: expected message %q, got %q", i, exp.message, events[i]["message"])
 			}
 			if events[i]["actor_name"] == nil || events[i]["actor_name"] == "" {

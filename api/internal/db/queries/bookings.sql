@@ -193,7 +193,9 @@ WHERE id = @id AND group_id = @group_id AND status = 'submitted'
 RETURNING *;
 
 -- name: RejectBooking :one
-UPDATE bookings SET status = 'draft', updated_at = now()
+-- Stays 'rejected' (draft-like editable state) until the user starts editing
+-- it (Update/AddItems/RemoveItem transition it to 'draft' at that point).
+UPDATE bookings SET status = 'rejected', updated_at = now()
 WHERE id = @id AND group_id = @group_id AND status = 'submitted'
 RETURNING *;
 
