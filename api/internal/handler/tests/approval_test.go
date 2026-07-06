@@ -385,7 +385,7 @@ func TestApprovalFlow(t *testing.T) {
 		if submitted == nil {
 			t.Fatalf("expected a submitted event, got %+v", events)
 		}
-		if submitted["message"] != "Vi behöver detta för hajk, kort varsel" {
+		if submitted["message"] != "Vi behöver detta för hajk, kort varsel - 1 föremål" {
 			t.Errorf("expected message, got %v", submitted["message"])
 		}
 	})
@@ -514,9 +514,9 @@ func TestApprovalFlow(t *testing.T) {
 			message   string
 		}{
 			{"items_changed", ""},
-			{"submitted", "Behöver detta för hajk"},
+			{"submitted", "Behöver detta för hajk - 1 föremål"},
 			{"rejected", "Boka färre"},
-			{"submitted", "Ändrat, tack för tipset!"},
+			{"submitted", "Ändrat, tack för tipset! - 1 föremål"},
 			{"approved", "Godkänt!"},
 		}
 		for i, exp := range expected {

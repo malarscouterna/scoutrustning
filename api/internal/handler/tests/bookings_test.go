@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -231,19 +230,21 @@ func TestBookingFlow_ItemChangeEvents(t *testing.T) {
 	resp.Body.Close()
 	catID := categories[0]["id"].(string)
 
-	body := map[string]any{
-		"commercial_name": "Stormkök", "common_name": "Stormkök 1",
-		"category_id": catID, "location_id": locID, "individually_tracked": true,
+	for _, name := range []string{"Stormkök 1", "Stormkök 2", "Stormkök 3"} {
+		body := map[string]any{
+			"commercial_name": "Stormkök", "common_name": name,
+			"category_id": catID, "location_id": locID, "individually_tracked": true,
+		}
+		b, _ := json.Marshal(body)
+		resp, _ := manager.Post("/api/v0/articles", bytes.NewReader(b))
+		resp.Body.Close()
 	}
-	b, _ := json.Marshal(body)
-	resp, _ = manager.Post("/api/v0/articles", bytes.NewReader(b))
-	resp.Body.Close()
 
 	teamID := getTeamID(t, leader, "Yggdrasil")
-	body = map[string]any{
+	body := map[string]any{
 		"start_date": "2026-06-01", "end_date": "2026-06-05", "used_by_team_id": teamID,
 	}
-	b, _ = json.Marshal(body)
+	b, _ := json.Marshal(body)
 	resp, _ = leader.Post("/api/v0/bookings", bytes.NewReader(b))
 	var booking map[string]any
 	json.NewDecoder(resp.Body).Decode(&booking)
@@ -261,7 +262,7 @@ func TestBookingFlow_ItemChangeEvents(t *testing.T) {
 	resp.Body.Close()
 	itemID := items[0]["id"].(string)
 
-	t.Run("adding an item logs an items_changed event", func(t *testing.T) {
+	t.Run("adding an item before first submission logs a static pre-submission event", func(t *testing.T) {
 		resp, err := leader.Get("/api/v0/bookings/" + bookingID + "/events")
 		if err != nil {
 			t.Fatal(err)
@@ -272,12 +273,12 @@ func TestBookingFlow_ItemChangeEvents(t *testing.T) {
 
 		found := false
 		for _, e := range events {
-			if e["event_type"] == "items_changed" && strings.Contains(e["message"].(string), "Stormkök 1") {
+			if e["event_type"] == "items_changed" && e["message"] == "Påbörjade bokning" {
 				found = true
 			}
 		}
 		if !found {
-			t.Errorf("expected items_changed event mentioning Stormkök 1, got %+v", events)
+			t.Errorf("expected a static pre-submission items_changed event, got %+v", events)
 		}
 	})
 
@@ -287,7 +288,10 @@ func TestBookingFlow_ItemChangeEvents(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	t.Run("removing an item logs an items_changed event", func(t *testing.T) {
+	t.Run("removing shortly after still merges into the same pre-submission event", func(t *testing.T) {
+		// Same actor, same booking, within the merge window - collapses into
+		// one thread entry rather than flooding it with one row per click.
+		// The message stays static regardless of the running counts.
 		resp, err := leader.Get("/api/v0/bookings/" + bookingID + "/events")
 		if err != nil {
 			t.Fatal(err)
@@ -296,21 +300,101 @@ func TestBookingFlow_ItemChangeEvents(t *testing.T) {
 		var events []map[string]any
 		json.NewDecoder(resp.Body).Decode(&events)
 
-		addCount, removeCount := 0, 0
+		itemsChangedCount := 0
+		var merged string
 		for _, e := range events {
 			if e["event_type"] != "items_changed" {
 				continue
 			}
-			msg := e["message"].(string)
-			if strings.HasPrefix(msg, "La till") {
-				addCount++
+			itemsChangedCount++
+			merged = e["message"].(string)
+		}
+		if itemsChangedCount != 1 {
+			t.Fatalf("expected exactly 1 merged items_changed event, got %d", itemsChangedCount)
+		}
+		if merged != "Påbörjade bokning" {
+			t.Errorf("expected static pre-submission message, got %q", merged)
+		}
+	})
+
+	// Re-add an item (needed to submit) and submit - once a booking has been
+	// submitted at least once, later item changes switch to delta wording.
+	body = map[string]any{"commercial_name": "Stormkök", "quantity": 1}
+	b, _ = json.Marshal(body)
+	resp, err = leader.Post("/api/v0/bookings/"+bookingID+"/items", bytes.NewReader(b))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	resp, err = leader.Post("/api/v0/bookings/"+bookingID+"/submit", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+
+	t.Run("a change after the booking has been submitted once uses add/remove delta wording", func(t *testing.T) {
+		body := map[string]any{"commercial_name": "Stormkök", "quantity": 1}
+		b, _ := json.Marshal(body)
+		resp, err := leader.Post("/api/v0/bookings/"+bookingID+"/items", bytes.NewReader(b))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+
+		resp2, err := leader.Get("/api/v0/bookings/" + bookingID + "/events")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp2.Body.Close()
+		var events []map[string]any
+		json.NewDecoder(resp2.Body).Decode(&events)
+
+		var latestMsg string
+		itemsChangedCount := 0
+		for _, e := range events {
+			if e["event_type"] != "items_changed" {
+				continue
 			}
-			if strings.HasPrefix(msg, "Tog bort") {
-				removeCount++
+			itemsChangedCount++
+			latestMsg = e["message"].(string)
+		}
+		if itemsChangedCount != 2 {
+			t.Fatalf("expected a new second items_changed event after submission, got %d total", itemsChangedCount)
+		}
+		if latestMsg != "La till 1 föremål" {
+			t.Errorf("expected delta wording for the post-submission change, got %q", latestMsg)
+		}
+	})
+
+	body = map[string]any{"commercial_name": "Stormkök", "quantity": 1}
+	b, _ = json.Marshal(body)
+	resp, err = manager.Post("/api/v0/bookings/"+bookingID+"/items", bytes.NewReader(b))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("manager add item: expected 201, got %d: %s", resp.StatusCode, body)
+	}
+	resp.Body.Close()
+
+	t.Run("a different actor's change gets its own event, does not merge", func(t *testing.T) {
+		resp, err := leader.Get("/api/v0/bookings/" + bookingID + "/events")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		var events []map[string]any
+		json.NewDecoder(resp.Body).Decode(&events)
+
+		itemsChangedCount := 0
+		for _, e := range events {
+			if e["event_type"] == "items_changed" {
+				itemsChangedCount++
 			}
 		}
-		if addCount != 1 || removeCount != 1 {
-			t.Errorf("expected 1 add + 1 remove items_changed event, got add=%d remove=%d", addCount, removeCount)
+		if itemsChangedCount != 3 {
+			t.Errorf("expected a third, separate items_changed event for the manager's action, got %d total", itemsChangedCount)
 		}
 	})
 }

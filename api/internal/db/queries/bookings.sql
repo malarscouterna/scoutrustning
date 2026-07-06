@@ -211,6 +211,27 @@ JOIN users u ON be.actor_id = u.id
 WHERE be.booking_id = @booking_id AND be.group_id = @group_id
 ORDER BY be.created_at ASC;
 
+-- name: GetLatestBookingEvent :one
+SELECT * FROM booking_events
+WHERE booking_id = @booking_id AND group_id = @group_id
+ORDER BY created_at DESC
+LIMIT 1;
+
+-- name: HasSubmittedEvent :one
+-- Whether this booking has ever been submitted - drives whether item-change
+-- events use pre-submission wording ("Påbörjade bokning") or add/remove delta
+-- wording once it's been through the approval flow at least once.
+SELECT EXISTS (
+    SELECT 1 FROM booking_events
+    WHERE booking_id = @booking_id AND group_id = @group_id AND event_type = 'submitted'
+);
+
+-- name: UpdateBookingEventMessage :one
+-- Bumps created_at so the merged entry still sorts as the most recent activity.
+UPDATE booking_events SET message = @message, metadata = @metadata, created_at = now()
+WHERE id = @id AND group_id = @group_id
+RETURNING *;
+
 -- name: DeleteBooking :exec
 DELETE FROM bookings
 WHERE id = @id AND group_id = @group_id AND status = 'draft';
