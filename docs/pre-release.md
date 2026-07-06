@@ -96,16 +96,20 @@ A personal booking covers a member borrowing equipment for scout or external use
 - "Personlig bokning" appears as the last option in the unit dropdown, below a visual divider. For managers, it sits below the divider that separates their own teams from all other teams. For normal users, it is the last item. Less prominent but not hidden.
 - In the bookings list, personal bookings show the creator's name so managers can distinguish between users' personal bookings.
 
-### Terminology - enhet
+### Terminology - avdelning/roll
 
 "Avdelning" is used both as the specific label for `type = 'troop'` teams and generically for any team throughout the Swedish UI. In scout terminology, "avdelning" is specifically a troop-level unit - the generic use collides with this.
 
-**Decision: use "enhet" as the generic term for any team (troop or role).**
+**Decision: no umbrella term.** "Enhet" read poorly in practice and "grupp" collides with the existing `groups` (scoutkår) concept. Instead, spell out the distinction explicitly per context:
+- Full form in prose/help text: "avdelning eller roll" / "avdelningar och roller" (conjunction depends on whether the sentence is inclusive-or or listing both).
+- Hyphen-joined in compound headings: "Avdelnings- och rollnotiser".
+- Slash form in tight UI (table columns, parenthetical): "Avdelning/roll".
+- The manager/admin team is treated as a role specifically (not generic) - e.g. "admin-rollen" in "sista admin-rollen" messages.
 
-- Audit all keys in `sv.json` that use "avdelning" generically and replace with "enhet".
-- Rename the team settings page to "Enheter" and structure it with a clear division between troops ("avdelningar") and roles ("roller") within that page.
-- Where UI text refers to both types together, say "enheter (avdelningar och roller)" on first mention, then just "enheter".
-- `type = 'troop'` continues to display as "Avdelning"; `type = 'role'` continues to display as "Roll". These type-specific labels are correct and unchanged.
+Done in `fix(web): consistent avdelning/roll phrasing, sort troops before roles`:
+- Audited all keys in `sv.json` that used "avdelning" generically and reworded per the patterns above.
+- `type = 'troop'` continues to display as "Avdelning"; `type = 'role'` continues to display as "Roll". These type-specific labels are unchanged.
+- The team settings page keeps its existing heading ("Avdelningar och roller") rather than being renamed. Division between troops and roles is achieved by sorting troops before roles within each access-level column, with a visual divider between the groups - no separate page sections needed.
 
 ### Collaborative bookings
 
@@ -162,8 +166,8 @@ Lower priority but useful before real users arrive.
 
 Proposed commit sequence. Each item is a self-contained PR.
 
-1. `fix(web): terminology - replace generic avdelning with enhet in sv.json and UI` - Pure string audit. Unblocks all new strings.
-2. `feat(web): rename team settings page to Enheter, split by troop/roll` - Settings page restructure. Depends on 1.
+1. ~~`fix(web): terminology - replace generic avdelning with enhet in sv.json and UI`~~ - Done as `fix(web): consistent avdelning/roll phrasing, sort troops before roles` (no umbrella term; see Terminology section above).
+2. ~~`feat(web): rename team settings page to Enheter, split by troop/roll`~~ - Covered by commit 1: troop/role division achieved via sort + divider on the existing page, no rename or restructure needed.
 3. `fix(api,web): booking edit - apply ExcludingBooking consistently on date/unit/title change` - API fix + tests. Independent.
 4. `fix(web): cancel button - correct cancellable status allowlist` - After missing-button case reproduced. Independent.
 5. `feat(api,web): personal bookings - group access switch + server-side approval enforcement` - New group setting, API enforcement, UI ordering. Independent.

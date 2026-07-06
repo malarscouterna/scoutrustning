@@ -290,6 +290,7 @@ func TestBookingFlow_UpdateConfirmedBooking(t *testing.T) {
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
 		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries}).Routes())
+		r.Mount("/teams", (&handler.TeamHandler{Q: env.Queries}).Routes())
 	})
 
 	manager := env.ClientAs("manager-equipment")
@@ -379,6 +380,58 @@ func TestBookingFlow_UpdateConfirmedBooking(t *testing.T) {
 		items := result["items"].([]any)
 		if len(items) != 3 {
 			t.Fatalf("expected 3 items, got %d", len(items))
+		}
+	})
+
+	t.Run("change dates with no conflict keeps existing items assignable", func(t *testing.T) {
+		// Move to a free date range - the booking's own 3 Sibley must not
+		// be flagged as conflicting with themselves.
+		b, _ := json.Marshal(map[string]any{"start_date": "2026-08-01", "end_date": "2026-08-05"})
+		resp, err := leader.Put("/api/v0/bookings/"+bookingID, bytes.NewReader(b))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("expected 200, got %d: %s", resp.StatusCode, body)
+		}
+
+		resp2, _ := leader.Get("/api/v0/bookings/" + bookingID)
+		defer resp2.Body.Close()
+		var result map[string]any
+		json.NewDecoder(resp2.Body).Decode(&result)
+		items := result["items"].([]any)
+		if len(items) != 3 {
+			t.Fatalf("expected 3 items to remain, got %d", len(items))
+		}
+	})
+
+	t.Run("change unit does not trigger availability check", func(t *testing.T) {
+		b, _ := json.Marshal(map[string]any{"name": "Test Unit", "type": "role", "access_level": "book"})
+		resp, _ := manager.Post("/api/v0/teams", bytes.NewReader(b))
+		var newTeam map[string]any
+		json.NewDecoder(resp.Body).Decode(&newTeam)
+		resp.Body.Close()
+		newTeamID := newTeam["id"].(string)
+
+		b, _ = json.Marshal(map[string]any{"used_by_team_id": newTeamID})
+		resp, err := leader.Put("/api/v0/bookings/"+bookingID, bytes.NewReader(b))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("expected 200, got %d: %s", resp.StatusCode, body)
+		}
+
+		var updated map[string]any
+		json.NewDecoder(resp.Body).Decode(&updated)
+		if updated["used_by_team_id"] != newTeamID {
+			t.Errorf("expected used_by_team_id %v, got %v", newTeamID, updated["used_by_team_id"])
 		}
 	})
 

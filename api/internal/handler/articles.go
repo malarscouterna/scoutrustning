@@ -702,6 +702,7 @@ func (h *ArticleHandler) AvailableArticlesList(w http.ResponseWriter, r *http.Re
 		articles, err := h.Q.AvailableArticlesExcludingBooking(r.Context(), db.AvailableArticlesExcludingBookingParams{
 			GroupID:          claims.GroupID,
 			ExcludeBookingID: bid,
+			ExcludeOwnItems:  true,
 			StartDate:        pgtype.Date{Time: startDate, Valid: true},
 			EndDate:          pgtype.Date{Time: endDate, Valid: true},
 		})
