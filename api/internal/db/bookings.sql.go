@@ -226,9 +226,12 @@ WHERE a.group_id = $1
             AND b.end_date >= $2
             AND (bi.return_status IS NULL OR bi.return_status IN ('pending', 'delayed'))
     )
-    AND a.id NOT IN (
-        SELECT bi.article_id FROM booking_items bi
-        WHERE bi.booking_id = $3
+    AND (
+        NOT $5::boolean
+        OR a.id NOT IN (
+            SELECT bi.article_id FROM booking_items bi
+            WHERE bi.booking_id = $3
+        )
     )
 ORDER BY CASE a.status WHEN 'ok' THEN 0 WHEN 'incoming' THEN 1 WHEN 'under_repair' THEN 2 WHEN 'reported_usable' THEN 3 ELSE 4 END, a.commercial_name, a.common_name
 `
@@ -238,6 +241,7 @@ type AvailableArticlesExcludingBookingParams struct {
 	StartDate        pgtype.Date `json:"start_date"`
 	ExcludeBookingID pgtype.UUID `json:"exclude_booking_id"`
 	EndDate          pgtype.Date `json:"end_date"`
+	ExcludeOwnItems  bool        `json:"exclude_own_items"`
 }
 
 type AvailableArticlesExcludingBookingRow struct {
@@ -253,13 +257,20 @@ type AvailableArticlesExcludingBookingRow struct {
 	ExpectedAvailableDate pgtype.Date `json:"expected_available_date"`
 }
 
-// Same as AvailableArticles but excludes items already in the given booking.
+// Availability for a booking's date range, excluding conflicts from other
+// overlapping bookings. When exclude_own_items is true, articles already
+// assigned to the given booking are also excluded from the result - used
+// when offering NEW items to add or swap into the booking. When false, the
+// booking's own current items are left in the result - used to revalidate
+// that a booking's existing items remain assignable after its dates change
+// (they must not appear as conflicting with themselves).
 func (q *Queries) AvailableArticlesExcludingBooking(ctx context.Context, arg AvailableArticlesExcludingBookingParams) ([]AvailableArticlesExcludingBookingRow, error) {
 	rows, err := q.db.Query(ctx, availableArticlesExcludingBooking,
 		arg.GroupID,
 		arg.StartDate,
 		arg.ExcludeBookingID,
 		arg.EndDate,
+		arg.ExcludeOwnItems,
 	)
 	if err != nil {
 		return nil, err

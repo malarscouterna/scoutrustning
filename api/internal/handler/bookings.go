@@ -339,6 +339,7 @@ func (h *BookingHandler) Update(w http.ResponseWriter, r *http.Request) {
 		available, err := h.Q.AvailableArticlesExcludingBooking(r.Context(), db.AvailableArticlesExcludingBookingParams{
 			GroupID:          claims.GroupID,
 			ExcludeBookingID: bookingID,
+			ExcludeOwnItems:  false,
 			StartDate:        params.StartDate,
 			EndDate:          params.EndDate,
 		})
@@ -443,6 +444,7 @@ func (h *BookingHandler) AddItems(w http.ResponseWriter, r *http.Request) {
 	available, err := h.Q.AvailableArticlesExcludingBooking(r.Context(), db.AvailableArticlesExcludingBookingParams{
 		GroupID:          claims.GroupID,
 		ExcludeBookingID: bookingID,
+		ExcludeOwnItems:  true,
 		StartDate:        booking.StartDate,
 		EndDate:          booking.EndDate,
 	})
@@ -957,6 +959,7 @@ func (h *BookingHandler) SwapItem(w http.ResponseWriter, r *http.Request) {
 	available, err := h.Q.AvailableArticlesExcludingBooking(r.Context(), db.AvailableArticlesExcludingBookingParams{
 		GroupID:          claims.GroupID,
 		ExcludeBookingID: bookingID,
+		ExcludeOwnItems:  true,
 		StartDate:        booking.StartDate,
 		EndDate:          booking.EndDate,
 	})
