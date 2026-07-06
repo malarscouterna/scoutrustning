@@ -101,6 +101,78 @@ func (h *BookingHandler) reopenIfRejected(ctx context.Context, groupID string, b
 	return "draft"
 }
 
+// itemsChangedMergeWindow bounds how long a burst of item add/remove actions by
+// the same actor collapses into a single thread entry, rather than one per
+// action - avoids flooding the comment thread when someone is actively
+// building their cart. A different actor, a different event type in between
+// (comment, approval action), or exceeding the window all start a fresh entry.
+const itemsChangedMergeWindow = 10 * time.Minute
+
+// itemsChangedCounts is the structured metadata stored on an items_changed
+// event - a running count for this actor's current merge window, not a list
+// of items. A future diff view can extend this with article-level detail;
+// for now the thread only shows how many, not which.
+type itemsChangedCounts struct {
+	Added         int  `json:"added"`
+	Removed       int  `json:"removed"`
+	PreSubmission bool `json:"pre_submission"`
+}
+
+// itemsChangedMessage renders a static, count-free label while the booking
+// has never been submitted - a running "Skapade bokning med N" would flicker
+// as the count changes while someone is still actively building the cart.
+// Once it's been submitted at least once, later edits use add/remove delta
+// wording; the item state at each submission is captured on the submitted
+// event itself instead (see Submit).
+func itemsChangedMessage(c itemsChangedCounts) string {
+	if c.PreSubmission {
+		return "Påbörjade bokning"
+	}
+	var parts []string
+	if c.Added > 0 {
+		parts = append(parts, fmt.Sprintf("La till %d föremål", c.Added))
+	}
+	if c.Removed > 0 {
+		parts = append(parts, fmt.Sprintf("Tog bort %d föremål", c.Removed))
+	}
+	return strings.Join(parts, ", ")
+}
+
+// logItemsChangedEvent merges into the latest booking_events row if it's an
+// items_changed event from the same actor within itemsChangedMergeWindow,
+// otherwise creates a new event.
+func (h *BookingHandler) logItemsChangedEvent(ctx context.Context, groupID string, bookingID pgtype.UUID, actorID string, added, removed int) {
+	latest, err := h.Q.GetLatestBookingEvent(ctx, db.GetLatestBookingEventParams{
+		BookingID: bookingID, GroupID: groupID,
+	})
+	if err == nil &&
+		latest.EventType == "items_changed" &&
+		latest.ActorID == actorID &&
+		time.Since(latest.CreatedAt.Time) < itemsChangedMergeWindow {
+		var counts itemsChangedCounts
+		json.Unmarshal(latest.Metadata, &counts)
+		counts.Added += added
+		counts.Removed += removed
+		metadata, _ := json.Marshal(counts)
+		h.Q.UpdateBookingEventMessage(ctx, db.UpdateBookingEventMessageParams{
+			ID: latest.ID, GroupID: groupID,
+			Message: itemsChangedMessage(counts), Metadata: metadata,
+		})
+		return
+	}
+
+	hasSubmitted, _ := h.Q.HasSubmittedEvent(ctx, db.HasSubmittedEventParams{
+		BookingID: bookingID, GroupID: groupID,
+	})
+	counts := itemsChangedCounts{Added: added, Removed: removed, PreSubmission: !hasSubmitted}
+	metadata, _ := json.Marshal(counts)
+	h.Q.CreateBookingEvent(ctx, db.CreateBookingEventParams{
+		GroupID: groupID, BookingID: bookingID,
+		ActorID: actorID, EventType: "items_changed",
+		Message: itemsChangedMessage(counts), Metadata: metadata,
+	})
+}
+
 func (h *BookingHandler) Create(w http.ResponseWriter, r *http.Request) {
 	claims, _ := auth.ClaimsFromContext(r.Context())
 	var req struct {
@@ -520,16 +592,7 @@ func (h *BookingHandler) AddItems(w http.ResponseWriter, r *http.Request) {
 
 	WriteJSON(w, http.StatusCreated, added)
 
-	itemNames := make([]string, len(matching[:req.Quantity]))
-	for i, a := range matching[:req.Quantity] {
-		itemNames[i] = a.CommonName
-	}
-	h.Q.CreateBookingEvent(r.Context(), db.CreateBookingEventParams{
-		GroupID: claims.GroupID, BookingID: bookingID,
-		ActorID: claims.MemberID, EventType: "items_changed",
-		Message:  fmt.Sprintf("La till %s", strings.Join(itemNames, ", ")),
-		Metadata: json.RawMessage("{}"),
-	})
+	h.logItemsChangedEvent(r.Context(), claims.GroupID, bookingID, claims.MemberID, len(added), 0)
 
 	// Auto-transition: if confirmed booking now has approval-required items, check level
 	if booking.Status == "confirmed" {
@@ -599,12 +662,7 @@ func (h *BookingHandler) RemoveItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if removedName != "" {
-		h.Q.CreateBookingEvent(r.Context(), db.CreateBookingEventParams{
-			GroupID: claims.GroupID, BookingID: bookingID,
-			ActorID: claims.MemberID, EventType: "items_changed",
-			Message:  fmt.Sprintf("Tog bort %s", removedName),
-			Metadata: json.RawMessage("{}"),
-		})
+		h.logItemsChangedEvent(r.Context(), claims.GroupID, bookingID, claims.MemberID, 0, 1)
 	}
 
 	// Auto-transition: if submitted booking no longer needs approval, auto-confirm
@@ -678,14 +736,19 @@ func (h *BookingHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if newStatus == "submitted" || req.Message != "" {
-		h.Q.CreateBookingEvent(r.Context(), db.CreateBookingEventParams{
-			GroupID: claims.GroupID, BookingID: bookingID,
-			ActorID: claims.MemberID, EventType: "submitted",
-			Metadata: []byte("{}"),
-			Message:  req.Message,
-		})
+	items, _ := h.Q.ListBookingItems(r.Context(), db.ListBookingItemsParams{
+		BookingID: bookingID, GroupID: claims.GroupID,
+	})
+	message := fmt.Sprintf("%d föremål", len(items))
+	if req.Message != "" {
+		message = req.Message + " - " + message
 	}
+	h.Q.CreateBookingEvent(r.Context(), db.CreateBookingEventParams{
+		GroupID: claims.GroupID, BookingID: bookingID,
+		ActorID: claims.MemberID, EventType: "submitted",
+		Metadata: []byte("{}"),
+		Message:  message,
+	})
 
 	if h.Notifier != nil {
 		b, n, gn, q, u := updated, h.Notifier, h.GChatNotifier, h.Q, h.BaseURL

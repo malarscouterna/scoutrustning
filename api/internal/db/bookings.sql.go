@@ -608,6 +608,34 @@ func (q *Queries) GetBooking(ctx context.Context, arg GetBookingParams) (GetBook
 	return i, err
 }
 
+const getLatestBookingEvent = `-- name: GetLatestBookingEvent :one
+SELECT id, group_id, booking_id, actor_id, event_type, message, metadata, created_at FROM booking_events
+WHERE booking_id = $1 AND group_id = $2
+ORDER BY created_at DESC
+LIMIT 1
+`
+
+type GetLatestBookingEventParams struct {
+	BookingID pgtype.UUID `json:"booking_id"`
+	GroupID   string      `json:"group_id"`
+}
+
+func (q *Queries) GetLatestBookingEvent(ctx context.Context, arg GetLatestBookingEventParams) (BookingEvent, error) {
+	row := q.db.QueryRow(ctx, getLatestBookingEvent, arg.BookingID, arg.GroupID)
+	var i BookingEvent
+	err := row.Scan(
+		&i.ID,
+		&i.GroupID,
+		&i.BookingID,
+		&i.ActorID,
+		&i.EventType,
+		&i.Message,
+		&i.Metadata,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getTeamByID = `-- name: GetTeamByID :one
 SELECT id, group_id, name, type, access_level, created_at, notification_email, notification_prefs, gchat_space_id, gruppkanal_channels FROM teams
 WHERE id = $1 AND group_id = $2
@@ -634,6 +662,28 @@ func (q *Queries) GetTeamByID(ctx context.Context, arg GetTeamByIDParams) (Team,
 		&i.GruppkanalChannels,
 	)
 	return i, err
+}
+
+const hasSubmittedEvent = `-- name: HasSubmittedEvent :one
+SELECT EXISTS (
+    SELECT 1 FROM booking_events
+    WHERE booking_id = $1 AND group_id = $2 AND event_type = 'submitted'
+)
+`
+
+type HasSubmittedEventParams struct {
+	BookingID pgtype.UUID `json:"booking_id"`
+	GroupID   string      `json:"group_id"`
+}
+
+// Whether this booking has ever been submitted - drives whether item-change
+// events use pre-submission wording ("Påbörjade bokning") or add/remove delta
+// wording once it's been through the approval flow at least once.
+func (q *Queries) HasSubmittedEvent(ctx context.Context, arg HasSubmittedEventParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasSubmittedEvent, arg.BookingID, arg.GroupID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const listAllBookings = `-- name: ListAllBookings :many
@@ -1153,6 +1203,41 @@ func (q *Queries) UpdateBooking(ctx context.Context, arg UpdateBookingParams) (B
 		&i.Notes,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateBookingEventMessage = `-- name: UpdateBookingEventMessage :one
+UPDATE booking_events SET message = $1, metadata = $2, created_at = now()
+WHERE id = $3 AND group_id = $4
+RETURNING id, group_id, booking_id, actor_id, event_type, message, metadata, created_at
+`
+
+type UpdateBookingEventMessageParams struct {
+	Message  string          `json:"message"`
+	Metadata json.RawMessage `json:"metadata"`
+	ID       pgtype.UUID     `json:"id"`
+	GroupID  string          `json:"group_id"`
+}
+
+// Bumps created_at so the merged entry still sorts as the most recent activity.
+func (q *Queries) UpdateBookingEventMessage(ctx context.Context, arg UpdateBookingEventMessageParams) (BookingEvent, error) {
+	row := q.db.QueryRow(ctx, updateBookingEventMessage,
+		arg.Message,
+		arg.Metadata,
+		arg.ID,
+		arg.GroupID,
+	)
+	var i BookingEvent
+	err := row.Scan(
+		&i.ID,
+		&i.GroupID,
+		&i.BookingID,
+		&i.ActorID,
+		&i.EventType,
+		&i.Message,
+		&i.Metadata,
+		&i.CreatedAt,
 	)
 	return i, err
 }
