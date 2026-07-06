@@ -1,10 +1,11 @@
 <script lang="ts">
-	import { createApiClient, type Booking, type BookingItem, type BookingEvent } from '$lib/api/client';
+	import { createApiClient, type Booking, type BookingItem } from '$lib/api/client';
 	import BookingItemsList from '$lib/components/BookingItemsList.svelte';
 	import PickupChecklist from '$lib/components/PickupChecklist.svelte';
 	import ReturnChecklist from '$lib/components/ReturnChecklist.svelte';
 	import AddItemSheet from '$lib/components/AddItemSheet.svelte';
 	import UserBadge from '$lib/components/UserBadge.svelte';
+	import BookingCommentThread from '$lib/components/BookingCommentThread.svelte';
 	import { isManager as checkManager } from '$lib/user';
 	import { cart } from '$lib/stores/cart.svelte';
 	import type { PageData } from './$types';
@@ -23,12 +24,15 @@
 	let booking = $state(data.booking);
 	// svelte-ignore state_referenced_locally
 	let items = $state(data.items);
+	// svelte-ignore state_referenced_locally
+	let autoApproves = $state(data.auto_approves);
 	let error = $state('');
 	let message = $state('');
 
 	$effect(() => {
 		booking = data.booking;
 		items = data.items;
+		autoApproves = data.auto_approves;
 	});
 
 	$effect(() => {
@@ -47,6 +51,7 @@
 		try {
 			const result = await api.getBooking(booking.id);
 			items = result.items;
+			autoApproves = result.auto_approves;
 			return result.items;
 		} finally {
 			reloading = false;
@@ -62,6 +67,7 @@
 			try {
 				const result = await api.getBooking(booking.id);
 				items = result.items;
+				autoApproves = result.auto_approves;
 				if (result.booking.status !== booking.status) {
 					booking = result.booking;
 				}
@@ -81,7 +87,7 @@
 	onDestroy(stopPolling);
 
 	let editable = $derived(
-		['draft', 'submitted', 'approved', 'confirmed'].includes(booking.status)
+		['draft', 'submitted', 'approved', 'confirmed', 'rejected'].includes(booking.status)
 	);
 
 	let cancellable = $derived(
@@ -111,7 +117,7 @@
 			submitMessage = '';
 			forceApproval = false;
 			setTimeout(() => message = '', 4000);
-			loadEvents();
+			eventsRefreshKey++;
 		} catch (e) {
 			error = translateError(e);
 		}
@@ -172,28 +178,13 @@
 	let submitMessage = $state('');
 	let forceApproval = $state(false);
 	let isManager = $derived(checkManager(data.user));
-	let bookingEvents = $state<BookingEvent[]>([]);
+	let eventsRefreshKey = $state(0);
 
-	async function loadEvents() {
-		try {
-			bookingEvents = await api.listBookingEvents(booking.id);
-		} catch { /* ignore */ }
-	}
-	loadEvents();
-
-	let noteMessage = $state('');
-
-	async function addNote() {
-		if (!noteMessage.trim()) return;
-		error = '';
-		try {
-			await api.addBookingNote(booking.id, noteMessage);
-			noteMessage = '';
-			loadEvents();
-		} catch (e) {
-			error = translateError(e);
-		}
-	}
+	let anyItemRequiresApproval = $derived(items.some((i) => i.approval_level !== 'none'));
+	$effect(() => {
+		if (anyItemRequiresApproval) forceApproval = true;
+	});
+	let needsReview = $derived(forceApproval || !autoApproves);
 
 	async function approveBooking() {
 		error = '';
@@ -202,7 +193,7 @@
 			message = m.page_booking_confirmed();
 			approvalMessage = '';
 			setTimeout(() => message = '', 4000);
-			loadEvents();
+			eventsRefreshKey++;
 		} catch (e) {
 			error = translateError(e);
 		}
@@ -215,7 +206,7 @@
 			message = m.page_booking_rejected();
 			approvalMessage = '';
 			setTimeout(() => message = '', 4000);
-			loadEvents();
+			eventsRefreshKey++;
 		} catch (e) {
 			error = translateError(e);
 		}
@@ -259,7 +250,11 @@
 				</div>
 			{/if}
 
-			<!-- Action buttons up top -->
+			<!-- Section 1: booking details -->
+			{#if editable}
+				<a href="/book?id={booking.id}" class="inline-block bg-blue-700 text-white px-4 py-2 rounded text-sm mb-4">{m.btn_edit()}</a>
+			{/if}
+
 			{#if booking.status === 'picked_up'}
 				<div class="flex flex-wrap gap-2 mb-4">
 					<button onclick={() => pickupMode = true} class="bg-blue-700 text-white px-4 py-2 rounded text-sm">
@@ -270,37 +265,14 @@
 					</button>
 				</div>
 			{/if}
-
-			{#if bookingEvents.length > 0}
-				<div class="border rounded mb-3 divide-y">
-					{#each bookingEvents as event}
-						<div class="px-4 py-2 text-sm {event.event_type === 'rejected' ? 'bg-red-50' : event.event_type === 'approved' ? 'bg-green-50' : 'bg-neutral-50'}">
-							<div class="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-neutral-500 mb-0.5">
-								<UserBadge userId={event.actor_id} name={event.actor_name} picture={event.actor_picture} contextBookingId={booking.id} size={18} />
-								<span>
-									{({'submitted': m.page_booking_event_submitted(), 'approved': m.page_booking_event_approved(), 'rejected': m.page_booking_event_rejected(), 'cancelled': m.page_booking_event_cancelled(), 'note': m.page_booking_event_commented()} as Record<string,string>)[event.event_type] ?? event.event_type}
-								</span>
-								<span>{new Date(event.created_at).toLocaleDateString('sv', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
-							</div>
-							{#if event.message}
-								<p class="text-neutral-700">{event.message}</p>
-							{/if}
-						</div>
-					{/each}
-				</div>
+			{#if booking.status === 'confirmed' || booking.status === 'approved'}
+				<button onclick={startPickup} class="bg-blue-700 text-white px-4 py-2 rounded text-sm mb-4">{m.page_booking_btn_start_pickup()}</button>
 			{/if}
 
-			<div class="flex gap-2 mb-3">
-				<input
-					type="text"
-					bind:value={noteMessage}
-					placeholder={m.page_booking_message_to_manager()}
-					class="flex-1 border rounded px-3 py-2 text-sm"
-					onkeydown={(e) => { if (e.key === 'Enter') addNote(); }}
-				/>
-				<button onclick={addNote} disabled={!noteMessage.trim()} class="bg-neutral-700 text-white px-3 py-2 rounded text-sm disabled:opacity-50">Skicka</button>
-			</div>
+			<!-- Section 2: comment thread - always visible -->
+			<BookingCommentThread bookingId={booking.id} refreshKey={eventsRefreshKey} />
 
+			<!-- Section 3: approval action area -->
 			{#if isManager && booking.status === 'submitted'}
 				<div class="border rounded p-4 mb-3 bg-orange-50">
 					<p class="text-sm font-medium text-orange-800 mb-2">{m.page_booking_pending_message()}</p>
@@ -317,30 +289,34 @@
 				</div>
 			{/if}
 
-			<div class="flex flex-wrap items-center gap-2">
-				{#if editable}
-					<a href="/book?id={booking.id}" class="bg-blue-700 text-white px-4 py-2 rounded text-sm">Redigera</a>
-				{/if}
-				{#if booking.status === 'draft'}
-					<div class="border rounded p-4 mb-3 bg-neutral-50">
-						<textarea
-							bind:value={submitMessage}
-							placeholder={m.page_booking_message_to_manager()}
-							class="w-full border rounded px-3 py-2 text-sm mb-2"
-							rows="2"
-						></textarea>
-						<div class="flex items-center gap-3">
-							<button onclick={submitBooking} class="bg-green-700 text-white px-4 py-2 rounded text-sm">{m.page_booking_btn_submit()}</button>
-							<label class="flex items-center gap-1.5 text-sm text-neutral-600">
-								<input type="checkbox" bind:checked={forceApproval} />
-								{m.page_booking_wants_confirmation()}
-							</label>
-						</div>
+			{#if !isManager && (booking.status === 'draft' || booking.status === 'rejected')}
+				<div class="border rounded p-4 mb-3 bg-neutral-50">
+					{#if booking.status === 'rejected'}
+						<p class="text-sm font-medium text-red-700 mb-2">{m.page_booking_rejected_notice()}</p>
+					{/if}
+					<textarea
+						bind:value={submitMessage}
+						placeholder={m.page_booking_message_to_manager()}
+						class="w-full border rounded px-3 py-2 text-sm mb-2"
+						rows="2"
+					></textarea>
+					<div class="flex items-center gap-3 mb-2">
+						<button onclick={submitBooking} class="bg-green-700 text-white px-4 py-2 rounded text-sm">{m.page_booking_btn_submit()}</button>
+						<label
+							class="flex items-center gap-1.5 text-sm text-neutral-600"
+							title={anyItemRequiresApproval ? m.page_booking_confirmation_locked_tooltip() : undefined}
+						>
+							<input type="checkbox" bind:checked={forceApproval} disabled={anyItemRequiresApproval} />
+							{m.page_booking_wants_confirmation()}
+						</label>
 					</div>
-				{/if}
-				{#if booking.status === 'confirmed' || booking.status === 'approved'}
-					<button onclick={startPickup} class="bg-blue-700 text-white px-4 py-2 rounded text-sm">{m.page_booking_btn_start_pickup()}</button>
-				{/if}
+					<p class="text-xs text-neutral-500">
+						{needsReview ? m.page_booking_needs_review_line() : m.page_booking_auto_approves_line()}
+					</p>
+				</div>
+			{/if}
+
+			<div class="flex flex-wrap items-center gap-2">
 				{#if cancellable}
 					<button onclick={cancelBooking} class="text-sm text-red-600 underline">
 						{booking.status === 'draft' ? m.page_booking_btn_delete_draft() : m.page_booking_btn_cancel()}

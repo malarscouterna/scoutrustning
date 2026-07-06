@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -84,7 +85,20 @@ func (h *BookingHandler) canAccessBooking(ctx context.Context, claims auth.Claim
 // isEditable returns true if the booking can be modified.
 func isEditable(status string) bool {
 	return status == "draft" || status == "confirmed" || status == "picked_up" ||
-		status == "submitted" || status == "approved"
+		status == "submitted" || status == "approved" || status == "rejected"
+}
+
+// reopenIfRejected transitions a rejected booking to draft the moment the user
+// starts editing it (Update/AddItems/RemoveItem), rather than on reject itself.
+// Returns the effective status to use for the rest of the caller's logic.
+func (h *BookingHandler) reopenIfRejected(ctx context.Context, groupID string, bookingID pgtype.UUID, status string) string {
+	if status != "rejected" {
+		return status
+	}
+	h.Q.UpdateBookingStatus(ctx, db.UpdateBookingStatusParams{
+		ID: bookingID, GroupID: groupID, Status: "draft",
+	})
+	return "draft"
 }
 
 func (h *BookingHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -194,9 +208,19 @@ func (h *BookingHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	autoApproves := true
+	maxLevel, err := h.Q.BookingMaxApprovalLevel(r.Context(), db.BookingMaxApprovalLevelParams{
+		BookingID: id, GroupID: claims.GroupID,
+	})
+	if err == nil {
+		teamAccess := resolveBookingAccess(claims, booking.UsedByTeamID)
+		autoApproves = !needsApprovalForLevel(maxLevel.(string), booking.UsedByTeamID, teamAccess)
+	}
+
 	WriteJSON(w, http.StatusOK, map[string]any{
-		"booking": booking,
-		"items":   items,
+		"booking":       booking,
+		"items":         items,
+		"auto_approves": autoApproves,
 	})
 }
 
@@ -264,6 +288,7 @@ func (h *BookingHandler) Update(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusBadRequest, "booking is not editable")
 		return
 	}
+	booking.Status = h.reopenIfRejected(r.Context(), claims.GroupID, bookingID, booking.Status)
 
 	var req struct {
 		StartDate             *string `json:"start_date"`
@@ -433,6 +458,7 @@ func (h *BookingHandler) AddItems(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusBadRequest, "booking is not editable")
 		return
 	}
+	booking.Status = h.reopenIfRejected(r.Context(), claims.GroupID, bookingID, booking.Status)
 
 	var req struct {
 		CommercialName string `json:"commercial_name"`
@@ -494,6 +520,17 @@ func (h *BookingHandler) AddItems(w http.ResponseWriter, r *http.Request) {
 
 	WriteJSON(w, http.StatusCreated, added)
 
+	itemNames := make([]string, len(matching[:req.Quantity]))
+	for i, a := range matching[:req.Quantity] {
+		itemNames[i] = a.CommonName
+	}
+	h.Q.CreateBookingEvent(r.Context(), db.CreateBookingEventParams{
+		GroupID: claims.GroupID, BookingID: bookingID,
+		ActorID: claims.MemberID, EventType: "items_changed",
+		Message:  fmt.Sprintf("La till %s", strings.Join(itemNames, ", ")),
+		Metadata: json.RawMessage("{}"),
+	})
+
 	// Auto-transition: if confirmed booking now has approval-required items, check level
 	if booking.Status == "confirmed" {
 		maxLevel, err := h.Q.BookingMaxApprovalLevel(r.Context(), db.BookingMaxApprovalLevelParams{
@@ -536,6 +573,22 @@ func (h *BookingHandler) RemoveItem(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusBadRequest, "booking is not editable")
 		return
 	}
+	booking.Status = h.reopenIfRejected(r.Context(), claims.GroupID, bookingID, booking.Status)
+
+	items, err := h.Q.ListBookingItems(r.Context(), db.ListBookingItemsParams{
+		BookingID: bookingID, GroupID: claims.GroupID,
+	})
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to check items")
+		return
+	}
+	var removedName string
+	for _, item := range items {
+		if item.ID == itemID {
+			removedName = item.CommonName
+			break
+		}
+	}
 
 	err = h.Q.RemoveBookingItem(r.Context(), db.RemoveBookingItemParams{
 		ID: itemID, GroupID: claims.GroupID, BookingID: bookingID,
@@ -543,6 +596,15 @@ func (h *BookingHandler) RemoveItem(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		WriteError(w, http.StatusNotFound, "item not found")
 		return
+	}
+
+	if removedName != "" {
+		h.Q.CreateBookingEvent(r.Context(), db.CreateBookingEventParams{
+			GroupID: claims.GroupID, BookingID: bookingID,
+			ActorID: claims.MemberID, EventType: "items_changed",
+			Message:  fmt.Sprintf("Tog bort %s", removedName),
+			Metadata: json.RawMessage("{}"),
+		})
 	}
 
 	// Auto-transition: if submitted booking no longer needs approval, auto-confirm
@@ -621,7 +683,7 @@ func (h *BookingHandler) Submit(w http.ResponseWriter, r *http.Request) {
 			GroupID: claims.GroupID, BookingID: bookingID,
 			ActorID: claims.MemberID, EventType: "submitted",
 			Metadata: []byte("{}"),
-			Message: req.Message,
+			Message:  req.Message,
 		})
 	}
 
@@ -665,8 +727,8 @@ func (h *BookingHandler) Approve(w http.ResponseWriter, r *http.Request) {
 	h.Q.CreateBookingEvent(r.Context(), db.CreateBookingEventParams{
 		GroupID: claims.GroupID, BookingID: bookingID,
 		ActorID: claims.MemberID, EventType: "approved",
-			Metadata: []byte("{}"),
-		Message: req.Message,
+		Metadata: []byte("{}"),
+		Message:  req.Message,
 	})
 
 	if h.Notifier != nil {
@@ -704,8 +766,8 @@ func (h *BookingHandler) Reject(w http.ResponseWriter, r *http.Request) {
 	h.Q.CreateBookingEvent(r.Context(), db.CreateBookingEventParams{
 		GroupID: claims.GroupID, BookingID: bookingID,
 		ActorID: claims.MemberID, EventType: "rejected",
-			Metadata: []byte("{}"),
-		Message: req.Message,
+		Metadata: []byte("{}"),
+		Message:  req.Message,
 	})
 
 	if h.Notifier != nil {
@@ -1091,7 +1153,7 @@ func (h *BookingHandler) UpdateItemReturn(w http.ResponseWriter, r *http.Request
 	}
 
 	var req struct {
-		ReturnStatus       string  `json:"return_status"`
+		ReturnStatus       string   `json:"return_status"`
 		ExpectedReturnDate *string  `json:"expected_return_date"`
 		Notes              string   `json:"notes"`
 		ImageIds           []string `json:"image_ids"`

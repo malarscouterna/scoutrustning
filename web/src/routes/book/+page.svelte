@@ -5,6 +5,7 @@
 	import { goto } from '$app/navigation';
 	import { cart } from '$lib/stores/cart.svelte';
 	import BookingItemsList from '$lib/components/BookingItemsList.svelte';
+	import BookingCommentThread from '$lib/components/BookingCommentThread.svelte';
 	import type { PageData } from './$types';
 	import { msg } from '$lib/msg';
 	import * as m from '$lib/paraglide/messages.js';
@@ -295,7 +296,10 @@
 
 	{:else}
 		<!-- Cart management mode -->
-		<h1 class="text-heading-sm font-bold mb-4">{m.page_book_your_booking()}</h1>
+		<div class="flex items-center justify-between gap-3 mb-4">
+			<h1 class="text-heading-sm font-bold">{m.page_book_your_booking()}</h1>
+			<scout-button type="link" href="/bookings/{bookingId}" variant="outlined">{m.page_book_view_booking()}</scout-button>
+		</div>
 
 		{#if message}
 			<div class="bg-green-50 border border-green-200 rounded p-3 mb-4 text-green-800 text-sm">{message}</div>
@@ -366,6 +370,10 @@
 			<BookingItemsList items={cartItems} editable conflictingIds={conflictingIds} onRemove={removeFromCart} onAddOne={addOneToCart} onRemoveOne={removeOneFromCart} />
 		{:else}
 			<p class="text-sm text-neutral-500 mb-4">{m.page_book_items_empty()}</p>
+		{/if}
+
+		{#if bookingId}
+			<BookingCommentThread {bookingId} />
 		{/if}
 
 		<!-- Primary actions -->
