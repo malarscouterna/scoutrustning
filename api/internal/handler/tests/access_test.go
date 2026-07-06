@@ -19,7 +19,7 @@ func mountAll(env *testutil.TestEnv) {
 		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
-		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries}).Routes())
+		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/teams", (&handler.TeamHandler{Q: env.Queries}).Routes())
 		r.Mount("/issues", (&handler.IssueHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 	})
@@ -472,7 +472,7 @@ func TestAccess_PickupEventLogging(t *testing.T) {
 		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
-		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries}).Routes())
+		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/teams", (&handler.TeamHandler{Q: env.Queries}).Routes())
 		r.Get("/me", func(w http.ResponseWriter, r *http.Request) {
 			claims, _ := auth.ClaimsFromContext(r.Context())
@@ -486,8 +486,11 @@ func TestAccess_PickupEventLogging(t *testing.T) {
 	locID, catID := seedIDs(t, manager)
 	articleID := createArticle(t, manager, "EventLogTest", catID, locID)
 
-	// Create booking, add item, submit, pickup
-	b, _ := json.Marshal(map[string]any{"start_date": "2026-08-01", "end_date": "2026-08-05"})
+	// Create booking, add item, submit, pickup. Assigned to the leader's own
+	// team so it auto-confirms - personal (no-team) bookings always require
+	// manager approval and are not what this test exercises.
+	teamID := getTeamID(t, leader, "Yggdrasil")
+	b, _ := json.Marshal(map[string]any{"start_date": "2026-08-01", "end_date": "2026-08-05", "used_by_team_id": teamID})
 	resp, _ := leader.Post("/api/v0/bookings", bytes.NewReader(b))
 	var booking map[string]any
 	json.NewDecoder(resp.Body).Decode(&booking)

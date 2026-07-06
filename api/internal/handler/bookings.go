@@ -18,6 +18,7 @@ import (
 
 type BookingHandler struct {
 	Q             *db.Queries
+	Perms         *PermissionCache
 	Notifier      notifications.Notifier
 	GChatNotifier notifications.Notifier
 	BaseURL       string
@@ -148,6 +149,12 @@ func (h *BookingHandler) Create(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		params.UsedByTeamID = id
+	} else if !claims.IsManager() {
+		perms := h.Perms.Get(r, claims.GroupID)
+		if !auth.AccessAtLeast(claims.MaxAccess, perms.PersonalBooking) {
+			WriteError(w, http.StatusForbidden, "you are not allowed to create personal bookings")
+			return
+		}
 	}
 	if req.UsedByExternal != nil {
 		params.UsedByExternal = pgtype.Text{String: *req.UsedByExternal, Valid: true}
@@ -379,7 +386,7 @@ func (h *BookingHandler) Update(w http.ResponseWriter, r *http.Request) {
 		})
 		if err == nil {
 			teamAccess := resolveBookingAccess(claims, updated.UsedByTeamID)
-			needs := needsApprovalForLevel(maxLevel.(string), teamAccess)
+			needs := needsApprovalForLevel(maxLevel.(string), updated.UsedByTeamID, teamAccess)
 
 			if needs && (updated.Status == "confirmed" || updated.Status == "approved") {
 				// Downgrade: new team needs approval
@@ -492,9 +499,9 @@ func (h *BookingHandler) AddItems(w http.ResponseWriter, r *http.Request) {
 		maxLevel, err := h.Q.BookingMaxApprovalLevel(r.Context(), db.BookingMaxApprovalLevelParams{
 			BookingID: bookingID, GroupID: claims.GroupID,
 		})
-		if err == nil && maxLevel != "none" {
+		if err == nil {
 			teamAccess := resolveBookingAccess(claims, booking.UsedByTeamID)
-			if needsApprovalForLevel(maxLevel.(string), teamAccess) {
+			if needsApprovalForLevel(maxLevel.(string), booking.UsedByTeamID, teamAccess) {
 				h.Q.UpdateBookingStatus(r.Context(), db.UpdateBookingStatusParams{
 					ID: bookingID, GroupID: claims.GroupID, Status: "submitted",
 				})
@@ -543,10 +550,13 @@ func (h *BookingHandler) RemoveItem(w http.ResponseWriter, r *http.Request) {
 		maxLevel, err := h.Q.BookingMaxApprovalLevel(r.Context(), db.BookingMaxApprovalLevelParams{
 			BookingID: bookingID, GroupID: claims.GroupID,
 		})
-		if err == nil && maxLevel == "none" {
-			h.Q.UpdateBookingStatus(r.Context(), db.UpdateBookingStatusParams{
-				ID: bookingID, GroupID: claims.GroupID, Status: "confirmed",
-			})
+		if err == nil {
+			teamAccess := resolveBookingAccess(claims, booking.UsedByTeamID)
+			if !needsApprovalForLevel(maxLevel.(string), booking.UsedByTeamID, teamAccess) {
+				h.Q.UpdateBookingStatus(r.Context(), db.UpdateBookingStatusParams{
+					ID: bookingID, GroupID: claims.GroupID, Status: "confirmed",
+				})
+			}
 		}
 	}
 
@@ -590,7 +600,7 @@ func (h *BookingHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		}
 
 		teamAccess := resolveBookingAccess(claims, booking.UsedByTeamID)
-		needsApproval = needsApprovalForLevel(maxLevel.(string), teamAccess)
+		needsApproval = needsApprovalForLevel(maxLevel.(string), booking.UsedByTeamID, teamAccess)
 	}
 
 	newStatus := "confirmed"
@@ -1209,10 +1219,14 @@ func resolveBookingAccess(claims auth.Claims, usedByTeamID pgtype.UUID) string {
 }
 
 // needsApprovalForLevel applies the approval matrix:
+//   - personal bookings (no team) always need approval, regardless of article level
 //   - none: never needs approval
 //   - low: needs approval unless teamAccess >= trusted
 //   - high: always needs approval (even for managers)
-func needsApprovalForLevel(articleLevel, teamAccess string) bool {
+func needsApprovalForLevel(articleLevel string, usedByTeamID pgtype.UUID, teamAccess string) bool {
+	if !usedByTeamID.Valid {
+		return true
+	}
 	switch articleLevel {
 	case "high":
 		return true

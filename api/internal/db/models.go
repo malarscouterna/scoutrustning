@@ -133,6 +133,7 @@ type GroupSetting struct {
 	GchatAdminEmail                  string             `json:"gchat_admin_email"`
 	DefaultGruppkanalChannels        []string           `json:"default_gruppkanal_channels"`
 	SmtpKeyMasked                    string             `json:"smtp_key_masked"`
+	PersonalBookingRole              string             `json:"personal_booking_role"`
 }
 
 type IssueArticle struct {

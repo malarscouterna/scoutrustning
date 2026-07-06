@@ -50,9 +50,12 @@ func setupPickupEnv(t *testing.T, env *testutil.TestEnv) (bookingID string, item
 		articleIDs = append(articleIDs, article["id"].(string))
 	}
 
-	// Create booking spanning today (realistic for pickup)
+	// Create booking spanning today (realistic for pickup). Assigned to the
+	// leader's own team so it auto-confirms - personal (no-team) bookings
+	// always require manager approval and are not what this suite tests.
+	teamID := getTeamID(t, leader, "Yggdrasil")
 	start, end := todayRange(5)
-	b, _ := json.Marshal(map[string]any{"start_date": start, "end_date": end})
+	b, _ := json.Marshal(map[string]any{"start_date": start, "end_date": end, "used_by_team_id": teamID})
 	resp, _ = leader.Post("/api/v0/bookings", bytes.NewReader(b))
 	var booking map[string]any
 	json.NewDecoder(resp.Body).Decode(&booking)
@@ -97,7 +100,8 @@ func mountPickupRoutes(env *testutil.TestEnv) {
 		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
-		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries}).Routes())
+		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
+		r.Mount("/teams", (&handler.TeamHandler{Q: env.Queries}).Routes())
 	})
 }
 

@@ -11,20 +11,22 @@ import (
 
 // Permissions holds the configurable permission levels for a group.
 type Permissions struct {
-	ImageUpload  string
-	Booking      string
-	ArticleEdit  string
-	IssueResolve string
-	ManagerNotes string
+	ImageUpload     string
+	Booking         string
+	ArticleEdit     string
+	IssueResolve    string
+	ManagerNotes    string
+	PersonalBooking string
 }
 
 // Default permissions (match DB defaults).
 var defaultPermissions = Permissions{
-	ImageUpload:  auth.AccessBook,
-	Booking:      auth.AccessBook,
-	ArticleEdit:  auth.AccessManager,
-	IssueResolve: auth.AccessManager,
-	ManagerNotes: auth.AccessManager,
+	ImageUpload:     auth.AccessBook,
+	Booking:         auth.AccessBook,
+	ArticleEdit:     auth.AccessManager,
+	IssueResolve:    auth.AccessManager,
+	ManagerNotes:    auth.AccessManager,
+	PersonalBooking: auth.AccessBook,
 }
 
 // Minimum allowed levels per permission.
@@ -34,6 +36,7 @@ var minPermissionLevel = map[string]string{
 	"article_edit_role":  auth.AccessBook,
 	"issue_resolve_role": auth.AccessBook,
 	"manager_notes_role": auth.AccessTrusted,
+	// personal_booking_role has no minimum - view/book/trusted/manager are all valid.
 }
 
 // ValidatePermissionLevel checks if a level is valid for a given permission key.
@@ -78,11 +81,12 @@ func (pc *PermissionCache) Get(r *http.Request, groupID string) Permissions {
 	}
 
 	perms := Permissions{
-		ImageUpload:  settings.ImageUploadRole,
-		Booking:      settings.BookingRole,
-		ArticleEdit:  settings.ArticleEditRole,
-		IssueResolve: settings.IssueResolveRole,
-		ManagerNotes: settings.ManagerNotesRole,
+		ImageUpload:     settings.ImageUploadRole,
+		Booking:         settings.BookingRole,
+		ArticleEdit:     settings.ArticleEditRole,
+		IssueResolve:    settings.IssueResolveRole,
+		ManagerNotes:    settings.ManagerNotesRole,
+		PersonalBooking: settings.PersonalBookingRole,
 	}
 
 	pc.mu.Lock()

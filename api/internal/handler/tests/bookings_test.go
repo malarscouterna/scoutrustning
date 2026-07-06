@@ -19,7 +19,8 @@ func TestBookingFlow_FullLifecycle(t *testing.T) {
 		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
-		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries}).Routes())
+		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
+		r.Mount("/teams", (&handler.TeamHandler{Q: env.Queries}).Routes())
 	})
 
 	manager := env.ClientAs("manager-equipment")
@@ -84,10 +85,14 @@ func TestBookingFlow_FullLifecycle(t *testing.T) {
 	})
 
 	t.Run("create draft booking", func(t *testing.T) {
+		// Booked under the leader's own team - personal (no-team) bookings
+		// always require approval regardless of article approval level.
+		teamID := getTeamID(t, leader, "Yggdrasil")
 		body := map[string]any{
-			"start_date": "2026-06-01",
-			"end_date":   "2026-06-05",
-			"notes":      "Hajk med Yggdrasil",
+			"start_date":      "2026-06-01",
+			"end_date":        "2026-06-05",
+			"notes":           "Hajk med Yggdrasil",
+			"used_by_team_id": teamID,
 		}
 		b, _ := json.Marshal(body)
 		resp, err := leader.Post("/api/v0/bookings", bytes.NewReader(b))
@@ -194,7 +199,7 @@ func TestBookingFlow_NoDoubleBooking(t *testing.T) {
 		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
-		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries}).Routes())
+		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 	})
 
 	manager := env.ClientAs("manager-equipment")
@@ -289,7 +294,7 @@ func TestBookingFlow_UpdateConfirmedBooking(t *testing.T) {
 		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
-		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries}).Routes())
+		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/teams", (&handler.TeamHandler{Q: env.Queries}).Routes())
 	})
 
@@ -468,7 +473,7 @@ func TestBookingFlow_AccessControl(t *testing.T) {
 		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
-		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries}).Routes())
+		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 	})
 
 	leaderYgg := env.ClientAs("leader-yggdrasil")
@@ -531,7 +536,8 @@ func TestBookingFlow_CancelAndDeleteDraft(t *testing.T) {
 		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
-		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries}).Routes())
+		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
+		r.Mount("/teams", (&handler.TeamHandler{Q: env.Queries}).Routes())
 	})
 
 	leader := env.ClientAs("leader-yggdrasil")
@@ -641,7 +647,11 @@ func TestBookingFlow_CancelAndDeleteDraft(t *testing.T) {
 		resp, _ = manager.Post("/api/v0/articles", bytes.NewReader(b))
 		resp.Body.Close()
 
-		b, _ = json.Marshal(map[string]any{"start_date": "2026-09-20", "end_date": "2026-09-22"})
+		// Booked under the leader's own team - personal (no-team) bookings
+		// always require approval regardless of article approval level, and
+		// would never reach picked_up via a plain submit.
+		teamID := getTeamID(t, leader, "Yggdrasil")
+		b, _ = json.Marshal(map[string]any{"start_date": "2026-09-20", "end_date": "2026-09-22", "used_by_team_id": teamID})
 		resp, _ = leader.Post("/api/v0/bookings", bytes.NewReader(b))
 		var booking map[string]any
 		json.NewDecoder(resp.Body).Decode(&booking)
@@ -677,7 +687,7 @@ func TestBookingFlow_IncrementalAddNoDuplicates(t *testing.T) {
 		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
-		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries}).Routes())
+		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 	})
 
 	manager := env.ClientAs("manager-equipment")
@@ -779,7 +789,7 @@ func TestBookingFlow_LocationScopedAvailability(t *testing.T) {
 		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
-		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries}).Routes())
+		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 	})
 
 	manager := env.ClientAs("manager-equipment")
@@ -896,7 +906,7 @@ func TestBookingFlow_Copy(t *testing.T) {
 		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
-		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries}).Routes())
+		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 	})
 
 	manager := env.ClientAs("manager-equipment")
@@ -980,6 +990,61 @@ func TestBookingFlow_Copy(t *testing.T) {
 		items := detail["items"].([]any)
 		if len(items) != 2 {
 			t.Errorf("expected 2 items in copy, got %d", len(items))
+		}
+	})
+}
+
+func TestPersonalBookingAccess(t *testing.T) {
+	env := testutil.SetupTestEnv(t)
+	perms := handler.NewPermissionCache(env.Queries)
+	env.V1(func(r chi.Router) {
+		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Perms: perms}).Routes())
+		r.Mount("/group-settings", (&handler.GroupSettingsHandler{Q: env.Queries, Pool: env.Pool, Perms: perms}).Routes())
+	})
+
+	manager := env.ClientAs("manager-equipment")
+	leader := env.ClientAs("leader-yggdrasil")
+
+	t.Run("book-level leader can create personal booking by default", func(t *testing.T) {
+		b, _ := json.Marshal(map[string]any{"start_date": "2026-10-01", "end_date": "2026-10-03"})
+		resp, err := leader.Post("/api/v0/bookings", bytes.NewReader(b))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusCreated {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("expected 201, got %d: %s", resp.StatusCode, body)
+		}
+	})
+
+	t.Run("raising personal_booking_role blocks book-level leader", func(t *testing.T) {
+		b, _ := json.Marshal(map[string]any{"personal_booking_role": "trusted"})
+		resp, _ := manager.Put("/api/v0/group-settings", bytes.NewReader(b))
+		resp.Body.Close()
+
+		b, _ = json.Marshal(map[string]any{"start_date": "2026-10-05", "end_date": "2026-10-07"})
+		resp, err := leader.Post("/api/v0/bookings", bytes.NewReader(b))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusForbidden {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("expected 403, got %d: %s", resp.StatusCode, body)
+		}
+	})
+
+	t.Run("manager can still create personal booking regardless of setting", func(t *testing.T) {
+		b, _ := json.Marshal(map[string]any{"start_date": "2026-10-10", "end_date": "2026-10-12"})
+		resp, err := manager.Post("/api/v0/bookings", bytes.NewReader(b))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusCreated {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("expected 201, got %d: %s", resp.StatusCode, body)
 		}
 	})
 }
