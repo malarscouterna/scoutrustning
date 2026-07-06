@@ -28,6 +28,11 @@ Work to complete before moving from `/api/v0/` (pre-release) to v1.0.
 
 When changing dates, title, or unit on an existing booking, the availability check incorrectly flags the booking's own items as conflicts because the `ExcludingBooking` path is not applied consistently during updates. Needs a fix and tests covering: date change with no conflict, date change with a real conflict from another booking, and title/unit change that should never trigger availability errors.
 
+Done in `fix(api): apply ExcludingBooking consistently on booking date change`:
+- Root cause was not a missing call site but the query itself: `AvailableArticlesExcludingBooking` had a second exclusion clause that filtered out articles already in the booking being edited - correct for `AddItems`/`SwapItem` (offering *new* items), wrong when `Update` reused it to revalidate the booking's *existing* items against new dates.
+- Fixed by adding an `exclude_own_items` boolean to the single query rather than duplicating it: `false` for `Update`'s own-item revalidation, `true` everywhere items are offered to add (`AddItems`, `SwapItem`, the `articles.go` add-item picker endpoint - the last one was missed on the first pass and caught by the full test suite).
+- Bookings have no `title` field, so that part of the description didn't apply; covered date-change-no-conflict, date-change-real-conflict, and unit-change-no-availability-check instead.
+
 ### Copy booking flow
 
 The copy API endpoint (`POST /api/v0/bookings/{id}/copy`) exists but the UI is not exposed. A user should be able to copy any existing booking to create a new one with the same items, then set new dates.
@@ -45,6 +50,10 @@ Tests needed: copy to clear dates, copy to dates that overlap the source, copy w
 - `returned`, `cancelled` - already terminal, no cancel button.
 
 Separately, user feedback reported "avbokningsknapp saknas" - a cancel button missing somewhere it should exist. The specific context is unknown. Needs reproduction to ensure both the spurious and missing cases are resolved together.
+
+Done in `fix(web,api): cancel button - correct cancellable status allowlist`:
+- `cancellable` changed from "not returned/cancelled" to the explicit allowlist above; server-side `Cancel` now also rejects `picked_up` (previously UI-only).
+- The likely cause of "avbokningsknapp saknas": `web/src/routes/book/+page.svelte` (the cart-builder page, reachable via `/book?id=` for any editable booking, not just drafts) had its own Cancel button with **no status check at all**, disagreeing with the booking detail page about when Cancel should show. Now uses the same allowlist.
 
 ### Booking comment thread and approval flow redesign
 
@@ -118,7 +127,7 @@ Done in `fix(web): consistent avdelning/roll phrasing, sort troops before roles`
 
 ### Collaborative bookings
 
-It should be possible to add other enheter or specific people to a booking. Added participants can modify the booking, add/remove items, and perform pickup. This is necessary when multiple teams are collaborating on an activity.
+It should be possible to add other teams (troops or roles) or specific people to a booking. Added participants can modify the booking, add/remove items, and perform pickup. This is necessary when multiple teams are collaborating on an activity.
 
 - A "Lägg till deltagare" section on the booking detail page, showing current participants and an add field. No confirmation or notification when adding.
 - Two participant roles: **editor** (can add and remove items, change dates, perform pickup) and **viewer** (read-only access to the booking). No finer split between add and remove - editors have full item edit rights.
