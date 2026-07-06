@@ -787,6 +787,10 @@ func (h *BookingHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusBadRequest, "booking already completed")
 		return
 	}
+	if booking.Status == "picked_up" {
+		WriteError(w, http.StatusBadRequest, "booking is picked up")
+		return
+	}
 
 	if booking.Status == "draft" {
 		// Delete drafts entirely

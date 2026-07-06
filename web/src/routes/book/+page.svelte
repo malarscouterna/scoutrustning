@@ -90,6 +90,10 @@
 	let conflictingIds = $state<Set<string>>(new Set());
 	let hasConflicts = $derived(conflictingIds.size > 0);
 
+	let cancellable = $derived(
+		['draft', 'submitted', 'approved', 'confirmed', 'rejected'].includes(data.existing?.booking.status ?? '')
+	);
+
 	$effect(() => {
 		if (data.existing) {
 			startDate = data.existing.booking.start_date;
@@ -374,11 +378,13 @@
 		</div>
 
 		<!-- Cancel - separated so it's not accidentally tapped -->
-		<div class="mt-6 pt-4 border-t">
-			<!-- svelte-ignore a11y_click_events_have_key_events --><!-- svelte-ignore a11y_no_static_element_interactions -->
-			<scout-button type="button" variant="danger" size="large" onclick={cancelBooking}>
-				{m.page_book_btn_cancel()}
-			</scout-button>
-		</div>
+		{#if cancellable}
+			<div class="mt-6 pt-4 border-t">
+				<!-- svelte-ignore a11y_click_events_have_key_events --><!-- svelte-ignore a11y_no_static_element_interactions -->
+				<scout-button type="button" variant="danger" size="large" onclick={cancelBooking}>
+					{m.page_book_btn_cancel()}
+				</scout-button>
+			</div>
+		{/if}
 	{/if}
 </div>

@@ -460,6 +460,7 @@
   "error_article_group_not_found": "Article group not found.",
   "error_booking_is_not_editable": "Booking cannot be edited.",
   "error_booking_already_completed": "Booking is already completed.",
+  "error_booking_is_picked_up": "Booking is picked up - complete the return flow first.",
   "error_booking_must_be_confirmed_or_approved": "Booking must be confirmed or approved.",
   "error_booking_must_be_in_picked_up_status": "Booking must be in picked up status.",
   "error_booking_must_be_in_picked_up_or_returned_status": "Booking must be in picked up or returned status.",

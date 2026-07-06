@@ -618,6 +618,57 @@ func TestBookingFlow_CancelAndDeleteDraft(t *testing.T) {
 			t.Errorf("expected cancelled, got %v", cancelled["status"])
 		}
 	})
+
+	t.Run("cannot cancel picked_up booking", func(t *testing.T) {
+		manager := env.ClientAs("manager-equipment")
+
+		resp, _ := manager.Get("/api/v0/locations")
+		var locations []map[string]any
+		json.NewDecoder(resp.Body).Decode(&locations)
+		resp.Body.Close()
+		locID := locations[0]["id"].(string)
+
+		resp, _ = manager.Get("/api/v0/categories")
+		var categories []map[string]any
+		json.NewDecoder(resp.Body).Decode(&categories)
+		resp.Body.Close()
+		catID := categories[0]["id"].(string)
+
+		b, _ := json.Marshal(map[string]any{
+			"commercial_name": "PickedUpCancelTest", "common_name": "PickedUpCancelTest 1",
+			"category_id": catID, "location_id": locID, "individually_tracked": true,
+		})
+		resp, _ = manager.Post("/api/v0/articles", bytes.NewReader(b))
+		resp.Body.Close()
+
+		b, _ = json.Marshal(map[string]any{"start_date": "2026-09-20", "end_date": "2026-09-22"})
+		resp, _ = leader.Post("/api/v0/bookings", bytes.NewReader(b))
+		var booking map[string]any
+		json.NewDecoder(resp.Body).Decode(&booking)
+		resp.Body.Close()
+		bookingID := booking["id"].(string)
+
+		b, _ = json.Marshal(map[string]any{"commercial_name": "PickedUpCancelTest", "quantity": 1})
+		resp, _ = leader.Post("/api/v0/bookings/"+bookingID+"/items", bytes.NewReader(b))
+		resp.Body.Close()
+
+		resp, _ = leader.Post("/api/v0/bookings/"+bookingID+"/submit", nil)
+		resp.Body.Close()
+
+		resp, _ = leader.Post("/api/v0/bookings/"+bookingID+"/pickup", nil)
+		resp.Body.Close()
+
+		resp, err := leader.Post("/api/v0/bookings/"+bookingID+"/cancel", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusBadRequest {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("expected 400, got %d: %s", resp.StatusCode, body)
+		}
+	})
 }
 
 func TestBookingFlow_IncrementalAddNoDuplicates(t *testing.T) {
