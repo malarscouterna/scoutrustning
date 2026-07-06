@@ -38,7 +38,12 @@
 	let newTeam = $state({ name: '', type: 'troop', access_level: 'book', claim_scope: 'troop', claim_id: '' });
 
 	function teamsByLevel(level: string) {
-		return allTeams.filter(t => t.access_level === level).sort((a, b) => a.name.localeCompare(b.name));
+		return allTeams
+			.filter(t => t.access_level === level)
+			.sort((a, b) => {
+				if (a.type !== b.type) return a.type === 'troop' ? -1 : 1;
+				return a.name.localeCompare(b.name);
+			});
 	}
 
 	async function changeTeamLevel(teamId: string, newLevel: string) {
@@ -1431,7 +1436,10 @@ async function linkGchatTeamSpace(teamId: string) {
 							<span class="text-xs text-neutral-400 ml-1">({teams.length})</span>
 						</div>
 						<div class="p-1.5 space-y-0.5 min-h-[48px]">
-							{#each teams as team (team.id)}
+							{#each teams as team, i (team.id)}
+								{#if i > 0 && team.type !== teams[i - 1].type}
+									<div class="border-t my-1"></div>
+								{/if}
 								<button
 									onclick={() => selectedTeamId = selectedTeamId === team.id ? null : team.id}
 									class="w-full text-left px-2 py-1 rounded text-sm flex items-center gap-1.5 hover:bg-neutral-50"
