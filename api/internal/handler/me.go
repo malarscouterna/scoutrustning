@@ -78,6 +78,7 @@ func (h *MeHandler) Get(w http.ResponseWriter, r *http.Request) {
 		"teams":              claims.Teams,
 		"max_access":         claims.MaxAccess,
 		"language":           lang,
+		"groups":             claims.Groups,
 		"permissions": map[string]string{
 			"image_upload":     perms.ImageUpload,
 			"booking":          perms.Booking,

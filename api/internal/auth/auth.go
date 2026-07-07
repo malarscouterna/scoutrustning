@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -43,6 +44,12 @@ type contextKey string
 
 const claimsKey contextKey = "claims"
 
+// ActiveGroupHeader carries the frontend's active-group-id cookie value
+// (set by the group switcher for multi-group members), forwarded by
+// hooks.server.ts the same way X-Dev-Role-Override is. Middleware prefers
+// this hint when a member matches more than one registered group.
+const ActiveGroupHeader = "X-Active-Group-Id"
+
 // AccessLevel constants ordered by privilege.
 const (
 	AccessView    = "view"
@@ -78,9 +85,14 @@ type Claims struct {
 	Picture   string           `json:"picture"`
 	Teams     []TeamMembership `json:"teams"`
 	MaxAccess string           `json:"max_access"`
-	// Orgs is populated only when the request came through AllowUnmapped and no
-	// registered group matched. Raw org id / role names straight from the JWT.
+	// Orgs is the raw org id/name/role list straight from the JWT memberships
+	// claim, independent of DB registration - used by /join so a user with one
+	// registered org can still apply for a second, unregistered one.
 	Orgs []OrgMembership `json:"orgs,omitempty"`
+	// Groups is Orgs filtered to the ones that resolve to a registered DB group -
+	// i.e. every group this member can actually switch into. Empty/single-entry
+	// for the common case of one registered group.
+	Groups []OrgMembership `json:"groups,omitempty"`
 }
 
 func (c Claims) IsManager() bool {
@@ -186,6 +198,27 @@ type OrgMembership struct {
 	Name      string    `json:"name"`
 	Roles     []OrgRole `json:"roles"`
 	IsPrimary bool      `json:"is_primary"`
+}
+
+// pickActiveGroup chooses which of a member's registered groups is active,
+// preferring the hint (from ActiveGroupHeader) if it matches one of them,
+// then the primary org, then a stable first match. Returns "" if registered
+// is empty.
+func pickActiveGroup(registered []OrgMembership, hint string) string {
+	for _, g := range registered {
+		if g.ID == hint {
+			return g.ID
+		}
+	}
+	for _, g := range registered {
+		if g.IsPrimary {
+			return g.ID
+		}
+	}
+	if len(registered) > 0 {
+		return registered[0].ID
+	}
+	return ""
 }
 
 // Middleware returns auth middleware. In dev mode, it supports X-Dev-Role-Override.
@@ -302,17 +335,26 @@ func Middleware(cfg MiddlewareConfig) func(http.Handler) http.Handler {
 				orgs = append(orgs, OrgMembership{ID: gid, Name: gm.Name, Roles: roles, IsPrimary: gm.IsPrimary})
 			}
 
-			// Determine which group to use: find first group from memberships that exists in DB
-			var groupID string
+			// Determine which registered groups this member belongs to. A member can
+			// match more than one; which one is "active" is resolved below, preferring
+			// the ActiveGroupHeader hint (set by the frontend's group switcher cookie)
+			// over the primary org, over a stable (sorted) first match. Iterating a Go
+			// map directly here would pick a different, arbitrary group on every
+			// request once a member has 2+ registered orgs.
+			var registeredGroups []OrgMembership
 			if cfg.Resolver != nil {
-				for gid := range ms.Groups {
-					exists, _ := cfg.Resolver.GroupExists(r.Context(), gid)
+				for _, org := range orgs {
+					exists, _ := cfg.Resolver.GroupExists(r.Context(), org.ID)
 					if exists {
-						groupID = gid
-						break
+						registeredGroups = append(registeredGroups, org)
 					}
 				}
+				sort.Slice(registeredGroups, func(i, j int) bool {
+					return registeredGroups[i].ID < registeredGroups[j].ID
+				})
 			}
+
+			groupID := pickActiveGroup(registeredGroups, r.Header.Get(ActiveGroupHeader))
 			if groupID == "" {
 				if cfg.AllowUnmapped {
 					claims := Claims{
@@ -401,6 +443,7 @@ func Middleware(cfg MiddlewareConfig) func(http.Handler) http.Handler {
 				Teams:     teams,
 				MaxAccess: maxAccess,
 				Orgs:      orgs,
+				Groups:    registeredGroups,
 			}
 
 			r = r.WithContext(withClaims(r.Context(), claims))
