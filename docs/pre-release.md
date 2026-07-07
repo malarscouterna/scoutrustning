@@ -24,6 +24,31 @@ When picking up an item from this doc:
 
 ---
 
+## Multi-group support (landing page, signup, GDPR)
+
+Full plan, rationale, and implementation notes in `docs/scout-group-signup.md` - this entry only tracks status against this checklist.
+
+- [x] `/welcome` public landing page, absorbing `/login` (deleted), linking to signup and GDPR
+- [x] `/gdpr` info page - deployment-provided markdown (`gdpr.md`, gitignored), not hardcoded, with a template committed for reference
+- [x] `/join` group signup form + admin/applicant email notifications
+- [ ] Account removal (self-service, orphan bookings/comments) - not started
+- [ ] Group switching (multi-group users, active-group cookie, `/api/v0/me` returning all groups) - not started
+- [ ] Deferred UX polish (explicitly not done yet, tracked in `docs/scout-group-signup.md`): logged-out language switcher on the three public pages; easier navigation back to `/welcome` from the logged-in dashboard
+
+Done in a series of commits building out `docs/scout-group-signup.md` §1/§2/§4:
+- `/join` required a real architecture decision, not just a form: the audience (unmapped-group users) is exactly who the standard `auth.Middleware` rejects with `403 group_not_found` before any handler runs. Solved with an additive `AllowUnmapped` flag on `MiddlewareConfig` plus a `Claims.Orgs` field populated from the raw JWT `memberships` claim - zero behavior change for every other route, which still uses the strict instance.
+- Two operational gotchas worth remembering for future env vars: `docker-compose.yml`'s `api` service uses an explicit `environment:` allowlist rather than `env_file: .env`, so a new var in `.env` silently does nothing until it's also added there; and `web`'s Paraglide messages are generated from `api/internal/i18n/messages/*.json` at build time, so new i18n keys need a container rebuild/restart, not just a source edit, to show up.
+- Signup is refused outright (`503`) if `ADMIN_EMAIL` isn't configured - deliberately no silent "half-succeeded, applicant got a confirmation but nobody will ever act on it" state.
+- Iterated several times on form details based on manual review: role field is a required dropdown of the applicant's actual Scoutnet roles (not free text, not hardcoded to "manager" - that was a real bug, the generated `init-group --role-key` was always `manager` regardless of what the applicant selected); a separate free-text "manager team name" field (e.g. "Utrustningsgruppen") distinct from the Scoutnet role title; contact email deliberately not prefilled from the applicant's own address (nudged toward a shared group mailbox instead); custom domain collection reduced to an interest checkbox with no domain name field, explicitly not wired into `init-group` - that's a manual follow-up conversation.
+
+---
+
+## Repo hygiene
+
+- [ ] Separate internal work-in-progress planning docs (this file, `docs/scout-group-signup.md`, `docs/BACKLOG.md`, `docs/accomplished.md`) from docs actual users/deployers care about (`README.md`, `docs/guide.md`, `docs/API.md`, `docs/SPEC.md`). They currently sit side by side in `docs/`, which makes it easy for someone cloning the repo to land on a half-finished planning doc instead of the guide. Consider a `docs/planning/` (or similar) subfolder for the former, or at least a one-line "internal, not user-facing" banner at the top of each.
+
+---
+
 ## Other frontend gaps
 
 - [ ] Web header logo - fetch `logo_url` from group settings and render in top nav when present

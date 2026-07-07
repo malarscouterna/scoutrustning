@@ -109,6 +109,7 @@ else
   check "GDPR"       "$WEB/gdpr"      "$LEADER_COOKIE"
   check "Profile"    "$WEB/profile"   "$LEADER_COOKIE"
   check "Welcome"    "$WEB/welcome"   "$LEADER_COOKIE"
+  check "Join"       "$WEB/join"      "$LEADER_COOKIE"
 
   # --- Static pages (manager) ---
   echo "Testing static pages (manager)..."

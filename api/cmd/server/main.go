@@ -131,6 +131,25 @@ func main() {
 	logoHandler := &handler.LogoHandler{Q: queries, ImageDir: imageDir}
 	r.Mount("/api/v0/public/groups", logoHandler.PublicLogoRoutes())
 
+	// Group signup — authenticated (valid ScoutID JWT) but deliberately not
+	// group-scoped, since applicants by definition have no registered group
+	// yet. Uses its own AllowUnmapped auth instance instead of the strict
+	// one above, and skips UpsertUserMiddleware (no group_id to upsert into).
+	r.Route("/api/v0/join", func(r chi.Router) {
+		r.Use(auth.Middleware(auth.MiddlewareConfig{
+			JWKSURL:       getenv("JWKS_URL", ""),
+			DevMode:       devMode,
+			PersonasPath:  getenv("DEV_PERSONAS_PATH", "dev-personas.json"),
+			Resolver:      &handler.DBTeamResolver{Q: queries},
+			AllowUnmapped: true,
+		}))
+		joinHandler := &handler.JoinHandler{
+			Notifier: &notifications.SMTPNotifier{Q: queries},
+			AdminTo:  getenv("ADMIN_EMAIL", ""),
+		}
+		r.Mount("/", joinHandler.Routes())
+	})
+
 	// Daily notification scheduler (reminders + overdue alerts).
 	// In demo mode, use NoopNotifier so scheduled sends never fire.
 	var schedulerNotifier notifications.Notifier = &notifications.SMTPNotifier{Q: queries}

@@ -3,6 +3,7 @@ import { resolve } from 'path';
 import { redirect } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
 import type { User } from '$lib/user';
+import { decodeJwtPayload } from '$lib/jwt';
 
 const DEV_MODE = process.env.DEV_MODE === 'true';
 const DEMO_MODE = process.env.DEMO_MODE === 'true';
@@ -89,7 +90,7 @@ export const load: LayoutServerLoad = async ({ cookies, locals, url, fetch: skFe
 			}
 			// Logged in via OIDC but group not found — show friendly message + persona switcher in demo
 			const oidcName = extractNameFromToken(session.accessToken);
-			if (url.pathname !== '/welcome') throw redirect(302, '/welcome');
+			if (url.pathname !== '/welcome' && url.pathname !== '/join') throw redirect(302, '/welcome');
 			return { user: null, dev: DEV_MODE ? { personas, currentPersona: null } : null, demo: DEMO_MODE, oidcName };
 		}
 
@@ -117,7 +118,7 @@ export const load: LayoutServerLoad = async ({ cookies, locals, url, fetch: skFe
 	const user = await fetchMe(skFetch);
 	if (!user) {
 		const oidcName = extractNameFromToken(session.accessToken);
-		if (oidcName && url.pathname !== '/welcome') throw redirect(302, '/welcome');
+		if (oidcName && url.pathname !== '/welcome' && url.pathname !== '/join') throw redirect(302, '/welcome');
 		return { user: null, dev: null, demo: false, oidcName: oidcName ?? null };
 	}
 	setLangCookie(cookies, user.language);
@@ -125,12 +126,5 @@ export const load: LayoutServerLoad = async ({ cookies, locals, url, fetch: skFe
 };
 
 function extractNameFromToken(token: string): string | null {
-	try {
-		const payload = JSON.parse(
-			new TextDecoder().decode(Uint8Array.from(atob(token.split('.')[1]), c => c.charCodeAt(0)))
-		);
-		return payload.name || null;
-	} catch {
-		return null;
-	}
+	return decodeJwtPayload(token)?.name || null;
 }

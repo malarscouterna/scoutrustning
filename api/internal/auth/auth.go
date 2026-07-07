@@ -17,12 +17,15 @@ import (
 
 // Token memberships claim structures (unexported, only used for JWT parsing).
 type tokenMembershipRole struct {
+	ID   int    `json:"id"`
 	Key  string `json:"key"`
 	Name string `json:"name"`
 }
 
 type tokenGroupMembership struct {
-	Roles []tokenMembershipRole `json:"roles"`
+	Name      string                `json:"name"`
+	Roles     []tokenMembershipRole `json:"roles"`
+	IsPrimary bool                  `json:"is_primary"`
 }
 
 type tokenTroopMembership struct {
@@ -75,6 +78,9 @@ type Claims struct {
 	Picture   string           `json:"picture"`
 	Teams     []TeamMembership `json:"teams"`
 	MaxAccess string           `json:"max_access"`
+	// Orgs is populated only when the request came through AllowUnmapped and no
+	// registered group matched. Raw org id / role names straight from the JWT.
+	Orgs []OrgMembership `json:"orgs,omitempty"`
 }
 
 func (c Claims) IsManager() bool {
@@ -158,6 +164,28 @@ type MiddlewareConfig struct {
 	DevMode      bool
 	PersonasPath string
 	Resolver     TeamResolver
+	// AllowUnmapped, when true, lets requests through even when no memberships
+	// claim matches a registered group, instead of returning 403. Used only by
+	// routes that operate before a group exists (e.g. group signup). Claims in
+	// this case have an empty GroupID and no Teams; use Claims.Orgs instead.
+	AllowUnmapped bool
+}
+
+// OrgRole is a single role a member holds within an org, read directly from
+// the JWT memberships claim.
+type OrgRole struct {
+	ID   int    `json:"id"`
+	Key  string `json:"key"`
+	Name string `json:"name"`
+}
+
+// OrgMembership is a raw org/name/role tuple read directly from the JWT
+// memberships claim, for use when the org has no registered group yet.
+type OrgMembership struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Roles     []OrgRole `json:"roles"`
+	IsPrimary bool      `json:"is_primary"`
 }
 
 // Middleware returns auth middleware. In dev mode, it supports X-Dev-Role-Override.
@@ -262,6 +290,18 @@ func Middleware(cfg MiddlewareConfig) func(http.Handler) http.Handler {
 				}
 			}
 
+			// Raw org memberships from the token, independent of which (if any)
+			// resolves to a registered group - used by /join so a user with one
+			// registered org can still apply for a second, unregistered one.
+			var orgs []OrgMembership
+			for gid, gm := range ms.Groups {
+				roles := make([]OrgRole, len(gm.Roles))
+				for i, role := range gm.Roles {
+					roles[i] = OrgRole{ID: role.ID, Key: role.Key, Name: role.Name}
+				}
+				orgs = append(orgs, OrgMembership{ID: gid, Name: gm.Name, Roles: roles, IsPrimary: gm.IsPrimary})
+			}
+
 			// Determine which group to use: find first group from memberships that exists in DB
 			var groupID string
 			if cfg.Resolver != nil {
@@ -274,6 +314,19 @@ func Middleware(cfg MiddlewareConfig) func(http.Handler) http.Handler {
 				}
 			}
 			if groupID == "" {
+				if cfg.AllowUnmapped {
+					claims := Claims{
+						MemberID:  memberID,
+						Name:      name,
+						Email:     email,
+						Picture:   picture,
+						MaxAccess: AccessView,
+						Orgs:      orgs,
+					}
+					r = r.WithContext(withClaims(r.Context(), claims))
+					next.ServeHTTP(w, r)
+					return
+				}
 				slog.Warn("no configured group found in token", "preferred_username", preferredUsername)
 				http.Error(w, `{"error":"group_not_found"}`, http.StatusForbidden)
 				return
@@ -347,6 +400,7 @@ func Middleware(cfg MiddlewareConfig) func(http.Handler) http.Handler {
 				Picture:   picture,
 				Teams:     teams,
 				MaxAccess: maxAccess,
+				Orgs:      orgs,
 			}
 
 			r = r.WithContext(withClaims(r.Context(), claims))

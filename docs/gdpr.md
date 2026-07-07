@@ -1,6 +1,6 @@
 # Hantering av personuppgifter
 
-Genom att logga in och använda den här tjänsten godkänner du hanteringen som beskrivs nedan.
+Genom att logga in och använda den här tjänsten godkänner du hanteringen som beskrivs nedan. Vi behandlar enbart användare som loggat in, övriga medlemmar i scoutkåren importeras inte.
 
 ## Vilka uppgifter samlas in
 

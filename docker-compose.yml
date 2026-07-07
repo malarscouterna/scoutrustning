@@ -35,6 +35,7 @@ services:
       SMTP_DEFAULT_USER: ${SMTP_DEFAULT_USER:-}
       SMTP_DEFAULT_KEY: ${SMTP_DEFAULT_KEY:-}
       APP_BASE_URL: ${APP_BASE_URL:-http://localhost:3000}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
     volumes:
       - ./dev-personas.json:/config/dev-personas.json:ro
       - images:/data/images
