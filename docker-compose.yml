@@ -64,6 +64,7 @@ services:
     volumes:
       - ./dev-personas.json:/app/dev-personas.json:ro
       - ./docs/guide.md:/app/guide.md:ro
+      - ./docs/gdpr.md:/app/gdpr.md:ro
     depends_on:
       - api
 

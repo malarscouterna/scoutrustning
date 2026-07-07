@@ -11,7 +11,7 @@ const PERSONA_COOKIE = 'dev-persona';
 const DEFAULT_PERSONA = 'leader-yggdrasil';
 
 function isPublicPath(pathname: string): boolean {
-	return pathname.startsWith('/auth/') || pathname === '/welcome' || pathname === '/guide';
+	return pathname.startsWith('/auth/') || pathname === '/welcome' || pathname === '/guide' || pathname === '/gdpr';
 }
 
 type AuthResult =

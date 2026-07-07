@@ -106,6 +106,7 @@ else
   check "Issues"     "$WEB/issues"    "$LEADER_COOKIE"
   check "Issues new" "$WEB/issues/new" "$LEADER_COOKIE"
   check "Guide"      "$WEB/guide"     "$LEADER_COOKIE"
+  check "GDPR"       "$WEB/gdpr"      "$LEADER_COOKIE"
   check "Profile"    "$WEB/profile"   "$LEADER_COOKIE"
   check "Welcome"    "$WEB/welcome"   "$LEADER_COOKIE"
 

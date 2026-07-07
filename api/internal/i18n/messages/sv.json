@@ -419,6 +419,7 @@
   "page_welcome_demo_desc": "Logga in med ditt ScoutID för att testa. Du kan byta roll med persona-väljaren efter inloggning.",
   "page_welcome_btn_login": "Logga in med ScoutID",
   "page_welcome_go_to_dashboard": "Gå till översikten",
+  "page_welcome_gdpr_link": "Information om personuppgifter (GDPR)",
   "availability_pre_approved": "Förgodkänd",
   "page_article_added_to_booking": "Tillagd i bokning!",
   "page_booking_items_heading": "Utrustning ({count} artiklar)",

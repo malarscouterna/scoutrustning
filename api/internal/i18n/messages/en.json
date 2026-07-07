@@ -419,6 +419,7 @@
   "page_welcome_demo_desc": "Log in with your ScoutID to try it out. You can switch role using the persona switcher after login.",
   "page_welcome_btn_login": "Log in with ScoutID",
   "page_welcome_go_to_dashboard": "Go to dashboard",
+  "page_welcome_gdpr_link": "Privacy / GDPR information",
   "availability_pre_approved": "Pre-approved",
   "page_article_added_to_booking": "Added to booking!",
   "page_booking_items_heading": "Equipment ({count} items)",
