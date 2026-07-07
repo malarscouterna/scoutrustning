@@ -69,6 +69,15 @@
 				</a>
 			{/if}
 
+			<!-- Group signup CTA -->
+			<a
+				href="/join"
+				class="flex items-center justify-between gap-4 border border-neutral-300 rounded-xl px-4 py-3 text-sm text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100 transition-colors"
+			>
+				<span>{m.page_welcome_join_link()}</span>
+				<span class="text-neutral-400">→</span>
+			</a>
+
 			<!-- Description -->
 			<p class="text-sm text-neutral-600 leading-relaxed">
 				{m.page_welcome_description()}
