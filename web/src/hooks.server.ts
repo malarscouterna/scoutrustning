@@ -9,6 +9,7 @@ const DEV_MODE = process.env.DEV_MODE === 'true';
 const DEMO_MODE = process.env.DEMO_MODE === 'true';
 const PERSONA_COOKIE = 'dev-persona';
 const DEFAULT_PERSONA = 'leader-yggdrasil';
+const ACTIVE_GROUP_COOKIE = 'active-group-id';
 
 function isPublicPath(pathname: string): boolean {
 	return pathname.startsWith('/auth/') || pathname === '/welcome' || pathname === '/guide' || pathname === '/gdpr';
@@ -134,11 +135,17 @@ const appHandle: Handle = async ({ event, resolve }) => {
 		headers.delete('Authorization');
 		headers.delete('X-Dev-Role-Override');
 		headers.delete('X-Language');
+		headers.delete('X-Active-Group-Id');
 
 		if (authMode === 'persona') {
 			headers.set('X-Dev-Role-Override', personaKey!);
 		} else if (authMode === 'oidc' && accessToken) {
 			headers.set('Authorization', `Bearer ${accessToken}`);
+		}
+
+		const activeGroupId = event.cookies.get(ACTIVE_GROUP_COOKIE);
+		if (activeGroupId) {
+			headers.set('X-Active-Group-Id', activeGroupId);
 		}
 
 		const res = await fetch(target, {
