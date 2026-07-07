@@ -19,5 +19,6 @@ type TeamResolver interface {
 	AutoCreateTeams(ctx context.Context, groupID string, claims []OIDCClaim) ([]TeamMembership, error)
 	DefaultAccessForUnknown(ctx context.Context, groupID string) (string, error)
 	GroupExists(ctx context.Context, groupID string) (bool, error)
+	GroupName(ctx context.Context, groupID string) (string, error)
 	CountManagerTeams(ctx context.Context, groupID string) (int, error)
 }

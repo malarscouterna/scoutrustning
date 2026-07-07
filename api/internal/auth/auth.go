@@ -260,7 +260,7 @@ func Middleware(cfg MiddlewareConfig) func(http.Handler) http.Handler {
 				}
 				if personas != nil {
 					if override := r.Header.Get("X-Dev-Role-Override"); override != "" {
-						claims, err := resolveDevPersona(r.Context(), personas, override, cfg.Resolver)
+						claims, err := resolveDevPersona(r.Context(), personas, override, cfg.Resolver, r.Header.Get(ActiveGroupHeader))
 						if err != nil {
 							http.Error(w, `{"error":"unknown dev persona"}`, http.StatusBadRequest)
 							return
@@ -452,22 +452,33 @@ func Middleware(cfg MiddlewareConfig) func(http.Handler) http.Handler {
 	}
 }
 
-// resolveDevPersona builds Claims from a dev persona definition.
-// Uses the resolver to look up team access levels from the DB.
-func resolveDevPersona(ctx context.Context, personas map[string]devPersona, name string, resolver TeamResolver) (Claims, error) {
+// resolveDevPersona builds Claims from a dev persona definition. A persona can
+// belong to more than one group (map key per group ID) to exercise the
+// active-group switcher locally; hint is the same ActiveGroupHeader value
+// used for real JWT logins. Uses the resolver to look up team access levels
+// and group names from the DB.
+func resolveDevPersona(ctx context.Context, personas map[string]devPersona, name string, resolver TeamResolver, hint string) (Claims, error) {
 	p, ok := personas[name]
 	if !ok {
 		return Claims{}, fmt.Errorf("unknown persona: %s", name)
 	}
 
-	// Use first group
-	var groupID string
-	var teamNames []string
-	for gid, names := range p.Groups {
-		groupID = gid
-		teamNames = names
-		break
+	var registeredGroups []OrgMembership
+	for gid := range p.Groups {
+		groupName := gid
+		if resolver != nil {
+			if n, err := resolver.GroupName(ctx, gid); err == nil {
+				groupName = n
+			}
+		}
+		registeredGroups = append(registeredGroups, OrgMembership{ID: gid, Name: groupName})
 	}
+	sort.Slice(registeredGroups, func(i, j int) bool {
+		return registeredGroups[i].ID < registeredGroups[j].ID
+	})
+
+	groupID := pickActiveGroup(registeredGroups, hint)
+	teamNames := p.Groups[groupID]
 
 	var teams []TeamMembership
 	maxAccess := AccessView
@@ -512,6 +523,7 @@ func resolveDevPersona(ctx context.Context, personas map[string]devPersona, name
 		Email:     p.Email,
 		Teams:     teams,
 		MaxAccess: maxAccess,
+		Groups:    registeredGroups,
 	}, nil
 }
 

@@ -210,10 +210,20 @@ func (e *TestEnv) ClientWithClaims(claims auth.Claims) *TestClient {
 }
 
 type TestClient struct {
-	baseURL   string
-	persona   string
-	rawClaims string
-	client    *http.Client
+	baseURL     string
+	persona     string
+	rawClaims   string
+	activeGroup string
+	client      *http.Client
+}
+
+// WithActiveGroup returns a copy of the client that sends the given group ID
+// as X-Active-Group-Id, simulating the frontend's active-group-id cookie
+// for a persona belonging to more than one registered group.
+func (c *TestClient) WithActiveGroup(groupID string) *TestClient {
+	copy := *c
+	copy.activeGroup = groupID
+	return &copy
 }
 
 func (c *TestClient) Do(method, path string, body io.Reader) (*http.Response, error) {
@@ -225,6 +235,9 @@ func (c *TestClient) Do(method, path string, body io.Reader) (*http.Response, er
 		req.Header.Set("X-Dev-Claims", c.rawClaims)
 	} else {
 		req.Header.Set("X-Dev-Role-Override", c.persona)
+	}
+	if c.activeGroup != "" {
+		req.Header.Set("X-Active-Group-Id", c.activeGroup)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	return c.client.Do(req)
