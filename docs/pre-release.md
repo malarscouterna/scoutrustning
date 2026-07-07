@@ -52,7 +52,7 @@ Done in a series of commits building out `docs/scout-group-signup.md` §1/§2/§
 ## Other frontend gaps
 
 - [ ] Web header logo - fetch `logo_url` from group settings and render in top nav when present
-- [ ] Own-profile avatar in top nav - show the logged-in user's picture/initials top-right (e.g. via `UserAvatar`), clicking navigates to `/profile` (which already has language, notification settings, and the logout button) rather than opening the read-only `UserInfoCard`. Must not collide with the dev-mode persona switcher, which currently occupies that corner - needs a layout decision for how the two coexist in dev mode specifically.
+- [x] ~~Own-profile avatar in top nav~~ - **superseded, see `docs/scout-group-signup.md` §3**: show the logged-in user's `UserAvatar` in the top nav's right-hand cluster (after `DevPersonaSwitcher`, so it doesn't collide with it in dev mode), clicking opens `UserInfoCard` for their own user ID (not a navigation to `/profile`) - this is also where the group switcher lands once multi-group support exists.
 
 ---
 

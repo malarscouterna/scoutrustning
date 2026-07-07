@@ -3,6 +3,8 @@
 	import { page } from '$app/stores';
 	import DevPersonaSwitcher from '$lib/components/DevPersonaSwitcher.svelte';
 	import FloatingCart from '$lib/components/FloatingCart.svelte';
+	import UserAvatar from '$lib/components/UserAvatar.svelte';
+	import UserInfoCard from '$lib/components/UserInfoCard.svelte';
 	import { ParaglideJS } from '@inlang/paraglide-sveltekit';
 	import { i18n } from '$lib/i18n';
 
@@ -20,6 +22,8 @@
 
 	// True when we're on the section's own index page (the breadcrumb leaf, not a sub-page)
 	let onSectionRoot = $derived(section !== null && $page.url.pathname === section.href);
+
+	let profileCardOpen = $state(false);
 </script>
 
 <ParaglideJS {i18n} languageTag={(data.user?.language ?? 'sv') as 'sv' | 'en'}>
@@ -65,9 +69,17 @@
 				{#if data.dev && data.user}
 					<DevPersonaSwitcher personas={data.dev.personas} currentPersona={data.dev.currentPersona} user={data.user} />
 				{/if}
+				<button
+					type="button"
+					aria-label={data.user.name}
+					onclick={() => (profileCardOpen = true)}
+				>
+					<UserAvatar name={data.user.name} picture={data.user.picture} size={32} />
+				</button>
 			</div>
 		</div>
 	</nav>
+	<UserInfoCard bind:open={profileCardOpen} userId={data.user.member_id} />
 {/if}
 
 <div>
