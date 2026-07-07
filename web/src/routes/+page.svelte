@@ -31,6 +31,7 @@
 		<scout-button type="link" href="/browse" variant="outlined">{m.page_home_btn_browse()}</scout-button>
 		<scout-button type="link" href="/profile" variant="outlined">{m.page_home_btn_settings()}</scout-button>
 		<scout-button type="link" href="/guide" variant="outlined">{m.page_home_btn_guide()}</scout-button>
+		<scout-button type="link" href="/welcome" variant="outlined">{m.page_home_btn_about()}</scout-button>
 		<scout-button type="link" href="/issues/new" variant="primary">{m.page_home_btn_issues()}</scout-button>
 	</div>
 
