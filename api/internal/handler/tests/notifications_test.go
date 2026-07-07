@@ -133,7 +133,7 @@ func TestNotifications_EventTriggered(t *testing.T) {
 	_, err := env.Pool.Exec(ctx,
 		`INSERT INTO users (id, group_id, name, email, max_access_level) VALUES
 			('mgr-1', '766', 'Utrustningsansvarig', 'manager@test.example', 'manager')
-		ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, max_access_level = EXCLUDED.max_access_level`)
+		ON CONFLICT (id, group_id) DO UPDATE SET email = EXCLUDED.email, max_access_level = EXCLUDED.max_access_level`)
 	if err != nil {
 		t.Fatalf("seed manager user: %v", err)
 	}
