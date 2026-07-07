@@ -238,6 +238,7 @@ func (h *MeHandler) PutLanguage(w http.ResponseWriter, r *http.Request) {
 	if err := h.Q.UpdateUserLanguage(r.Context(), db.UpdateUserLanguageParams{
 		Language: lang,
 		ID:       claims.MemberID,
+		GroupID:  claims.GroupID,
 	}); err != nil {
 		WriteError(w, http.StatusInternalServerError, "failed to update language")
 		return

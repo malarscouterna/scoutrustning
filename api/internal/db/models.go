@@ -255,7 +255,6 @@ type User struct {
 	GroupID           string             `json:"group_id"`
 	Name              string             `json:"name"`
 	Email             string             `json:"email"`
-	ActiveGroupID     pgtype.Text        `json:"active_group_id"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
 	Language          pgtype.Text        `json:"language"`
