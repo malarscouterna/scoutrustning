@@ -5,8 +5,10 @@ const DEMO_MODE = process.env.DEMO_MODE === 'true';
 const DEMO_URL = process.env.DEMO_URL || 'https://demo.scoutrustning.se';
 const PROD_URL = process.env.PROD_URL || 'https://scoutrustning.se';
 
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ parent }) => {
+	const { user } = await parent();
 	return {
+		user,
 		demo: DEMO_MODE,
 		dev: DEV_MODE,
 		demoUrl: DEMO_URL,

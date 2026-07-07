@@ -11,7 +11,7 @@ const PERSONA_COOKIE = 'dev-persona';
 const DEFAULT_PERSONA = 'leader-yggdrasil';
 
 function isPublicPath(pathname: string): boolean {
-	return pathname.startsWith('/auth/') || pathname === '/login' || pathname === '/guide';
+	return pathname.startsWith('/auth/') || pathname === '/welcome' || pathname === '/guide';
 }
 
 type AuthResult =
@@ -42,7 +42,7 @@ function clearSessionAndRedirect(event: any, callbackUrl: string): never {
 			event.cookies.delete(cookie.name, { path: '/' });
 		}
 	}
-	throw redirect(302, `/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+	throw redirect(302, `/welcome?callbackUrl=${encodeURIComponent(callbackUrl)}`);
 }
 
 const appHandle: Handle = async ({ event, resolve }) => {
@@ -88,7 +88,7 @@ const appHandle: Handle = async ({ event, resolve }) => {
 					// Stale persona cookie without OIDC - clear it and redirect to login
 					event.cookies.delete(PERSONA_COOKIE, { path: '/' });
 					const callbackUrl = event.url.pathname + event.url.search;
-					throw redirect(302, `/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+					throw redirect(302, `/welcome?callbackUrl=${encodeURIComponent(callbackUrl)}`);
 				}
 			} else {
 				authMode = 'persona';
@@ -103,7 +103,7 @@ const appHandle: Handle = async ({ event, resolve }) => {
 			} else if (DEMO_MODE) {
 				// Demo: require OIDC login, no auto-persona fallback
 				const callbackUrl = event.url.pathname + event.url.search;
-				throw redirect(302, `/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+				throw redirect(302, `/welcome?callbackUrl=${encodeURIComponent(callbackUrl)}`);
 			} else {
 				// Dev fallback: set default persona
 				event.cookies.set(PERSONA_COOKIE, DEFAULT_PERSONA, { path: '/', maxAge: 60 * 60 * 24 * 30 });
@@ -121,7 +121,7 @@ const appHandle: Handle = async ({ event, resolve }) => {
 		} else {
 			// Production: redirect to login — stale cookie cleanup handled by the outer wrapper
 			const callbackUrl = event.url.pathname + event.url.search;
-			throw redirect(302, `/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+			throw redirect(302, `/welcome?callbackUrl=${encodeURIComponent(callbackUrl)}`);
 		}
 	}
 
@@ -172,7 +172,7 @@ const innerHandle: Handle = hasOIDC
 // Outer wrapper: post-processes all responses, including thrown redirects.
 // throw redirect() propagates as a JS exception and bypasses normal response
 // processing — we catch it here so we can inspect and modify the response.
-// If a redirect to /login happens while the browser still holds a stale
+// If a redirect to /welcome happens while the browser still holds a stale
 // Auth.js session cookie, we append deletion headers to break the loop.
 export const handle: Handle = async ({ event, resolve }) => {
 	let response: Response;
@@ -191,7 +191,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	const requestCookies = event.request.headers.get('cookie') ?? '';
 	const location = response.headers.get('location') ?? '';
-	const redirectingToLogin = response.status >= 300 && response.status < 400 && location.includes('/login');
+	const redirectingToLogin = response.status >= 300 && response.status < 400 && location.includes('/welcome');
 
 	if (redirectingToLogin) {
 		// Auth.js splits large JWTs across multiple chunked cookies (.0, .1, ...).

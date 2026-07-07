@@ -89,7 +89,7 @@ export const load: LayoutServerLoad = async ({ cookies, locals, url, fetch: skFe
 			}
 			// Logged in via OIDC but group not found — show friendly message + persona switcher in demo
 			const oidcName = extractNameFromToken(session.accessToken);
-			if (url.pathname !== '/') throw redirect(302, '/');
+			if (url.pathname !== '/welcome') throw redirect(302, '/welcome');
 			return { user: null, dev: DEV_MODE ? { personas, currentPersona: null } : null, demo: DEMO_MODE, oidcName };
 		}
 
@@ -117,7 +117,7 @@ export const load: LayoutServerLoad = async ({ cookies, locals, url, fetch: skFe
 	const user = await fetchMe(skFetch);
 	if (!user) {
 		const oidcName = extractNameFromToken(session.accessToken);
-		if (oidcName && url.pathname !== '/') throw redirect(302, '/');
+		if (oidcName && url.pathname !== '/welcome') throw redirect(302, '/welcome');
 		return { user: null, dev: null, demo: false, oidcName: oidcName ?? null };
 	}
 	setLangCookie(cookies, user.language);
