@@ -340,6 +340,37 @@ func (q *Queries) ListUsersByGroup(ctx context.Context, arg ListUsersByGroupPara
 	return items, nil
 }
 
+const removeUser = `-- name: RemoveUser :exec
+UPDATE users SET
+  name = $1,
+  email = $2,
+  picture = NULL,
+  notification_email = NULL,
+  notification_prefs = '{}',
+  team_ids = '{}',
+  max_access_level = 'view',
+  updated_at = now()
+WHERE id = $3
+`
+
+type RemoveUserParams struct {
+	Name  string `json:"name"`
+	Email string `json:"email"`
+	ID    string `json:"id"`
+}
+
+// Self-service account removal: scrubs personal info but keeps every row for
+// this member (across all their registered groups - deliberately not scoped
+// by group_id, unlike every other query here) so existing FKs
+// (bookings.created_by, booking_events.actor_id, ...) stay linked - history
+// survives, just no longer attributable. Re-login with the same id
+// overwrites these via UpsertUser's ON CONFLICT, naturally "restoring" the
+// profile for whichever group they log back into.
+func (q *Queries) RemoveUser(ctx context.Context, arg RemoveUserParams) error {
+	_, err := q.db.Exec(ctx, removeUser, arg.Name, arg.Email, arg.ID)
+	return err
+}
+
 const resetAllNotificationPrefs = `-- name: ResetAllNotificationPrefs :one
 WITH updated AS (
   UPDATE users SET notification_prefs = '{}', updated_at = now()

@@ -448,6 +448,8 @@ export function createApiClient(opts: FetchOptions = {}) {
 			requestMut<void>(`/teams/${teamId}/gchat-space`, 'DELETE', undefined, opts),
 updateLanguage: (language: string | null) =>
 			requestMut<void>('/me/language', 'PUT', { language }, opts),
+		removeAccount: () =>
+			requestMut<void>('/me', 'DELETE', undefined, opts),
 		getNotificationPrefs: () =>
 			request<{ prefs: NotificationPrefs }>('/me/notification-prefs', opts),
 		updateNotificationPrefs: (data: Record<string, PerEventPrefs | null>) =>

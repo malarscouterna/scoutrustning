@@ -698,6 +698,25 @@ async function linkGchatTeamSpace(teamId: string) {
 		location.reload();
 	}
 
+	// --- Account removal ---
+	let removeConfirming = $state(false);
+	let removing = $state(false);
+	let removeError = $state('');
+
+	let signoutForm = $state<HTMLFormElement | undefined>();
+
+	async function removeAccount() {
+		removing = true;
+		removeError = '';
+		try {
+			await api.removeAccount();
+			signoutForm?.submit();
+		} catch (e: any) {
+			removeError = m.page_profile_remove_error();
+			removing = false;
+		}
+	}
+
 	async function saveLanguage() {
 		languageSaving = true;
 		languageMessage = '';
@@ -1168,6 +1187,35 @@ async function linkGchatTeamSpace(teamId: string) {
 		<form method="POST" action="/auth/signout" class="mt-4">
 			<button type="submit" class="text-sm text-red-600 hover:underline">{m.page_profile_btn_logout()}</button>
 		</form>
+
+		<form method="POST" action="/auth/signout" bind:this={signoutForm} class="hidden"></form>
+
+		<section class="mt-8 border border-red-200 rounded-lg p-4">
+			<h2 class="font-medium mb-1 text-red-700">{m.page_profile_danger_zone_heading()}</h2>
+			<p class="text-sm text-neutral-600 mb-3">
+				{m.page_profile_danger_zone_description()}
+			</p>
+			{#if removeError}<p class="text-sm text-red-600 mb-2">{removeError}</p>{/if}
+			{#if !removeConfirming}
+				<button type="button" onclick={() => (removeConfirming = true)} class="text-sm text-red-600 hover:underline">
+					{m.page_profile_btn_remove_account()}
+				</button>
+			{:else}
+				<div class="flex items-center gap-3">
+					<button
+						type="button"
+						onclick={removeAccount}
+						disabled={removing}
+						class="text-sm bg-red-600 text-white px-3 py-1 rounded disabled:opacity-50"
+					>
+						{m.page_profile_btn_remove_confirm()}
+					</button>
+					<button type="button" onclick={() => (removeConfirming = false)} class="text-sm text-neutral-500 hover:underline">
+						{m.btn_cancel()}
+					</button>
+				</div>
+			{/if}
+		</section>
 
 	<!-- Teams tab -->
 	{:else if tab === 'teams'}
