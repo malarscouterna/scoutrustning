@@ -332,6 +332,8 @@
   "user_info_card_manager_only_heading": "Only visible to equipment managers",
   "user_info_card_issues_heading": "Issues",
   "user_info_card_no_issues": "No open issues.",
+  "user_info_card_groups_heading": "Switch scout group",
+  "user_info_card_current_group_badge": "Active",
   "page_profile_settings_heading": "My settings",
   "page_profile_settings_placeholder": "Personal settings coming in a future version.",
   "page_profile_images_heading": "My images",
