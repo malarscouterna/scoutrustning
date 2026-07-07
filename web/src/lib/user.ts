@@ -5,6 +5,12 @@ export interface TeamMembership {
 	access_level: 'view' | 'book' | 'trusted' | 'manager';
 }
 
+export interface RegisteredGroup {
+	id: string;
+	name: string;
+	is_primary: boolean;
+}
+
 export interface User {
 	member_id: string;
 	group_id: string;
@@ -16,6 +22,7 @@ export interface User {
 	language: string;
 	teams: TeamMembership[];
 	max_access: 'view' | 'book' | 'trusted' | 'manager';
+	groups: RegisteredGroup[];
 	permissions?: {
 		image_upload: string;
 		booking: string;

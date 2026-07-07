@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { page } from '$app/stores';
 	import { createApiClient, type UserInfo } from '$lib/api/client';
 	import UserAvatar from '$lib/components/UserAvatar.svelte';
 	import * as m from '$lib/paraglide/messages.js';
@@ -13,6 +14,15 @@
 	let { userId, open = $bindable(), contextBookingId }: Props = $props();
 
 	const api = createApiClient();
+
+	const viewingOwnProfile = $derived($page.data.user?.member_id === userId);
+	const groups = $derived($page.data.user?.groups ?? []);
+	const activeGroupId = $derived($page.data.user?.group_id);
+
+	function switchGroup(groupId: string) {
+		document.cookie = `active-group-id=${groupId}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
+		location.reload();
+	}
 
 	let info = $state<UserInfo | null>(null);
 	let loading = $state(false);
@@ -165,6 +175,38 @@
 						</ul>
 					{/if}
 				</div>
+
+				{#if viewingOwnProfile}
+					{#if groups.length > 1}
+						<div>
+							<p class="text-xs font-medium text-neutral-500 mb-1">{m.user_info_card_groups_heading()}</p>
+							<ul class="space-y-1">
+								{#each groups as group}
+									<li>
+										<button
+											type="button"
+											disabled={group.id === activeGroupId}
+											onclick={() => switchGroup(group.id)}
+											class="w-full flex items-center justify-between gap-2 rounded px-2 py-1 text-sm text-left {group.id === activeGroupId ? 'bg-blue-50 font-medium' : 'hover:bg-neutral-50'}"
+										>
+											<span>{group.name}</span>
+											{#if group.id === activeGroupId}
+												<span class="text-neutral-500 text-xs">{m.user_info_card_current_group_badge()}</span>
+											{/if}
+										</button>
+									</li>
+								{/each}
+							</ul>
+						</div>
+					{/if}
+
+					<div class="flex items-center justify-between gap-2 pt-2 border-t">
+						<a href="/profile" class="text-sm text-blue-700 hover:underline">{m.page_home_btn_settings()}</a>
+						<form method="POST" action="/auth/signout">
+							<button type="submit" class="text-sm text-red-600 hover:underline">{m.page_profile_btn_logout()}</button>
+						</form>
+					</div>
+				{/if}
 			{/if}
 		</div>
 	</div>

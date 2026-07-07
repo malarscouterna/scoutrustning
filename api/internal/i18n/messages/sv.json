@@ -332,6 +332,8 @@
   "user_info_card_manager_only_heading": "Endast synligt för utrustningsansvariga",
   "user_info_card_issues_heading": "Ärenden",
   "user_info_card_no_issues": "Inga öppna ärenden.",
+  "user_info_card_groups_heading": "Byt scoutkår",
+  "user_info_card_current_group_badge": "Aktiv",
   "page_profile_settings_heading": "Mina inställningar",
   "page_profile_settings_placeholder": "Personliga inställningar kommer i en framtida version.",
   "page_profile_images_heading": "Mina bilder",
