@@ -65,7 +65,7 @@ type Booking struct {
 	Status                string             `json:"status"`
 	StartDate             pgtype.Date        `json:"start_date"`
 	EndDate               pgtype.Date        `json:"end_date"`
-	Notes                 string             `json:"notes"`
+	Title                 string             `json:"title"`
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 }
@@ -88,7 +88,6 @@ type BookingItem struct {
 	ArticleID    pgtype.UUID `json:"article_id"`
 	PickupStatus pgtype.Text `json:"pickup_status"`
 	ReturnStatus pgtype.Text `json:"return_status"`
-	Notes        string      `json:"notes"`
 }
 
 type Category struct {

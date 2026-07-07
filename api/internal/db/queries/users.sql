@@ -31,7 +31,7 @@ ORDER BY t.type, t.name;
 -- Bookings the user owns, or has participated in via a non-management action
 -- (adding items, pickup, return) logged on article_events. Management actions
 -- (submit/approve/reject) live on booking_events and are intentionally excluded.
-SELECT DISTINCT b.id, b.status, b.start_date, b.end_date, b.used_by_team_id, b.used_by_external, b.notes,
+SELECT DISTINCT b.id, b.status, b.start_date, b.end_date, b.used_by_team_id, b.used_by_external, b.title,
     t.name AS team_name
 FROM bookings b
 LEFT JOIN teams t ON t.id = b.used_by_team_id

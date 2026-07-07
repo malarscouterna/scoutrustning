@@ -51,7 +51,7 @@ func createBookingWithTeam(t *testing.T, client *testutil.TestClient, teamID str
 	t.Helper()
 	body := map[string]any{
 		"start_date": "2026-06-01", "end_date": "2026-06-05",
-		"used_by_team_id": teamID,
+		"used_by_team_id": teamID, "title": "Test booking",
 	}
 	b, _ := json.Marshal(body)
 	resp, err := client.Post("/api/v0/bookings", bytes.NewReader(b))
@@ -145,7 +145,7 @@ func TestAccess_TeamBookingVisibility(t *testing.T) {
 	})
 
 	t.Run("other team leader cannot modify booking", func(t *testing.T) {
-		b, _ := json.Marshal(map[string]any{"notes": "hacked"})
+		b, _ := json.Marshal(map[string]any{"title": "hacked"})
 		resp, _ := leaderSpi.Put("/api/v0/bookings/"+bookingID, bytes.NewReader(b))
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusForbidden {
@@ -171,7 +171,7 @@ func TestAccess_TeamBookingVisibility(t *testing.T) {
 	})
 
 	t.Run("equipment manager can modify any booking", func(t *testing.T) {
-		b, _ := json.Marshal(map[string]any{"notes": "manager note"})
+		b, _ := json.Marshal(map[string]any{"title": "manager note"})
 		resp, _ := manager.Put("/api/v0/bookings/"+bookingID, bytes.NewReader(b))
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
@@ -327,7 +327,7 @@ func TestMultiTenancy_GroupIsolation(t *testing.T) {
 	createArticle(t, manager766, "IsolationTest", catID, locID)
 
 	// Leader in group 766 creates a booking
-	b, _ := json.Marshal(map[string]any{"start_date": "2026-06-01", "end_date": "2026-06-05"})
+	b, _ := json.Marshal(map[string]any{"start_date": "2026-06-01", "end_date": "2026-06-05", "title": "Test booking"})
 	resp, _ := leader766.Post("/api/v0/bookings", bytes.NewReader(b))
 	var booking766 map[string]any
 	json.NewDecoder(resp.Body).Decode(&booking766)
@@ -401,7 +401,7 @@ func TestAccess_TeamMembershipOnBooking(t *testing.T) {
 	t.Run("leader can book for own team", func(t *testing.T) {
 		b, _ := json.Marshal(map[string]any{
 			"start_date": "2026-06-01", "end_date": "2026-06-05",
-			"used_by_team_id": yggID,
+			"used_by_team_id": yggID, "title": "Test booking",
 		})
 		resp, _ := leaderYgg.Post("/api/v0/bookings", bytes.NewReader(b))
 		defer resp.Body.Close()
@@ -414,7 +414,7 @@ func TestAccess_TeamMembershipOnBooking(t *testing.T) {
 	t.Run("leader cannot book for other team", func(t *testing.T) {
 		b, _ := json.Marshal(map[string]any{
 			"start_date": "2026-06-01", "end_date": "2026-06-05",
-			"used_by_team_id": spiID,
+			"used_by_team_id": spiID, "title": "Test booking",
 		})
 		resp, _ := leaderYgg.Post("/api/v0/bookings", bytes.NewReader(b))
 		defer resp.Body.Close()
@@ -426,7 +426,7 @@ func TestAccess_TeamMembershipOnBooking(t *testing.T) {
 	t.Run("trusted user can book for own role team", func(t *testing.T) {
 		b, _ := json.Marshal(map[string]any{
 			"start_date": "2026-06-01", "end_date": "2026-06-05",
-			"used_by_team_id": valborgID,
+			"used_by_team_id": valborgID, "title": "Test booking",
 		})
 		resp, _ := projectLeader.Post("/api/v0/bookings", bytes.NewReader(b))
 		defer resp.Body.Close()
@@ -439,7 +439,7 @@ func TestAccess_TeamMembershipOnBooking(t *testing.T) {
 	t.Run("trusted user cannot book for a troop", func(t *testing.T) {
 		b, _ := json.Marshal(map[string]any{
 			"start_date": "2026-06-01", "end_date": "2026-06-05",
-			"used_by_team_id": yggID,
+			"used_by_team_id": yggID, "title": "Test booking",
 		})
 		resp, _ := projectLeader.Post("/api/v0/bookings", bytes.NewReader(b))
 		defer resp.Body.Close()
@@ -452,7 +452,7 @@ func TestAccess_TeamMembershipOnBooking(t *testing.T) {
 		for _, id := range []string{yggID, spiID, valborgID} {
 			b, _ := json.Marshal(map[string]any{
 				"start_date": "2026-07-01", "end_date": "2026-07-05",
-				"used_by_team_id": id,
+				"used_by_team_id": id, "title": "Test booking",
 			})
 			resp, _ := manager.Post("/api/v0/bookings", bytes.NewReader(b))
 			defer resp.Body.Close()
@@ -490,7 +490,7 @@ func TestAccess_PickupEventLogging(t *testing.T) {
 	// team so it auto-confirms - personal (no-team) bookings always require
 	// manager approval and are not what this test exercises.
 	teamID := getTeamID(t, leader, "Yggdrasil")
-	b, _ := json.Marshal(map[string]any{"start_date": "2026-08-01", "end_date": "2026-08-05", "used_by_team_id": teamID})
+	b, _ := json.Marshal(map[string]any{"start_date": "2026-08-01", "end_date": "2026-08-05", "used_by_team_id": teamID, "title": "Test booking"})
 	resp, _ := leader.Post("/api/v0/bookings", bytes.NewReader(b))
 	var booking map[string]any
 	json.NewDecoder(resp.Body).Decode(&booking)

@@ -88,7 +88,7 @@ func TestAvailability_IncomingArticles(t *testing.T) {
 	})
 
 	t.Run("incoming article bookable for future dates", func(t *testing.T) {
-		b, _ := json.Marshal(map[string]any{"start_date": "2026-06-15", "end_date": "2026-06-20"})
+		b, _ := json.Marshal(map[string]any{"start_date": "2026-06-15", "end_date": "2026-06-20", "title": "Test booking"})
 		resp, _ := leader.Post("/api/v0/bookings", bytes.NewReader(b))
 		var booking map[string]any
 		json.NewDecoder(resp.Body).Decode(&booking)
@@ -317,7 +317,7 @@ func setupReturnEnvWithArticle(t *testing.T, env *testutil.TestEnv, articleID st
 	commercialName := art["commercial_name"].(string)
 
 	now := time.Now()
-	b, _ := json.Marshal(map[string]any{"start_date": now.Format("2006-01-02"), "end_date": now.AddDate(0, 0, 5).Format("2006-01-02")})
+	b, _ := json.Marshal(map[string]any{"start_date": now.Format("2006-01-02"), "end_date": now.AddDate(0, 0, 5).Format("2006-01-02"), "title": "Test booking"})
 	resp, _ = leader.Post("/api/v0/bookings", bytes.NewReader(b))
 	var booking map[string]any
 	json.NewDecoder(resp.Body).Decode(&booking)
@@ -363,7 +363,7 @@ func TestPickupFlow_UndoPreservesCondition(t *testing.T) {
 
 	// Create booking spanning today, submit, pickup
 	now := time.Now()
-	b, _ := json.Marshal(map[string]any{"start_date": now.Format("2006-01-02"), "end_date": now.AddDate(0, 0, 5).Format("2006-01-02")})
+	b, _ := json.Marshal(map[string]any{"start_date": now.Format("2006-01-02"), "end_date": now.AddDate(0, 0, 5).Format("2006-01-02"), "title": "Test booking"})
 	resp, _ := leader.Post("/api/v0/bookings", bytes.NewReader(b))
 	var booking map[string]any
 	json.NewDecoder(resp.Body).Decode(&booking)

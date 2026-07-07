@@ -52,8 +52,8 @@
 									<span class="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">{booking.team_name}</span>
 								{/if}
 							</div>
-							{#if booking.notes}
-								<p class="text-sm text-neutral-500 mt-1 truncate">{booking.notes}</p>
+							{#if booking.title}
+								<p class="text-sm text-neutral-500 mt-1 truncate">{booking.title}</p>
 							{/if}
 						</a>
 					{/each}

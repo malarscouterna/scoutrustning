@@ -133,7 +133,7 @@ func (h *UserHandler) Get(w http.ResponseWriter, r *http.Request) {
 		UsedByTeamID   string `json:"used_by_team_id,omitempty"`
 		TeamName       string `json:"team_name,omitempty"`
 		UsedByExternal string `json:"used_by_external,omitempty"`
-		Notes          string `json:"notes,omitempty"`
+		Title          string `json:"title,omitempty"`
 	}
 	bookingResults := make([]openBooking, 0, len(bookings))
 	for _, b := range bookings {
@@ -142,7 +142,7 @@ func (h *UserHandler) Get(w http.ResponseWriter, r *http.Request) {
 			Status:    b.Status,
 			StartDate: b.StartDate.Time.Format("2006-01-02"),
 			EndDate:   b.EndDate.Time.Format("2006-01-02"),
-			Notes:     b.Notes,
+			Title:     b.Title,
 		}
 		if b.UsedByTeamID.Valid {
 			ob.UsedByTeamID = formatUUID(b.UsedByTeamID)

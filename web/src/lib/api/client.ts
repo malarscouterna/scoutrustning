@@ -76,7 +76,7 @@ export interface Booking {
 	status: string;
 	start_date: string;
 	end_date: string;
-	notes: string;
+	title: string;
 	created_at: string;
 }
 
@@ -217,7 +217,7 @@ export interface UserOpenBooking {
 	used_by_team_id?: string;
 	team_name?: string;
 	used_by_external?: string;
-	notes?: string;
+	title?: string;
 }
 
 export interface UserIssueSummary {
@@ -354,7 +354,7 @@ export function createApiClient(opts: FetchOptions = {}) {
 			if (params?.bookable_only === true) query.set('bookable_only', 'true');
 			return request<AvailabilityGroup[]>(`/articles/availability?${query}`, opts);
 		},
-		createBooking: (data: { start_date: string; end_date: string; notes?: string; used_by_team_id?: string; used_by_external?: string }) =>
+		createBooking: (data: { start_date: string; end_date: string; title: string; used_by_team_id?: string; used_by_external?: string }) =>
 			requestMut<Booking>('/bookings', 'POST', data, opts),
 		listBookings: () => request<Booking[]>('/bookings', opts),
 		getBooking: (id: string) => request<{ booking: Booking; items: BookingItem[]; auto_approves: boolean }>(`/bookings/${id}`, opts),
@@ -379,15 +379,16 @@ export function createApiClient(opts: FetchOptions = {}) {
 			}, opts),
 		swapItem: (bookingId: string, itemId: string, newArticleId: string) =>
 			requestMut<BookingItem>(`/bookings/${bookingId}/items/${itemId}/swap`, 'POST', { new_article_id: newArticleId }, opts),
-		listAvailableArticles: (startDate: string, endDate: string, params?: { exclude_booking_id?: string; commercial_name?: string }) => {
+		listAvailableArticles: (startDate: string, endDate: string, params?: { exclude_booking_id?: string; commercial_name?: string; exclude_own_items?: boolean }) => {
 			const query = new URLSearchParams({ start_date: startDate, end_date: endDate });
 			if (params?.exclude_booking_id) query.set('exclude_booking_id', params.exclude_booking_id);
 			if (params?.commercial_name) query.set('commercial_name', params.commercial_name);
+			if (params?.exclude_own_items === false) query.set('exclude_own_items', 'false');
 			return request<{ id: string; commercial_name: string; common_name: string; location_name: string; place: string; status: string; expected_available_date: string | null }[]>(`/articles/availability/articles?${query}`, opts);
 		},
 		returnBooking: (id: string) =>
 			requestMut<Booking>(`/bookings/${id}/return`, 'POST', {}, opts),
-		updateItemReturn: (bookingId: string, itemId: string, data: { return_status: string; expected_return_date?: string; notes?: string; image_ids?: string[] }) =>
+		updateItemReturn: (bookingId: string, itemId: string, data: { return_status: string; expected_return_date?: string; image_ids?: string[] }) =>
 			requestMut<BookingItem>(`/bookings/${bookingId}/items/${itemId}/return`, 'PUT', data, opts),
 		listTeams: () => request<Team[]>('/teams', opts),
 		createTeam: (data: { name: string; type: string; access_level?: string; claim_scope?: string; claim_id?: string }) =>

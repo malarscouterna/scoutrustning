@@ -227,7 +227,8 @@ List individual available articles for a date range. Used for swap selection dur
 **Query parameters**:
 - `start_date` (required) - ISO date
 - `end_date` (required) - ISO date
-- `exclude_booking_id` - exclude items already in this booking from the unavailable set
+- `exclude_booking_id` - ignore date-range conflicts caused by this booking itself (so its own dates don't count against it)
+- `exclude_own_items` - default `true`. When `true`, the booking's own current items are also removed from the result (used when offering *new* items to add/swap). Pass `false` to instead revalidate the booking's *existing* items against a date range - e.g. after an edit that doesn't change dates, to confirm none of them have become conflicting.
 - `commercial_name` - filter by commercial name
 
 **Response** `200` - array of individual articles with `id`, `commercial_name`, `common_name`, `location_name`, `place`
@@ -253,10 +254,10 @@ Create a draft booking. When `used_by_team_id` is set, the user must be a member
   "used_by_team_id": "uuid or null",
   "used_by_external": "string or null",
   "used_by_external_contact": "string or null",
-  "notes": ""
+  "title": "string"
 }
 ```
-Required: `start_date`, `end_date`.
+Required: `start_date`, `end_date`, `title` (non-empty).
 
 **Response** `201` | `400` | `403` (not a member of the team)
 
@@ -276,7 +277,7 @@ Get booking with its items (including article details).
 ### `PUT /api/v0/bookings/{id}`
 Update a booking. Allowed on draft, submitted, approved, and confirmed bookings. Blocked once the booking is in `picked_up` status - use item-level endpoints instead. Access: creator, team members, or equipment manager.
 
-All fields are optional - only provided fields are updated. If dates change, all existing items are re-validated against availability.
+All fields are optional - only provided fields are updated. `title`, if provided, must be non-empty. If dates change, all existing items are re-validated against availability.
 
 **Body**
 ```json
@@ -286,7 +287,7 @@ All fields are optional - only provided fields are updated. If dates change, all
   "used_by_team_id": "uuid or null",
   "used_by_external": "string or null",
   "used_by_external_contact": "string or null",
-  "notes": "Updated notes"
+  "title": "Updated title"
 }
 ```
 
@@ -389,7 +390,7 @@ Cancel a booking. Drafts are deleted entirely (returns 204). Other bookings tran
 **Response** `200` | `204` | `400` | `403` | `404`
 
 ### `POST /api/v0/bookings/{id}/copy`
-Create a new draft booking with the same team, notes, and items as the source. Dates are set to today + 7 days as placeholders. Items that no longer exist are silently skipped.
+Create a new draft booking with the same team, title, and items as the source. Dates are set to today + 7 days as placeholders. Items that no longer exist are silently skipped.
 
 **Response** `201`
 ```json
@@ -778,7 +779,7 @@ Returns another group member's info for the user info card: name, profile pictur
   "picture": "string | null",
   "notification_email": "string | null",
   "teams": [{"id": "string", "name": "string", "type": "troop", "access_level": "trusted"}],
-  "open_bookings": [{"id": "string", "status": "submitted", "start_date": "2026-06-01", "end_date": "2026-06-05", "used_by_team_id": "string", "team_name": "string", "used_by_external": "string", "notes": "string"}],
+  "open_bookings": [{"id": "string", "status": "submitted", "start_date": "2026-06-01", "end_date": "2026-06-05", "used_by_team_id": "string", "team_name": "string", "used_by_external": "string", "title": "string"}],
   "issues": [{"id": "string", "title": "string", "severity": "unusable", "status": "open", "created_at": "2026-06-01"}]
 }
 ```

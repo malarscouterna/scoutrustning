@@ -55,7 +55,7 @@ func setupPickupEnv(t *testing.T, env *testutil.TestEnv) (bookingID string, item
 	// always require manager approval and are not what this suite tests.
 	teamID := getTeamID(t, leader, "Yggdrasil")
 	start, end := todayRange(5)
-	b, _ := json.Marshal(map[string]any{"start_date": start, "end_date": end, "used_by_team_id": teamID})
+	b, _ := json.Marshal(map[string]any{"start_date": start, "end_date": end, "used_by_team_id": teamID, "title": "Test booking"})
 	resp, _ = leader.Post("/api/v0/bookings", bytes.NewReader(b))
 	var booking map[string]any
 	json.NewDecoder(resp.Body).Decode(&booking)
@@ -115,7 +115,7 @@ func TestPickupFlow_TransitionAndChecklist(t *testing.T) {
 	t.Run("cannot pickup a draft booking", func(t *testing.T) {
 		// Create a draft (don't submit)
 		start, end := todayRange(3)
-		b, _ := json.Marshal(map[string]any{"start_date": start, "end_date": end})
+		b, _ := json.Marshal(map[string]any{"start_date": start, "end_date": end, "title": "Test booking"})
 		resp, _ := leader.Post("/api/v0/bookings", bytes.NewReader(b))
 		var draft map[string]any
 		json.NewDecoder(resp.Body).Decode(&draft)
@@ -372,7 +372,7 @@ func TestPickupFlow_AvailableArticlesEndpoint(t *testing.T) {
 	}
 
 	// Create a booking with 2 Yxa
-	b, _ := json.Marshal(map[string]any{"start_date": "2026-06-01", "end_date": "2026-06-05"})
+	b, _ := json.Marshal(map[string]any{"start_date": "2026-06-01", "end_date": "2026-06-05", "title": "Test booking"})
 	resp, _ = leader.Post("/api/v0/bookings", bytes.NewReader(b))
 	var booking map[string]any
 	json.NewDecoder(resp.Body).Decode(&booking)
@@ -425,6 +425,30 @@ func TestPickupFlow_AvailableArticlesEndpoint(t *testing.T) {
 		// so we get 3 - 2 (in booking) = 1
 		if len(articles) != 1 {
 			t.Fatalf("expected 1 available Yxa (excluding booking), got %d", len(articles))
+		}
+	})
+
+	t.Run("exclude_own_items=false includes the booking's own items in the result", func(t *testing.T) {
+		// Used by the frontend to revalidate a booking's existing items
+		// against its own date range (e.g. after a title-only edit that
+		// resends unchanged dates) - the booking's own items must not be
+		// spuriously flagged as unavailable.
+		resp, err := leader.Get("/api/v0/articles/availability/articles?start_date=2026-06-01&end_date=2026-06-05&commercial_name=Yxa&exclude_booking_id=" + bookingID + "&exclude_own_items=false")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("expected 200, got %d: %s", resp.StatusCode, body)
+		}
+
+		var articles []map[string]any
+		json.NewDecoder(resp.Body).Decode(&articles)
+		// All 3 Yxa: the 1 unbooked plus the 2 already in this booking.
+		if len(articles) != 3 {
+			t.Fatalf("expected 3 available Yxa (own items included), got %d", len(articles))
 		}
 	})
 }

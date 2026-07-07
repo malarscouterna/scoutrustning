@@ -144,6 +144,7 @@ func TestNotifications_EventTriggered(t *testing.T) {
 		b, _ := json.Marshal(map[string]any{
 			"start_date": "2025-08-01",
 			"end_date":   "2025-08-05",
+			"title":      "Test booking",
 		})
 		resp, _ := leader.Post("/api/v0/bookings", bytes.NewReader(b))
 		var result map[string]any

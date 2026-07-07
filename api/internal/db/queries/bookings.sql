@@ -17,10 +17,10 @@ WHERE status = 'picked_up'
 -- name: CreateBooking :one
 INSERT INTO bookings (
     group_id, created_by, used_by_team_id, used_by_external,
-    used_by_external_contact, status, start_date, end_date, notes
+    used_by_external_contact, status, start_date, end_date, title
 ) VALUES (
     @group_id, @created_by, @used_by_team_id, @used_by_external,
-    @used_by_external_contact, 'draft', @start_date, @end_date, @notes
+    @used_by_external_contact, 'draft', @start_date, @end_date, @title
 )
 RETURNING *;
 
@@ -70,7 +70,7 @@ UPDATE bookings SET
     used_by_team_id = @used_by_team_id,
     used_by_external = @used_by_external,
     used_by_external_contact = @used_by_external_contact,
-    notes = @notes,
+    title = @title,
     updated_at = now()
 WHERE id = @id AND group_id = @group_id
 RETURNING *;

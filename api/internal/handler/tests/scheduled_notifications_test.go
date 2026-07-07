@@ -73,8 +73,8 @@ func seedBooking(t *testing.T, env *testutil.TestEnv, creatorID, status string, 
 
 	var id pgtype.UUID
 	err := env.Pool.QueryRow(ctx, `
-		INSERT INTO bookings (group_id, created_by, used_by_team_id, status, start_date, end_date, notes)
-		VALUES ('766', $1, $2, $3, $4, $5, '')
+		INSERT INTO bookings (group_id, created_by, used_by_team_id, status, start_date, end_date, title)
+		VALUES ('766', $1, $2, $3, $4, $5, 'Test booking')
 		RETURNING id
 	`, creatorID, teamID, status,
 		pgtype.Date{Time: startDate, Valid: true},

@@ -232,8 +232,8 @@
 					{msg(`booking_status_${booking.status}`) ?? booking.status}
 				</span>
 			</div>
-			{#if booking.notes}
-				<p class="text-neutral-600 mb-2">{booking.notes}</p>
+			{#if booking.title}
+				<p class="text-neutral-600 mb-2">{booking.title}</p>
 			{/if}
 			<p class="text-sm text-neutral-500 mb-3">
 				{#if booking.team_name}
