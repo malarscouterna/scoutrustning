@@ -98,6 +98,9 @@
 				<a href="/guide" class="text-neutral-600 hover:text-neutral-900 underline underline-offset-2">
 					{m.page_welcome_guide_link()}
 				</a>
+				<a href="/gdpr" class="text-neutral-600 hover:text-neutral-900 underline underline-offset-2">
+					{m.page_welcome_gdpr_link()}
+				</a>
 			</div>
 
 			<!-- Open source -->
