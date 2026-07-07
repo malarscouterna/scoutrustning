@@ -90,3 +90,22 @@ WHERE id = @id AND group_id = @group_id;
 -- name: ClearUserNotificationEmail :exec
 UPDATE users SET notification_email = NULL, updated_at = now()
 WHERE id = @id AND group_id = @group_id;
+
+-- name: RemoveUser :exec
+-- Self-service account removal: scrubs personal info but keeps every row for
+-- this member (across all their registered groups - deliberately not scoped
+-- by group_id, unlike every other query here) so existing FKs
+-- (bookings.created_by, booking_events.actor_id, ...) stay linked - history
+-- survives, just no longer attributable. Re-login with the same id
+-- overwrites these via UpsertUser's ON CONFLICT, naturally "restoring" the
+-- profile for whichever group they log back into.
+UPDATE users SET
+  name = @name,
+  email = @email,
+  picture = NULL,
+  notification_email = NULL,
+  notification_prefs = '{}',
+  team_ids = '{}',
+  max_access_level = 'view',
+  updated_at = now()
+WHERE id = @id;

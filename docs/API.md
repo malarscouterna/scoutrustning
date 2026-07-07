@@ -803,6 +803,10 @@ Returns the authenticated user's resolved profile.
   "teams": [...],
   "max_access": "manager",
   "language": "sv",
+  "groups": [
+    { "id": "67", "name": "Mälarscouterna", "is_primary": true },
+    { "id": "99", "name": "Testkåren", "is_primary": false }
+  ],
   "permissions": {
     "image_upload": "book",
     "booking": "view",
@@ -813,6 +817,13 @@ Returns the authenticated user's resolved profile.
 }
 ```
 `language` is the resolved language (`sv` or `en`): user preference → group default → `sv`.
+
+`groups` lists every registered scout group the member belongs to (from the JWT's `memberships.groups` claim, filtered to ones with a matching DB group) - normally just one entry. `group_id`/`group_name` reflect whichever one is currently active, resolved from an `X-Active-Group-Id` header (set by the frontend from an `active-group-id` cookie) if present and valid, else the primary org, else the first match.
+
+### `DELETE /api/v0/me`
+Self-service removal of the caller's own profile - **global, across every registered group the member belongs to**, not just the currently-active one. Does not delete any row - scrubs `name`, `email`, `picture`, `notification_email`, `notification_prefs`, `team_ids`, and resets `max_access_level` to `view` on all of the member's `(id, group_id)` rows in one statement, so existing bookings/events/etc. authored by this member stay linked but are no longer attributable. Logging in again with the same member ID restores the full profile for whichever group they log back into (the existing upsert-on-login overwrites the scrubbed fields).
+
+**Response** `204` on success.
 
 ### `PUT /api/v0/me/language`
 Set the user's personal language preference.

@@ -34,8 +34,39 @@ func (h *MeHandler) Routes() chi.Router {
 	r.Put("/language", h.PutLanguage)
 	r.Put("/notification-email", h.PutNotificationEmail)
 	r.Post("/test-email", h.PostTestEmail)
+	r.Delete("/", h.Remove)
 	r.Mount("/notification-prefs", h.NotifPrefs.MeRoutes())
 	return r
+}
+
+// Remove scrubs the caller's profile (name/email/picture/notification
+// prefs/team access) across every group they belong to, without deleting any
+// row - existing bookings, events, etc. stay linked. Re-login with the same
+// member ID recreates the full profile via UpsertUser's ON CONFLICT, for
+// whichever group they log back into.
+func (h *MeHandler) Remove(w http.ResponseWriter, r *http.Request) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		WriteError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	lang := "sv"
+	if settings, err := h.Q.GetGroupSettings(r.Context(), claims.GroupID); err == nil {
+		lang = settings.DefaultLanguage
+	}
+
+	if err := h.Q.RemoveUser(r.Context(), db.RemoveUserParams{
+		ID: claims.MemberID,
+		Name:    i18n.T(lang, "removed_user_placeholder"),
+		Email:   "borttagen@scoutrustning.invalid",
+	}); err != nil {
+		slog.Error("failed to remove user", "error", err, "member_id", claims.MemberID, "group_id", claims.GroupID)
+		WriteError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *MeHandler) Get(w http.ResponseWriter, r *http.Request) {
