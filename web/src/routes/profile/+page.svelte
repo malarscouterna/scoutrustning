@@ -693,6 +693,11 @@ async function linkGchatTeamSpace(teamId: string) {
 	let languageSaving = $state(false);
 	let languageMessage = $state('');
 
+	function switchGroup(groupId: string) {
+		document.cookie = `active-group-id=${groupId}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
+		location.reload();
+	}
+
 	async function saveLanguage() {
 		languageSaving = true;
 		languageMessage = '';
@@ -896,6 +901,29 @@ async function linkGchatTeamSpace(teamId: string) {
 				</div>
 			{/if}
 		</section>
+
+		{#if (user?.groups?.length ?? 0) > 1}
+			<section class="mb-6 border rounded-lg p-4">
+				<h2 class="font-medium mb-3">{m.user_info_card_groups_heading()}</h2>
+				<ul class="space-y-1">
+					{#each user!.groups as group}
+						<li>
+							<button
+								type="button"
+								disabled={group.id === user!.group_id}
+								onclick={() => switchGroup(group.id)}
+								class="w-full flex items-center justify-between gap-2 rounded px-2 py-1 text-sm text-left {group.id === user!.group_id ? 'bg-blue-50 font-medium' : 'hover:bg-neutral-50'}"
+							>
+								<span>{group.name}</span>
+								{#if group.id === user!.group_id}
+									<span class="text-neutral-500 text-xs">{m.user_info_card_current_group_badge()}</span>
+								{/if}
+							</button>
+						</li>
+					{/each}
+				</ul>
+			</section>
+		{/if}
 
 		<section class="mb-6 border rounded-lg p-4">
 			<h2 class="font-medium mb-3">{m.page_profile_settings_heading()}</h2>

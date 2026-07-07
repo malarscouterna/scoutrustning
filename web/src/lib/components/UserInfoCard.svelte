@@ -18,6 +18,8 @@
 	const viewingOwnProfile = $derived($page.data.user?.member_id === userId);
 	const groups = $derived($page.data.user?.groups ?? []);
 	const activeGroupId = $derived($page.data.user?.group_id);
+	const activeGroupName = $derived($page.data.user?.group_name);
+	let groupMenuOpen = $state(false);
 
 	function switchGroup(groupId: string) {
 		document.cookie = `active-group-id=${groupId}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
@@ -111,6 +113,50 @@
 					>×</button>
 				</div>
 
+				{#if viewingOwnProfile}
+					{#if groups.length > 1}
+						<div class="relative inline-block">
+							<button
+								type="button"
+								onclick={() => (groupMenuOpen = !groupMenuOpen)}
+								class="text-sm text-neutral-500 hover:text-neutral-900 flex items-center gap-1"
+							>
+								{activeGroupName}
+								<span class="text-xs">▾</span>
+							</button>
+							{#if groupMenuOpen}
+								<button type="button" class="fixed inset-0 z-10" aria-label={m.btn_close()} onclick={() => (groupMenuOpen = false)}></button>
+								<ul class="absolute z-20 mt-1 bg-white border rounded-lg shadow-lg min-w-48 py-1">
+									{#each groups as group}
+										<li>
+											<button
+												type="button"
+												disabled={group.id === activeGroupId}
+												onclick={() => switchGroup(group.id)}
+												class="w-full flex items-center justify-between gap-2 px-3 py-1.5 text-sm text-left {group.id === activeGroupId ? 'bg-blue-50 font-medium' : 'hover:bg-neutral-50'}"
+											>
+												<span>{group.name}</span>
+												{#if group.id === activeGroupId}
+													<span class="text-neutral-500 text-xs">{m.user_info_card_current_group_badge()}</span>
+												{/if}
+											</button>
+										</li>
+									{/each}
+								</ul>
+							{/if}
+						</div>
+					{:else if activeGroupName}
+						<p class="text-sm text-neutral-500">{activeGroupName}</p>
+					{/if}
+
+					<div class="flex items-center justify-between gap-2 pb-2 border-b">
+						<a href="/profile" class="text-sm text-blue-700 hover:underline">{m.page_home_btn_settings()}</a>
+						<form method="POST" action="/auth/signout">
+							<button type="submit" class="text-sm text-red-600 hover:underline">{m.page_profile_btn_logout()}</button>
+						</form>
+					</div>
+				{/if}
+
 				{#if info.notification_email}
 					<div>
 						<p class="text-xs font-medium text-neutral-500">{m.user_info_card_notification_email()}</p>
@@ -175,38 +221,6 @@
 						</ul>
 					{/if}
 				</div>
-
-				{#if viewingOwnProfile}
-					{#if groups.length > 1}
-						<div>
-							<p class="text-xs font-medium text-neutral-500 mb-1">{m.user_info_card_groups_heading()}</p>
-							<ul class="space-y-1">
-								{#each groups as group}
-									<li>
-										<button
-											type="button"
-											disabled={group.id === activeGroupId}
-											onclick={() => switchGroup(group.id)}
-											class="w-full flex items-center justify-between gap-2 rounded px-2 py-1 text-sm text-left {group.id === activeGroupId ? 'bg-blue-50 font-medium' : 'hover:bg-neutral-50'}"
-										>
-											<span>{group.name}</span>
-											{#if group.id === activeGroupId}
-												<span class="text-neutral-500 text-xs">{m.user_info_card_current_group_badge()}</span>
-											{/if}
-										</button>
-									</li>
-								{/each}
-							</ul>
-						</div>
-					{/if}
-
-					<div class="flex items-center justify-between gap-2 pt-2 border-t">
-						<a href="/profile" class="text-sm text-blue-700 hover:underline">{m.page_home_btn_settings()}</a>
-						<form method="POST" action="/auth/signout">
-							<button type="submit" class="text-sm text-red-600 hover:underline">{m.page_profile_btn_logout()}</button>
-						</form>
-					</div>
-				{/if}
 			{/if}
 		</div>
 	</div>
