@@ -692,6 +692,13 @@ func (h *ArticleHandler) AvailableArticlesList(w http.ResponseWriter, r *http.Re
 
 	excludeBooking := r.URL.Query().Get("exclude_booking_id")
 	commercialName := r.URL.Query().Get("commercial_name")
+	// Defaults to true: the common case is browsing to offer NEW items to
+	// add/swap into the booking, where the booking's own current items
+	// should not reappear as "available". Callers revalidating the booking's
+	// EXISTING items against a new date range (e.g. after editing dates)
+	// must pass exclude_own_items=false, or every item they already hold
+	// will be spuriously flagged as unavailable.
+	excludeOwnItems := r.URL.Query().Get("exclude_own_items") != "false"
 
 	if excludeBooking != "" {
 		bid, err := parseUUID(excludeBooking)
@@ -702,7 +709,7 @@ func (h *ArticleHandler) AvailableArticlesList(w http.ResponseWriter, r *http.Re
 		articles, err := h.Q.AvailableArticlesExcludingBooking(r.Context(), db.AvailableArticlesExcludingBookingParams{
 			GroupID:          claims.GroupID,
 			ExcludeBookingID: bid,
-			ExcludeOwnItems:  true,
+			ExcludeOwnItems:  excludeOwnItems,
 			StartDate:        pgtype.Date{Time: startDate, Valid: true},
 			EndDate:          pgtype.Date{Time: endDate, Valid: true},
 		})

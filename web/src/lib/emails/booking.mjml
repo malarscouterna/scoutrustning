@@ -69,7 +69,7 @@
     <mj-section background-color="#ffffff" padding="0 32px 0">
       <mj-column padding-top="0">
         <mj-text padding-top="0" padding-bottom="0" color="#608199">
-          EMAIL_NOTES_BLOCK
+          EMAIL_TITLE_BLOCK
         </mj-text>
         <mj-text padding-top="0" padding-bottom="0" color="#374b5a" font-size="14px" line-height="1.6">
           EMAIL_BOOKING_EVENTS_BLOCK

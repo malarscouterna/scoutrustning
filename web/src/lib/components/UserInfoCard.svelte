@@ -62,8 +62,8 @@
 				<span class="text-blue-700">{booking.start_date} - {booking.end_date}</span>
 				<span class="text-neutral-500 text-xs">({msg('booking_status_' + booking.status)})</span>
 			</div>
-			{#if booking.notes}
-				<p class="text-neutral-500 text-xs truncate">{booking.notes}</p>
+			{#if booking.title}
+				<p class="text-neutral-500 text-xs truncate">{booking.title}</p>
 			{/if}
 		</a>
 	</li>

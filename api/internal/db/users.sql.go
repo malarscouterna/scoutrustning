@@ -184,7 +184,7 @@ func (q *Queries) GetUserNotificationPrefs(ctx context.Context, arg GetUserNotif
 }
 
 const getUserOpenBookings = `-- name: GetUserOpenBookings :many
-SELECT DISTINCT b.id, b.status, b.start_date, b.end_date, b.used_by_team_id, b.used_by_external, b.notes,
+SELECT DISTINCT b.id, b.status, b.start_date, b.end_date, b.used_by_team_id, b.used_by_external, b.title,
     t.name AS team_name
 FROM bookings b
 LEFT JOIN teams t ON t.id = b.used_by_team_id
@@ -216,7 +216,7 @@ type GetUserOpenBookingsRow struct {
 	EndDate        pgtype.Date `json:"end_date"`
 	UsedByTeamID   pgtype.UUID `json:"used_by_team_id"`
 	UsedByExternal pgtype.Text `json:"used_by_external"`
-	Notes          string      `json:"notes"`
+	Title          string      `json:"title"`
 	TeamName       pgtype.Text `json:"team_name"`
 }
 
@@ -239,7 +239,7 @@ func (q *Queries) GetUserOpenBookings(ctx context.Context, arg GetUserOpenBookin
 			&i.EndDate,
 			&i.UsedByTeamID,
 			&i.UsedByExternal,
-			&i.Notes,
+			&i.Title,
 			&i.TeamName,
 		); err != nil {
 			return nil, err

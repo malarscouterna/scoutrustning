@@ -55,7 +55,7 @@ func setupReturnEnv(t *testing.T, env *testutil.TestEnv, articleCount, bookCount
 	now := time.Now()
 	startStr := now.Format("2006-01-02")
 	endStr := now.AddDate(0, 0, 5).Format("2006-01-02")
-	b, _ := json.Marshal(map[string]any{"start_date": startStr, "end_date": endStr, "used_by_team_id": teamID})
+	b, _ := json.Marshal(map[string]any{"start_date": startStr, "end_date": endStr, "used_by_team_id": teamID, "title": "Test booking"})
 	resp, _ = leader.Post("/api/v0/bookings", bytes.NewReader(b))
 	var booking map[string]any
 	json.NewDecoder(resp.Body).Decode(&booking)
@@ -250,7 +250,6 @@ func TestReturnFlow_BrokenReturn(t *testing.T) {
 	t.Run("return as reported_unusable records status on item", func(t *testing.T) {
 		b, _ := json.Marshal(map[string]any{
 			"return_status": "reported_unusable",
-			"notes":         "Tent pole snapped",
 		})
 		resp, err := leader.Put("/api/v0/bookings/"+bookingID+"/items/"+itemIDs[0]+"/return", bytes.NewReader(b))
 		if err != nil {
@@ -284,7 +283,6 @@ func TestReturnFlow_BrokenReturn(t *testing.T) {
 	t.Run("return as missing records status on item", func(t *testing.T) {
 		b, _ := json.Marshal(map[string]any{
 			"return_status": "missing",
-			"notes":         "Cannot find it",
 		})
 		resp, err := leader.Put("/api/v0/bookings/"+bookingID+"/items/"+itemIDs[1]+"/return", bytes.NewReader(b))
 		if err != nil {
@@ -353,7 +351,7 @@ func TestReturnFlow_InvalidStatus(t *testing.T) {
 
 	t.Run("cannot return on confirmed booking", func(t *testing.T) {
 		// Create a confirmed (not picked up) booking
-		b, _ := json.Marshal(map[string]any{"start_date": "2026-08-01", "end_date": "2026-08-03"})
+		b, _ := json.Marshal(map[string]any{"start_date": "2026-08-01", "end_date": "2026-08-03", "title": "Test booking"})
 		resp, _ := leader.Post("/api/v0/bookings", bytes.NewReader(b))
 		var booking map[string]any
 		json.NewDecoder(resp.Body).Decode(&booking)

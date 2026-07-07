@@ -88,7 +88,7 @@ func TestApprovalFlow(t *testing.T) {
 		dateCounter++
 		startDate := fmt.Sprintf("2026-%02d-01", dateCounter%12+1)
 		endDate := fmt.Sprintf("2026-%02d-05", dateCounter%12+1)
-		bookingData := map[string]any{"start_date": startDate, "end_date": endDate}
+		bookingData := map[string]any{"start_date": startDate, "end_date": endDate, "title": "Test booking"}
 		if len(teamName) > 0 {
 			// Look up team ID by name
 			resp, _ := client.Get("/api/v0/teams")
@@ -238,7 +238,7 @@ func TestApprovalFlow(t *testing.T) {
 		}
 
 		// Editing the rejected booking reopens it to draft.
-		b, _ = json.Marshal(map[string]any{"notes": "Uppdaterad kommentar"})
+		b, _ = json.Marshal(map[string]any{"title": "Uppdaterad kommentar"})
 		resp3, err := leader.Put("/api/v0/bookings/"+bookingID, bytes.NewReader(b))
 		if err != nil {
 			t.Fatal(err)
@@ -353,7 +353,7 @@ func TestApprovalFlow(t *testing.T) {
 		dateCounter++
 		startDate := fmt.Sprintf("2027-%02d-01", dateCounter%12+1)
 		endDate := fmt.Sprintf("2027-%02d-05", dateCounter%12+1)
-		b, _ := json.Marshal(map[string]any{"start_date": startDate, "end_date": endDate})
+		b, _ := json.Marshal(map[string]any{"start_date": startDate, "end_date": endDate, "title": "Test booking"})
 		resp, _ := leader.Post("/api/v0/bookings", bytes.NewReader(b))
 		var booking map[string]any
 		json.NewDecoder(resp.Body).Decode(&booking)

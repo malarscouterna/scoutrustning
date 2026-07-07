@@ -19,7 +19,7 @@
 	let savedKey = $state<string | null>(null);
 	let activeItemId = $state<string | null>(null);
 	let activeGroupKey = $state<string | null>(null);
-	let form = $state({ status: '', expectedReturnDate: '', notes: '' });
+	let form = $state({ status: '', expectedReturnDate: '' });
 	let lastExpectedDate = $state('');
 	let delayWarning = $state('');
 	let quantityInputs = $state<Record<string, number>>({});
@@ -132,7 +132,7 @@
 
 	function flash(key: string) { savedKey = key; setTimeout(() => { if (savedKey === key) savedKey = null; }, 2000); }
 
-	async function setReturn(itemId: string, status: string, extra?: { expected_return_date?: string; notes?: string; image_ids?: string[] }) {
+	async function setReturn(itemId: string, status: string, extra?: { expected_return_date?: string; image_ids?: string[] }) {
 		error = '';
 		try {
 			await api.updateItemReturn(bookingId, itemId, { return_status: status, ...extra });
@@ -146,7 +146,6 @@
 		const severity = returnStatusToSeverity[form.status];
 		await setReturn(item.id, form.status, {
 			expected_return_date: form.status === 'delayed' ? form.expectedReturnDate : undefined,
-			notes: severity ? undefined : form.notes || undefined,
 		});
 		activeItemId = null;
 		if (severity) {
@@ -156,7 +155,7 @@
 
 	function openForm(id: string) {
 		activeItemId = id; activeGroupKey = null;
-		form = { status: '', expectedReturnDate: lastExpectedDate, notes: '' }; delayWarning = '';
+		form = { status: '', expectedReturnDate: lastExpectedDate }; delayWarning = '';
 	}
 
 	async function returnGroupOk(g: QGroup) {
@@ -183,7 +182,6 @@
 				await api.updateItemReturn(bookingId, unhandled[i].id, {
 					return_status: form.status,
 					expected_return_date: form.status === 'delayed' ? form.expectedReturnDate : undefined,
-					notes: severity ? undefined : form.notes || undefined,
 				});
 			activeGroupKey = null;
 			delete quantityInputs[`${g.key}_form`];
@@ -205,7 +203,7 @@
 	function openGroupForm(g: QGroup) {
 		const unhandled = g.picked.filter((i) => !i.return_status || i.return_status === 'pending');
 		activeGroupKey = g.key; activeItemId = null;
-		form = { status: '', expectedReturnDate: lastExpectedDate, notes: '' }; delayWarning = '';
+		form = { status: '', expectedReturnDate: lastExpectedDate }; delayWarning = '';
 		// Always reset to current unhandled count (Issue 11)
 		quantityInputs[`${g.key}_form`] = unhandled.length;
 	}

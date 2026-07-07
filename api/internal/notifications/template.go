@@ -87,7 +87,7 @@ type BookingEmailData struct {
 	EndDate       pgtype.Date
 	Status        string
 	TeamName      string // empty if personal or external
-	Notes         string
+	Title         string
 	Items         []db.ListBookingItemsRow
 	Events        []db.ListBookingEventsRow
 }
@@ -147,7 +147,7 @@ func renderBookingEmail(d BookingEmailData) (htmlOut, textOut string) {
 		"EMAIL_STATUS_FG", statusBadge.fg,
 		"EMAIL_ITEMS_HEADING", html.EscapeString(i18n.T(d.Lang, "email_items_heading")),
 		"EMAIL_ITEMS_HTML", itemsHTML,
-		"EMAIL_NOTES_BLOCK", buildNotesBlock(d.Lang, d.Notes),
+		"EMAIL_TITLE_BLOCK", buildTitleBlock(d.Lang, d.Title),
 		"EMAIL_BOOKING_EVENTS_BLOCK", buildBookingEventsHTML(d.Lang, d.Events),
 		"EMAIL_CTA_LABEL", html.EscapeString(i18n.T(d.Lang, "email_cta_"+d.Event)),
 		"EMAIL_CTA_URL", bookingURL,
@@ -256,7 +256,7 @@ func fetchBookingEmailData(ctx context.Context, q *db.Queries, b db.Booking, eve
 		EndDate:       b.EndDate,
 		Status:        b.Status,
 		TeamName:      teamName,
-		Notes:         b.Notes,
+		Title:         b.Title,
 		Items:         items,
 		Events:        events,
 	}
@@ -503,15 +503,15 @@ func buildEventsHTML(lang string, events []db.ListIssueEventsRow) string {
 	return strings.TrimSuffix(b.String(), "<br>")
 }
 
-// buildNotesBlock renders the notes section as a self-contained HTML block, or empty string.
-func buildNotesBlock(lang, notes string) string {
-	if notes == "" {
+// buildTitleBlock renders the booking title section as a self-contained HTML block, or empty string.
+func buildTitleBlock(lang, title string) string {
+	if title == "" {
 		return ""
 	}
-	heading := html.EscapeString(i18n.T(lang, "email_notes_heading"))
+	heading := html.EscapeString(i18n.T(lang, "email_booking_title_heading"))
 	return fmt.Sprintf(
 		`<div style="padding-top:16px;border-top:1px solid #d7e4f0;margin-top:8px"><span style="font-weight:600;color:#374b5a">%s</span><br><span style="color:#608199">%s</span></div>`,
-		heading, html.EscapeString(notes),
+		heading, html.EscapeString(title),
 	)
 }
 
@@ -610,8 +610,8 @@ func buildBookingText(d BookingEmailData, bannerLabel, start, end, teamLabel, bo
 		}
 		b.WriteString("\n")
 	}
-	if d.Notes != "" {
-		fmt.Fprintf(&b, "%s\n%s\n\n", i18n.T(d.Lang, "email_notes_heading"), d.Notes)
+	if d.Title != "" {
+		fmt.Fprintf(&b, "%s\n%s\n\n", i18n.T(d.Lang, "email_booking_title_heading"), d.Title)
 	}
 	if hasNotes(d.Events) {
 		fmt.Fprintf(&b, "%s\n", i18n.T(d.Lang, "email_booking_events_heading"))
@@ -679,8 +679,8 @@ func BookingDetailText(d BookingEmailData) string {
 			}
 		}
 	}
-	if d.Notes != "" {
-		fmt.Fprintf(&b, "\n_%s_\n", d.Notes)
+	if d.Title != "" {
+		fmt.Fprintf(&b, "\n_%s_\n", d.Title)
 	}
 	return b.String()
 }

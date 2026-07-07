@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { createApiClient, type BookingItem } from '$lib/api/client';
+	import { createApiClient, type BookingItem, ApiError } from '$lib/api/client';
 	import { hasRole, canBookPersonal } from '$lib/user';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
@@ -35,7 +35,7 @@
 	// Create mode state
 	let newStartDate = $state('');
 	let newEndDate = $state('');
-	let newNotes = $state('');
+	let newTitle = $state('');
 	let defaultUnit = $derived.by(() => {
 		const myTeams = data.teams.filter(u => myTeamSet.has(u.name));
 		const troop = myTeams.find(u => u.type === 'troop');
@@ -63,7 +63,7 @@
 			const booking = await api.createBooking({
 				start_date: newStartDate,
 				end_date: newEndDate,
-				notes: newNotes,
+				title: newTitle,
 				used_by_team_id: newUnit || undefined
 			});
 			cart.activate(booking.id);
@@ -78,7 +78,7 @@
 	let bookingId = $derived(data.existing?.booking.id ?? null);
 	let startDate = $state('');
 	let endDate = $state('');
-	let notes = $state('');
+	let title = $state('');
 	let selectedUnit = $state('');
 	let unitInitialized = $state(false);
 	let cartItems = $state<BookingItem[]>([]);
@@ -100,7 +100,7 @@
 		if (data.existing) {
 			startDate = data.existing.booking.start_date;
 			endDate = data.existing.booking.end_date;
-			notes = data.existing.booking.notes;
+			title = data.existing.booking.title;
 			selectedUnit = data.existing.booking.used_by_team_id ?? '';
 			unitInitialized = true;
 			cartItems = data.existing.items;
@@ -123,6 +123,17 @@
 		setTimeout(() => message = '', 4000);
 	}
 
+	// A date-change update can be hard-rejected (409) with the article_ids of
+	// every unavailable item - highlight those rows using the same per-row
+	// indicator as the informational post-save conflict check, so the user
+	// knows which items to remove or swap.
+	function flagConflictFromError(e: unknown) {
+		const ids = e instanceof ApiError ? e.body?.params?.article_ids : undefined;
+		if (ids) {
+			conflictingIds = new Set(ids.split(','));
+		}
+	}
+
 	async function saveDetails() {
 		if (!bookingId) return;
 		saving = true;
@@ -132,11 +143,15 @@
 			await api.updateBooking(bookingId, {
 				start_date: startDate,
 				end_date: endDate,
-				notes,
+				title,
 				used_by_team_id: selectedUnit || ''
 			});
-			// Check for conflicts after date change
-			const available = await api.listAvailableArticles(startDate, endDate, { exclude_booking_id: bookingId });
+			// Check for conflicts after date change. exclude_own_items must be
+			// false here: we're revalidating the booking's own current items
+			// against the (possibly unchanged) date range, not offering new
+			// items to add - the default (true) would flag every held item
+			// as unavailable since it excludes them from the result set.
+			const available = await api.listAvailableArticles(startDate, endDate, { exclude_booking_id: bookingId, exclude_own_items: false });
 			const availableIds = new Set(available.map(a => a.id));
 			const conflicts = new Set(
 				cartItems
@@ -149,6 +164,7 @@
 			}
 		} catch (e) {
 			error = translateError(e);
+			flagConflictFromError(e);
 		}
 		saving = false;
 	}
@@ -208,7 +224,7 @@
 			await api.updateBooking(bookingId, {
 				start_date: startDate,
 				end_date: endDate,
-				notes,
+				title,
 				used_by_team_id: selectedUnit || ''
 			});
 			const booking = await api.submitBooking(bookingId);
@@ -217,6 +233,7 @@
 			message = booking.status === 'confirmed' ? m.page_book_booking_confirmed() : m.page_book_booking_submitted();
 		} catch (e) {
 			error = translateError(e);
+			flagConflictFromError(e);
 		}
 		submitting = false;
 	}
@@ -253,8 +270,8 @@
 				<input type="date" bind:value={newEndDate} class="border rounded px-3 py-2" />
 			</label>
 			<label class="flex flex-col gap-1 col-span-2">
-				<span class="text-sm">{m.page_book_notes()}</span>
-				<input type="text" bind:value={newNotes} placeholder={m.page_book_notes_placeholder()} class="border rounded px-3 py-2" />
+				<span class="text-sm">{m.page_book_title()}</span>
+				<input type="text" bind:value={newTitle} placeholder={m.page_book_title_placeholder()} class="border rounded px-3 py-2" />
 			</label>
 			<label class="flex flex-col gap-1 col-span-2">
 				<span class="text-sm">{m.page_book_booked_for()}</span>
@@ -283,7 +300,7 @@
 			type="button"
 			variant="primary"
 			onclick={createBooking}
-			disabled={!newStartDate || !newEndDate || creating ? true : undefined}
+			disabled={!newStartDate || !newEndDate || !newTitle.trim() || creating ? true : undefined}
 		>
 			{creating ? '...' : m.page_book_btn_create()}
 		</scout-button>
@@ -316,7 +333,7 @@
 			</div>
 		{/if}
 
-		<!-- Dates, team, notes -->
+		<!-- Dates, team, title -->
 		<div class="grid grid-cols-2 sm:flex sm:flex-wrap gap-3 mb-3">
 			<label class="flex flex-col gap-1">
 				<span class="text-sm">{m.page_book_start_date()}</span>
@@ -327,8 +344,8 @@
 				<input type="date" bind:value={endDate} class="border rounded px-3 py-2" />
 			</label>
 			<label class="flex flex-col gap-1 col-span-2">
-				<span class="text-sm">{m.page_book_notes()}</span>
-				<input type="text" bind:value={notes} placeholder={m.page_book_notes_placeholder()} class="border rounded px-3 py-2" />
+				<span class="text-sm">{m.page_book_title()}</span>
+				<input type="text" bind:value={title} placeholder={m.page_book_title_placeholder()} class="border rounded px-3 py-2" />
 			</label>
 			<label class="flex flex-col gap-1 col-span-2">
 				<span class="text-sm">{m.page_book_booked_for()}</span>

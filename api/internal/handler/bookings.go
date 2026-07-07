@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -181,10 +182,15 @@ func (h *BookingHandler) Create(w http.ResponseWriter, r *http.Request) {
 		UsedByTeamID          *string `json:"used_by_team_id"`
 		UsedByExternal        *string `json:"used_by_external"`
 		UsedByExternalContact *string `json:"used_by_external_contact"`
-		Notes                 string  `json:"notes"`
+		Title                 string  `json:"title"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if strings.TrimSpace(req.Title) == "" {
+		WriteError(w, http.StatusBadRequest, "title is required")
 		return
 	}
 
@@ -208,7 +214,7 @@ func (h *BookingHandler) Create(w http.ResponseWriter, r *http.Request) {
 		CreatedBy: claims.MemberID,
 		StartDate: pgtype.Date{Time: startDate, Valid: true},
 		EndDate:   pgtype.Date{Time: endDate, Valid: true},
-		Notes:     req.Notes,
+		Title:     req.Title,
 	}
 	if req.UsedByTeamID != nil {
 		id, err := parseUUID(*req.UsedByTeamID)
@@ -368,7 +374,7 @@ func (h *BookingHandler) Update(w http.ResponseWriter, r *http.Request) {
 		UsedByTeamID          *string `json:"used_by_team_id"`
 		UsedByExternal        *string `json:"used_by_external"`
 		UsedByExternalContact *string `json:"used_by_external_contact"`
-		Notes                 *string `json:"notes"`
+		Title                 *string `json:"title"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		WriteError(w, http.StatusBadRequest, "invalid request body")
@@ -383,7 +389,7 @@ func (h *BookingHandler) Update(w http.ResponseWriter, r *http.Request) {
 		UsedByTeamID:          booking.UsedByTeamID,
 		UsedByExternal:        booking.UsedByExternal,
 		UsedByExternalContact: booking.UsedByExternalContact,
-		Notes:                 booking.Notes,
+		Title:                 booking.Title,
 	}
 
 	if req.StartDate != nil {
@@ -406,8 +412,12 @@ func (h *BookingHandler) Update(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusBadRequest, "end_date must be after start_date")
 		return
 	}
-	if req.Notes != nil {
-		params.Notes = *req.Notes
+	if req.Title != nil {
+		if strings.TrimSpace(*req.Title) == "" {
+			WriteError(w, http.StatusBadRequest, "title is required")
+			return
+		}
+		params.Title = *req.Title
 	}
 	if req.UsedByTeamID != nil {
 		if *req.UsedByTeamID == "" {
@@ -429,8 +439,12 @@ func (h *BookingHandler) Update(w http.ResponseWriter, r *http.Request) {
 		params.UsedByExternalContact = pgtype.Text{String: *req.UsedByExternalContact, Valid: true}
 	}
 
-	// If dates changed, re-validate availability for all existing items
-	datesChanged := params.StartDate != booking.StartDate || params.EndDate != booking.EndDate
+	// If dates changed, re-validate availability for all existing items.
+	// Compared via .Time.Equal() rather than struct !=: pgtype.Date embeds
+	// time.Time, and struct equality on time.Time can spuriously report a
+	// change for the same instant depending on how the value was constructed
+	// (parsed vs. scanned from the DB).
+	datesChanged := !params.StartDate.Time.Equal(booking.StartDate.Time) || !params.EndDate.Time.Equal(booking.EndDate.Time)
 	if datesChanged {
 		items, err := h.Q.ListBookingItems(r.Context(), db.ListBookingItemsParams{
 			BookingID: bookingID, GroupID: claims.GroupID,
@@ -457,14 +471,28 @@ func (h *BookingHandler) Update(w http.ResponseWriter, r *http.Request) {
 			availSet[a.ID] = true
 		}
 
+		var conflictNames, conflictIDs []string
 		for _, item := range items {
 			if item.ReturnStatus.Valid && item.ReturnStatus.String != "pending" {
 				continue // already returned, skip
 			}
 			if !availSet[item.ArticleID] {
-				WriteErrorWithParams(w, http.StatusConflict, "article_not_available_for_dates", map[string]string{"name": item.CommonName})
-				return
+				conflictNames = append(conflictNames, item.CommonName)
+				conflictIDs = append(conflictIDs, formatUUID(item.ArticleID))
 			}
+		}
+		if len(conflictNames) > 0 {
+			errKey := "article_not_available_for_dates"
+			if len(conflictNames) > 1 {
+				errKey = "articles_not_available_for_dates"
+			}
+			WriteErrorWithParams(w, http.StatusConflict, errKey, map[string]string{
+				"name":        conflictNames[0],
+				"names":       strings.Join(conflictNames, ", "),
+				"count":       strconv.Itoa(len(conflictNames)),
+				"article_ids": strings.Join(conflictIDs, ","),
+			})
+			return
 		}
 	}
 
@@ -1218,7 +1246,6 @@ func (h *BookingHandler) UpdateItemReturn(w http.ResponseWriter, r *http.Request
 	var req struct {
 		ReturnStatus       string   `json:"return_status"`
 		ExpectedReturnDate *string  `json:"expected_return_date"`
-		Notes              string   `json:"notes"`
 		ImageIds           []string `json:"image_ids"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -1306,7 +1333,7 @@ func (h *BookingHandler) Copy(w http.ResponseWriter, r *http.Request) {
 		UsedByExternalContact: source.UsedByExternalContact,
 		StartDate:             pgtype.Date{Time: now, Valid: true},
 		EndDate:               pgtype.Date{Time: now.AddDate(0, 0, 7), Valid: true},
-		Notes:                 source.Notes,
+		Title:                 source.Title,
 	})
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, "failed to create copy")

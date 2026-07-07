@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -91,7 +92,7 @@ func TestBookingFlow_FullLifecycle(t *testing.T) {
 		body := map[string]any{
 			"start_date":      "2026-06-01",
 			"end_date":        "2026-06-05",
-			"notes":           "Hajk med Yggdrasil",
+			"title":           "Hajk med Yggdrasil",
 			"used_by_team_id": teamID,
 		}
 		b, _ := json.Marshal(body)
@@ -242,7 +243,7 @@ func TestBookingFlow_ItemChangeEvents(t *testing.T) {
 
 	teamID := getTeamID(t, leader, "Yggdrasil")
 	body := map[string]any{
-		"start_date": "2026-06-01", "end_date": "2026-06-05", "used_by_team_id": teamID,
+		"start_date": "2026-06-01", "end_date": "2026-06-05", "used_by_team_id": teamID, "title": "Test booking",
 	}
 	b, _ := json.Marshal(body)
 	resp, _ = leader.Post("/api/v0/bookings", bytes.NewReader(b))
@@ -439,7 +440,7 @@ func TestBookingFlow_NoDoubleBooking(t *testing.T) {
 	}
 
 	// Leader A books 2 Sibley for June 5-8
-	body := map[string]any{"start_date": "2026-06-05", "end_date": "2026-06-08"}
+	body := map[string]any{"start_date": "2026-06-05", "end_date": "2026-06-08", "title": "Test booking"}
 	b, _ := json.Marshal(body)
 	resp, _ = leaderA.Post("/api/v0/bookings", bytes.NewReader(b))
 	var bookingA map[string]any
@@ -451,7 +452,7 @@ func TestBookingFlow_NoDoubleBooking(t *testing.T) {
 	resp.Body.Close()
 
 	// Leader B tries to book 1 Sibley for overlapping dates
-	body = map[string]any{"start_date": "2026-06-07", "end_date": "2026-06-10"}
+	body = map[string]any{"start_date": "2026-06-07", "end_date": "2026-06-10", "title": "Test booking"}
 	b, _ = json.Marshal(body)
 	resp, _ = leaderB.Post("/api/v0/bookings", bytes.NewReader(b))
 	var bookingB map[string]any
@@ -473,7 +474,7 @@ func TestBookingFlow_NoDoubleBooking(t *testing.T) {
 	})
 
 	t.Run("leader B can book Sibley for non-overlapping dates", func(t *testing.T) {
-		body := map[string]any{"start_date": "2026-06-10", "end_date": "2026-06-12"}
+		body := map[string]any{"start_date": "2026-06-10", "end_date": "2026-06-12", "title": "Test booking"}
 		b, _ := json.Marshal(body)
 		resp, _ := leaderB.Post("/api/v0/bookings", bytes.NewReader(b))
 		var bookingC map[string]any
@@ -534,7 +535,7 @@ func TestBookingFlow_UpdateConfirmedBooking(t *testing.T) {
 	}
 
 	// Create and confirm a booking with 2 Sibley
-	b, _ := json.Marshal(map[string]any{"start_date": "2026-07-01", "end_date": "2026-07-05"})
+	b, _ := json.Marshal(map[string]any{"start_date": "2026-07-01", "end_date": "2026-07-05", "title": "Test booking"})
 	resp, _ = leader.Post("/api/v0/bookings", bytes.NewReader(b))
 	var booking map[string]any
 	json.NewDecoder(resp.Body).Decode(&booking)
@@ -548,8 +549,8 @@ func TestBookingFlow_UpdateConfirmedBooking(t *testing.T) {
 	resp, _ = leader.Post("/api/v0/bookings/"+bookingID+"/submit", nil)
 	resp.Body.Close()
 
-	t.Run("update notes on confirmed booking", func(t *testing.T) {
-		b, _ := json.Marshal(map[string]any{"notes": "Updated notes"})
+	t.Run("update title on confirmed booking", func(t *testing.T) {
+		b, _ := json.Marshal(map[string]any{"title": "Updated title"})
 		resp, err := leader.Put("/api/v0/bookings/"+bookingID, bytes.NewReader(b))
 		if err != nil {
 			t.Fatal(err)
@@ -563,8 +564,8 @@ func TestBookingFlow_UpdateConfirmedBooking(t *testing.T) {
 
 		var updated map[string]any
 		json.NewDecoder(resp.Body).Decode(&updated)
-		if updated["notes"] != "Updated notes" {
-			t.Errorf("expected updated notes, got %v", updated["notes"])
+		if updated["title"] != "Updated title" {
+			t.Errorf("expected updated title, got %v", updated["title"])
 		}
 	})
 
@@ -648,7 +649,7 @@ func TestBookingFlow_UpdateConfirmedBooking(t *testing.T) {
 
 	t.Run("change dates fails when items not available", func(t *testing.T) {
 		// Book all 3 Sibley for July 10-15 with another booking
-		b, _ := json.Marshal(map[string]any{"start_date": "2026-07-10", "end_date": "2026-07-15"})
+		b, _ := json.Marshal(map[string]any{"start_date": "2026-07-10", "end_date": "2026-07-15", "title": "Test booking"})
 		resp, _ := manager.Post("/api/v0/bookings", bytes.NewReader(b))
 		var otherBooking map[string]any
 		json.NewDecoder(resp.Body).Decode(&otherBooking)
@@ -670,6 +671,26 @@ func TestBookingFlow_UpdateConfirmedBooking(t *testing.T) {
 			body, _ := io.ReadAll(resp.Body)
 			t.Fatalf("expected 409, got %d: %s", resp.StatusCode, body)
 		}
+
+		// All 3 Sibley are unavailable simultaneously - the response must
+		// report all of them, not just the first one found, so the frontend
+		// can highlight every conflicting row in a single round trip.
+		var body map[string]any
+		json.NewDecoder(resp.Body).Decode(&body)
+		if body["error"] != "articles_not_available_for_dates" {
+			t.Errorf("expected plural error key, got %v", body["error"])
+		}
+		params, ok := body["params"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected params object, got %v", body["params"])
+		}
+		if params["count"] != "3" {
+			t.Errorf("expected count 3, got %v", params["count"])
+		}
+		ids := strings.Split(params["article_ids"].(string), ",")
+		if len(ids) != 3 {
+			t.Errorf("expected 3 article_ids, got %d: %v", len(ids), ids)
+		}
 	})
 }
 
@@ -686,7 +707,7 @@ func TestBookingFlow_AccessControl(t *testing.T) {
 	leaderOrn := env.ClientAs("leader-flaskpost")
 
 	// Create a personal booking (no unit)
-	b, _ := json.Marshal(map[string]any{"start_date": "2026-08-01", "end_date": "2026-08-05"})
+	b, _ := json.Marshal(map[string]any{"start_date": "2026-08-01", "end_date": "2026-08-05", "title": "Test booking"})
 	resp, _ := leaderYgg.Post("/api/v0/bookings", bytes.NewReader(b))
 	var booking map[string]any
 	json.NewDecoder(resp.Body).Decode(&booking)
@@ -694,7 +715,7 @@ func TestBookingFlow_AccessControl(t *testing.T) {
 	bookingID := booking["id"].(string)
 
 	t.Run("creator can update own booking", func(t *testing.T) {
-		b, _ := json.Marshal(map[string]any{"notes": "My booking"})
+		b, _ := json.Marshal(map[string]any{"title": "My booking"})
 		resp, err := leaderYgg.Put("/api/v0/bookings/"+bookingID, bytes.NewReader(b))
 		if err != nil {
 			t.Fatal(err)
@@ -708,7 +729,7 @@ func TestBookingFlow_AccessControl(t *testing.T) {
 	})
 
 	t.Run("other leader cannot update booking", func(t *testing.T) {
-		b, _ := json.Marshal(map[string]any{"notes": "Hacked"})
+		b, _ := json.Marshal(map[string]any{"title": "Hacked"})
 		resp, err := leaderOrn.Put("/api/v0/bookings/"+bookingID, bytes.NewReader(b))
 		if err != nil {
 			t.Fatal(err)
@@ -722,7 +743,7 @@ func TestBookingFlow_AccessControl(t *testing.T) {
 
 	t.Run("equipment manager can update any booking", func(t *testing.T) {
 		manager := env.ClientAs("manager-equipment")
-		b, _ := json.Marshal(map[string]any{"notes": "Manager override"})
+		b, _ := json.Marshal(map[string]any{"title": "Manager override"})
 		resp, err := manager.Put("/api/v0/bookings/"+bookingID, bytes.NewReader(b))
 		if err != nil {
 			t.Fatal(err)
@@ -749,7 +770,7 @@ func TestBookingFlow_CancelAndDeleteDraft(t *testing.T) {
 	leader := env.ClientAs("leader-yggdrasil")
 
 	t.Run("delete draft booking", func(t *testing.T) {
-		b, _ := json.Marshal(map[string]any{"start_date": "2026-09-01", "end_date": "2026-09-03"})
+		b, _ := json.Marshal(map[string]any{"start_date": "2026-09-01", "end_date": "2026-09-03", "title": "Test booking"})
 		resp, _ := leader.Post("/api/v0/bookings", bytes.NewReader(b))
 		var booking map[string]any
 		json.NewDecoder(resp.Body).Decode(&booking)
@@ -798,7 +819,7 @@ func TestBookingFlow_CancelAndDeleteDraft(t *testing.T) {
 		resp.Body.Close()
 
 		// Create, add item, submit
-		b, _ = json.Marshal(map[string]any{"start_date": "2026-09-10", "end_date": "2026-09-12"})
+		b, _ = json.Marshal(map[string]any{"start_date": "2026-09-10", "end_date": "2026-09-12", "title": "Test booking"})
 		resp, _ = leader.Post("/api/v0/bookings", bytes.NewReader(b))
 		var booking map[string]any
 		json.NewDecoder(resp.Body).Decode(&booking)
@@ -857,7 +878,7 @@ func TestBookingFlow_CancelAndDeleteDraft(t *testing.T) {
 		// always require approval regardless of article approval level, and
 		// would never reach picked_up via a plain submit.
 		teamID := getTeamID(t, leader, "Yggdrasil")
-		b, _ = json.Marshal(map[string]any{"start_date": "2026-09-20", "end_date": "2026-09-22", "used_by_team_id": teamID})
+		b, _ = json.Marshal(map[string]any{"start_date": "2026-09-20", "end_date": "2026-09-22", "used_by_team_id": teamID, "title": "Test booking"})
 		resp, _ = leader.Post("/api/v0/bookings", bytes.NewReader(b))
 		var booking map[string]any
 		json.NewDecoder(resp.Body).Decode(&booking)
@@ -925,7 +946,7 @@ func TestBookingFlow_IncrementalAddNoDuplicates(t *testing.T) {
 	}
 
 	// Create booking
-	b, _ := json.Marshal(map[string]any{"start_date": "2026-10-01", "end_date": "2026-10-03"})
+	b, _ := json.Marshal(map[string]any{"start_date": "2026-10-01", "end_date": "2026-10-03", "title": "Test booking"})
 	resp, _ = leader.Post("/api/v0/bookings", bytes.NewReader(b))
 	var booking map[string]any
 	json.NewDecoder(resp.Body).Decode(&booking)
@@ -1067,7 +1088,7 @@ func TestBookingFlow_LocationScopedAvailability(t *testing.T) {
 	})
 
 	t.Run("booking from location 1 does not affect location 2 availability", func(t *testing.T) {
-		b, _ := json.Marshal(map[string]any{"start_date": "2026-11-01", "end_date": "2026-11-03"})
+		b, _ := json.Marshal(map[string]any{"start_date": "2026-11-01", "end_date": "2026-11-03", "title": "Test booking"})
 		resp, _ := leader.Post("/api/v0/bookings", bytes.NewReader(b))
 		var booking map[string]any
 		json.NewDecoder(resp.Body).Decode(&booking)
@@ -1141,7 +1162,7 @@ func TestBookingFlow_Copy(t *testing.T) {
 	}
 
 	// Create booking with 2 items, submit, then cancel
-	b, _ := json.Marshal(map[string]any{"start_date": "2026-12-01", "end_date": "2026-12-03", "notes": "Original"})
+	b, _ := json.Marshal(map[string]any{"start_date": "2026-12-01", "end_date": "2026-12-03", "title": "Original"})
 	resp, _ = leader.Post("/api/v0/bookings", bytes.NewReader(b))
 	var booking map[string]any
 	json.NewDecoder(resp.Body).Decode(&booking)
@@ -1182,8 +1203,8 @@ func TestBookingFlow_Copy(t *testing.T) {
 		if newBooking["status"] != "draft" {
 			t.Errorf("expected draft, got %v", newBooking["status"])
 		}
-		if newBooking["notes"] != "Original" {
-			t.Errorf("expected notes preserved, got %v", newBooking["notes"])
+		if newBooking["title"] != "Original" {
+			t.Errorf("expected title preserved, got %v", newBooking["title"])
 		}
 
 		// Verify the new booking has items
@@ -1212,7 +1233,7 @@ func TestPersonalBookingAccess(t *testing.T) {
 	leader := env.ClientAs("leader-yggdrasil")
 
 	t.Run("book-level leader can create personal booking by default", func(t *testing.T) {
-		b, _ := json.Marshal(map[string]any{"start_date": "2026-10-01", "end_date": "2026-10-03"})
+		b, _ := json.Marshal(map[string]any{"start_date": "2026-10-01", "end_date": "2026-10-03", "title": "Test booking"})
 		resp, err := leader.Post("/api/v0/bookings", bytes.NewReader(b))
 		if err != nil {
 			t.Fatal(err)
@@ -1229,7 +1250,7 @@ func TestPersonalBookingAccess(t *testing.T) {
 		resp, _ := manager.Put("/api/v0/group-settings", bytes.NewReader(b))
 		resp.Body.Close()
 
-		b, _ = json.Marshal(map[string]any{"start_date": "2026-10-05", "end_date": "2026-10-07"})
+		b, _ = json.Marshal(map[string]any{"start_date": "2026-10-05", "end_date": "2026-10-07", "title": "Test booking"})
 		resp, err := leader.Post("/api/v0/bookings", bytes.NewReader(b))
 		if err != nil {
 			t.Fatal(err)
@@ -1242,7 +1263,7 @@ func TestPersonalBookingAccess(t *testing.T) {
 	})
 
 	t.Run("manager can still create personal booking regardless of setting", func(t *testing.T) {
-		b, _ := json.Marshal(map[string]any{"start_date": "2026-10-10", "end_date": "2026-10-12"})
+		b, _ := json.Marshal(map[string]any{"start_date": "2026-10-10", "end_date": "2026-10-12", "title": "Test booking"})
 		resp, err := manager.Post("/api/v0/bookings", bytes.NewReader(b))
 		if err != nil {
 			t.Fatal(err)
