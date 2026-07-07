@@ -13,7 +13,8 @@
       "name": "Julia Valborg-Yggdrasil",
       "email": "julia@example.com",
       "groups": {
-        "766": ["Valborgskommittén", "Yggdrasil"]
+        "766": ["Valborgskommittén", "Yggdrasil"],
+        "999": ["Avdelning 1"]
       }
     },
     "project-leader": {

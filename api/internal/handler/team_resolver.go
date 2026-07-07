@@ -81,6 +81,14 @@ func (r *DBTeamResolver) GroupExists(ctx context.Context, groupID string) (bool,
 	return true, nil
 }
 
+func (r *DBTeamResolver) GroupName(ctx context.Context, groupID string) (string, error) {
+	g, err := r.Q.GetGroup(ctx, groupID)
+	if err != nil {
+		return "", err
+	}
+	return g.Name, nil
+}
+
 func (r *DBTeamResolver) AutoCreateTeams(ctx context.Context, groupID string, claims []auth.OIDCClaim) ([]auth.TeamMembership, error) {
 	// Get existing mappings to find unmatched claims
 	mappings, err := r.Q.GetTeamClaimMappingsByClaims(ctx, groupID)
