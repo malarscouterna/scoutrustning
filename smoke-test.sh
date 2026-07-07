@@ -54,8 +54,8 @@ check_not_contains() {
 echo "Mode: DEV_MODE=$DEV_MODE, DEMO_MODE=$DEMO_MODE"
 echo "Waiting for web server..."
 if [ "$DEMO_MODE" = "true" ]; then
-  # In demo mode, unauthenticated requests redirect - wait for login page
-  until curl -sf "$WEB/login" -o /dev/null 2>/dev/null; do sleep 1; done
+  # In demo mode, unauthenticated requests redirect - wait for welcome page
+  until curl -sf "$WEB/welcome" -o /dev/null 2>/dev/null; do sleep 1; done
 else
   until curl -sf "$WEB" -H "$LEADER_COOKIE" -o /dev/null 2>/dev/null; do sleep 1; done
 fi
@@ -80,17 +80,17 @@ if [ "$DEMO_MODE" = "true" ]; then
 
   echo "Testing demo mode: unauthenticated access blocked..."
   NO_COOKIE="Cookie: "
-  check "Home (no auth->login)"     "$WEB/"        "$NO_COOKIE"  "302"
-  check "Browse (no auth->login)"   "$WEB/browse"  "$NO_COOKIE"  "302"
-  check "Book (no auth->login)"     "$WEB/book"    "$NO_COOKIE"  "302"
-  check "Login page (public)"       "$WEB/login"   "$NO_COOKIE"  "200"
+  check "Home (no auth->welcome)"     "$WEB/"        "$NO_COOKIE"  "302"
+  check "Browse (no auth->welcome)"   "$WEB/browse"  "$NO_COOKIE"  "302"
+  check "Book (no auth->welcome)"     "$WEB/book"    "$NO_COOKIE"  "302"
+  check "Welcome page (public)"       "$WEB/welcome" "$NO_COOKIE"  "200"
 
   echo "Testing demo mode: persona cookie without OIDC blocked..."
-  check "Home (persona no OIDC->login)"    "$WEB/"        "$LEADER_COOKIE"   "302"
-  check "Browse (persona no OIDC->login)"  "$WEB/browse"  "$MANAGER_COOKIE"  "302"
+  check "Home (persona no OIDC->welcome)"    "$WEB/"        "$LEADER_COOKIE"   "302"
+  check "Browse (persona no OIDC->welcome)"  "$WEB/browse"  "$MANAGER_COOKIE"  "302"
 
-  echo "Testing demo mode: login page has no persona switcher..."
-  check_not_contains "Login (no switcher)" "$WEB/login" "$NO_COOKIE" "Dev persona"
+  echo "Testing demo mode: welcome page has no persona switcher..."
+  check_not_contains "Welcome (no switcher)" "$WEB/welcome" "$NO_COOKIE" "Dev persona"
 
 else
   # ============================================================
@@ -107,7 +107,7 @@ else
   check "Issues new" "$WEB/issues/new" "$LEADER_COOKIE"
   check "Guide"      "$WEB/guide"     "$LEADER_COOKIE"
   check "Profile"    "$WEB/profile"   "$LEADER_COOKIE"
-  check "Login"      "$WEB/login"     "$LEADER_COOKIE"
+  check "Welcome"    "$WEB/welcome"   "$LEADER_COOKIE"
 
   # --- Static pages (manager) ---
   echo "Testing static pages (manager)..."

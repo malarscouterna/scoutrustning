@@ -19,7 +19,7 @@
 			body: JSON.stringify({ persona: key })
 		});
 		if (key === null) {
-			window.location.href = '/login';
+			window.location.href = '/welcome';
 		} else {
 			window.location.reload();
 		}
