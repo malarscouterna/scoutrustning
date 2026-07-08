@@ -252,6 +252,34 @@
 	] as const);
 	let permForm = $state<Record<string, string>>({});
 	let permSaving = $state(false);
+
+	// Auto-archive timeouts (0 disables). Own section/save button, not folded into permForm,
+	// since 0 is a meaningful value here and these are numbers rather than access-level strings.
+	let draftArchiveDays = $state(3);
+	let rejectedArchiveDays = $state(7);
+	let archiveSaving = $state(false);
+	let archiveMessage = $state('');
+	$effect(() => {
+		if (data.groupSettings) {
+			draftArchiveDays = data.groupSettings.draft_archive_days ?? 3;
+			rejectedArchiveDays = data.groupSettings.rejected_archive_days ?? 7;
+		}
+	});
+
+	async function saveArchiveSettings() {
+		archiveSaving = true;
+		archiveMessage = '';
+		try {
+			groupSettings = await api.updateGroupSettings({
+				draft_archive_days: draftArchiveDays,
+				rejected_archive_days: rejectedArchiveDays,
+			});
+			flash(v => archiveMessage = v, m.common_saved());
+		} catch (e: any) {
+			archiveMessage = m.page_profile_error_prefix() + translateError(e);
+		}
+		archiveSaving = false;
+	}
 	let permMessage = $state('');
 
 	$effect(() => {
@@ -1829,6 +1857,31 @@ async function linkGchatTeamSpace(teamId: string) {
 				</button>
 				{#if permMessage}
 					<span class="text-sm {permMessage.startsWith('Fel') ? 'text-red-600' : 'text-green-600'}">{permMessage}</span>
+				{/if}
+			</div>
+		</section>
+
+		<!-- Auto-archive timeouts -->
+		<section class="mb-6 border rounded-lg p-4">
+			<h3 class="font-medium mb-1">{m.page_profile_archive_section()}</h3>
+			<p class="text-xs text-neutral-500 mb-3">{m.page_profile_archive_help()}</p>
+			<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 mb-3">
+				<label class="flex items-center justify-between gap-2 text-sm">
+					<span>{m.page_profile_archive_draft_days()}</span>
+					<input type="number" min="0" bind:value={draftArchiveDays} class="border rounded px-2 py-1 text-sm w-20" />
+				</label>
+				<label class="flex items-center justify-between gap-2 text-sm">
+					<span>{m.page_profile_archive_rejected_days()}</span>
+					<input type="number" min="0" bind:value={rejectedArchiveDays} class="border rounded px-2 py-1 text-sm w-20" />
+				</label>
+			</div>
+			<p class="text-xs text-neutral-500 mb-3">{m.page_profile_archive_zero_hint()}</p>
+			<div class="flex items-center gap-3">
+				<button onclick={saveArchiveSettings} disabled={archiveSaving} class="text-sm bg-blue-700 text-white px-4 py-2 rounded disabled:opacity-50">
+					{archiveSaving ? m.btn_saving() : m.btn_save()}
+				</button>
+				{#if archiveMessage}
+					<span class="text-sm {archiveMessage.startsWith('Fel') ? 'text-red-600' : 'text-green-600'}">{archiveMessage}</span>
 				{/if}
 			</div>
 		</section>

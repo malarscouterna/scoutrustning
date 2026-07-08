@@ -64,6 +64,8 @@ type groupSettingsResponse struct {
 	ManagerNotesRole      string   `json:"manager_notes_role"`
 	PersonalBookingRole   string   `json:"personal_booking_role"`
 	DefaultLanguage       string   `json:"default_language"`
+	DraftArchiveDays      int32    `json:"draft_archive_days"`
+	RejectedArchiveDays   int32    `json:"rejected_archive_days"`
 	NotificationChannels  []string `json:"notification_channels"`
 	LogoURL               string   `json:"logo_url"`        // empty string when no logo uploaded
 	LogoSquareURL         string   `json:"logo_square_url"` // empty string when no square logo uploaded
@@ -88,6 +90,8 @@ func (h *GroupSettingsHandler) Get(w http.ResponseWriter, r *http.Request) {
 			ManagerNotesRole:     "manager",
 			PersonalBookingRole:  "book",
 			DefaultLanguage:      "sv",
+			DraftArchiveDays:     3,
+			RejectedArchiveDays:  7,
 			NotificationChannels: []string{"email"},
 			SystemSmtpConfigured: os.Getenv("SMTP_DEFAULT_HOST") != "",
 			SystemSmtpFrom:       os.Getenv("SMTP_DEFAULT_FROM"),
@@ -119,6 +123,12 @@ type groupSettingsRequest struct {
 	ManagerNotesRole      string  `json:"manager_notes_role"`
 	PersonalBookingRole   string  `json:"personal_booking_role"`
 	DefaultLanguage       string  `json:"default_language"`
+	// Pointers, unlike the other fields here: each save on the settings page only sends its
+	// own section, and 0 is a meaningful value (disables auto-archiving for that stage) rather
+	// than "unset" - so a section that doesn't mention these must leave them untouched, not
+	// silently reset them to 0. Same nil-means-"don't change" pattern as SmtpKey above.
+	DraftArchiveDays    *int32 `json:"draft_archive_days"`
+	RejectedArchiveDays *int32 `json:"rejected_archive_days"`
 }
 
 func (h *GroupSettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
@@ -199,6 +209,31 @@ func (h *GroupSettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	existing, existingErr := h.Q.GetGroupSettings(r.Context(), claims.GroupID)
+
+	draftArchiveDays := int32(3)
+	if existingErr == nil {
+		draftArchiveDays = existing.DraftArchiveDays
+	}
+	if req.DraftArchiveDays != nil {
+		if *req.DraftArchiveDays < 0 {
+			WriteError(w, http.StatusBadRequest, "invalid draft_archive_days")
+			return
+		}
+		draftArchiveDays = *req.DraftArchiveDays
+	}
+	rejectedArchiveDays := int32(7)
+	if existingErr == nil {
+		rejectedArchiveDays = existing.RejectedArchiveDays
+	}
+	if req.RejectedArchiveDays != nil {
+		if *req.RejectedArchiveDays < 0 {
+			WriteError(w, http.StatusBadRequest, "invalid rejected_archive_days")
+			return
+		}
+		rejectedArchiveDays = *req.RejectedArchiveDays
+	}
+
 	// Handle SMTP key: nil = don't change, empty string = clear, non-empty = encrypt and store
 	var smtpKeyEncrypted []byte
 	var smtpKeyMasked string
@@ -213,13 +248,10 @@ func (h *GroupSettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
 			smtpKeyMasked = crypto.MaskKey(*req.SmtpKey)
 		}
 		// empty string = clear (smtpKeyEncrypted and smtpKeyMasked stay zero values)
-	} else {
+	} else if existingErr == nil {
 		// nil = preserve existing
-		existing, err := h.Q.GetGroupSettings(r.Context(), claims.GroupID)
-		if err == nil {
-			smtpKeyEncrypted = existing.SmtpKeyEncrypted
-			smtpKeyMasked = existing.SmtpKeyMasked
-		}
+		smtpKeyEncrypted = existing.SmtpKeyEncrypted
+		smtpKeyMasked = existing.SmtpKeyMasked
 	}
 
 	smtpPort := req.SmtpPort
@@ -256,6 +288,8 @@ func (h *GroupSettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		ManagerNotesRole:      req.ManagerNotesRole,
 		PersonalBookingRole:   req.PersonalBookingRole,
 		DefaultLanguage:       defaultLanguage,
+		DraftArchiveDays:      draftArchiveDays,
+		RejectedArchiveDays:   rejectedArchiveDays,
 	}); err != nil {
 		WriteError(w, http.StatusInternalServerError, "failed to save settings")
 		return
@@ -455,6 +489,8 @@ func settingsToResponse(s db.GroupSetting) groupSettingsResponse {
 		ManagerNotesRole:      s.ManagerNotesRole,
 		PersonalBookingRole:   s.PersonalBookingRole,
 		DefaultLanguage:       s.DefaultLanguage,
+		DraftArchiveDays:      s.DraftArchiveDays,
+		RejectedArchiveDays:   s.RejectedArchiveDays,
 		NotificationChannels:  s.EnabledChannels,
 	}
 	if s.LogoFileID.Valid {

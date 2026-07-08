@@ -107,6 +107,65 @@ func SendOverdueAlerts(ctx context.Context, q *db.Queries, n Notifier, today pgt
 	}
 }
 
+// SendArchiveWarnings sends a one-time booking_archive_warning - to the team's broadcast
+// channels (Gruppkanal email/GChat) plus a personal email to the creator and team members -
+// for any draft-with-items or rejected-awaiting-resubmission booking whose auto-archive
+// deadline (docs/pre-release.md "Booking auto-archive setting") falls within the next 24
+// hours. Deduped via notification_log like reminders/overdue alerts.
+func SendArchiveWarnings(ctx context.Context, q *db.Queries, n, gn Notifier, baseURL string) {
+	bookings, err := q.GetBookingsNearingArchive(ctx)
+	if err != nil {
+		slog.Error("scheduler: GetBookingsNearingArchive failed", "error", err)
+		return
+	}
+	for _, b := range bookings {
+		sendArchiveWarningForBooking(ctx, q, n, gn, b, baseURL)
+	}
+}
+
+func sendArchiveWarningForBooking(ctx context.Context, q *db.Queries, n, gn Notifier, row db.GetBookingsNearingArchiveRow, baseURL string) {
+	b := db.Booking{
+		ID: row.ID, GroupID: row.GroupID, CreatedBy: row.CreatedBy,
+		UsedByTeamID: row.UsedByTeamID, StartDate: row.StartDate, EndDate: row.EndDate,
+		Status: row.Status, Title: row.Title,
+	}
+	ds := loadDispatchSettings(ctx, q, b.GroupID, formatUUID(b.UsedByTeamID))
+	tk := bookingThreadKey(b)
+
+	// Broadcast to the team's shared channels first. Unlike the other broadcast events
+	// (confirmed/rejected/cancelled), which fire exactly once from a handler action, this
+	// one is discovered by hourly polling - so guard on notification_log the same way the
+	// personal loop below does, using the same sentinel user IDs sendBroadcastEmail/GChat
+	// log under, to avoid re-broadcasting if a booking is somehow caught in two ticks.
+	broadcastEmailSent, _ := q.HasNotificationBeenSent(ctx, db.HasNotificationBeenSentParams{
+		EntityID: b.ID, EventType: EventBookingArchiveWarning, UserID: "broadcast:" + formatUUID(b.UsedByTeamID), Channel: "email",
+	})
+	if !broadcastEmailSent {
+		broadcastMsg := archiveWarningMsg(ctx, q, b, row.ArchiveDeadline, baseURL, recipient{lang: "sv"})
+		sendBroadcastEmail(ctx, q, n, b.GroupID, b.UsedByTeamID, ds, EventBookingArchiveWarning, b.ID, tk, broadcastMsg)
+	}
+	gchatSent, _ := q.HasNotificationBeenSent(ctx, db.HasNotificationBeenSentParams{
+		EntityID: b.ID, EventType: EventBookingArchiveWarning, UserID: "gchat:" + formatUUID(b.UsedByTeamID), Channel: "gchat",
+	})
+	if !gchatSent {
+		opener, detail := bookingBroadcastTexts(ctx, q, b, EventBookingArchiveWarning, baseURL)
+		sendBroadcastGChat(ctx, q, gn, b.GroupID, b.UsedByTeamID, ds, EventBookingArchiveWarning, b.ID, tk, opener, detail)
+	}
+
+	for _, r := range bookingRecipients(ctx, q, b.GroupID, b.CreatedBy, b.UsedByTeamID) {
+		r := r
+		sent, err := q.HasNotificationBeenSent(ctx, db.HasNotificationBeenSentParams{
+			EntityID: b.ID, EventType: EventBookingArchiveWarning, UserID: r.id, Channel: "email",
+		})
+		if err != nil || sent {
+			continue
+		}
+		sendTo(ctx, q, n, ds, b.GroupID, r, EventBookingArchiveWarning, "email", b.ID, tk, func(lang string) Message {
+			return archiveWarningMsg(ctx, q, b, row.ArchiveDeadline, baseURL, r)
+		})
+	}
+}
+
 func sendOverdueForBooking(ctx context.Context, q *db.Queries, n Notifier, b db.GetAllOverdueBookingsRow, today pgtype.Date, baseURL string) {
 	ds := loadDispatchSettings(ctx, q, b.GroupID, formatUUID(b.UsedByTeamID))
 	booking := db.Booking{

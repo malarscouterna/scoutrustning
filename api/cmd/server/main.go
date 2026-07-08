@@ -154,30 +154,59 @@ func main() {
 	// Daily notification scheduler (reminders + overdue alerts).
 	// In demo mode, use NoopNotifier so scheduled sends never fire.
 	var schedulerNotifier notifications.Notifier = &notifications.SMTPNotifier{Q: queries}
+	var schedulerGChatNotifier notifications.Notifier = &notifications.GChatNotifier{Q: queries}
 	if demoMode {
 		schedulerNotifier = notifications.NoopNotifier{}
+		schedulerGChatNotifier = notifications.NoopNotifier{}
 	}
-	notifications.StartScheduler(queries, schedulerNotifier, getenv("APP_BASE_URL", "http://localhost:5173"))
+	baseURL := getenv("APP_BASE_URL", "http://localhost:5173")
+	notifications.StartScheduler(queries, schedulerNotifier, baseURL)
 
 	addr := getenv("ADDR", ":8080")
 	srv := &http.Server{Addr: addr, Handler: r}
 
-	// Background: clean up empty draft bookings every hour
+	// Background: clean up empty/expired bookings and send archive warnings.
+	// Runs immediately on startup (not just after the first tick) so a deploy/restart
+	// doesn't leave a booking waiting up to a full interval for its first check - this
+	// matters most for the archive warning, whose 23-24h detection window can otherwise
+	// be missed entirely if a tick is delayed past it. In dev mode the interval is 1
+	// minute instead of 1 hour, so changes to auto-archive settings are quick to verify
+	// against Mailpit without waiting.
+	runBookingCleanupJobs := func() {
+		threshold := pgtype.Timestamptz{Time: time.Now().Add(-48 * time.Hour), Valid: true}
+		deleted, err := queries.CleanupEmptyDrafts(ctx, threshold)
+		if err != nil {
+			slog.Error("draft cleanup failed", "error", err)
+		} else if deleted > 0 {
+			slog.Info("cleaned up empty drafts", "deleted", deleted)
+		}
+
+		archived, err := handler.ArchiveExpiredBookings(ctx, queries)
+		if err != nil {
+			slog.Error("booking auto-archive failed", "error", err)
+		} else if archived > 0 {
+			slog.Info("auto-archived expired bookings", "archived", archived)
+		}
+
+		notifications.SendArchiveWarnings(ctx, queries, schedulerNotifier, schedulerGChatNotifier, baseURL)
+	}
 	go func() {
-		ticker := time.NewTicker(1 * time.Hour)
+		interval := 1 * time.Hour
+		if devMode && !demoMode {
+			// devMode alone is also true in demo (it just gates the persona switcher
+			// behind a real login there) - the fast interval should only apply to
+			// genuine local dev, not demo deployments.
+			interval = 1 * time.Minute
+		}
+		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
+		runBookingCleanupJobs()
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				threshold := pgtype.Timestamptz{Time: time.Now().Add(-48 * time.Hour), Valid: true}
-				deleted, err := queries.CleanupEmptyDrafts(ctx, threshold)
-				if err != nil {
-					slog.Error("draft cleanup failed", "error", err)
-				} else if deleted > 0 {
-					slog.Info("cleaned up empty drafts", "deleted", deleted)
-				}
+				runBookingCleanupJobs()
 			}
 		}
 	}()

@@ -620,6 +620,9 @@ func (h *BookingHandler) AddItems(w http.ResponseWriter, r *http.Request) {
 
 	WriteJSON(w, http.StatusCreated, added)
 
+	if len(added) > 0 {
+		h.Q.SetFirstItemAddedAt(r.Context(), db.SetFirstItemAddedAtParams{ID: bookingID, GroupID: claims.GroupID})
+	}
 	h.logItemsChangedEvent(r.Context(), claims.GroupID, bookingID, claims.MemberID, len(added), 0)
 
 	// Auto-transition: if confirmed booking now has approval-required items, check level
