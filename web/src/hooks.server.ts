@@ -7,6 +7,9 @@ import { i18n } from '$lib/i18n';
 const API_URL = process.env.API_URL || 'http://localhost:8080';
 const DEV_MODE = process.env.DEV_MODE === 'true';
 const DEMO_MODE = process.env.DEMO_MODE === 'true';
+// The persona-switcher mechanism is needed whenever either flag is set - demo mode uses
+// it too, just with the OIDC lock (no auto-fallback persona) layered on top below.
+const PERSONAS_ENABLED = DEV_MODE || DEMO_MODE;
 const PERSONA_COOKIE = 'dev-persona';
 const DEFAULT_PERSONA = 'leader-yggdrasil';
 const ACTIVE_GROUP_COOKIE = 'active-group-id';
@@ -48,7 +51,7 @@ function clearSessionAndRedirect(event: any, callbackUrl: string): never {
 
 const appHandle: Handle = async ({ event, resolve }) => {
 	// Dev mode: POST /dev/persona — set or clear the active persona cookie
-	if (DEV_MODE && event.url.pathname === '/dev/persona' && event.request.method === 'POST') {
+	if (PERSONAS_ENABLED && event.url.pathname === '/dev/persona' && event.request.method === 'POST') {
 		const { persona } = await event.request.json();
 		const maxAge = 60 * 60 * 24 * 30;
 		const cookie = persona
@@ -73,7 +76,7 @@ const appHandle: Handle = async ({ event, resolve }) => {
 	let personaKey: string | undefined;
 	let accessToken: string | null = null;
 
-	if (DEV_MODE) {
+	if (PERSONAS_ENABLED) {
 		personaKey = event.cookies.get(PERSONA_COOKIE);
 		if (personaKey) {
 			if (DEMO_MODE) {

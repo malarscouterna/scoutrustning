@@ -10,7 +10,11 @@ export const load: PageServerLoad = async ({ parent }) => {
 	return {
 		user,
 		demo: DEMO_MODE,
-		dev: DEV_MODE,
+		// DEV_MODE alone is also true in demo (it just gates the persona switcher there,
+		// behind a real login) - this flag drives the try-demo/try-prod link matrix below,
+		// which needs "true local dev, not demo" specifically, or the try-demo link would
+		// incorrectly show while already in demo.
+		dev: DEV_MODE && !DEMO_MODE,
 		demoUrl: DEMO_URL,
 		prodUrl: PROD_URL
 	};

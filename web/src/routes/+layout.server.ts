@@ -7,6 +7,9 @@ import { decodeJwtPayload } from '$lib/jwt';
 
 const DEV_MODE = process.env.DEV_MODE === 'true';
 const DEMO_MODE = process.env.DEMO_MODE === 'true';
+// The persona-switcher mechanism is needed whenever either flag is set - demo mode uses
+// it too, just with the OIDC lock (no auto-fallback persona) layered on top below.
+const PERSONAS_ENABLED = DEV_MODE || DEMO_MODE;
 const PERSONA_COOKIE = 'dev-persona';
 const DEFAULT_PERSONA = 'leader-yggdrasil';
 
@@ -56,7 +59,7 @@ function setLangCookie(cookies: import('@sveltejs/kit').Cookies, lang: string) {
 }
 
 export const load: LayoutServerLoad = async ({ cookies, locals, url, fetch: skFetch }) => {
-	if (DEV_MODE) {
+	if (PERSONAS_ENABLED) {
 		const personaCookie = cookies.get(PERSONA_COOKIE);
 		const personas = loadPersonas();
 
@@ -91,7 +94,7 @@ export const load: LayoutServerLoad = async ({ cookies, locals, url, fetch: skFe
 			// Logged in via OIDC but group not found — show friendly message + persona switcher in demo
 			const oidcName = extractNameFromToken(session.accessToken);
 			if (url.pathname !== '/welcome' && url.pathname !== '/join') throw redirect(302, '/welcome');
-			return { user: null, dev: DEV_MODE ? { personas, currentPersona: null } : null, demo: DEMO_MODE, oidcName };
+			return { user: null, dev: PERSONAS_ENABLED ? { personas, currentPersona: null } : null, demo: DEMO_MODE, oidcName };
 		}
 
 		if (DEMO_MODE) {
