@@ -53,6 +53,17 @@ Planning document. Nothing here is implemented yet — this is the plan to be ap
 - Provisioning stays manual for now: no signup-request table, no approve-from-email button. The security surface of an unauthenticated action link that mutates state (creates a group) isn't worth it for a rare, low-volume workflow, and group creation already happens via docker/`init-group` CLI commands.
   - Possible future iteration: an approve button/link, if we ever want it, would need a signed/expiring token and a `group_signup_requests` table — deliberately deferred, not part of this plan.
 
+### 2a. Follow-up UX fixes
+
+Found via manual review. **Status: implemented.**
+
+- **Unmapped-user state on `/welcome`.** `welcome/+page.svelte` now branches three ways instead of two: `data.user` set → dashboard link (unchanged); `data.user` null but `data.oidcName` set (unmapped-group user) → the dashboard button rendered **disabled**, with new copy below it (`page_welcome_no_group_heading`/`_desc`, interpolating the account name) explaining no registered scout group was found and pointing at the signup link further down the page; otherwise → the original demo banner + login form. `data.oidcName` was already loaded by `+layout.server.ts` but previously unused in this template.
+- **Button rename.** `page_welcome_go_to_dashboard` changed from "Gå till översikten" / "Go to dashboard" to "Öppna Scoutrustning" / "Open Scoutrustning".
+- **Demo-mode gating on `/join`.** No route-level block was needed - `data.demo` (from `process.env.DEMO_MODE`) already flows into `join/+page.svelte` for free via SvelteKit's parent-layout-data merge, no wiring needed in `join/+page.server.ts`. The page shows a `page_join_demo_heading`/`_desc` banner and wraps the whole form in a `<fieldset disabled={data.demo}>` (native HTML disabling of every input/select/checkbox/submit inside, plus `opacity-50` styling) rather than hiding or redirecting - the form stays visible so it's clear signup exists but isn't available here.
+- **CTA back to `/welcome` from `/join`.** Added a persistent "← Tillbaka till startsidan" / "← Back to home" link (`page_join_back_to_welcome`) above the form, shown in both the form and success states (the success state already had its own separate link to `/welcome`, now redundant but left as-is since it's contextually part of the success message).
+- Verified via `pnpm run check` (0 errors, 0 warnings) after `pnpm run build` to regenerate Paraglide output from the new `sv.json`/`en.json` keys.
+- **Follow-up gap found after shipping the above:** clicking "Registrera din scoutkår" while logged out landed on `/join`, which (via `join/+page.server.ts:32`) immediately bounced back to `/welcome?callbackUrl=/join` since there's no session yet - visually indistinguishable from nothing happening, since the user is already on `/welcome`. Fixed by making the CTA itself session-aware: users with any session (`data.user` or `data.oidcName` - i.e. already authenticated, mapped or not) still link straight to `/join`; logged-out visitors instead submit the same CSRF-protected `POST /auth/signin/keycloak` form used by the main login button, with `callbackUrl=/join` - so clicking the CTA while logged out goes straight to ScoutID, and returns straight to `/join` after login, without the invisible round trip through `/welcome`.
+
 ## 3. Group switching
 
 - For users belonging to multiple registered scout groups.
