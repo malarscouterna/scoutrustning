@@ -1390,7 +1390,7 @@ func (h *BookingHandler) UpdateItemReturn(w http.ResponseWriter, r *http.Request
 		// docs/delayed-return-swap.md: try to silently substitute an equivalent
 		// unit into whichever booking is waiting on this exact article before
 		// its expected return date arrives.
-		if _, err := ResolveBlockedItemsForArticle(r.Context(), h.Q, claims.GroupID, item.ArticleID, expectedReturnDateParsed, false); err != nil {
+		if _, err := ResolveBlockedItemsForArticle(r.Context(), h.Q, h.Notifier, h.GChatNotifier, h.BaseURL, claims.GroupID, item.ArticleID, expectedReturnDateParsed, false); err != nil {
 			slog.Error("delayed-item swap resolution failed", "article_id", item.ArticleID, "error", err)
 		}
 	case "reported_usable":
@@ -1398,14 +1398,14 @@ func (h *BookingHandler) UpdateItemReturn(w http.ResponseWriter, r *http.Request
 		// Opportunistic upgrade only (docs/delayed-return-swap.md decision 6): the
 		// unit is still bookable, so a waiting booking is never actually blocked -
 		// swap it onto a fully-ok unit if one's free, otherwise leave it as-is.
-		if _, err := ResolveBlockedItemsForArticle(r.Context(), h.Q, claims.GroupID, item.ArticleID, time.Now(), true); err != nil {
+		if _, err := ResolveBlockedItemsForArticle(r.Context(), h.Q, h.Notifier, h.GChatNotifier, h.BaseURL, claims.GroupID, item.ArticleID, time.Now(), true); err != nil {
 			slog.Error("reported_usable upgrade resolution failed", "article_id", item.ArticleID, "error", err)
 		}
 	case "reported_unusable", "missing":
 		// No article status side effect — caller creates issue via POST /issues.
 		// The article becomes genuinely unbookable, so any waiting booking gets
 		// the full swap-or-notify treatment, identical to a delayed item.
-		if _, err := ResolveBlockedItemsForArticle(r.Context(), h.Q, claims.GroupID, item.ArticleID, time.Now(), false); err != nil {
+		if _, err := ResolveBlockedItemsForArticle(r.Context(), h.Q, h.Notifier, h.GChatNotifier, h.BaseURL, claims.GroupID, item.ArticleID, time.Now(), false); err != nil {
 			slog.Error("condition-change swap resolution failed", "article_id", item.ArticleID, "error", err)
 		}
 	}

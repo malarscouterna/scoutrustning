@@ -354,6 +354,72 @@ func bookingBroadcastTexts(ctx context.Context, q *db.Queries, b db.Booking, eve
 	return BookingOpenerText(data), BookingDetailText(data)
 }
 
+// bookingItemBlockedMsg builds the booking_item_blocked email, which additionally
+// interpolates the name of the item that couldn't be swapped - the affected item's
+// name only, never the other (late) booker (docs/delayed-return-swap.md decision 4).
+func bookingItemBlockedMsg(ctx context.Context, q *db.Queries, b db.Booking, itemName, baseURL string, r recipient) Message {
+	data := fetchBookingEmailData(ctx, q, b, EventBookingItemBlocked, r.lang, r.name, baseURL)
+	data.BlockedItemName = itemName
+	htmlBody, textBody := renderBookingEmail(data)
+	subject := i18n.T(r.lang, "email_subject_"+EventBookingItemBlocked)
+	if data.TeamName != "" {
+		subject = data.TeamName + ": " + subject
+	}
+	return Message{
+		To:       r.deliveryEmail(),
+		Subject:  subject,
+		Body:     htmlBody,
+		TextBody: textBody,
+	}
+}
+
+func bookingItemBlockedBroadcastTexts(ctx context.Context, q *db.Queries, b db.Booking, itemName, baseURL string) (opener, detail string) {
+	data := fetchBookingEmailData(ctx, q, b, EventBookingItemBlocked, "sv", "", baseURL)
+	data.BlockedItemName = itemName
+	return BookingOpenerText(data), BookingDetailText(data)
+}
+
+// SendBookingItemBlocked notifies a waiting booking that one of its items couldn't be
+// silently swapped to an equivalent unit (docs/delayed-return-swap.md decision 4) - the
+// article it's waiting on is unavailable and no substitute was found. Broadcasts to the
+// booking's team channels and sends a personal email to the booking's creator only (not
+// the full team roster, unlike sendBookingToTeam) - deduped on blockedItemID, not the
+// booking's own ID, since a booking can have more than one item blocked over time and
+// each needs its own notification_log entry.
+func SendBookingItemBlocked(ctx context.Context, q *db.Queries, n, gn Notifier, b db.Booking, blockedItemID pgtype.UUID, itemName, baseURL string) {
+	ds := loadDispatchSettings(ctx, q, b.GroupID, formatUUID(b.UsedByTeamID))
+	tk := "booking_item_" + formatUUID(blockedItemID)
+
+	broadcastEmailSent, _ := q.HasNotificationBeenSent(ctx, db.HasNotificationBeenSentParams{
+		EntityID: blockedItemID, EventType: EventBookingItemBlocked, UserID: "broadcast:" + formatUUID(b.UsedByTeamID), Channel: "email",
+	})
+	if !broadcastEmailSent {
+		broadcastMsg := bookingItemBlockedMsg(ctx, q, b, itemName, baseURL, recipient{lang: "sv"})
+		sendBroadcastEmail(ctx, q, n, b.GroupID, b.UsedByTeamID, ds, EventBookingItemBlocked, blockedItemID, tk, broadcastMsg)
+	}
+	gchatSent, _ := q.HasNotificationBeenSent(ctx, db.HasNotificationBeenSentParams{
+		EntityID: blockedItemID, EventType: EventBookingItemBlocked, UserID: "gchat:" + formatUUID(b.UsedByTeamID), Channel: "gchat",
+	})
+	if !gchatSent {
+		opener, detail := bookingItemBlockedBroadcastTexts(ctx, q, b, itemName, baseURL)
+		sendBroadcastGChat(ctx, q, gn, b.GroupID, b.UsedByTeamID, ds, EventBookingItemBlocked, blockedItemID, tk, opener, detail)
+	}
+
+	r, ok := bookingCreator(ctx, q, b.GroupID, b.CreatedBy)
+	if !ok {
+		return
+	}
+	sent, err := q.HasNotificationBeenSent(ctx, db.HasNotificationBeenSentParams{
+		EntityID: blockedItemID, EventType: EventBookingItemBlocked, UserID: r.id, Channel: "email",
+	})
+	if err != nil || sent {
+		return
+	}
+	sendTo(ctx, q, n, ds, b.GroupID, r, EventBookingItemBlocked, "email", blockedItemID, tk, func(lang string) Message {
+		return bookingItemBlockedMsg(ctx, q, b, itemName, baseURL, r)
+	})
+}
+
 // issueMsg builds a Message for an issue event for a specific recipient.
 func issueMsg(ctx context.Context, q *db.Queries, issue db.IssueReport, event, baseURL string, r recipient) Message {
 	data := fetchIssueEmailData(ctx, q, issue, event, r.lang, r.name, baseURL)

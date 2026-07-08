@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/malarscouterna/scoutrustning/api/internal/db"
+	"github.com/malarscouterna/scoutrustning/api/internal/notifications"
 )
 
 // ResolveBlockedItemsForArticle looks for the earliest non-terminal booking
@@ -25,10 +26,10 @@ import (
 //
 // Returns swapped=true if a substitution was made. Returns swapped=false with
 // no error both when nothing is waiting on this article and when a waiting
-// booking exists but no equivalent unit was found - the "notify instead"
-// half of decision 4 is wired in separately (never reached in upgradeOnly mode,
-// which never notifies per decision 6).
-func ResolveBlockedItemsForArticle(ctx context.Context, q *db.Queries, groupID string, articleID pgtype.UUID, checkDate time.Time, upgradeOnly bool) (bool, error) {
+// booking exists but no equivalent unit was found - in the latter case (and
+// only when upgradeOnly is false, per decision 6) it fires the "no swap
+// available" notification (decision 4) at the waiting booking instead.
+func ResolveBlockedItemsForArticle(ctx context.Context, q *db.Queries, n, gn notifications.Notifier, baseURL, groupID string, articleID pgtype.UUID, checkDate time.Time, upgradeOnly bool) (bool, error) {
 	waiting, err := q.FindWaitingBookingItemsForArticle(ctx, db.FindWaitingBookingItemsForArticleParams{
 		ArticleID: articleID,
 		GroupID:   groupID,
@@ -61,7 +62,20 @@ func ResolveBlockedItemsForArticle(ctx context.Context, q *db.Queries, groupID s
 		EndDate:        earliest.EndDate,
 	})
 	if err != nil {
-		// No equivalent unit available - fall through to notification (later phase).
+		// No equivalent unit available. The reported_usable upgrade-only case never
+		// notifies (decision 6) - nothing is actually blocked, since the current unit
+		// remains bookable.
+		if !upgradeOnly {
+			waitingBooking, err := q.GetBooking(ctx, db.GetBookingParams{ID: earliest.BookingID, GroupID: groupID})
+			if err == nil {
+				b := db.Booking{
+					ID: waitingBooking.ID, GroupID: waitingBooking.GroupID, CreatedBy: waitingBooking.CreatedBy,
+					UsedByTeamID: waitingBooking.UsedByTeamID, StartDate: waitingBooking.StartDate,
+					EndDate: waitingBooking.EndDate, Status: waitingBooking.Status, Title: waitingBooking.Title,
+				}
+				go notifications.SendBookingItemBlocked(context.Background(), q, n, gn, b, earliest.BookingItemID, article.CommonName, baseURL)
+			}
+		}
 		return false, nil
 	}
 
@@ -106,7 +120,7 @@ const overdueSwapGracePeriod = 48 * time.Hour
 // every delayed/overdue item across all groups and tries to resolve each
 // affected article's blocked bookings once. Multiple items sharing the same
 // (group, article) pair are only resolved once per pass.
-func ResolveOverdueSwaps(ctx context.Context, q *db.Queries) (int, error) {
+func ResolveOverdueSwaps(ctx context.Context, q *db.Queries, n, gn notifications.Notifier, baseURL string) (int, error) {
 	graceCutoff := time.Now().Add(-overdueSwapGracePeriod)
 	items, err := q.FindDelayedOrOverdueItems(ctx, pgtype.Date{Time: graceCutoff, Valid: true})
 	if err != nil {
@@ -126,7 +140,7 @@ func ResolveOverdueSwaps(ctx context.Context, q *db.Queries) (int, error) {
 		}
 		seen[k] = true
 
-		ok, err := ResolveBlockedItemsForArticle(ctx, q, item.GroupID, item.ArticleID, time.Now(), false)
+		ok, err := ResolveBlockedItemsForArticle(ctx, q, n, gn, baseURL, item.GroupID, item.ArticleID, time.Now(), false)
 		if err != nil {
 			slog.Error("nightly swap resolution failed", "article_id", item.ArticleID, "error", err)
 			continue

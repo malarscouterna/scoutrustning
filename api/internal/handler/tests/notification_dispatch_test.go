@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -156,6 +157,25 @@ func (d *dispatchEnv) newIssue(t *testing.T) db.IssueReport {
 	return issue
 }
 
+// newBooking creates a minimal confirmed booking for the dispatch env's reporter/unit team.
+func (d *dispatchEnv) newBooking(t *testing.T) db.Booking {
+	t.Helper()
+	ctx := context.Background()
+	var b db.Booking
+	err := d.env.Pool.QueryRow(ctx, `
+		INSERT INTO bookings (group_id, created_by, used_by_team_id, status, start_date, end_date, title)
+		VALUES ($1, $2, $3, 'confirmed', CURRENT_DATE, CURRENT_DATE + 5, 'Test booking')
+		RETURNING id, group_id, created_by, used_by_team_id, used_by_external, used_by_external_contact, status, start_date, end_date, title, created_at, updated_at
+	`, d.groupID, d.reporterID, d.unitTeamID).Scan(
+		&b.ID, &b.GroupID, &b.CreatedBy, &b.UsedByTeamID, &b.UsedByExternal, &b.UsedByExternalContact,
+		&b.Status, &b.StartDate, &b.EndDate, &b.Title, &b.CreatedAt, &b.UpdatedAt,
+	)
+	if err != nil {
+		t.Fatalf("newBooking: %v", err)
+	}
+	return b
+}
+
 // recipientEmails extracts the To addresses from captured messages.
 func recipientEmails(msgs []notifications.Message) []string {
 	seen := make(map[string]bool)
@@ -271,5 +291,40 @@ func TestPersonalEmailPolicy_GchatSpaceConfigured(t *testing.T) {
 	// Personal email should be suppressed because GChat space is configured and in Gruppkanal.
 	if containsEmail(n.Messages(), "manager@test.example") {
 		t.Errorf("expected personal email to manager@test.example to be suppressed (gchat broadcast configured)")
+	}
+}
+
+// TestNotificationDispatch_BookingItemBlocked exercises decision 4's "no swap
+// available" notification (docs/delayed-return-swap.md): a personal email to the
+// booking's creator, naming the blocked item but not any other booker, deduped on
+// the blocked booking_item's own ID rather than the booking's ID (so a second
+// blocked item on the same booking isn't silently suppressed by the first one's
+// notification_log entry).
+func TestNotificationDispatch_BookingItemBlocked(t *testing.T) {
+	d := setupDispatchEnv(t)
+
+	b := d.newBooking(t)
+	blockedItemID := pgtype.UUID{Bytes: [16]byte{1, 2, 3, 4}, Valid: true}
+
+	n := &notifications.CapturingNotifier{}
+	notifications.SendBookingItemBlocked(context.Background(), d.q, n, &notifications.NoopNotifier{}, b, blockedItemID, "Sibley 1", "http://localhost")
+
+	if !containsEmail(n.Messages(), "user@test.example") {
+		t.Fatalf("expected personal email to booking creator user@test.example, got: %v", recipientEmails(n.Messages()))
+	}
+	for _, m := range n.Messages() {
+		if m.To == "user@test.example" && !strings.Contains(m.Body, "Sibley 1") {
+			t.Errorf("expected email body to name the blocked item Sibley 1, got: %s", m.Body)
+		}
+	}
+
+	sent, err := d.q.HasNotificationBeenSent(context.Background(), db.HasNotificationBeenSentParams{
+		EntityID: blockedItemID, EventType: notifications.EventBookingItemBlocked, UserID: d.reporterID, Channel: "email",
+	})
+	if err != nil {
+		t.Fatalf("HasNotificationBeenSent: %v", err)
+	}
+	if !sent {
+		t.Errorf("expected notification_log entry keyed by blocked item ID, not the booking ID")
 	}
 }

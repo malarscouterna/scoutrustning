@@ -21,6 +21,7 @@ const (
 	EventBookingReminder            EventKey = "booking_reminder"
 	EventBookingOverdue             EventKey = "booking_overdue"
 	EventBookingArchiveWarning      EventKey = "booking_archive_warning"
+	EventBookingItemBlocked         EventKey = "booking_item_blocked"
 	EventBookingAnyCreated          EventKey = "booking_any_created"
 	EventIssueCreated               EventKey = "issue_created"
 	EventIssueAssignedToMe          EventKey = "issue_assigned_to_me"
@@ -38,6 +39,7 @@ var AllEvents = []EventKey{
 	EventBookingReminder,
 	EventBookingOverdue,
 	EventBookingArchiveWarning,
+	EventBookingItemBlocked,
 	EventBookingAnyCreated,
 	EventIssueCreated,
 	EventIssueAssignedToMe,
@@ -101,6 +103,7 @@ func BroadcastSystemDefaults() NotificationPrefs {
 		EventBookingReminder:            {Gruppkanal: on, PersonalEmailPolicy: PolicyIfNoBroadcast},
 		EventBookingOverdue:             {Gruppkanal: on, PersonalEmailPolicy: PolicyIfNoBroadcast},
 		EventBookingArchiveWarning:      {Gruppkanal: on, PersonalEmailPolicy: PolicyIfNoBroadcast},
+		EventBookingItemBlocked:         {Gruppkanal: on, PersonalEmailPolicy: PolicyIfNoBroadcast},
 		EventBookingAnyCreated:          {Gruppkanal: on, PersonalEmailPolicy: PolicyIfNoBroadcast},
 		EventIssueCreated:   {Gruppkanal: on, PersonalEmailPolicy: PolicyIfNoBroadcast},
 		EventIssueResolved:  {Gruppkanal: on, PersonalEmailPolicy: PolicyIfNoBroadcast},

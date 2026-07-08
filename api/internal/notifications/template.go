@@ -39,6 +39,7 @@ var eventStyles = map[string]eventStyle{
 	EventBookingReminder:           {bannerBG: "#e6eeff", bannerFG: "#003660", ctaBG: "#003660"},
 	EventBookingOverdue:            {bannerBG: "#ffe2e2", bannerFG: "#c10007", ctaBG: "#d97706"},
 	EventBookingArchiveWarning:     {bannerBG: "#fef3c7", bannerFG: "#92400e", ctaBG: "#d97706"},
+	EventBookingItemBlocked:        {bannerBG: "#ffe2e2", bannerFG: "#c10007", ctaBG: "#374b5a"},
 	EventIssueCreated:              {bannerBG: "#fef3c7", bannerFG: "#92400e", ctaBG: "#d97706"},
 	EventIssueAssignedToMe:         {bannerBG: "#e6eeff", bannerFG: "#003660", ctaBG: "#003660"},
 	EventIssueResolved:             {bannerBG: "#dcfce7", bannerFG: "#008236", ctaBG: "#008236"},
@@ -94,6 +95,11 @@ type BookingEmailData struct {
 	// ArchiveDeadline is only set for EventBookingArchiveWarning; interpolated into
 	// the email intro as an absolute date/time rather than a live countdown.
 	ArchiveDeadline pgtype.Timestamptz
+	// BlockedItemName is only set for EventBookingItemBlocked; the name of the
+	// item that couldn't be swapped to an equivalent unit, interpolated into
+	// the email intro. Deliberately does not name the late/other booker - see
+	// docs/delayed-return-swap.md decision 4.
+	BlockedItemName string
 }
 
 // IssueEmailData holds all values needed to render an issue email.
@@ -153,7 +159,7 @@ func renderBookingEmail(d BookingEmailData) (htmlOut, textOut string) {
 		"EMAIL_BANNER_LABEL", html.EscapeString(bannerLabel),
 		"EMAIL_BANNER_BG", style.bannerBG,
 		"EMAIL_BANNER_FG", style.bannerFG,
-		"EMAIL_INTRO", html.EscapeString(i18n.T(d.Lang, bookingIntroKey(d), map[string]string{"deadline": formatDateTime(d.Lang, d.ArchiveDeadline)})),
+		"EMAIL_INTRO", html.EscapeString(i18n.T(d.Lang, bookingIntroKey(d), map[string]string{"deadline": formatDateTime(d.Lang, d.ArchiveDeadline), "item_name": d.BlockedItemName})),
 		"EMAIL_START_DATE", html.EscapeString(start),
 		"EMAIL_END_DATE", html.EscapeString(end),
 		"EMAIL_TEAM_LABEL", html.EscapeString(teamLabel),
@@ -626,7 +632,7 @@ func buildBookingText(d BookingEmailData, bannerLabel, start, end, teamLabel, bo
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n\n", bannerLabel)
 	fmt.Fprintf(&b, "Hej %s,\n\n", d.RecipientName)
-	fmt.Fprintf(&b, "%s\n\n", i18n.T(d.Lang, bookingIntroKey(d), map[string]string{"deadline": formatDateTime(d.Lang, d.ArchiveDeadline)}))
+	fmt.Fprintf(&b, "%s\n\n", i18n.T(d.Lang, bookingIntroKey(d), map[string]string{"deadline": formatDateTime(d.Lang, d.ArchiveDeadline), "item_name": d.BlockedItemName}))
 	fmt.Fprintf(&b, "%s - %s\n", start, end)
 	fmt.Fprintf(&b, "%s  |  %s\n\n", teamLabel, i18n.T(d.Lang, "booking_status_"+d.Status))
 	if len(d.Items) > 0 {
