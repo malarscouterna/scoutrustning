@@ -519,6 +519,8 @@
   "error_cannot_delete_the_last_manager_team": "Cannot delete the last manager team.",
   "error_cannot_demote_the_last_manager_team": "Cannot demote the last manager team.",
   "error_end_date_must_be_after_start_date": "End date must be after start date.",
+  "error_invalid_start_date": "Please select a start date.",
+  "error_invalid_end_date": "Please select an end date.",
   "error_message_required": "Message is required.",
   "error_description_required": "Description is required.",
   "error_name_is_required": "Name is required.",

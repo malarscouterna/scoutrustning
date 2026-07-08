@@ -56,7 +56,18 @@
 	let createError = $state('');
 
 	async function createBooking() {
-		if (!newStartDate || !newEndDate) return;
+		if (!newStartDate) {
+			createError = m.error_invalid_start_date();
+			return;
+		}
+		if (!newEndDate) {
+			createError = m.error_invalid_end_date();
+			return;
+		}
+		if (!newTitle.trim()) {
+			createError = m.error_title_is_required();
+			return;
+		}
 		creating = true;
 		createError = '';
 		try {
@@ -218,6 +229,18 @@
 
 	async function submitBooking() {
 		if (!bookingId || hasConflicts) return;
+		if (!startDate) {
+			error = m.error_invalid_start_date();
+			return;
+		}
+		if (!endDate) {
+			error = m.error_invalid_end_date();
+			return;
+		}
+		if (!title.trim()) {
+			error = m.error_title_is_required();
+			return;
+		}
 		submitting = true;
 		error = '';
 		try {
@@ -401,7 +424,7 @@
 				type="button"
 				variant="primary"
 				onclick={submitBooking}
-				disabled={cartItems.length === 0 || hasConflicts || submitting ? true : undefined}
+				disabled={cartItems.length === 0 || !startDate || !endDate || hasConflicts || submitting ? true : undefined}
 			>
 				{submitting ? '...' : m.page_booking_btn_submit()}
 			</scout-button>
