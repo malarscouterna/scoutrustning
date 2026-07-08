@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"testing"
 	"time"
@@ -339,5 +340,125 @@ func TestReturnFlow_ReportedUsableUpgradeOnly(t *testing.T) {
 	itemAfter := detailAfter["items"].([]any)[0].(map[string]any)
 	if itemAfter["article_id"] != articleZ {
 		t.Errorf("expected article upgraded to strictly-ok Z (%s), got %v", articleZ, itemAfter["article_id"])
+	}
+}
+
+// TestUpdateFlow_ConflictPathSwaps exercises decision 7: changing a booking's
+// dates onto a range where its exact assigned unit is already held by another
+// booking now silently swaps in an equivalent free unit instead of hard-409ing
+// - this is also what makes item 10's copy-then-reschedule flow "just work"
+// without any copy-specific code, since Copy's follow-up PATCH goes through
+// this same Update handler.
+func TestUpdateFlow_ConflictPathSwaps(t *testing.T) {
+	env := testutil.SetupTestEnv(t)
+	mountReturnRoutes(env)
+
+	manager := env.ClientAs("manager-equipment")
+	leaderA := env.ClientAs("leader-yggdrasil")
+	leaderC := env.ClientAs("leader-flaskpost")
+
+	resp, _ := manager.Get("/api/v0/locations")
+	var locations []map[string]any
+	json.NewDecoder(resp.Body).Decode(&locations)
+	resp.Body.Close()
+	locID := locations[0]["id"].(string)
+	resp, _ = manager.Get("/api/v0/categories")
+	var categories []map[string]any
+	json.NewDecoder(resp.Body).Decode(&categories)
+	resp.Body.Close()
+	catID := categories[0]["id"].(string)
+
+	var articleIDs []string
+	for i := range 2 {
+		b, _ := json.Marshal(map[string]any{
+			"commercial_name": "UpdateSwapTest", "common_name": "UpdateSwapTest " + string(rune('1'+i)),
+			"category_id": catID, "location_id": locID, "individually_tracked": true,
+		})
+		resp, _ := manager.Post("/api/v0/articles", bytes.NewReader(b))
+		var article map[string]any
+		json.NewDecoder(resp.Body).Decode(&article)
+		resp.Body.Close()
+		articleIDs = append(articleIDs, article["id"].(string))
+	}
+	articleX := articleIDs[0]
+	articleY := articleIDs[1]
+
+	teamA := getTeamID(t, leaderA, "Yggdrasil")
+	b, _ := json.Marshal(map[string]any{"start_date": "2027-03-01", "end_date": "2027-03-05", "used_by_team_id": teamA, "title": "Booking A"})
+	resp, _ = leaderA.Post("/api/v0/bookings", bytes.NewReader(b))
+	var bookingAResp map[string]any
+	json.NewDecoder(resp.Body).Decode(&bookingAResp)
+	resp.Body.Close()
+	bookingA := bookingAResp["id"].(string)
+
+	b, _ = json.Marshal(map[string]any{"commercial_name": "UpdateSwapTest", "quantity": 1})
+	resp, _ = leaderA.Post("/api/v0/bookings/"+bookingA+"/items", bytes.NewReader(b))
+	resp.Body.Close()
+	resp, _ = leaderA.Post("/api/v0/bookings/"+bookingA+"/submit", nil)
+	resp.Body.Close()
+
+	resp, _ = leaderA.Get("/api/v0/bookings/" + bookingA)
+	var detailA map[string]any
+	json.NewDecoder(resp.Body).Decode(&detailA)
+	resp.Body.Close()
+	itemA := detailA["items"].([]any)[0].(map[string]any)
+	if itemA["article_id"] != articleX {
+		t.Fatalf("expected booking A assigned article X (%s), got %v", articleX, itemA["article_id"])
+	}
+
+	// Booking C: a separate, later window that overlaps where we're about to
+	// move booking A's dates to. Both X and Y are free for these dates, so it
+	// also deterministically gets assigned X.
+	teamC := getTeamID(t, leaderC, "Flaskpostorné")
+	b, _ = json.Marshal(map[string]any{"start_date": "2027-03-10", "end_date": "2027-03-15", "used_by_team_id": teamC, "title": "Booking C"})
+	resp, _ = leaderC.Post("/api/v0/bookings", bytes.NewReader(b))
+	var bookingCResp map[string]any
+	json.NewDecoder(resp.Body).Decode(&bookingCResp)
+	resp.Body.Close()
+	bookingC := bookingCResp["id"].(string)
+
+	b, _ = json.Marshal(map[string]any{"commercial_name": "UpdateSwapTest", "quantity": 1})
+	resp, _ = leaderC.Post("/api/v0/bookings/"+bookingC+"/items", bytes.NewReader(b))
+	resp.Body.Close()
+	resp, _ = leaderC.Post("/api/v0/bookings/"+bookingC+"/submit", nil)
+	resp.Body.Close()
+
+	// Move booking A's dates to overlap booking C's window. Its exact unit
+	// (X) is now held by C, but Y is free - expect a silent swap, not a 409.
+	b, _ = json.Marshal(map[string]any{"start_date": "2027-03-12", "end_date": "2027-03-13", "title": "Booking A - rescheduled"})
+	resp, err := leaderA.Put("/api/v0/bookings/"+bookingA, bytes.NewReader(b))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200 (silent swap, not a conflict), got %d: %s", resp.StatusCode, body)
+	}
+
+	resp, _ = leaderA.Get("/api/v0/bookings/" + bookingA)
+	defer resp.Body.Close()
+	var detailAfter map[string]any
+	json.NewDecoder(resp.Body).Decode(&detailAfter)
+	itemAfter := detailAfter["items"].([]any)[0].(map[string]any)
+	if itemAfter["article_id"] != articleY {
+		t.Errorf("expected article swapped to Y (%s), got %v", articleY, itemAfter["article_id"])
+	}
+
+	resp, err = leaderA.Get("/api/v0/bookings/" + bookingA + "/events")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var events []map[string]any
+	json.NewDecoder(resp.Body).Decode(&events)
+	found := false
+	for _, e := range events {
+		if e["event_type"] == "swap" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected a swap event on booking A, got events: %v", events)
 	}
 }
