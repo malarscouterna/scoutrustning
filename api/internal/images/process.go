@@ -15,6 +15,9 @@ const (
 	ThumbHeight         = 400
 	ThumbQuality        = 75
 	MaxUploadSize       = 25 << 20 // 25MB
+	// Logos are small, simple graphics - 25MB (sized for product/issue photos) is
+	// an oversized allowance that likely signals a wrong file was picked.
+	LogoMaxUploadSize = 5 << 20 // 5MB
 )
 
 // Format aspect ratios (w:h)
@@ -226,40 +229,40 @@ const (
 	// Email PNG is sized for display at ~60px rendered height (2x retina).
 	LogoEmailMaxWidth  = 600
 	LogoEmailMaxHeight = 120
+	// Square logo/icon variant, for narrow displays where a wide banner
+	// logo would be squeezed illegibly small. Web display only, no email use.
+	LogoSquareMaxSize = 400
+	// Lossy fallback quality, used only when the lossless encode exceeds
+	// LogoLosslessMaxBytes - visually indistinguishable from lossless for
+	// typical flat-color/text logos, at a fraction of the file size.
+	LogoWebpQuality = 90
+	// Logos are simple, small graphics - if a lossless encode exceeds this,
+	// something unusual is going on (large photo, gradients, noise) and it's
+	// not worth the size cost; fall back to lossy instead.
+	LogoLosslessMaxBytes = 300 * 1024
 )
 
 // LogoResult holds both variants produced from one govips decode pass.
 type LogoResult struct {
 	ID   string
-	WebP []byte // for web display (lossless WebP)
+	WebP []byte // for web display (lossless WebP, falling back to lossy above LogoLosslessMaxBytes)
 	PNG  []byte // for email (universal client support)
 }
 
 // ProcessLogoImage decodes an uploaded logo, strips EXIF, and produces:
-//   - a lossless WebP sized to fit within LogoMaxWidth × LogoMaxHeight
+//   - a WebP sized to fit within LogoMaxWidth × LogoMaxHeight - lossless unless
+//     that exceeds LogoLosslessMaxBytes, in which case it falls back to lossy
 //   - a PNG sized to fit within LogoEmailMaxWidth × LogoEmailMaxHeight
 //
 // Both are derived from the same in-memory decoded image — no re-encoding chain.
 func ProcessLogoImage(r io.Reader) (*LogoResult, error) {
-	data, err := io.ReadAll(r)
+	img, id, err := decodeLogoUpload(r)
 	if err != nil {
-		return nil, fmt.Errorf("read input: %w", err)
-	}
-
-	img, err := vips.NewImageFromBuffer(data)
-	if err != nil {
-		return nil, fmt.Errorf("decode image: %w", err)
+		return nil, err
 	}
 	defer img.Close()
 
-	if err := img.AutoRotate(); err != nil {
-		return nil, fmt.Errorf("auto-rotate: %w", err)
-	}
-	img.RemoveMetadata()
-
-	id := uuid.New().String()
-
-	// Web variant: lossless WebP, fit within LogoMaxWidth × LogoMaxHeight
+	// Web variant: WebP, fit within LogoMaxWidth × LogoMaxHeight
 	webImg, err := img.Copy()
 	if err != nil {
 		return nil, fmt.Errorf("copy for webp: %w", err)
@@ -268,7 +271,7 @@ func ProcessLogoImage(r io.Reader) (*LogoResult, error) {
 	if err := fitWithin(webImg, LogoMaxWidth, LogoMaxHeight); err != nil {
 		return nil, fmt.Errorf("resize webp: %w", err)
 	}
-	webpBytes, _, err := webImg.ExportWebp(&vips.WebpExportParams{Lossless: true})
+	webpBytes, err := exportLogoWebp(webImg)
 	if err != nil {
 		return nil, fmt.Errorf("encode webp: %w", err)
 	}
@@ -288,6 +291,72 @@ func ProcessLogoImage(r io.Reader) (*LogoResult, error) {
 	}
 
 	return &LogoResult{ID: id, WebP: webpBytes, PNG: pngBytes}, nil
+}
+
+// SquareLogoResult holds the square logo/icon variant.
+type SquareLogoResult struct {
+	ID   string
+	WebP []byte // web display only (lossless WebP, falling back to lossy above LogoLosslessMaxBytes)
+}
+
+// ProcessSquareLogoImage decodes an uploaded square logo/icon, strips EXIF, and
+// produces a WebP fit within LogoSquareMaxSize × LogoSquareMaxSize - lossless
+// unless that exceeds LogoLosslessMaxBytes, in which case it falls back to lossy.
+func ProcessSquareLogoImage(r io.Reader) (*SquareLogoResult, error) {
+	img, id, err := decodeLogoUpload(r)
+	if err != nil {
+		return nil, err
+	}
+	defer img.Close()
+
+	if err := fitWithin(img, LogoSquareMaxSize, LogoSquareMaxSize); err != nil {
+		return nil, fmt.Errorf("resize square webp: %w", err)
+	}
+	webpBytes, err := exportLogoWebp(img)
+	if err != nil {
+		return nil, fmt.Errorf("encode square webp: %w", err)
+	}
+
+	return &SquareLogoResult{ID: id, WebP: webpBytes}, nil
+}
+
+// exportLogoWebp encodes img as lossless WebP, falling back to lossy
+// (LogoWebpQuality) only if the lossless encode exceeds LogoLosslessMaxBytes.
+func exportLogoWebp(img *vips.ImageRef) ([]byte, error) {
+	lossless, _, err := img.ExportWebp(&vips.WebpExportParams{Lossless: true})
+	if err != nil {
+		return nil, err
+	}
+	if len(lossless) <= LogoLosslessMaxBytes {
+		return lossless, nil
+	}
+	lossy, _, err := img.ExportWebp(&vips.WebpExportParams{Quality: LogoWebpQuality})
+	if err != nil {
+		return nil, err
+	}
+	return lossy, nil
+}
+
+// decodeLogoUpload reads, decodes, auto-rotates, and strips metadata from an
+// uploaded logo image. Shared by the wide and square logo processors.
+func decodeLogoUpload(r io.Reader) (*vips.ImageRef, string, error) {
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return nil, "", fmt.Errorf("read input: %w", err)
+	}
+
+	img, err := vips.NewImageFromBuffer(data)
+	if err != nil {
+		return nil, "", fmt.Errorf("decode image: %w", err)
+	}
+
+	if err := img.AutoRotate(); err != nil {
+		img.Close()
+		return nil, "", fmt.Errorf("auto-rotate: %w", err)
+	}
+	img.RemoveMetadata()
+
+	return img, uuid.New().String(), nil
 }
 
 // fitWithin resizes img to fit within maxW × maxH preserving aspect ratio.

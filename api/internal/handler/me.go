@@ -21,7 +21,7 @@ type MeHandler struct {
 	// NotifPrefs handles /me/notification-prefs sub-routes.
 	NotifPrefs *NotificationPrefsHandler
 	// Notifier is used exclusively by the test-email endpoint.
-	Notifier   notifications.Notifier
+	Notifier notifications.Notifier
 	// PersonaIDs is non-nil in demo mode. Persona users are skipped by test-email.
 	PersonaIDs map[string]bool
 	DemoMode   bool
@@ -57,9 +57,9 @@ func (h *MeHandler) Remove(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.Q.RemoveUser(r.Context(), db.RemoveUserParams{
-		ID: claims.MemberID,
-		Name:    i18n.T(lang, "removed_user_placeholder"),
-		Email:   "borttagen@scoutrustning.invalid",
+		ID:    claims.MemberID,
+		Name:  i18n.T(lang, "removed_user_placeholder"),
+		Email: "borttagen@scoutrustning.invalid",
 	}); err != nil {
 		slog.Error("failed to remove user", "error", err, "member_id", claims.MemberID, "group_id", claims.GroupID)
 		WriteError(w, http.StatusInternalServerError, "internal error")
@@ -82,9 +82,17 @@ func (h *MeHandler) Get(w http.ResponseWriter, r *http.Request) {
 	perms := h.Perms.Get(r, claims.GroupID)
 
 	lang := "sv"
+	logoURL := ""
+	logoSquareURL := ""
 	var notificationEmail *string
 	if settings, err := h.Q.GetGroupSettings(r.Context(), claims.GroupID); err == nil {
 		lang = settings.DefaultLanguage
+		if settings.LogoFileID.Valid {
+			logoURL = "/api/v0/public/groups/" + claims.GroupID + "/logo?v=" + formatUUID(settings.LogoFileID)
+		}
+		if settings.LogoSquareFileID.Valid {
+			logoSquareURL = "/api/v0/public/groups/" + claims.GroupID + "/logo-square?v=" + formatUUID(settings.LogoSquareFileID)
+		}
 	}
 	if user, err := h.Q.GetUser(r.Context(), db.GetUserParams{
 		ID:      claims.MemberID,
@@ -99,17 +107,19 @@ func (h *MeHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]any{
-		"member_id":          claims.MemberID,
-		"group_id":           claims.GroupID,
-		"group_name":         groupName,
-		"name":               claims.Name,
-		"email":              claims.Email,
-		"picture":            claims.Picture,
-		"notification_email": notificationEmail,
-		"teams":              claims.Teams,
-		"max_access":         claims.MaxAccess,
-		"language":           lang,
-		"groups":             claims.Groups,
+		"member_id":             claims.MemberID,
+		"group_id":              claims.GroupID,
+		"group_name":            groupName,
+		"group_logo_url":        logoURL,
+		"group_logo_square_url": logoSquareURL,
+		"name":                  claims.Name,
+		"email":                 claims.Email,
+		"picture":               claims.Picture,
+		"notification_email":    notificationEmail,
+		"teams":                 claims.Teams,
+		"max_access":            claims.MaxAccess,
+		"language":              lang,
+		"groups":                claims.Groups,
 		"permissions": map[string]string{
 			"image_upload":     perms.ImageUpload,
 			"booking":          perms.Booking,
