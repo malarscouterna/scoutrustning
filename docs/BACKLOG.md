@@ -2,6 +2,14 @@
 
 Deferred work items - things to grab when there's time, smaller tasks set aside during major work. When an item is completed, move it to [accomplished.md](accomplished.md).
 
+## Per-item descriptions for individually-tracked articles
+
+Was item 14 in `docs/pre-release.md`'s Implementation order, deferred out of the pre-release scope (2026-07-08). New `description` column on `articles`, edit field in manager article view, display on pickup checklist. Independent, no dependencies.
+
+## Booking list card comment preview
+
+Was item 16 in `docs/pre-release.md`'s Implementation order, deferred out of the pre-release scope (2026-07-08). Last-comment preview + unread indicator on `BookingCard`. Split out from the comment thread redesign (item 7) since it needs a read/seen-state concept that doesn't exist yet.
+
 ## Clickable item-change entries in booking event thread
 
 The booking comment thread redesign (`docs/pre-release.md`, item 7) wires up `items_changed` events for add/remove/swap so a plain description shows in the thread. Follow-up: make those entries clickable to show an actual diff (which article(s) were added/removed, before/after state) instead of just a text line. Needs a small UI (e.g. expandable row or a modal) and probably the event `metadata` already stores enough (article id/name) to build it without further backend changes.

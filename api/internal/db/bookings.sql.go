@@ -15,7 +15,7 @@ import (
 const addBookingItem = `-- name: AddBookingItem :one
 INSERT INTO booking_items (group_id, booking_id, article_id)
 VALUES ($1, $2, $3)
-RETURNING id, group_id, booking_id, article_id, pickup_status, return_status
+RETURNING id, group_id, booking_id, article_id, pickup_status, return_status, expected_return_date
 `
 
 type AddBookingItemParams struct {
@@ -34,6 +34,7 @@ func (q *Queries) AddBookingItem(ctx context.Context, arg AddBookingItemParams) 
 		&i.ArticleID,
 		&i.PickupStatus,
 		&i.ReturnStatus,
+		&i.ExpectedReturnDate,
 	)
 	return i, err
 }
@@ -443,6 +444,116 @@ type DeleteBookingParams struct {
 func (q *Queries) DeleteBooking(ctx context.Context, arg DeleteBookingParams) error {
 	_, err := q.db.Exec(ctx, deleteBooking, arg.ID, arg.GroupID)
 	return err
+}
+
+const findDelayedOrOverdueItems = `-- name: FindDelayedOrOverdueItems :many
+SELECT bi.id AS booking_item_id, bi.group_id, bi.article_id, bi.booking_id
+FROM booking_items bi
+JOIN bookings b ON bi.booking_id = b.id
+WHERE b.status = 'picked_up'
+    AND bi.pickup_status IS NOT NULL
+    AND (
+        bi.return_status = 'delayed'
+        OR (bi.return_status IS NULL AND b.end_date < $1)
+    )
+`
+
+type FindDelayedOrOverdueItemsRow struct {
+	BookingItemID pgtype.UUID `json:"booking_item_id"`
+	GroupID       string      `json:"group_id"`
+	ArticleID     pgtype.UUID `json:"article_id"`
+	BookingID     pgtype.UUID `json:"booking_id"`
+}
+
+// Cross-group enumeration for the nightly swap-resolution job (mirrors
+// GetAllOverdueBookings's cross-group shape): booking_items still picked_up
+// where either a manager already marked them delayed, or the booking's
+// end_date has passed with no return status recorded at all.
+func (q *Queries) FindDelayedOrOverdueItems(ctx context.Context, today pgtype.Date) ([]FindDelayedOrOverdueItemsRow, error) {
+	rows, err := q.db.Query(ctx, findDelayedOrOverdueItems, today)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FindDelayedOrOverdueItemsRow{}
+	for rows.Next() {
+		var i FindDelayedOrOverdueItemsRow
+		if err := rows.Scan(
+			&i.BookingItemID,
+			&i.GroupID,
+			&i.ArticleID,
+			&i.BookingID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const findWaitingBookingItemsForArticle = `-- name: FindWaitingBookingItemsForArticle :many
+SELECT bi.id AS booking_item_id, bi.booking_id, b.start_date, b.end_date,
+    b.created_by, u.name AS creator_name, u.picture AS creator_picture
+FROM booking_items bi
+JOIN bookings b ON bi.booking_id = b.id
+LEFT JOIN users u ON b.created_by = u.id
+WHERE bi.article_id = $1
+    AND b.group_id = $2
+    AND b.status IN ('draft', 'submitted', 'approved', 'confirmed')
+    AND b.start_date <= $3
+ORDER BY b.start_date ASC
+`
+
+type FindWaitingBookingItemsForArticleParams struct {
+	ArticleID pgtype.UUID `json:"article_id"`
+	GroupID   string      `json:"group_id"`
+	CheckDate pgtype.Date `json:"check_date"`
+}
+
+type FindWaitingBookingItemsForArticleRow struct {
+	BookingItemID  pgtype.UUID `json:"booking_item_id"`
+	BookingID      pgtype.UUID `json:"booking_id"`
+	StartDate      pgtype.Date `json:"start_date"`
+	EndDate        pgtype.Date `json:"end_date"`
+	CreatedBy      string      `json:"created_by"`
+	CreatorName    pgtype.Text `json:"creator_name"`
+	CreatorPicture pgtype.Text `json:"creator_picture"`
+}
+
+// Non-terminal bookings (docs/delayed-return-swap.md decision 2) already holding
+// the exact given article, whose own start_date has arrived by check_date - i.e.
+// bookings actively blocked by this article right now. Also doubles as the
+// "next expected user" preview query, called with check_date = the date typed
+// into the expected-return-date field before saving.
+func (q *Queries) FindWaitingBookingItemsForArticle(ctx context.Context, arg FindWaitingBookingItemsForArticleParams) ([]FindWaitingBookingItemsForArticleRow, error) {
+	rows, err := q.db.Query(ctx, findWaitingBookingItemsForArticle, arg.ArticleID, arg.GroupID, arg.CheckDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FindWaitingBookingItemsForArticleRow{}
+	for rows.Next() {
+		var i FindWaitingBookingItemsForArticleRow
+		if err := rows.Scan(
+			&i.BookingItemID,
+			&i.BookingID,
+			&i.StartDate,
+			&i.EndDate,
+			&i.CreatedBy,
+			&i.CreatorName,
+			&i.CreatorPicture,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getAllBookingsStartingOn = `-- name: GetAllBookingsStartingOn :many
@@ -906,7 +1017,7 @@ func (q *Queries) ListBookingEvents(ctx context.Context, arg ListBookingEventsPa
 }
 
 const listBookingItems = `-- name: ListBookingItems :many
-SELECT bi.id, bi.group_id, bi.booking_id, bi.article_id, bi.pickup_status, bi.return_status,
+SELECT bi.id, bi.group_id, bi.booking_id, bi.article_id, bi.pickup_status, bi.return_status, bi.expected_return_date,
     a.commercial_name,
     a.common_name,
     a.place,
@@ -940,6 +1051,7 @@ type ListBookingItemsRow struct {
 	ArticleID                    pgtype.UUID     `json:"article_id"`
 	PickupStatus                 pgtype.Text     `json:"pickup_status"`
 	ReturnStatus                 pgtype.Text     `json:"return_status"`
+	ExpectedReturnDate           pgtype.Date     `json:"expected_return_date"`
 	CommercialName               string          `json:"commercial_name"`
 	CommonName                   string          `json:"common_name"`
 	Place                        string          `json:"place"`
@@ -971,6 +1083,7 @@ func (q *Queries) ListBookingItems(ctx context.Context, arg ListBookingItemsPara
 			&i.ArticleID,
 			&i.PickupStatus,
 			&i.ReturnStatus,
+			&i.ExpectedReturnDate,
 			&i.CommercialName,
 			&i.CommonName,
 			&i.Place,
@@ -1223,7 +1336,7 @@ func (q *Queries) RemoveBookingItem(ctx context.Context, arg RemoveBookingItemPa
 const swapBookingItemArticle = `-- name: SwapBookingItemArticle :one
 UPDATE booking_items SET article_id = $1, pickup_status = 'swapped'
 WHERE id = $2 AND group_id = $3 AND booking_id = $4
-RETURNING id, group_id, booking_id, article_id, pickup_status, return_status
+RETURNING id, group_id, booking_id, article_id, pickup_status, return_status, expected_return_date
 `
 
 type SwapBookingItemArticleParams struct {
@@ -1248,6 +1361,7 @@ func (q *Queries) SwapBookingItemArticle(ctx context.Context, arg SwapBookingIte
 		&i.ArticleID,
 		&i.PickupStatus,
 		&i.ReturnStatus,
+		&i.ExpectedReturnDate,
 	)
 	return i, err
 }
@@ -1343,7 +1457,7 @@ func (q *Queries) UpdateBookingEventMessage(ctx context.Context, arg UpdateBooki
 const updateBookingItemPickupStatus = `-- name: UpdateBookingItemPickupStatus :one
 UPDATE booking_items SET pickup_status = $1
 WHERE id = $2 AND group_id = $3 AND booking_id = $4
-RETURNING id, group_id, booking_id, article_id, pickup_status, return_status
+RETURNING id, group_id, booking_id, article_id, pickup_status, return_status, expected_return_date
 `
 
 type UpdateBookingItemPickupStatusParams struct {
@@ -1368,26 +1482,29 @@ func (q *Queries) UpdateBookingItemPickupStatus(ctx context.Context, arg UpdateB
 		&i.ArticleID,
 		&i.PickupStatus,
 		&i.ReturnStatus,
+		&i.ExpectedReturnDate,
 	)
 	return i, err
 }
 
 const updateBookingItemReturnStatus = `-- name: UpdateBookingItemReturnStatus :one
-UPDATE booking_items SET return_status = $1
-WHERE id = $2 AND group_id = $3 AND booking_id = $4
-RETURNING id, group_id, booking_id, article_id, pickup_status, return_status
+UPDATE booking_items SET return_status = $1, expected_return_date = $2
+WHERE id = $3 AND group_id = $4 AND booking_id = $5
+RETURNING id, group_id, booking_id, article_id, pickup_status, return_status, expected_return_date
 `
 
 type UpdateBookingItemReturnStatusParams struct {
-	ReturnStatus pgtype.Text `json:"return_status"`
-	ID           pgtype.UUID `json:"id"`
-	GroupID      string      `json:"group_id"`
-	BookingID    pgtype.UUID `json:"booking_id"`
+	ReturnStatus       pgtype.Text `json:"return_status"`
+	ExpectedReturnDate pgtype.Date `json:"expected_return_date"`
+	ID                 pgtype.UUID `json:"id"`
+	GroupID            string      `json:"group_id"`
+	BookingID          pgtype.UUID `json:"booking_id"`
 }
 
 func (q *Queries) UpdateBookingItemReturnStatus(ctx context.Context, arg UpdateBookingItemReturnStatusParams) (BookingItem, error) {
 	row := q.db.QueryRow(ctx, updateBookingItemReturnStatus,
 		arg.ReturnStatus,
+		arg.ExpectedReturnDate,
 		arg.ID,
 		arg.GroupID,
 		arg.BookingID,
@@ -1400,6 +1517,7 @@ func (q *Queries) UpdateBookingItemReturnStatus(ctx context.Context, arg UpdateB
 		&i.ArticleID,
 		&i.PickupStatus,
 		&i.ReturnStatus,
+		&i.ExpectedReturnDate,
 	)
 	return i, err
 }

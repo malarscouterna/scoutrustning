@@ -260,9 +260,41 @@ SELECT NOT EXISTS (
 ) AS all_picked_up;
 
 -- name: UpdateBookingItemReturnStatus :one
-UPDATE booking_items SET return_status = @return_status
+UPDATE booking_items SET return_status = @return_status, expected_return_date = @expected_return_date
 WHERE id = @id AND group_id = @group_id AND booking_id = @booking_id
 RETURNING *;
+
+-- name: FindWaitingBookingItemsForArticle :many
+-- Non-terminal bookings (docs/delayed-return-swap.md decision 2) already holding
+-- the exact given article, whose own start_date has arrived by check_date - i.e.
+-- bookings actively blocked by this article right now. Also doubles as the
+-- "next expected user" preview query, called with check_date = the date typed
+-- into the expected-return-date field before saving.
+SELECT bi.id AS booking_item_id, bi.booking_id, b.start_date, b.end_date,
+    b.created_by, u.name AS creator_name, u.picture AS creator_picture
+FROM booking_items bi
+JOIN bookings b ON bi.booking_id = b.id
+LEFT JOIN users u ON b.created_by = u.id
+WHERE bi.article_id = @article_id
+    AND b.group_id = @group_id
+    AND b.status IN ('draft', 'submitted', 'approved', 'confirmed')
+    AND b.start_date <= @check_date
+ORDER BY b.start_date ASC;
+
+-- name: FindDelayedOrOverdueItems :many
+-- Cross-group enumeration for the nightly swap-resolution job (mirrors
+-- GetAllOverdueBookings's cross-group shape): booking_items still picked_up
+-- where either a manager already marked them delayed, or the booking's
+-- end_date has passed with no return status recorded at all.
+SELECT bi.id AS booking_item_id, bi.group_id, bi.article_id, bi.booking_id
+FROM booking_items bi
+JOIN bookings b ON bi.booking_id = b.id
+WHERE b.status = 'picked_up'
+    AND bi.pickup_status IS NOT NULL
+    AND (
+        bi.return_status = 'delayed'
+        OR (bi.return_status IS NULL AND b.end_date < @today)
+    );
 
 -- name: AllItemsReturned :one
 -- Returns true if every picked-up item has a final return status.

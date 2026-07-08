@@ -188,6 +188,13 @@ func main() {
 		}
 
 		notifications.SendArchiveWarnings(ctx, queries, schedulerNotifier, schedulerGChatNotifier, baseURL)
+
+		swapped, err := handler.ResolveOverdueSwaps(ctx, queries)
+		if err != nil {
+			slog.Error("overdue swap resolution failed", "error", err)
+		} else if swapped > 0 {
+			slog.Info("auto-swapped overdue booking items", "swapped", swapped)
+		}
 	}
 	go func() {
 		interval := 1 * time.Hour
