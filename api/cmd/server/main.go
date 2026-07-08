@@ -40,6 +40,12 @@ func main() {
 	dbURL := getenv("DATABASE_URL", "postgres://utrustning:utrustning@localhost:5432/utrustning?sslmode=disable")
 	devMode := getenv("DEV_MODE", "false") == "true"
 	demoMode := getenv("DEMO_MODE", "false") == "true"
+	// The persona-switcher mechanism (X-Dev-Role-Override auth bypass, GChat message
+	// labeling) is needed whenever either flag is set - demo mode uses it too, just with
+	// the OIDC lock (no auto-fallback persona) layered on top. Don't gate it on devMode
+	// alone, or a deployment that sets DEMO_MODE without also remembering DEV_MODE would
+	// silently lose persona switching.
+	personasEnabled := devMode || demoMode
 	imageDir := getenv("IMAGE_DIR", "/data/images")
 
 	images.InitVips()
@@ -74,7 +80,7 @@ func main() {
 	r.Route("/api/v0", func(r chi.Router) {
 		r.Use(auth.Middleware(auth.MiddlewareConfig{
 			JWKSURL:      getenv("JWKS_URL", ""),
-			DevMode:      devMode,
+			DevMode:      personasEnabled,
 			PersonasPath: getenv("DEV_PERSONAS_PATH", "dev-personas.json"),
 			Resolver:     &handler.DBTeamResolver{Q: queries},
 		}))
@@ -84,7 +90,7 @@ func main() {
 
 		personaIDs := buildPersonaIDs(demoMode, getenv("DEV_PERSONAS_PATH", "dev-personas.json"))
 		smtpNotifier := &notifications.SMTPNotifier{Q: queries}
-		gchatNotifier := &notifications.GChatNotifier{Q: queries, LabelTeam: devMode}
+		gchatNotifier := &notifications.GChatNotifier{Q: queries, LabelTeam: personasEnabled}
 
 		// In demo mode, event sends from handlers are suppressed via NoopNotifier.
 		// The test-email endpoint always uses smtpNotifier directly so demo visitors
@@ -139,7 +145,7 @@ func main() {
 	r.Route("/api/v0/join", func(r chi.Router) {
 		r.Use(auth.Middleware(auth.MiddlewareConfig{
 			JWKSURL:       getenv("JWKS_URL", ""),
-			DevMode:       devMode,
+			DevMode:       personasEnabled,
 			PersonasPath:  getenv("DEV_PERSONAS_PATH", "dev-personas.json"),
 			Resolver:      &handler.DBTeamResolver{Q: queries},
 			AllowUnmapped: true,
