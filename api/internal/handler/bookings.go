@@ -501,14 +501,65 @@ func (h *BookingHandler) Update(w http.ResponseWriter, r *http.Request) {
 			availSet[a.ID] = true
 		}
 
+		// Exclude every unit this booking already holds, so a swap can never
+		// reassign an item onto another item of its own - grown as swaps happen
+		// below so two conflicting items in the same request can't both be
+		// handed the same single replacement unit.
+		excludeIDs := make([]pgtype.UUID, len(items))
+		for i, item := range items {
+			excludeIDs[i] = item.ArticleID
+		}
+
 		var conflictNames, conflictIDs []string
 		for _, item := range items {
 			if item.ReturnStatus.Valid && item.ReturnStatus.String != "pending" {
 				continue // already returned, skip
 			}
-			if !availSet[item.ArticleID] {
+			if availSet[item.ArticleID] {
+				continue
+			}
+
+			// docs/delayed-return-swap.md decision 7: try to silently substitute
+			// an equivalent unit for the new date range before falling back to
+			// the 409 - the user doesn't care which physical unit they end up
+			// with, only that they have one.
+			replacementID, err := h.Q.FindReplacementArticle(r.Context(), db.FindReplacementArticleParams{
+				GroupID:        claims.GroupID,
+				CommercialName: item.CommercialName,
+				LocationID:     item.LocationID,
+				Statuses:       []string{"ok", "reported_usable"},
+				ExcludeIds:     excludeIDs,
+				StartDate:      params.StartDate,
+				EndDate:        params.EndDate,
+			})
+			if err != nil {
 				conflictNames = append(conflictNames, item.CommonName)
 				conflictIDs = append(conflictIDs, formatUUID(item.ArticleID))
+				continue
+			}
+
+			if _, err := h.Q.SwapBookingItemArticleByArticle(r.Context(), db.SwapBookingItemArticleByArticleParams{
+				NewArticleID: replacementID,
+				OldArticleID: item.ArticleID,
+				BookingID:    bookingID,
+				GroupID:      claims.GroupID,
+			}); err != nil {
+				WriteError(w, http.StatusInternalServerError, "failed to swap article")
+				return
+			}
+			excludeIDs = append(excludeIDs, replacementID)
+			replacement, err := h.Q.GetArticle(r.Context(), db.GetArticleParams{ID: replacementID, GroupID: claims.GroupID})
+			if err == nil {
+				if _, err := h.Q.CreateBookingEvent(r.Context(), db.CreateBookingEventParams{
+					GroupID:   claims.GroupID,
+					BookingID: bookingID,
+					ActorID:   claims.MemberID,
+					EventType: "swap",
+					Message:   "Bytte automatiskt ut " + item.CommonName + " mot " + replacement.CommonName + " för de nya datumen.",
+					Metadata:  []byte("{}"),
+				}); err != nil {
+					slog.Error("swap: failed to log event", "booking_id", bookingID, "error", err)
+				}
 			}
 		}
 		if len(conflictNames) > 0 {
