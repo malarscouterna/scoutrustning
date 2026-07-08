@@ -1,11 +1,19 @@
 <script lang="ts">
 	import { isManager as checkManager } from '$lib/user';
 	import type { PageData } from './$types';
-	import { msg } from '$lib/msg';
-	import { bookingStatusColors } from '$lib/styles';
+	import BookingCard from '$lib/components/BookingCard.svelte';
+	import CopyBookingModal from '$lib/components/CopyBookingModal.svelte';
+	import type { Booking } from '$lib/api/client';
+	import { goto } from '$app/navigation';
 	import * as m from '$lib/paraglide/messages.js';
 
 	let { data }: { data: PageData } = $props();
+
+	let copySource = $state<Booking | null>(null);
+	function handleCopied(newBookingId: string) {
+		copySource = null;
+		goto(`/bookings/${newBookingId}?msg=${encodeURIComponent(m.copy_booking_success())}`);
+	}
 
 	let mgr = $derived(checkManager(data.user));
 	let userTeamNames = $derived((data.user?.teams ?? []).map(t => t.team_name));
@@ -78,30 +86,12 @@
 	{:else}
 		<div class="space-y-2">
 			{#each filteredBookings as booking}
-				<a href="/bookings/{booking.id}" class="block border rounded px-4 py-3 hover:bg-neutral-50">
-					<div class="flex flex-wrap items-center justify-between gap-1">
-						<div class="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
-							<span class="font-medium">{booking.start_date} — {booking.end_date}</span>
-							{#if booking.team_name}
-								<span class="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">{booking.team_name}</span>
-							{:else if booking.used_by_external}
-								<span class="text-xs bg-neutral-50 text-neutral-600 px-1.5 py-0.5 rounded">{booking.used_by_external}</span>
-							{:else}
-								<span class="text-xs text-neutral-400">{m.page_bookings_personal()}</span>
-								{#if booking.creator_name}
-									<span class="text-xs text-neutral-400">— {booking.creator_name}</span>
-								{/if}
-							{/if}
-						</div>
-						<span class="text-xs px-2 py-0.5 rounded {bookingStatusColors[booking.status] ?? 'bg-neutral-100'}">
-							{msg(`booking_status_${booking.status}`) ?? booking.status}
-						</span>
-					</div>
-					{#if booking.title}
-						<p class="text-sm text-neutral-500 mt-1 truncate">{booking.title}</p>
-					{/if}
-				</a>
+				<BookingCard {booking} href="/bookings/{booking.id}" onCopy={() => (copySource = booking)} />
 			{/each}
 		</div>
 	{/if}
 </div>
+
+{#if copySource}
+	<CopyBookingModal source={copySource} onClose={() => (copySource = null)} onCopied={handleCopied} />
+{/if}

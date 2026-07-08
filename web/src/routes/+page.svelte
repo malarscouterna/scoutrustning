@@ -3,10 +3,19 @@
 	import { cart } from '$lib/stores/cart.svelte';
 	import BookingCard from '$lib/components/BookingCard.svelte';
 	import IssueCard from '$lib/components/IssueCard.svelte';
+	import CopyBookingModal from '$lib/components/CopyBookingModal.svelte';
+	import type { Booking } from '$lib/api/client';
 	import type { PageData } from './$types';
+	import { goto } from '$app/navigation';
 	import * as m from '$lib/paraglide/messages.js';
 
 	let { data }: { data: PageData } = $props();
+
+	let copySource = $state<Booking | null>(null);
+	function handleCopied(newBookingId: string) {
+		copySource = null;
+		goto(`/bookings/${newBookingId}?msg=${encodeURIComponent(m.copy_booking_success())}`);
+	}
 
 	let showBook = $derived(canBook(data.user));
 	let mgr = $derived(checkManager(data.user));
@@ -136,7 +145,7 @@
 				</h3>
 				<div class="space-y-1 mb-3">
 					{#each data.pendingApprovals as booking}
-						<BookingCard {booking} href="/bookings/{booking.id}" />
+						<BookingCard {booking} href="/bookings/{booking.id}" onCopy={() => (copySource = booking)} />
 					{/each}
 				</div>
 			{/if}
@@ -145,7 +154,7 @@
 				<h3 class="text-sm font-medium text-neutral-500 mb-1">{m.page_home_section_active()}</h3>
 				<div class="space-y-1 mb-3">
 					{#each active as booking}
-						<BookingCard {booking} href="/bookings/{booking.id}" />
+						<BookingCard {booking} href="/bookings/{booking.id}" onCopy={() => (copySource = booking)} />
 					{/each}
 				</div>
 			{/if}
@@ -186,3 +195,7 @@
 	</div>
 
 </div>
+
+{#if copySource}
+	<CopyBookingModal source={copySource} onClose={() => (copySource = null)} onCopied={handleCopied} />
+{/if}

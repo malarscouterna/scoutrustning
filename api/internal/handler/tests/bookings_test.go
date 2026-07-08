@@ -1219,6 +1219,74 @@ func TestBookingFlow_Copy(t *testing.T) {
 			t.Errorf("expected 2 items in copy, got %d", len(items))
 		}
 	})
+
+	t.Run("copy then set new non-overlapping dates succeeds", func(t *testing.T) {
+		resp, _ := leader.Post("/api/v0/bookings/"+bookingID+"/copy", nil)
+		var result map[string]any
+		json.NewDecoder(resp.Body).Decode(&result)
+		resp.Body.Close()
+		newID := result["booking"].(map[string]any)["id"].(string)
+
+		b, _ := json.Marshal(map[string]any{
+			"start_date": "2027-01-01", "end_date": "2027-01-03", "title": "Copy - new dates",
+		})
+		resp, err := leader.Put("/api/v0/bookings/"+newID, bytes.NewReader(b))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("expected 200, got %d: %s", resp.StatusCode, body)
+		}
+	})
+
+	t.Run("copy then set dates overlapping the source's items conflicts", func(t *testing.T) {
+		resp, _ := leader.Post("/api/v0/bookings/"+bookingID+"/copy", nil)
+		var result map[string]any
+		json.NewDecoder(resp.Body).Decode(&result)
+		resp.Body.Close()
+		newID := result["booking"].(map[string]any)["id"].(string)
+
+		// Source items are held by another confirmed booking below (see next subtest setup);
+		// here we exercise a straightforward conflict: submit+confirm a second booking with the
+		// same items over a date range, then try to set the copy's dates to overlap it.
+		b, _ := json.Marshal(map[string]any{"start_date": "2027-02-01", "end_date": "2027-02-05", "title": "Holder"})
+		resp, _ = leader.Post("/api/v0/bookings", bytes.NewReader(b))
+		var holder map[string]any
+		json.NewDecoder(resp.Body).Decode(&holder)
+		resp.Body.Close()
+		holderID := holder["id"].(string)
+
+		b, _ = json.Marshal(map[string]any{"commercial_name": "CopyTest", "quantity": 2})
+		resp, _ = leader.Post("/api/v0/bookings/"+holderID+"/items", bytes.NewReader(b))
+		resp.Body.Close()
+		resp, _ = leader.Post("/api/v0/bookings/"+holderID+"/submit", nil)
+		resp.Body.Close()
+
+		b, _ = json.Marshal(map[string]any{
+			"start_date": "2027-02-03", "end_date": "2027-02-04", "title": "Copy - conflicting dates",
+		})
+		resp, err := leader.Put("/api/v0/bookings/"+newID, bytes.NewReader(b))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusConflict {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("expected 409, got %d: %s", resp.StatusCode, body)
+		}
+
+		var errBody map[string]any
+		json.NewDecoder(resp.Body).Decode(&errBody)
+		if errBody["params"] == nil {
+			t.Fatalf("expected params with conflicting article_ids, got %v", errBody)
+		}
+		params := errBody["params"].(map[string]any)
+		if params["article_ids"] == nil || params["article_ids"] == "" {
+			t.Errorf("expected non-empty article_ids, got %v", params["article_ids"])
+		}
+	})
 }
 
 func TestPersonalBookingAccess(t *testing.T) {

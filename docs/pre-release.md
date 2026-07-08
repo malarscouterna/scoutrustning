@@ -102,6 +102,18 @@ When the UI is built, the user must be able to set the new date range before con
 
 Tests needed: copy to clear dates, copy to dates that overlap the source, copy where some items are unavailable.
 
+Done in `feat(web): copy booking UI`:
+- **Design decision on "clear dates":** making `bookings.start_date`/`end_date` truly nullable would have required dropping the `NOT NULL` + `CHECK (end_date >= start_date)` constraints from migration `00001_init.sql` and auditing every availability/archive-countdown query that assumes non-null dates - a much bigger, riskier change than the copy feature itself. Instead, a `CopyBookingModal.svelte` popup forces the user to re-enter title, unit, and a real date range *before* the copy is ever shown in the cart builder: it calls `POST /copy` (still creating the draft with the existing today+7 placeholder dates server-side, unchanged), then immediately calls `PATCH /bookings/{id}` with the user's chosen title/unit/dates before the modal closes. No schema change, no nullable dates.
+- This ordering satisfies "set dates before conflict-checking fires" for free: conflict-checking has only ever run on an explicit save (`saveDetails` in `/book`), never automatically on load, so a freshly-copied draft sitting with placeholder dates was never actually a problem in practice - but the modal now means the placeholder dates are never shown to the user at all, since they're overwritten before the browser ever navigates to the new booking.
+- "Items unavailable for the new dates should be marked, not silently included" is handled by the existing `Update` conflict-checking (item 3/8's `exclude_own_items` work): if the modal's chosen dates conflict with another booking holding the same items, the `PATCH` call 409s with `articles_not_available_for_dates` + `article_ids`, surfaced as an inline error in the modal so the user can pick different dates before the draft is ever navigated to. The draft itself still exists (not rolled back) so retrying just re-submits the `PATCH`, not a fresh copy.
+- Copy action exposed as a "Kopiera bokning" text link in the booking detail page's action row (any status, gated on `canBook(user)`), and as a small copy icon on `BookingCard` (dashboard pending/active sections, and the full `/bookings` list). Deduplicated the `/bookings` list page's previously-inline card markup into `BookingCard` in the same commit (was an exact duplicate, now takes the new `onCopy` prop).
+- On success, navigates to `/bookings/{new-id}` (the detail page), not straight into `/book` - the user can review the copy and click "Redigera" from there like any other draft.
+- New Material Symbols icon `content_copy` added to the self-hosted `web/static/material-symbols-outlined.woff2` subset (previously only contained `camping`).
+- Backend tests added to `TestBookingFlow_Copy`: copy + set non-overlapping dates succeeds; copy + set dates overlapping another booking holding the same items 409s with populated `article_ids`. The "copy to clear dates" scenario from the original ask is superseded by the popup design above (dates are never literally cleared/null; they're always re-entered as a real range).
+- Full Go integration suite and `smoke-test.sh` both pass.
+
+**Known gap (not fixed here, flagged during manual review):** `Copy` copies each item by its exact `article_id` (e.g. specifically "Sibley 1"), not by `commercial_name` + `location` the way a normal add-item pick does. So if that exact physical unit is unavailable for the dates chosen in the modal, the `PATCH` 409s on that specific item even when another unit of the same product (e.g. "Sibley 2") is free - no auto-substitution happens. **Decided (see item 11's Auto-swap section below):** the user shouldn't care which physical unit they get, so this should silently resolve to any other available equivalent unit via the same shared swap-resolution helper item 11 introduces, falling back to the 409 only when no equivalent unit exists at all. Deferred to that item so the logic is built once and reused, not duplicated here.
+
 ### Booking status - cancel button state machine
 
 `cancellable` currently excludes only `returned` and `cancelled`. Correct behaviour:
@@ -231,6 +243,12 @@ When an item is still `picked_up` at the start of the next booking's date range:
 
 The swap check runs in two situations: immediately when any user marks an item as delayed, and as a nightly job for items that are overdue but have not been explicitly marked delayed.
 
+**Decided: shared swap-resolution helper, reused by item 10's copy flow.** The user shouldn't care which physical unit they're assigned, only that they have one - so "find an equivalent available unit and substitute it in, silently" is one operation with (at least) two callers:
+1. This item's delayed-return swap (mark-as-delayed + nightly job).
+2. `Copy`'s date-set flow (item 10 above): when the copy modal's chosen dates conflict with the exact source item, silently resolve to any other available unit of the same `commercial_name` + `location` instead of 409ing on that one unit. Only surface the hard conflict if no equivalent unit exists at all for those dates.
+
+Likely also applicable to `Update`'s general conflict path (any date change on an existing booking, not just a copy) - same reasoning applies, decide when implementing whether to fold that in too or keep it scoped to copy for now. Implementation: a single `FindEquivalentAvailableArticle`-style query/helper in the availability layer, called from both sites rather than duplicated. Build this as its own commit when picking up item 11, updating item 10's copy flow to call it too.
+
 **Notification (no swap available):** Send to the affected next booker: which items are affected and a link to their booking page. Do not include names of the current booker in the notification.
 
 **Booking page conflict overview:** The booking detail page for the affected booking shows a warning section listing each blocked item. The warning links to a UI that shows who currently has the item - name, unit, and expected return date. Contact info shown is the user's chosen personal notification email.
@@ -281,11 +299,11 @@ Proposed commit sequence. Each item is a self-contained PR.
 6. ~~`feat(api,web): user info card component - full card and compact view`~~ - Done. See User info card component section above.
 7. ~~`feat(api,web): booking comment thread and approval flow redesign`~~ - Done. See Booking comment thread and approval flow redesign section above.
 8. ~~`fix(api,web): rename booking notes to title, require non-empty, fix self-conflict regression on update`~~ - Done. See Booking title field section above.
-9. `feat(api,web): booking auto-archive setting` - Group setting, cleanup job, advance notifications. Depends on 7.
-10. `feat(api,web): copy booking UI` - Expose existing API endpoint, date-first flow, unavailable items marked. Independent.
+9. ~~`feat(api,web): booking auto-archive setting`~~ - Done. See Booking auto-archive setting section above.
+10. ~~`feat(api,web): copy booking UI`~~ - Done as `feat(web): copy booking UI`. See Copy booking flow section above.
 11. `feat(api,web): delayed return - auto-swap, conflict overview, next-booker notification` - Auto-swap logic, booking page conflict section, notification without names. Depends on 6.
 12. `feat(api,web): collaborative bookings - add enheter and people to a booking` - New participants model, shared pickup rights. Depends on 6 and 7.
-13. `feat(web): web header logo` - Fetch logo_url from group settings, render in top nav. Independent, can go anywhere.
+13. ~~`feat(web): web header logo`~~ - Done. See "Web header logo" in Other frontend gaps section above.
 14. `feat(api,web): per-item descriptions for individually-tracked articles` - New `description` column on `articles`, edit field in manager article view, display on pickup checklist. Independent.
 15. `feat(web): free-form image crop in issue reporting` - Replace locked-ratio crop with free-form crop in the issue reporting upload flow. Independent.
 16. `feat(web): booking list card comment preview` - Last-comment preview + unread indicator on `BookingCard`. Split out from 7 since it needs a read/seen-state concept that doesn't exist yet. Depends on 7.

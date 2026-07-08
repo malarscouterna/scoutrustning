@@ -7,31 +7,45 @@
 	interface Props {
 		booking: Booking;
 		href: string;
+		onCopy?: () => void;
 	}
 
-	let { booking, href }: Props = $props();
+	let { booking, href, onCopy }: Props = $props();
 </script>
 
-<a {href} class="block border rounded px-4 py-3 hover:bg-neutral-50 {bookingStatusLeftBorder[booking.status] ?? ''}">
-	<div class="flex flex-wrap items-center justify-between gap-1">
-		<div class="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
-			<span class="font-medium">{booking.start_date} — {booking.end_date}</span>
-			{#if booking.team_name}
-				<span class="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">{booking.team_name}</span>
-			{:else if booking.used_by_external}
-				<span class="text-xs bg-neutral-50 text-neutral-600 px-1.5 py-0.5 rounded">{booking.used_by_external}</span>
-			{:else}
-				<span class="text-xs bg-neutral-50 text-neutral-600 px-1.5 py-0.5 rounded">{m.booking_card_personal()}</span>
-				{#if booking.creator_name}
-					<span class="text-xs text-neutral-400">{booking.creator_name}</span>
+<div class="relative">
+	<a {href} class="block border rounded px-4 py-3 hover:bg-neutral-50 {bookingStatusLeftBorder[booking.status] ?? ''}">
+		<div class="flex flex-wrap items-center justify-between gap-1 pr-8">
+			<div class="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
+				<span class="font-medium">{booking.start_date} — {booking.end_date}</span>
+				{#if booking.team_name}
+					<span class="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">{booking.team_name}</span>
+				{:else if booking.used_by_external}
+					<span class="text-xs bg-neutral-50 text-neutral-600 px-1.5 py-0.5 rounded">{booking.used_by_external}</span>
+				{:else}
+					<span class="text-xs bg-neutral-50 text-neutral-600 px-1.5 py-0.5 rounded">{m.booking_card_personal()}</span>
+					{#if booking.creator_name}
+						<span class="text-xs text-neutral-400">{booking.creator_name}</span>
+					{/if}
 				{/if}
-			{/if}
+			</div>
+			<span class="text-xs px-2 py-0.5 rounded {bookingStatusColors[booking.status] ?? 'bg-neutral-100'}">
+				{msg(`booking_status_${booking.status}`) ?? booking.status}
+			</span>
 		</div>
-		<span class="text-xs px-2 py-0.5 rounded {bookingStatusColors[booking.status] ?? 'bg-neutral-100'}">
-			{msg(`booking_status_${booking.status}`) ?? booking.status}
-		</span>
-	</div>
-	{#if booking.title}
-		<p class="text-sm text-neutral-500 mt-1 truncate">{booking.title}</p>
+		{#if booking.title}
+			<p class="text-sm text-neutral-500 mt-1 truncate">{booking.title}</p>
+		{/if}
+	</a>
+	{#if onCopy}
+		<button
+			type="button"
+			onclick={onCopy}
+			title={m.copy_booking_btn()}
+			aria-label={m.copy_booking_btn()}
+			class="absolute top-2 right-2 text-neutral-400 hover:text-blue-700 p-1"
+		>
+			<span class="material-symbols-outlined text-lg">content_copy</span>
+		</button>
 	{/if}
-</a>
+</div>
