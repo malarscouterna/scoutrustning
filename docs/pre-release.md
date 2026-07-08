@@ -172,6 +172,13 @@ The draft countdown in particular should combine urgency with reassurance: the m
 
 When a booking is auto-archived its items are released and the event thread records the archival clearly (not a silent disappearance). Setting 0 for either disables auto-archiving for that stage.
 
+Done in `feat(api,web): booking auto-archive setting`:
+- `group_settings.draft_archive_days` (default 3) / `rejected_archive_days` (default 7), 0 disables. Settings UI section added to `/settings`.
+- An hourly job (`handler.ArchiveExpiredBookings`, reusing the ticker previously used for the 48h empty-draft cleanup) cancels expired bookings, releasing items and logging an `auto_archived` booking event. Runs immediately on startup too (not just after the first tick), and every 1 minute instead of hourly in genuine local dev (`devMode && !demoMode`), to make the feature fast to verify.
+- A one-time advance warning ~24h before the deadline (`notifications.SendArchiveWarnings`, also hourly with a narrow 23-24h detection window for precision), broadcast to the team's channels (email/GChat) plus personal email to creator+team, deduped via `notification_log`.
+- **Revised during implementation - the 48h empty-draft cleanup is gone, not "unaffected."** Originally planned to keep the old hard-coded 48h empty-draft cleanup as a separate, unconfigurable behavior alongside this feature. In practice that meant a brand-new empty draft showed no countdown at all until the first item was added (the draft-archive timer started at `first_item_added_at`, not booking creation) - inconsistent with "the booking detail page shows a countdown... whenever the booking is in one of these timed states," and a worse experience once this feature existed. Simplified to one rule: the draft deadline runs from `bookings.created_at` (a `bookings.first_item_added_at` column was added then removed - migrations `00018`/`00019` - once this became clear), covering empty and non-empty drafts alike, superseding the old 48h cleanup entirely. The countdown is now visible "from the beginning" as originally intended by the "whenever" wording above.
+- Booking-detail-page countdown (`bookings/[id]/+page.svelte`): live-updating (30s tick, minute-level granularity - no seconds), amber background escalating to red under 24h remaining. Also shown on `/book?id=` (the cart-builder page), not just the read-only detail page, since that's where a user is actually working on the booking.
+
 ### Personal bookings - concept completeness
 
 A personal booking covers a member borrowing equipment for scout or external use that is not associated with any registered team - e.g. a leader running a personal activity or borrowing for an external group.

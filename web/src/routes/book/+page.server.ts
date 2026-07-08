@@ -8,8 +8,8 @@ export const load: PageServerLoad = async ({ fetch, url }) => {
 	const teams = await api.listTeams();
 
 	if (bookingId) {
-		const { booking, items } = await api.getBooking(bookingId);
-		return { teams, existing: { booking, items } };
+		const { booking, items, archive_deadline } = await api.getBooking(bookingId);
+		return { teams, existing: { booking, items, archive_deadline } };
 	}
 
 	return { teams, existing: null };

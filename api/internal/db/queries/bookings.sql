@@ -281,34 +281,22 @@ DELETE FROM bookings
 WHERE group_id = @group_id AND status = 'draft'
     AND created_at < @older_than;
 
--- name: CleanupEmptyDrafts :execrows
--- Delete draft bookings with zero items older than the given threshold (all groups).
-DELETE FROM bookings
-WHERE status = 'draft'
-    AND created_at < @older_than
-    AND NOT EXISTS (
-        SELECT 1 FROM booking_items WHERE booking_id = bookings.id
-    );
-
--- name: SetFirstItemAddedAt :exec
--- Set once, the first time an item is added to a booking; a no-op on later calls
--- so the auto-archive deadline stays fixed from that first moment.
-UPDATE bookings SET first_item_added_at = now()
-WHERE id = @id AND group_id = @group_id AND first_item_added_at IS NULL;
-
 -- name: GetBookingsNearingArchive :many
 -- Bookings whose auto-archive deadline (docs/pre-release.md "Booking auto-archive setting")
 -- falls between 23 and 24 hours from now (all groups). Called hourly (not the once-daily
 -- scheduler) so the one-time advance warning lands close to a true 24h-before mark rather
--- than drifting by up to a full day between checks.
+-- than drifting by up to a full day between checks. Draft deadline runs from created_at,
+-- not first-item-add, so the countdown (and this warning) applies from the moment a draft
+-- is created, with or without items - this also supersedes the old separate 48h
+-- empty-draft cleanup, which no longer exists.
 SELECT b.*,
-    (CASE WHEN b.status = 'draft' THEN b.first_item_added_at + (gs.draft_archive_days || ' days')::interval
+    (CASE WHEN b.status = 'draft' THEN b.created_at + (gs.draft_archive_days || ' days')::interval
          ELSE b.updated_at + (gs.rejected_archive_days || ' days')::interval END)::timestamptz AS archive_deadline
 FROM bookings b
 JOIN group_settings gs ON gs.group_id = b.group_id
 WHERE (
-    (b.status = 'draft' AND b.first_item_added_at IS NOT NULL AND gs.draft_archive_days > 0
-        AND b.first_item_added_at + (gs.draft_archive_days || ' days')::interval BETWEEN now() + interval '23 hours' AND now() + interval '24 hours')
+    (b.status = 'draft' AND gs.draft_archive_days > 0
+        AND b.created_at + (gs.draft_archive_days || ' days')::interval BETWEEN now() + interval '23 hours' AND now() + interval '24 hours')
     OR
     (b.status = 'rejected' AND gs.rejected_archive_days > 0
         AND b.updated_at + (gs.rejected_archive_days || ' days')::interval BETWEEN now() + interval '23 hours' AND now() + interval '24 hours')
@@ -321,8 +309,8 @@ SELECT b.*
 FROM bookings b
 JOIN group_settings gs ON gs.group_id = b.group_id
 WHERE (
-    (b.status = 'draft' AND b.first_item_added_at IS NOT NULL AND gs.draft_archive_days > 0
-        AND b.first_item_added_at + (gs.draft_archive_days || ' days')::interval <= now())
+    (b.status = 'draft' AND gs.draft_archive_days > 0
+        AND b.created_at + (gs.draft_archive_days || ' days')::interval <= now())
     OR
     (b.status = 'rejected' AND gs.rejected_archive_days > 0
         AND b.updated_at + (gs.rejected_archive_days || ' days')::interval <= now())

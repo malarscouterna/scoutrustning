@@ -12,7 +12,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pressly/goose/v3"
 
@@ -171,22 +170,16 @@ func main() {
 	addr := getenv("ADDR", ":8080")
 	srv := &http.Server{Addr: addr, Handler: r}
 
-	// Background: clean up empty/expired bookings and send archive warnings.
+	// Background: cancel expired bookings and send archive warnings.
 	// Runs immediately on startup (not just after the first tick) so a deploy/restart
 	// doesn't leave a booking waiting up to a full interval for its first check - this
 	// matters most for the archive warning, whose 23-24h detection window can otherwise
 	// be missed entirely if a tick is delayed past it. In dev mode the interval is 1
 	// minute instead of 1 hour, so changes to auto-archive settings are quick to verify
-	// against Mailpit without waiting.
+	// against Mailpit without waiting. This supersedes the old separate 48h empty-draft
+	// cleanup job - the draft auto-archive deadline now runs from created_at, covering
+	// empty drafts too.
 	runBookingCleanupJobs := func() {
-		threshold := pgtype.Timestamptz{Time: time.Now().Add(-48 * time.Hour), Valid: true}
-		deleted, err := queries.CleanupEmptyDrafts(ctx, threshold)
-		if err != nil {
-			slog.Error("draft cleanup failed", "error", err)
-		} else if deleted > 0 {
-			slog.Info("cleaned up empty drafts", "deleted", deleted)
-		}
-
 		archived, err := handler.ArchiveExpiredBookings(ctx, queries)
 		if err != nil {
 			slog.Error("booking auto-archive failed", "error", err)

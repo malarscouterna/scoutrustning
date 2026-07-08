@@ -86,7 +86,7 @@ func (q *Queries) AllItemsReturned(ctx context.Context, arg AllItemsReturnedPara
 const approveBooking = `-- name: ApproveBooking :one
 UPDATE bookings SET status = 'confirmed', updated_at = now()
 WHERE id = $1 AND group_id = $2 AND status = 'submitted'
-RETURNING id, group_id, created_by, used_by_team_id, used_by_external, used_by_external_contact, status, start_date, end_date, title, created_at, updated_at, first_item_added_at
+RETURNING id, group_id, created_by, used_by_team_id, used_by_external, used_by_external_contact, status, start_date, end_date, title, created_at, updated_at
 `
 
 type ApproveBookingParams struct {
@@ -110,7 +110,6 @@ func (q *Queries) ApproveBooking(ctx context.Context, arg ApproveBookingParams) 
 		&i.Title,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.FirstItemAddedAt,
 	)
 	return i, err
 }
@@ -325,24 +324,6 @@ func (q *Queries) BookingMaxApprovalLevel(ctx context.Context, arg BookingMaxApp
 	return max_approval_level, err
 }
 
-const cleanupEmptyDrafts = `-- name: CleanupEmptyDrafts :execrows
-DELETE FROM bookings
-WHERE status = 'draft'
-    AND created_at < $1
-    AND NOT EXISTS (
-        SELECT 1 FROM booking_items WHERE booking_id = bookings.id
-    )
-`
-
-// Delete draft bookings with zero items older than the given threshold (all groups).
-func (q *Queries) CleanupEmptyDrafts(ctx context.Context, olderThan pgtype.Timestamptz) (int64, error) {
-	result, err := q.db.Exec(ctx, cleanupEmptyDrafts, olderThan)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const cleanupStaleDrafts = `-- name: CleanupStaleDrafts :exec
 DELETE FROM bookings
 WHERE group_id = $1 AND status = 'draft'
@@ -368,7 +349,7 @@ INSERT INTO bookings (
     $1, $2, $3, $4,
     $5, 'draft', $6, $7, $8
 )
-RETURNING id, group_id, created_by, used_by_team_id, used_by_external, used_by_external_contact, status, start_date, end_date, title, created_at, updated_at, first_item_added_at
+RETURNING id, group_id, created_by, used_by_team_id, used_by_external, used_by_external_contact, status, start_date, end_date, title, created_at, updated_at
 `
 
 type CreateBookingParams struct {
@@ -407,7 +388,6 @@ func (q *Queries) CreateBooking(ctx context.Context, arg CreateBookingParams) (B
 		&i.Title,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.FirstItemAddedAt,
 	)
 	return i, err
 }
@@ -556,7 +536,7 @@ func (q *Queries) GetAllOverdueBookings(ctx context.Context, date pgtype.Date) (
 }
 
 const getBooking = `-- name: GetBooking :one
-SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.title, b.created_at, b.updated_at, b.first_item_added_at, t.name AS team_name, u.name AS creator_name, u.picture AS creator_picture
+SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.title, b.created_at, b.updated_at, t.name AS team_name, u.name AS creator_name, u.picture AS creator_picture
 FROM bookings b
 LEFT JOIN teams t ON b.used_by_team_id = t.id
 LEFT JOIN users u ON b.created_by = u.id
@@ -581,7 +561,6 @@ type GetBookingRow struct {
 	Title                 string             `json:"title"`
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
-	FirstItemAddedAt      pgtype.Timestamptz `json:"first_item_added_at"`
 	TeamName              pgtype.Text        `json:"team_name"`
 	CreatorName           pgtype.Text        `json:"creator_name"`
 	CreatorPicture        pgtype.Text        `json:"creator_picture"`
@@ -603,7 +582,6 @@ func (q *Queries) GetBooking(ctx context.Context, arg GetBookingParams) (GetBook
 		&i.Title,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.FirstItemAddedAt,
 		&i.TeamName,
 		&i.CreatorName,
 		&i.CreatorPicture,
@@ -612,14 +590,14 @@ func (q *Queries) GetBooking(ctx context.Context, arg GetBookingParams) (GetBook
 }
 
 const getBookingsNearingArchive = `-- name: GetBookingsNearingArchive :many
-SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.title, b.created_at, b.updated_at, b.first_item_added_at,
-    (CASE WHEN b.status = 'draft' THEN b.first_item_added_at + (gs.draft_archive_days || ' days')::interval
+SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.title, b.created_at, b.updated_at,
+    (CASE WHEN b.status = 'draft' THEN b.created_at + (gs.draft_archive_days || ' days')::interval
          ELSE b.updated_at + (gs.rejected_archive_days || ' days')::interval END)::timestamptz AS archive_deadline
 FROM bookings b
 JOIN group_settings gs ON gs.group_id = b.group_id
 WHERE (
-    (b.status = 'draft' AND b.first_item_added_at IS NOT NULL AND gs.draft_archive_days > 0
-        AND b.first_item_added_at + (gs.draft_archive_days || ' days')::interval BETWEEN now() + interval '23 hours' AND now() + interval '24 hours')
+    (b.status = 'draft' AND gs.draft_archive_days > 0
+        AND b.created_at + (gs.draft_archive_days || ' days')::interval BETWEEN now() + interval '23 hours' AND now() + interval '24 hours')
     OR
     (b.status = 'rejected' AND gs.rejected_archive_days > 0
         AND b.updated_at + (gs.rejected_archive_days || ' days')::interval BETWEEN now() + interval '23 hours' AND now() + interval '24 hours')
@@ -639,14 +617,16 @@ type GetBookingsNearingArchiveRow struct {
 	Title                 string             `json:"title"`
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
-	FirstItemAddedAt      pgtype.Timestamptz `json:"first_item_added_at"`
 	ArchiveDeadline       pgtype.Timestamptz `json:"archive_deadline"`
 }
 
 // Bookings whose auto-archive deadline (docs/pre-release.md "Booking auto-archive setting")
 // falls between 23 and 24 hours from now (all groups). Called hourly (not the once-daily
 // scheduler) so the one-time advance warning lands close to a true 24h-before mark rather
-// than drifting by up to a full day between checks.
+// than drifting by up to a full day between checks. Draft deadline runs from created_at,
+// not first-item-add, so the countdown (and this warning) applies from the moment a draft
+// is created, with or without items - this also supersedes the old separate 48h
+// empty-draft cleanup, which no longer exists.
 func (q *Queries) GetBookingsNearingArchive(ctx context.Context) ([]GetBookingsNearingArchiveRow, error) {
 	rows, err := q.db.Query(ctx, getBookingsNearingArchive)
 	if err != nil {
@@ -669,7 +649,6 @@ func (q *Queries) GetBookingsNearingArchive(ctx context.Context) ([]GetBookingsN
 			&i.Title,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.FirstItemAddedAt,
 			&i.ArchiveDeadline,
 		); err != nil {
 			return nil, err
@@ -683,12 +662,12 @@ func (q *Queries) GetBookingsNearingArchive(ctx context.Context) ([]GetBookingsN
 }
 
 const getBookingsPastArchiveDeadline = `-- name: GetBookingsPastArchiveDeadline :many
-SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.title, b.created_at, b.updated_at, b.first_item_added_at
+SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.title, b.created_at, b.updated_at
 FROM bookings b
 JOIN group_settings gs ON gs.group_id = b.group_id
 WHERE (
-    (b.status = 'draft' AND b.first_item_added_at IS NOT NULL AND gs.draft_archive_days > 0
-        AND b.first_item_added_at + (gs.draft_archive_days || ' days')::interval <= now())
+    (b.status = 'draft' AND gs.draft_archive_days > 0
+        AND b.created_at + (gs.draft_archive_days || ' days')::interval <= now())
     OR
     (b.status = 'rejected' AND gs.rejected_archive_days > 0
         AND b.updated_at + (gs.rejected_archive_days || ' days')::interval <= now())
@@ -719,7 +698,6 @@ func (q *Queries) GetBookingsPastArchiveDeadline(ctx context.Context) ([]Booking
 			&i.Title,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.FirstItemAddedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -810,7 +788,7 @@ func (q *Queries) HasSubmittedEvent(ctx context.Context, arg HasSubmittedEventPa
 }
 
 const listAllBookings = `-- name: ListAllBookings :many
-SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.title, b.created_at, b.updated_at, b.first_item_added_at, t.name AS team_name, u.name AS creator_name
+SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.title, b.created_at, b.updated_at, t.name AS team_name, u.name AS creator_name
 FROM bookings b
 LEFT JOIN teams t ON b.used_by_team_id = t.id
 LEFT JOIN users u ON b.created_by = u.id
@@ -831,7 +809,6 @@ type ListAllBookingsRow struct {
 	Title                 string             `json:"title"`
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
-	FirstItemAddedAt      pgtype.Timestamptz `json:"first_item_added_at"`
 	TeamName              pgtype.Text        `json:"team_name"`
 	CreatorName           pgtype.Text        `json:"creator_name"`
 }
@@ -858,7 +835,6 @@ func (q *Queries) ListAllBookings(ctx context.Context, groupID string) ([]ListAl
 			&i.Title,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.FirstItemAddedAt,
 			&i.TeamName,
 			&i.CreatorName,
 		); err != nil {
@@ -1060,7 +1036,7 @@ func (q *Queries) ListBookingTeams(ctx context.Context, groupID string) ([]ListB
 }
 
 const listBookingsByStatus = `-- name: ListBookingsByStatus :many
-SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.title, b.created_at, b.updated_at, b.first_item_added_at, t.name AS team_name, u.name AS creator_name
+SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.title, b.created_at, b.updated_at, t.name AS team_name, u.name AS creator_name
 FROM bookings b
 LEFT JOIN teams t ON b.used_by_team_id = t.id
 LEFT JOIN users u ON b.created_by = u.id
@@ -1086,7 +1062,6 @@ type ListBookingsByStatusRow struct {
 	Title                 string             `json:"title"`
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
-	FirstItemAddedAt      pgtype.Timestamptz `json:"first_item_added_at"`
 	TeamName              pgtype.Text        `json:"team_name"`
 	CreatorName           pgtype.Text        `json:"creator_name"`
 }
@@ -1113,7 +1088,6 @@ func (q *Queries) ListBookingsByStatus(ctx context.Context, arg ListBookingsBySt
 			&i.Title,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.FirstItemAddedAt,
 			&i.TeamName,
 			&i.CreatorName,
 		); err != nil {
@@ -1128,7 +1102,7 @@ func (q *Queries) ListBookingsByStatus(ctx context.Context, arg ListBookingsBySt
 }
 
 const listBookingsByUser = `-- name: ListBookingsByUser :many
-SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.title, b.created_at, b.updated_at, b.first_item_added_at, t.name AS team_name, u.name AS creator_name
+SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.title, b.created_at, b.updated_at, t.name AS team_name, u.name AS creator_name
 FROM bookings b
 LEFT JOIN teams t ON b.used_by_team_id = t.id
 LEFT JOIN users u ON b.created_by = u.id
@@ -1158,7 +1132,6 @@ type ListBookingsByUserRow struct {
 	Title                 string             `json:"title"`
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
-	FirstItemAddedAt      pgtype.Timestamptz `json:"first_item_added_at"`
 	TeamName              pgtype.Text        `json:"team_name"`
 	CreatorName           pgtype.Text        `json:"creator_name"`
 }
@@ -1185,7 +1158,6 @@ func (q *Queries) ListBookingsByUser(ctx context.Context, arg ListBookingsByUser
 			&i.Title,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.FirstItemAddedAt,
 			&i.TeamName,
 			&i.CreatorName,
 		); err != nil {
@@ -1202,7 +1174,7 @@ func (q *Queries) ListBookingsByUser(ctx context.Context, arg ListBookingsByUser
 const rejectBooking = `-- name: RejectBooking :one
 UPDATE bookings SET status = 'rejected', updated_at = now()
 WHERE id = $1 AND group_id = $2 AND status = 'submitted'
-RETURNING id, group_id, created_by, used_by_team_id, used_by_external, used_by_external_contact, status, start_date, end_date, title, created_at, updated_at, first_item_added_at
+RETURNING id, group_id, created_by, used_by_team_id, used_by_external, used_by_external_contact, status, start_date, end_date, title, created_at, updated_at
 `
 
 type RejectBookingParams struct {
@@ -1228,7 +1200,6 @@ func (q *Queries) RejectBooking(ctx context.Context, arg RejectBookingParams) (B
 		&i.Title,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.FirstItemAddedAt,
 	)
 	return i, err
 }
@@ -1246,23 +1217,6 @@ type RemoveBookingItemParams struct {
 
 func (q *Queries) RemoveBookingItem(ctx context.Context, arg RemoveBookingItemParams) error {
 	_, err := q.db.Exec(ctx, removeBookingItem, arg.ID, arg.GroupID, arg.BookingID)
-	return err
-}
-
-const setFirstItemAddedAt = `-- name: SetFirstItemAddedAt :exec
-UPDATE bookings SET first_item_added_at = now()
-WHERE id = $1 AND group_id = $2 AND first_item_added_at IS NULL
-`
-
-type SetFirstItemAddedAtParams struct {
-	ID      pgtype.UUID `json:"id"`
-	GroupID string      `json:"group_id"`
-}
-
-// Set once, the first time an item is added to a booking; a no-op on later calls
-// so the auto-archive deadline stays fixed from that first moment.
-func (q *Queries) SetFirstItemAddedAt(ctx context.Context, arg SetFirstItemAddedAtParams) error {
-	_, err := q.db.Exec(ctx, setFirstItemAddedAt, arg.ID, arg.GroupID)
 	return err
 }
 
@@ -1308,7 +1262,7 @@ UPDATE bookings SET
     title = $6,
     updated_at = now()
 WHERE id = $7 AND group_id = $8
-RETURNING id, group_id, created_by, used_by_team_id, used_by_external, used_by_external_contact, status, start_date, end_date, title, created_at, updated_at, first_item_added_at
+RETURNING id, group_id, created_by, used_by_team_id, used_by_external, used_by_external_contact, status, start_date, end_date, title, created_at, updated_at
 `
 
 type UpdateBookingParams struct {
@@ -1347,7 +1301,6 @@ func (q *Queries) UpdateBooking(ctx context.Context, arg UpdateBookingParams) (B
 		&i.Title,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.FirstItemAddedAt,
 	)
 	return i, err
 }
@@ -1454,7 +1407,7 @@ func (q *Queries) UpdateBookingItemReturnStatus(ctx context.Context, arg UpdateB
 const updateBookingStatus = `-- name: UpdateBookingStatus :one
 UPDATE bookings SET status = $1, updated_at = now()
 WHERE id = $2 AND group_id = $3
-RETURNING id, group_id, created_by, used_by_team_id, used_by_external, used_by_external_contact, status, start_date, end_date, title, created_at, updated_at, first_item_added_at
+RETURNING id, group_id, created_by, used_by_team_id, used_by_external, used_by_external_contact, status, start_date, end_date, title, created_at, updated_at
 `
 
 type UpdateBookingStatusParams struct {
@@ -1479,7 +1432,6 @@ func (q *Queries) UpdateBookingStatus(ctx context.Context, arg UpdateBookingStat
 		&i.Title,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.FirstItemAddedAt,
 	)
 	return i, err
 }

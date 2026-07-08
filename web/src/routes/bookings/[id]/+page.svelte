@@ -26,6 +26,8 @@
 	let items = $state(data.items);
 	// svelte-ignore state_referenced_locally
 	let autoApproves = $state(data.auto_approves);
+	// svelte-ignore state_referenced_locally
+	let archiveDeadline = $state(data.archive_deadline);
 	let error = $state('');
 	let message = $state('');
 
@@ -33,7 +35,28 @@
 		booking = data.booking;
 		items = data.items;
 		autoApproves = data.auto_approves;
+		archiveDeadline = data.archive_deadline;
 	});
+
+	// Countdown tick for the archive-deadline banner - updated every 30s, not every
+	// second, since the display only shows minute-level granularity.
+	let nowTick = $state(Date.now());
+	let countdownTimer: ReturnType<typeof setInterval> | null = null;
+	$effect(() => {
+		countdownTimer = setInterval(() => nowTick = Date.now(), 30_000);
+		return () => { if (countdownTimer) clearInterval(countdownTimer); };
+	});
+
+	function formatCountdown(msLeft: number): string {
+		const totalMinutes = Math.max(0, Math.floor(msLeft / 60_000));
+		const days = Math.floor(totalMinutes / (24 * 60));
+		const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+		const minutes = totalMinutes % 60;
+		if (days > 0) {
+			return m.page_booking_archive_countdown_days({ days: String(days), hours: String(hours) });
+		}
+		return m.page_booking_archive_countdown_hours({ hours: String(hours), minutes: String(minutes) });
+	}
 
 	$effect(() => {
 		const urlMsg = $page.url.searchParams.get('msg');
@@ -52,6 +75,7 @@
 			const result = await api.getBooking(booking.id);
 			items = result.items;
 			autoApproves = result.auto_approves;
+			archiveDeadline = result.archive_deadline;
 			return result.items;
 		} finally {
 			reloading = false;
@@ -68,6 +92,7 @@
 				const result = await api.getBooking(booking.id);
 				items = result.items;
 				autoApproves = result.auto_approves;
+				archiveDeadline = result.archive_deadline;
 				if (result.booking.status !== booking.status) {
 					booking = result.booking;
 				}
@@ -248,6 +273,20 @@
 					<span>{m.page_booking_created_by_label()}</span>
 					<UserBadge userId={booking.created_by} name={booking.creator_name} picture={booking.creator_picture} contextBookingId={booking.id} size={18} />
 				</div>
+			{/if}
+
+			<!-- Auto-archive countdown: draft-with-items or rejected-awaiting-resubmission,
+			     per group settings (docs/pre-release.md "Booking auto-archive setting").
+			     Urgency increases (amber → red) under 24h left; hidden once the deadline
+			     has passed (a poll will pick up the resulting cancelled status shortly). -->
+			{#if archiveDeadline && (booking.status === 'draft' || booking.status === 'rejected')}
+				{@const msLeft = new Date(archiveDeadline).getTime() - nowTick}
+				{#if msLeft > 0}
+					<div class="border rounded p-3 mb-4 text-sm {msLeft < 24 * 3600_000 ? 'bg-red-50 border-red-300 text-red-900' : 'bg-amber-50 border-amber-300 text-amber-900'}">
+						<p class="font-medium mb-1">{formatCountdown(msLeft)}</p>
+						<p>{booking.status === 'draft' ? m.page_booking_archive_hint_draft() : m.page_booking_archive_hint_rejected()}</p>
+					</div>
+				{/if}
 			{/if}
 
 			<!-- Section 1: booking details -->
