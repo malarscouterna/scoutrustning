@@ -6,10 +6,12 @@
 	import AddItemSheet from '$lib/components/AddItemSheet.svelte';
 	import UserBadge from '$lib/components/UserBadge.svelte';
 	import BookingCommentThread from '$lib/components/BookingCommentThread.svelte';
-	import { isManager as checkManager } from '$lib/user';
+	import CopyBookingModal from '$lib/components/CopyBookingModal.svelte';
+	import { isManager as checkManager, canBook } from '$lib/user';
 	import { cart } from '$lib/stores/cart.svelte';
 	import type { PageData } from './$types';
 	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import { onDestroy } from 'svelte';
 	import { msg } from '$lib/msg';
 	import { bookingStatusColors } from '$lib/styles';
@@ -204,6 +206,12 @@
 	let forceApproval = $state(false);
 	let isManager = $derived(checkManager(data.user));
 	let eventsRefreshKey = $state(0);
+	let showCopyModal = $state(false);
+
+	function handleCopied(newBookingId: string) {
+		showCopyModal = false;
+		goto(`/bookings/${newBookingId}?msg=${encodeURIComponent(m.copy_booking_success())}`);
+	}
 
 	let anyItemRequiresApproval = $derived(items.some((i) => i.approval_level !== 'none'));
 	$effect(() => {
@@ -361,6 +369,11 @@
 						{booking.status === 'draft' ? m.page_booking_btn_delete_draft() : m.page_booking_btn_cancel()}
 					</button>
 				{/if}
+				{#if canBook(data.user)}
+					<button onclick={() => (showCopyModal = true)} class="text-sm text-blue-700 underline">
+						{m.copy_booking_btn()}
+					</button>
+				{/if}
 			</div>
 		</div>
 
@@ -412,4 +425,8 @@
 		onAdded={async () => { await reload(); showAddItemSheet = false; }}
 		onClose={() => showAddItemSheet = false}
 	/>
+{/if}
+
+{#if showCopyModal}
+	<CopyBookingModal source={booking} onClose={() => (showCopyModal = false)} onCopied={handleCopied} />
 {/if}
