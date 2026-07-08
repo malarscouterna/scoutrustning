@@ -15,6 +15,8 @@ export interface User {
 	member_id: string;
 	group_id: string;
 	group_name: string;
+	group_logo_url: string;
+	group_logo_square_url: string;
 	name: string;
 	email: string;
 	picture: string | null;

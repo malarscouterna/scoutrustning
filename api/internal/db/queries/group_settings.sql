@@ -72,6 +72,17 @@ WHERE group_id = @group_id;
 -- name: GetGroupLogoFileID :one
 SELECT logo_file_id FROM group_settings WHERE group_id = @group_id;
 
+-- name: SetGroupLogoSquare :exec
+UPDATE group_settings SET logo_square_file_id = @logo_square_file_id, updated_at = now()
+WHERE group_id = @group_id;
+
+-- name: ClearGroupLogoSquare :exec
+UPDATE group_settings SET logo_square_file_id = NULL, updated_at = now()
+WHERE group_id = @group_id;
+
+-- name: GetGroupLogoSquareFileID :one
+SELECT logo_square_file_id FROM group_settings WHERE group_id = @group_id;
+
 -- name: SetGchatCredentials :exec
 UPDATE group_settings SET
     gchat_service_account_json_encrypted = @gchat_service_account_json_encrypted,

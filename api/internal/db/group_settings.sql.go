@@ -45,6 +45,16 @@ func (q *Queries) ClearGroupLogo(ctx context.Context, groupID string) error {
 	return err
 }
 
+const clearGroupLogoSquare = `-- name: ClearGroupLogoSquare :exec
+UPDATE group_settings SET logo_square_file_id = NULL, updated_at = now()
+WHERE group_id = $1
+`
+
+func (q *Queries) ClearGroupLogoSquare(ctx context.Context, groupID string) error {
+	_, err := q.db.Exec(ctx, clearGroupLogoSquare, groupID)
+	return err
+}
+
 const countArticlesForCategory = `-- name: CountArticlesForCategory :one
 SELECT count(*) FROM articles
 WHERE group_id = $1 AND category_id = $2
@@ -83,7 +93,7 @@ const createGroupSettingsDefaults = `-- name: CreateGroupSettingsDefaults :one
 INSERT INTO group_settings (group_id)
 VALUES ($1)
 ON CONFLICT (group_id) DO NOTHING
-RETURNING group_id, notification_email_from, smtp_key_encrypted, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults, logo_file_id, enabled_channels, gchat_service_account_json_encrypted, gchat_admin_email, default_gruppkanal_channels, smtp_key_masked, personal_booking_role
+RETURNING group_id, notification_email_from, smtp_key_encrypted, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults, logo_file_id, enabled_channels, gchat_service_account_json_encrypted, gchat_admin_email, default_gruppkanal_channels, smtp_key_masked, personal_booking_role, logo_square_file_id
 `
 
 func (q *Queries) CreateGroupSettingsDefaults(ctx context.Context, groupID string) (GroupSetting, error) {
@@ -117,6 +127,7 @@ func (q *Queries) CreateGroupSettingsDefaults(ctx context.Context, groupID strin
 		&i.DefaultGruppkanalChannels,
 		&i.SmtpKeyMasked,
 		&i.PersonalBookingRole,
+		&i.LogoSquareFileID,
 	)
 	return i, err
 }
@@ -149,6 +160,17 @@ func (q *Queries) GetGroupLogoFileID(ctx context.Context, groupID string) (pgtyp
 	return logo_file_id, err
 }
 
+const getGroupLogoSquareFileID = `-- name: GetGroupLogoSquareFileID :one
+SELECT logo_square_file_id FROM group_settings WHERE group_id = $1
+`
+
+func (q *Queries) GetGroupLogoSquareFileID(ctx context.Context, groupID string) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, getGroupLogoSquareFileID, groupID)
+	var logo_square_file_id pgtype.UUID
+	err := row.Scan(&logo_square_file_id)
+	return logo_square_file_id, err
+}
+
 const getGroupNotificationDefaults = `-- name: GetGroupNotificationDefaults :one
 SELECT notification_defaults, default_gruppkanal_channels FROM group_settings
 WHERE group_id = $1
@@ -167,7 +189,7 @@ func (q *Queries) GetGroupNotificationDefaults(ctx context.Context, groupID stri
 }
 
 const getGroupSettings = `-- name: GetGroupSettings :one
-SELECT group_id, notification_email_from, smtp_key_encrypted, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults, logo_file_id, enabled_channels, gchat_service_account_json_encrypted, gchat_admin_email, default_gruppkanal_channels, smtp_key_masked, personal_booking_role FROM group_settings
+SELECT group_id, notification_email_from, smtp_key_encrypted, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults, logo_file_id, enabled_channels, gchat_service_account_json_encrypted, gchat_admin_email, default_gruppkanal_channels, smtp_key_masked, personal_booking_role, logo_square_file_id FROM group_settings
 WHERE group_id = $1
 `
 
@@ -202,6 +224,7 @@ func (q *Queries) GetGroupSettings(ctx context.Context, groupID string) (GroupSe
 		&i.DefaultGruppkanalChannels,
 		&i.SmtpKeyMasked,
 		&i.PersonalBookingRole,
+		&i.LogoSquareFileID,
 	)
 	return i, err
 }
@@ -237,6 +260,21 @@ type SetGroupLogoParams struct {
 
 func (q *Queries) SetGroupLogo(ctx context.Context, arg SetGroupLogoParams) error {
 	_, err := q.db.Exec(ctx, setGroupLogo, arg.LogoFileID, arg.GroupID)
+	return err
+}
+
+const setGroupLogoSquare = `-- name: SetGroupLogoSquare :exec
+UPDATE group_settings SET logo_square_file_id = $1, updated_at = now()
+WHERE group_id = $2
+`
+
+type SetGroupLogoSquareParams struct {
+	LogoSquareFileID pgtype.UUID `json:"logo_square_file_id"`
+	GroupID          string      `json:"group_id"`
+}
+
+func (q *Queries) SetGroupLogoSquare(ctx context.Context, arg SetGroupLogoSquareParams) error {
+	_, err := q.db.Exec(ctx, setGroupLogoSquare, arg.LogoSquareFileID, arg.GroupID)
 	return err
 }
 
@@ -283,7 +321,7 @@ UPDATE group_settings SET
     smtp_user = $5,
     updated_at = now()
 WHERE group_id = $6
-RETURNING group_id, notification_email_from, smtp_key_encrypted, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults, logo_file_id, enabled_channels, gchat_service_account_json_encrypted, gchat_admin_email, default_gruppkanal_channels, smtp_key_masked, personal_booking_role
+RETURNING group_id, notification_email_from, smtp_key_encrypted, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults, logo_file_id, enabled_channels, gchat_service_account_json_encrypted, gchat_admin_email, default_gruppkanal_channels, smtp_key_masked, personal_booking_role, logo_square_file_id
 `
 
 type UpdateSmtpSettingsParams struct {
@@ -333,6 +371,7 @@ func (q *Queries) UpdateSmtpSettings(ctx context.Context, arg UpdateSmtpSettings
 		&i.DefaultGruppkanalChannels,
 		&i.SmtpKeyMasked,
 		&i.PersonalBookingRole,
+		&i.LogoSquareFileID,
 	)
 	return i, err
 }
@@ -366,7 +405,7 @@ ON CONFLICT (group_id) DO UPDATE SET
     personal_booking_role = $14,
     default_language = $15,
     updated_at = now()
-RETURNING group_id, notification_email_from, smtp_key_encrypted, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults, logo_file_id, enabled_channels, gchat_service_account_json_encrypted, gchat_admin_email, default_gruppkanal_channels, smtp_key_masked, personal_booking_role
+RETURNING group_id, notification_email_from, smtp_key_encrypted, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults, logo_file_id, enabled_channels, gchat_service_account_json_encrypted, gchat_admin_email, default_gruppkanal_channels, smtp_key_masked, personal_booking_role, logo_square_file_id
 `
 
 type UpsertGroupSettingsParams struct {
@@ -434,6 +473,7 @@ func (q *Queries) UpsertGroupSettings(ctx context.Context, arg UpsertGroupSettin
 		&i.DefaultGruppkanalChannels,
 		&i.SmtpKeyMasked,
 		&i.PersonalBookingRole,
+		&i.LogoSquareFileID,
 	)
 	return i, err
 }

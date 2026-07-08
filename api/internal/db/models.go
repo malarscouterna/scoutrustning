@@ -133,6 +133,7 @@ type GroupSetting struct {
 	DefaultGruppkanalChannels        []string           `json:"default_gruppkanal_channels"`
 	SmtpKeyMasked                    string             `json:"smtp_key_masked"`
 	PersonalBookingRole              string             `json:"personal_booking_role"`
+	LogoSquareFileID                 pgtype.UUID        `json:"logo_square_file_id"`
 }
 
 type IssueArticle struct {

@@ -296,6 +296,71 @@
 		setTimeout(() => setter(''), 4000);
 	}
 
+	// --- Group logo ---
+	let logoUploading = $state(false);
+	let logoError = $state('');
+
+	async function handleLogoSelect(e: Event) {
+		const input = e.target as HTMLInputElement;
+		const file = input.files?.[0];
+		input.value = '';
+		if (!file) return;
+		logoUploading = true;
+		logoError = '';
+		try {
+			const result = await api.uploadGroupLogo(file);
+			if (groupSettings) groupSettings = { ...groupSettings, logo_url: result.logo_url };
+		} catch (e: any) {
+			logoError = translateError(e);
+		}
+		logoUploading = false;
+	}
+
+	async function removeLogo() {
+		if (!confirm(m.page_profile_logo_delete_confirm())) return;
+		logoUploading = true;
+		logoError = '';
+		try {
+			await api.deleteGroupLogo();
+			if (groupSettings) groupSettings = { ...groupSettings, logo_url: '' };
+		} catch (e: any) {
+			logoError = translateError(e);
+		}
+		logoUploading = false;
+	}
+
+	let logoSquareUploading = $state(false);
+	let logoSquareError = $state('');
+
+	async function handleLogoSquareSelect(e: Event) {
+		const input = e.target as HTMLInputElement;
+		const file = input.files?.[0];
+		input.value = '';
+		if (!file) return;
+		logoSquareUploading = true;
+		logoSquareError = '';
+		try {
+			const result = await api.uploadGroupLogoSquare(file);
+			if (groupSettings) groupSettings = { ...groupSettings, logo_square_url: result.logo_square_url };
+		} catch (e: any) {
+			logoSquareError = translateError(e);
+		}
+		logoSquareUploading = false;
+	}
+
+	async function removeLogoSquare() {
+		if (!confirm(m.page_profile_logo_square_delete_confirm())) return;
+		logoSquareUploading = true;
+		logoSquareError = '';
+		try {
+			await api.deleteGroupLogoSquare();
+			if (groupSettings) groupSettings = { ...groupSettings, logo_square_url: '' };
+		} catch (e: any) {
+			logoSquareError = translateError(e);
+		}
+		logoSquareUploading = false;
+	}
+
 	// --- CSV Import ---
 	function handleFileSelect(e: Event) {
 		const input = e.target as HTMLInputElement;
@@ -1824,6 +1889,63 @@ async function linkGchatTeamSpace(teamId: string) {
 					{/if}
 				</div>
 			{/if}
+		</section>
+
+		<!-- Logo -->
+		<section class="mb-6 border rounded-lg p-4">
+			<h3 class="font-medium mb-1">{m.page_profile_logo_heading()}</h3>
+			<p class="text-xs text-neutral-500 mb-3">{m.page_profile_logo_help()}</p>
+			<div class="flex items-center gap-4">
+				{#if groupSettings?.logo_url}
+					<img src={groupSettings.logo_url} alt={m.page_profile_logo_heading()} class="h-16 max-w-[16rem] object-contain border rounded bg-white px-2" />
+				{:else}
+					<div class="h-16 w-40 border rounded bg-neutral-50 flex items-center justify-center text-neutral-300 text-xs">{m.page_profile_logo_none()}</div>
+				{/if}
+				<div class="flex flex-col gap-2">
+					<div class="flex items-center gap-2">
+						<input type="file" accept="image/*" onchange={handleLogoSelect} disabled={logoUploading} class="text-sm file:mr-2 file:px-3 file:py-1 file:rounded file:border file:border-neutral-300 file:bg-white file:text-sm file:text-neutral-700 file:cursor-pointer hover:file:bg-neutral-50" />
+						{#if logoUploading}
+							<span class="text-sm text-neutral-400">{m.page_profile_logo_uploading()}</span>
+						{/if}
+					</div>
+					{#if groupSettings?.logo_url}
+						<button onclick={removeLogo} disabled={logoUploading} class="text-sm text-red-600 hover:underline text-left disabled:opacity-50">
+							{m.page_profile_logo_btn_remove()}
+						</button>
+					{/if}
+				</div>
+			</div>
+			{#if logoError}
+				<p class="text-xs text-red-600 mt-2">{logoError}</p>
+			{/if}
+
+			<div class="border-t mt-4 pt-4">
+				<h4 class="text-sm font-medium mb-1">{m.page_profile_logo_square_heading()}</h4>
+				<p class="text-xs text-neutral-500 mb-3">{m.page_profile_logo_square_help()}</p>
+				<div class="flex items-center gap-4">
+					{#if groupSettings?.logo_square_url}
+						<img src={groupSettings.logo_square_url} alt={m.page_profile_logo_square_heading()} class="h-16 max-w-[8rem] object-contain border rounded bg-white px-2" />
+					{:else}
+						<div class="h-16 w-24 border rounded bg-neutral-50 flex items-center justify-center text-neutral-300 text-xs">{m.page_profile_logo_none()}</div>
+					{/if}
+					<div class="flex flex-col gap-2">
+						<div class="flex items-center gap-2">
+							<input type="file" accept="image/*" onchange={handleLogoSquareSelect} disabled={logoSquareUploading} class="text-sm file:mr-2 file:px-3 file:py-1 file:rounded file:border file:border-neutral-300 file:bg-white file:text-sm file:text-neutral-700 file:cursor-pointer hover:file:bg-neutral-50" />
+							{#if logoSquareUploading}
+								<span class="text-sm text-neutral-400">{m.page_profile_logo_uploading()}</span>
+							{/if}
+						</div>
+						{#if groupSettings?.logo_square_url}
+							<button onclick={removeLogoSquare} disabled={logoSquareUploading} class="text-sm text-red-600 hover:underline text-left disabled:opacity-50">
+								{m.page_profile_logo_btn_remove()}
+							</button>
+						{/if}
+					</div>
+				</div>
+				{#if logoSquareError}
+					<p class="text-xs text-red-600 mt-2">{logoSquareError}</p>
+				{/if}
+			</div>
 		</section>
 
 		<!-- Group language -->

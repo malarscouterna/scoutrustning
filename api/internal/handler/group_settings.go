@@ -65,7 +65,8 @@ type groupSettingsResponse struct {
 	PersonalBookingRole   string   `json:"personal_booking_role"`
 	DefaultLanguage       string   `json:"default_language"`
 	NotificationChannels  []string `json:"notification_channels"`
-	LogoURL               string   `json:"logo_url"` // empty string when no logo uploaded
+	LogoURL               string   `json:"logo_url"`        // empty string when no logo uploaded
+	LogoSquareURL         string   `json:"logo_square_url"` // empty string when no square logo uploaded
 	DemoMode              bool     `json:"demo_mode"`
 }
 
@@ -457,7 +458,10 @@ func settingsToResponse(s db.GroupSetting) groupSettingsResponse {
 		NotificationChannels:  s.EnabledChannels,
 	}
 	if s.LogoFileID.Valid {
-		resp.LogoURL = "/api/v0/public/groups/" + s.GroupID + "/logo"
+		resp.LogoURL = "/api/v0/public/groups/" + s.GroupID + "/logo?v=" + formatUUID(s.LogoFileID)
+	}
+	if s.LogoSquareFileID.Valid {
+		resp.LogoSquareURL = "/api/v0/public/groups/" + s.GroupID + "/logo-square?v=" + formatUUID(s.LogoSquareFileID)
 	}
 	resp.SmtpKeyMasked = s.SmtpKeyMasked
 	return resp

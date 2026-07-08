@@ -24,6 +24,8 @@
 
 	let groups = $derived(data.user?.groups ?? []);
 	let groupMenuOpen = $state(false);
+	let logoUrl = $derived(data.user?.group_logo_url || null);
+	let squareLogoUrl = $derived(data.user?.group_logo_square_url || null);
 
 	function switchGroup(groupId: string) {
 		document.cookie = `active-group-id=${groupId}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
@@ -32,49 +34,68 @@
 </script>
 
 <div class="max-w-4xl mx-auto p-4">
-	<!-- Group identity (logo will land here too) + primary CTAs on one row -->
-	<div class="flex flex-wrap items-center justify-between gap-2 mb-2">
-		<div class="flex flex-wrap gap-2">
-			{#if showBook}
-				<scout-button type="link" href="/book" variant="primary">{m.page_home_btn_book()}</scout-button>
-			{/if}
-			<scout-button type="link" href="/issues/new" variant="primary">{m.page_home_btn_issues()}</scout-button>
-		</div>
-
-		{#if groups.length > 1}
-			<div class="relative inline-block">
-				<button
-					type="button"
-					onclick={() => (groupMenuOpen = !groupMenuOpen)}
-					class="text-sm text-neutral-500 hover:text-neutral-900 flex items-center gap-1"
-				>
-					{data.user?.group_name}
-					<span class="text-xs">▾</span>
-				</button>
-				{#if groupMenuOpen}
-					<button type="button" class="fixed inset-0 z-10" aria-label={m.btn_close()} onclick={() => (groupMenuOpen = false)}></button>
-					<ul class="absolute z-20 mt-1 bg-white border rounded-lg shadow-lg min-w-48 py-1">
-						{#each groups as group}
-							<li>
-								<button
-									type="button"
-									disabled={group.id === data.user?.group_id}
-									onclick={() => switchGroup(group.id)}
-									class="w-full flex items-center justify-between gap-2 px-3 py-1.5 text-sm text-left {group.id === data.user?.group_id ? 'bg-blue-50 font-medium' : 'hover:bg-neutral-50'}"
-								>
-									<span>{group.name}</span>
-									{#if group.id === data.user?.group_id}
-										<span class="text-neutral-500 text-xs">{m.user_info_card_current_group_badge()}</span>
-									{/if}
-								</button>
-							</li>
-						{/each}
-					</ul>
-				{/if}
-			</div>
-		{:else if data.user?.group_name}
-			<p class="text-sm text-neutral-500">{data.user.group_name}</p>
+	<!-- Group identity (logo) + primary CTAs on one row. The group block uses ml-auto rather than
+	     justify-between on the parent, so on wrap it flows right after the CTAs instead of landing
+	     alone on its own right-aligned row. -->
+	<div class="flex flex-wrap items-center gap-2 mb-2">
+		{#if showBook}
+			<scout-button type="link" href="/book" variant="primary">{m.page_home_btn_book()}</scout-button>
 		{/if}
+		<scout-button type="link" href="/issues/new" variant="primary">{m.page_home_btn_issues()}</scout-button>
+
+		<div class="flex items-center gap-2 ml-auto">
+			{#if groups.length > 1}
+				<div class="relative inline-block">
+					<button
+						type="button"
+						onclick={() => (groupMenuOpen = !groupMenuOpen)}
+						class="flex items-center gap-1 {logoUrl ? '' : 'text-sm text-neutral-500 hover:text-neutral-900'}"
+						aria-label={logoUrl ? data.user?.group_name : undefined}
+					>
+						{#if logoUrl}
+							{#if squareLogoUrl}
+								<img src={squareLogoUrl} alt={data.user?.group_name ?? ''} class="h-12 max-w-[6rem] object-contain sm:hidden" />
+								<img src={logoUrl} alt={data.user?.group_name ?? ''} class="hidden sm:block h-12 max-w-[14rem] object-contain" />
+							{:else}
+								<img src={logoUrl} alt={data.user?.group_name ?? ''} class="h-12 max-w-[14rem] object-contain" />
+							{/if}
+						{:else}
+							{data.user?.group_name}
+						{/if}
+						<span class="text-xs text-neutral-500">▾</span>
+					</button>
+					{#if groupMenuOpen}
+						<button type="button" class="fixed inset-0 z-10" aria-label={m.btn_close()} onclick={() => (groupMenuOpen = false)}></button>
+						<ul class="absolute right-0 z-20 mt-1 bg-white border rounded-lg shadow-lg min-w-48 py-1">
+							{#each groups as group}
+								<li>
+									<button
+										type="button"
+										disabled={group.id === data.user?.group_id}
+										onclick={() => switchGroup(group.id)}
+										class="w-full flex items-center justify-between gap-2 px-3 py-1.5 text-sm text-left {group.id === data.user?.group_id ? 'bg-blue-50 font-medium' : 'hover:bg-neutral-50'}"
+									>
+										<span>{group.name}</span>
+										{#if group.id === data.user?.group_id}
+											<span class="text-neutral-500 text-xs">{m.user_info_card_current_group_badge()}</span>
+										{/if}
+									</button>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+				</div>
+			{:else if logoUrl}
+				{#if squareLogoUrl}
+					<img src={squareLogoUrl} alt={data.user?.group_name ?? ''} class="h-12 max-w-[6rem] object-contain sm:hidden" />
+					<img src={logoUrl} alt={data.user?.group_name ?? ''} class="hidden sm:block h-12 max-w-[14rem] object-contain" />
+				{:else}
+					<img src={logoUrl} alt={data.user?.group_name ?? ''} class="h-12 max-w-[14rem] object-contain" />
+				{/if}
+			{:else if data.user?.group_name}
+				<p class="text-sm text-neutral-500">{data.user.group_name}</p>
+			{/if}
+		</div>
 	</div>
 	<div class="flex flex-wrap gap-2 mb-6">
 		<scout-button type="link" href="/browse" variant="outlined">{m.page_home_btn_browse()}</scout-button>

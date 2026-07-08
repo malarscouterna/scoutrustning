@@ -122,6 +122,7 @@ func main() {
 		r.Mount("/group-settings/notification-defaults", notifPrefsHandler.GroupRoutes())
 		r.Mount("/group-settings/force-notification-defaults", notifPrefsHandler.ForceDefaultsRoute())
 		r.Mount("/group-settings/logo", logoHandler.Routes())
+		r.Mount("/group-settings/logo-square", logoHandler.SquareRoutes())
 		r.Mount("/issues", issueHandler.Routes())
 		r.Mount("/images", imageHandler.Routes())
 		r.Mount("/users", userHandler.Routes())

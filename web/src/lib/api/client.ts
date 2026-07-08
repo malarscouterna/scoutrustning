@@ -163,6 +163,8 @@ export interface GroupSettings {
 	personal_booking_role: string;
 	default_language: string;
 	notification_channels: string[];
+	logo_url: string;
+	logo_square_url: string;
 }
 
 export interface ResolvedPref {
@@ -508,6 +510,40 @@ updateLanguage: (language: string | null) =>
 			}
 			return res.json();
 		},
+
+		uploadGroupLogo: async (file: File) => {
+			const f = opts.fetch ?? globalThis.fetch;
+			const formData = new FormData();
+			formData.append('file', file);
+			const res = await f(`${API_BASE}/group-settings/logo`, {
+				method: 'POST',
+				body: formData
+			});
+			if (!res.ok) {
+				const b = await res.json().catch(() => ({}));
+				throw new ApiError(b.error || res.statusText, res.status, b);
+			}
+			return res.json() as Promise<{ logo_url: string }>;
+		},
+		deleteGroupLogo: () =>
+			requestMut<void>('/group-settings/logo', 'DELETE', undefined, opts),
+
+		uploadGroupLogoSquare: async (file: File) => {
+			const f = opts.fetch ?? globalThis.fetch;
+			const formData = new FormData();
+			formData.append('file', file);
+			const res = await f(`${API_BASE}/group-settings/logo-square`, {
+				method: 'POST',
+				body: formData
+			});
+			if (!res.ok) {
+				const b = await res.json().catch(() => ({}));
+				throw new ApiError(b.error || res.statusText, res.status, b);
+			}
+			return res.json() as Promise<{ logo_square_url: string }>;
+		},
+		deleteGroupLogoSquare: () =>
+			requestMut<void>('/group-settings/logo-square', 'DELETE', undefined, opts),
 
 		uploadIssueImage: async (file: File) => {
 			const f = opts.fetch ?? globalThis.fetch;
