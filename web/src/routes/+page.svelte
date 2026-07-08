@@ -32,50 +32,55 @@
 </script>
 
 <div class="max-w-4xl mx-auto p-4">
-	{#if groups.length > 1}
-		<div class="relative inline-block mb-3">
-			<button
-				type="button"
-				onclick={() => (groupMenuOpen = !groupMenuOpen)}
-				class="text-sm text-neutral-500 hover:text-neutral-900 flex items-center gap-1"
-			>
-				{data.user?.group_name}
-				<span class="text-xs">▾</span>
-			</button>
-			{#if groupMenuOpen}
-				<button type="button" class="fixed inset-0 z-10" aria-label={m.btn_close()} onclick={() => (groupMenuOpen = false)}></button>
-				<ul class="absolute z-20 mt-1 bg-white border rounded-lg shadow-lg min-w-48 py-1">
-					{#each groups as group}
-						<li>
-							<button
-								type="button"
-								disabled={group.id === data.user?.group_id}
-								onclick={() => switchGroup(group.id)}
-								class="w-full flex items-center justify-between gap-2 px-3 py-1.5 text-sm text-left {group.id === data.user?.group_id ? 'bg-blue-50 font-medium' : 'hover:bg-neutral-50'}"
-							>
-								<span>{group.name}</span>
-								{#if group.id === data.user?.group_id}
-									<span class="text-neutral-500 text-xs">{m.user_info_card_current_group_badge()}</span>
-								{/if}
-							</button>
-						</li>
-					{/each}
-				</ul>
+	<!-- Group identity (logo will land here too) + primary CTAs on one row -->
+	<div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+		<div class="flex flex-wrap gap-2">
+			{#if showBook}
+				<scout-button type="link" href="/book" variant="primary">{m.page_home_btn_book()}</scout-button>
 			{/if}
+			<scout-button type="link" href="/issues/new" variant="primary">{m.page_home_btn_issues()}</scout-button>
 		</div>
-	{:else if data.user?.group_name}
-		<p class="text-sm text-neutral-500 mb-3">{data.user.group_name}</p>
-	{/if}
 
-	<div class="flex flex-wrap gap-2 mb-6">
-		{#if showBook}
-			<scout-button type="link" href="/book" variant="primary">{m.page_home_btn_book()}</scout-button>
+		{#if groups.length > 1}
+			<div class="relative inline-block">
+				<button
+					type="button"
+					onclick={() => (groupMenuOpen = !groupMenuOpen)}
+					class="text-sm text-neutral-500 hover:text-neutral-900 flex items-center gap-1"
+				>
+					{data.user?.group_name}
+					<span class="text-xs">▾</span>
+				</button>
+				{#if groupMenuOpen}
+					<button type="button" class="fixed inset-0 z-10" aria-label={m.btn_close()} onclick={() => (groupMenuOpen = false)}></button>
+					<ul class="absolute z-20 mt-1 bg-white border rounded-lg shadow-lg min-w-48 py-1">
+						{#each groups as group}
+							<li>
+								<button
+									type="button"
+									disabled={group.id === data.user?.group_id}
+									onclick={() => switchGroup(group.id)}
+									class="w-full flex items-center justify-between gap-2 px-3 py-1.5 text-sm text-left {group.id === data.user?.group_id ? 'bg-blue-50 font-medium' : 'hover:bg-neutral-50'}"
+								>
+									<span>{group.name}</span>
+									{#if group.id === data.user?.group_id}
+										<span class="text-neutral-500 text-xs">{m.user_info_card_current_group_badge()}</span>
+									{/if}
+								</button>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+			</div>
+		{:else if data.user?.group_name}
+			<p class="text-sm text-neutral-500">{data.user.group_name}</p>
 		{/if}
+	</div>
+	<div class="flex flex-wrap gap-2 mb-6">
 		<scout-button type="link" href="/browse" variant="outlined">{m.page_home_btn_browse()}</scout-button>
-		<scout-button type="link" href="/profile" variant="outlined">{m.page_home_btn_settings()}</scout-button>
+		<scout-button type="link" href="/settings" variant="outlined">{m.page_home_btn_settings()}</scout-button>
 		<scout-button type="link" href="/guide" variant="outlined">{m.page_home_btn_guide()}</scout-button>
 		<scout-button type="link" href="/welcome" variant="outlined">{m.page_home_btn_about()}</scout-button>
-		<scout-button type="link" href="/issues/new" variant="primary">{m.page_home_btn_issues()}</scout-button>
 	</div>
 
 	<div class="grid md:grid-cols-2 gap-6">
