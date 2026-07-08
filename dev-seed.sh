@@ -764,7 +764,9 @@ BOOKING10_ID=$(curl -s -X POST "$API/api/v0/bookings" \
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING10_ID/items" \
   -H "$LEADER" -H "Content-Type: application/json" \
   -d '{"commercial_name":"Vindskydd","quantity":1}' > /dev/null
-curl -sf -X POST "$API/api/v0/bookings/$BOOKING10_ID/submit" -H "$LEADER" > /dev/null
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING10_ID/submit" \
+  -H "$LEADER" -H "Content-Type: application/json" \
+  -d '{"force_approval":true}' > /dev/null
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING10_ID/reject" \
   -H "$HEADER" -H "Content-Type: application/json" \
   -d '{"message":"Kolla lagerstatus för Vindskydd innan ni skickar in igen."}' > /dev/null
@@ -774,6 +776,58 @@ docker compose exec -T db psql -U utrustning -d utrustning -c "
   WHERE id = '$BOOKING10_ID';
 " > /dev/null
 echo "  Booking 10 (rejected, not resubmitted): 1x Vindskydd — backdated to trigger the archive-warning notification"
+
+# ─── Booking 11 & 12: Overdue item blocking a waiting booking (docs/delayed-return-swap.md) ───
+# Fana is a singleton (exactly 1 unit in the seed CSV, approval_level=high), so no
+# equivalent unit ever exists to auto-swap into - the block persists indefinitely for
+# demo purposes, instead of the nightly job silently resolving it within a minute (dev
+# interval) the way it would for any product with a spare unit. Booking 11's dates are
+# backdated well past both its own end_date and the nightly job's 48h grace period, so
+# it shows up as overdue immediately. Booking 12's dates already started but don't
+# overlap booking 11's original window, so it can still be assigned the same physical
+# Fana - reproducing exactly the scenario blocked_items/delay-preview are built for.
+echo ""
+echo "Creating booking 11 (overdue, holding the only Fana, never returned)..."
+START_BLOCK_PAST=$(date -d "-10 days" +%Y-%m-%d 2>/dev/null || date -v-10d +%Y-%m-%d)
+END_BLOCK_PAST=$(date -d "-5 days" +%Y-%m-%d 2>/dev/null || date -v-5d +%Y-%m-%d)
+BOOKING11_ID=$(curl -s -X POST "$API/api/v0/bookings" \
+  -H "$LEADER" -H "Content-Type: application/json" \
+  -d "{\"start_date\":\"$START_BLOCK_PAST\",\"end_date\":\"$END_BLOCK_PAST\",\"used_by_team_id\":\"$TEAM_ID\",\"title\":\"Nationaldagsfirande — Yggdrasil\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING11_ID/items" \
+  -H "$LEADER" -H "Content-Type: application/json" \
+  -d '{"commercial_name":"Fana","quantity":1}' > /dev/null
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING11_ID/submit" -H "$LEADER" > /dev/null
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING11_ID/approve" \
+  -H "$HEADER" -H "Content-Type: application/json" \
+  -d '{"message":"Godkänt."}' > /dev/null
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING11_ID/pickup" -H "$LEADER" > /dev/null
+
+FANA_ITEM11=$(find_item "$BOOKING11_ID" "Fana" "leader-yggdrasil")
+curl -sf -X PUT "$API/api/v0/bookings/$BOOKING11_ID/items/$FANA_ITEM11/pickup" \
+  -H "$LEADER" -H "Content-Type: application/json" \
+  -d '{"pickup_status":"picked_up"}' > /dev/null
+# Left un-returned on purpose - never marked delayed, never returned. Once the nightly
+# job's grace period has passed it becomes "overdue with no return status at all",
+# exactly like a leader who simply forgot.
+echo "  Booking 11 (picked_up, overdue): 1x Fana — never returned, will show as blocking booking 12"
+
+echo ""
+echo "Creating booking 12 (confirmed, waiting on the same Fana)..."
+START_BLOCK_NOW=$(date -d "-2 days" +%Y-%m-%d 2>/dev/null || date -v-2d +%Y-%m-%d)
+END_BLOCK_NOW=$(date -d "+3 days" +%Y-%m-%d 2>/dev/null || date -v+3d +%Y-%m-%d)
+BOOKING12_ID=$(curl -s -X POST "$API/api/v0/bookings" \
+  -H "$FLASKPOST" -H "Content-Type: application/json" \
+  -d "{\"start_date\":\"$START_BLOCK_NOW\",\"end_date\":\"$END_BLOCK_NOW\",\"used_by_team_id\":\"$FLASK_TEAM_ID\",\"title\":\"Flaggceremoni — Flaskpostorné\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING12_ID/items" \
+  -H "$FLASKPOST" -H "Content-Type: application/json" \
+  -d '{"commercial_name":"Fana","quantity":1}' > /dev/null
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING12_ID/submit" -H "$FLASKPOST" > /dev/null
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING12_ID/approve" \
+  -H "$HEADER" -H "Content-Type: application/json" \
+  -d '{"message":"Godkänt."}' > /dev/null
+echo "  Booking 12 (confirmed, blocked): 1x Fana — same physical flag as booking 11, shows blocked_items warning on the booking detail page"
 
 echo ""
 echo "Upserting personas into users table..."
