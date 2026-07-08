@@ -87,11 +87,12 @@ New endpoint: `GET /bookings/{id}/items/{itemId}/delay-preview?expected_return_d
 - New i18n keys only: `email_subject_`, `email_banner_`, `email_cta_`, `email_intro_` for the event - the generic `bookingMsg`/`renderBookingEmail`/GChat opener-detail machinery is reused unchanged (confirmed by tracing `fetchBookingEmailData`/`renderBookingEmail` - fully data-driven off the event key already).
 - Sender function follows `sendArchiveWarningForBooking`'s shape (broadcast to team channels + loop over `bookingRecipients`), but keyed by `booking_item.id` as `entityID` per decision 4's dedup correction, not the booking ID.
 
-### Frontend
+### Frontend. Written.
 
-- `ReturnChecklist.svelte`: extend the existing `checkConflict()` (triggered on `expectedReturnDate` change while marking an item delayed) to also call the new delay-preview endpoint. If a waiting booking is found, show its creator via the existing compact `UserBadge` component alongside (or replacing) the current generic `delayWarning` text - no new component needed.
-- `bookings/[id]/+page.svelte`: new warning section (visible once `blocked_items` is non-empty) listing each blocked item; each row links to the existing `UserInfoCard` (full popup) for the holder's `user_id`, with `contextBookingId` = the holder's booking, reusing item 6's component entirely.
-- `client.ts`: types + methods for `blocked_items` on `GetBooking`'s response and the new delay-preview call.
+- `ReturnChecklist.svelte`: `checkConflict()` (triggered on `expectedReturnDate` change while marking an item delayed) now also calls `api.getDelayPreview()`. If a waiting booking is found, shows its creator via the existing compact `UserBadge` component (which already wraps `UserInfoCard`) alongside the generic "fully booked" warning - no new component needed. Also fixed: the "fully booked" text was previously hardcoded Swedish, not going through Paraglide - now `return_delay_fully_booked`/`return_delay_blocks_booking` i18n keys. For the quantity-tracked group form (which has no single item in scope), the first unhandled item in the group is used as the representative - quantity-tracked units share one `articles` row, so any one of them carries the same `article_id`.
+- `bookings/[id]/+page.svelte`: new warning section (visible once `blocked_items` is non-empty) listing each blocked item, reusing `UserBadge` (not a bare `UserInfoCard` wire-up - `UserBadge` already is the "compact badge that opens the full popup on click" component per item 6) with `contextBookingId` = the holder's booking.
+- `client.ts`: `BlockedItem`/`DelayPreview` types, `blocked_items` added to `getBooking`'s response type, new `getDelayPreview()` method.
+- Backend support for the above: `GetBlockedItemsForBooking` query, `blocked_items` field on `Get`'s JSON response, and the new `GET /bookings/{id}/items/{itemId}/delay-preview` endpoint (`DelayPreview` handler in `bookings.go`) - documented in `docs/API.md`. Covered by `TestDelayPreview` and `TestGetBooking_BlockedItems` in `booking_swap_test.go`.
 
 ## Known simplifications / accepted limitations
 

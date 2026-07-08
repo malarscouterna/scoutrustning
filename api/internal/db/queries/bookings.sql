@@ -300,6 +300,31 @@ WHERE b.status = 'picked_up'
         OR (bi.return_status IS NULL AND b.end_date < @grace_cutoff)
     );
 
+-- name: GetBlockedItemsForBooking :many
+-- Powers the booking-detail warning section (docs/delayed-return-swap.md): this
+-- booking's own items whose start_date has arrived, where another booking still
+-- holds the exact same article_id, picked_up and unresolved (delayed or simply
+-- never returned) - i.e. this booking is actively blocked right now, mirroring
+-- FindWaitingBookingItemsForArticle's "waiting" definition but starting from the
+-- waiting booking instead of the article.
+SELECT bi.id AS booking_item_id, a.commercial_name, a.common_name,
+    holder_b.id AS holder_booking_id, holder_b.created_by AS holder_user_id,
+    holder_u.name AS holder_name, holder_u.picture AS holder_picture,
+    holder_bi.expected_return_date
+FROM booking_items bi
+JOIN bookings b ON bi.booking_id = b.id
+JOIN articles a ON bi.article_id = a.id
+JOIN booking_items holder_bi ON holder_bi.article_id = bi.article_id AND holder_bi.id != bi.id
+JOIN bookings holder_b ON holder_bi.booking_id = holder_b.id
+LEFT JOIN users holder_u ON holder_b.created_by = holder_u.id
+WHERE b.id = @booking_id
+    AND b.group_id = @group_id
+    AND b.start_date <= CURRENT_DATE
+    AND holder_b.status = 'picked_up'
+    AND holder_bi.pickup_status IS NOT NULL
+    AND (holder_bi.return_status IS NULL OR holder_bi.return_status = 'delayed')
+ORDER BY bi.id;
+
 -- name: AllItemsReturned :one
 -- Returns true if every picked-up item has a final return status.
 -- Delayed items are NOT final — they must be resolved before completing.

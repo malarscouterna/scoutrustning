@@ -30,6 +30,8 @@
 	let autoApproves = $state(data.auto_approves);
 	// svelte-ignore state_referenced_locally
 	let archiveDeadline = $state(data.archive_deadline);
+	// svelte-ignore state_referenced_locally
+	let blockedItems = $state(data.blocked_items);
 	let error = $state('');
 	let message = $state('');
 
@@ -38,6 +40,7 @@
 		items = data.items;
 		autoApproves = data.auto_approves;
 		archiveDeadline = data.archive_deadline;
+		blockedItems = data.blocked_items;
 	});
 
 	// Countdown tick for the archive-deadline banner - updated every 30s, not every
@@ -78,6 +81,7 @@
 			items = result.items;
 			autoApproves = result.auto_approves;
 			archiveDeadline = result.archive_deadline;
+			blockedItems = result.blocked_items;
 			return result.items;
 		} finally {
 			reloading = false;
@@ -95,6 +99,7 @@
 				items = result.items;
 				autoApproves = result.auto_approves;
 				archiveDeadline = result.archive_deadline;
+				blockedItems = result.blocked_items;
 				if (result.booking.status !== booking.status) {
 					booking = result.booking;
 				}
@@ -295,6 +300,21 @@
 						<p>{booking.status === 'draft' ? m.page_booking_archive_hint_draft() : m.page_booking_archive_hint_rejected()}</p>
 					</div>
 				{/if}
+			{/if}
+
+			<!-- Blocked items: this booking's own items still waiting on an exact unit
+			     another booking hasn't returned (docs/delayed-return-swap.md). Clears
+			     once auto-swap resolves it or the holder returns the item. -->
+			{#if blockedItems.length > 0}
+				<div class="border rounded p-3 mb-4 text-sm bg-amber-50 border-amber-300 text-amber-900 space-y-2">
+					<p class="font-medium">{m.page_booking_blocked_items_heading()}</p>
+					{#each blockedItems as blocked (blocked.booking_item_id)}
+						<div class="flex items-center gap-2 flex-wrap">
+							<span>{m.page_booking_blocked_item_row({ name: blocked.common_name || blocked.commercial_name })}</span>
+							<UserBadge userId={blocked.holder_user_id} name={blocked.holder_name ?? ''} picture={blocked.holder_picture} contextBookingId={blocked.holder_booking_id} size={18} />
+						</div>
+					{/each}
+				</div>
 			{/if}
 
 			<!-- Section 1: booking details -->

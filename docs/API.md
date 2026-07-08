@@ -270,14 +270,24 @@ Get booking with its items (including article details).
   "booking": { ... },
   "items": [
     {"id": "uuid", "commercial_name": "Sibley", "common_name": "Sibley 1", "location_name": "Hajkförrådet", ...}
+  ],
+  "auto_approves": true,
+  "archive_deadline": "2026-06-10T12:00:00Z",
+  "blocked_items": [
+    {
+      "booking_item_id": "uuid", "commercial_name": "Sibley", "common_name": "Sibley 1",
+      "holder_booking_id": "uuid", "holder_user_id": "3000924", "holder_name": "...", "holder_picture": null,
+      "expected_return_date": "2026-06-12"
+    }
   ]
 }
 ```
+`blocked_items` (docs/delayed-return-swap.md) lists this booking's own items whose `start_date` has arrived but the exact same article is still held, unresolved, by another `picked_up` booking - empty once auto-swap resolves it or the holder returns the item.
 
 ### `PUT /api/v0/bookings/{id}`
 Update a booking. Allowed on draft, submitted, approved, and confirmed bookings. Blocked once the booking is in `picked_up` status - use item-level endpoints instead. Access: creator, team members, or equipment manager.
 
-All fields are optional - only provided fields are updated. `title`, if provided, must be non-empty. If dates change, all existing items are re-validated against availability.
+All fields are optional - only provided fields are updated. `title`, if provided, must be non-empty. If dates change, all existing items are re-validated against availability - conflicting items are first silently swapped to an equivalent free unit if one exists (docs/delayed-return-swap.md decision 7); only items with no equivalent still 409.
 
 **Body**
 ```json
@@ -291,7 +301,7 @@ All fields are optional - only provided fields are updated. `title`, if provided
 }
 ```
 
-**Response** `200` | `400` | `403` | `404` | `409` (items not available for new dates)
+**Response** `200` | `400` | `403` | `404` | `409` (items not available for new dates, no equivalent unit found)
 
 ### `POST /api/v0/bookings/{id}/items`
 Add articles to a booking by commercial_name and quantity. Eagerly assigns specific available articles. Allowed on editable bookings (not returned/cancelled). Access: creator, team members, or equipment manager.
@@ -455,7 +465,23 @@ Side effects: `reported_usable`/`reported_unusable`/`missing` no longer set arti
 ```
 Valid values: `returned_ok`, `delayed`, `reported_usable`, `reported_unusable`, `missing`, `""` (undo). `expected_return_date` required when status is `delayed`.
 
+Side effects (docs/delayed-return-swap.md): `delayed`, `reported_unusable`, and `missing` each try to silently substitute an equivalent free unit into whichever other booking is currently blocked by this exact article, logging a `swap` booking event on that booking; `reported_usable` only upgrades a waiting booking onto a strictly-`ok` unit if one exists (opportunistic, never notifies). If no equivalent unit is found, the blocked booking's team/creator is notified instead - the current (late) booker is never named in that notification.
+
 **Response** `200` | `400` | `403` | `404`
+
+### `GET /api/v0/bookings/{id}/items/{itemId}/delay-preview`
+Read-only preview (docs/delayed-return-swap.md) of who would be blocked if this item's return were delayed until the given date - powers the "next expected user" hint while a manager is still filling in the form, before saving. Makes no changes. Access: creator, team members, or equipment manager.
+
+**Query params**: `expected_return_date` (required, `YYYY-MM-DD`).
+
+**Response** `200` | `400` | `403` | `404`
+```json
+{"blocked": false}
+```
+or
+```json
+{"blocked": true, "booking_id": "uuid", "holder_user_id": "3000924", "holder_name": "...", "holder_picture": null}
+```
 
 ---
 

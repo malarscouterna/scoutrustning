@@ -2,6 +2,7 @@
 	import { createApiClient, type BookingItem } from '$lib/api/client';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
 	import ReportIssueSheet from '$lib/components/ReportIssueSheet.svelte';
+	import UserBadge from '$lib/components/UserBadge.svelte';
 	import * as m from '$lib/paraglide/messages.js';
 	import { translateError } from '$lib/errors';
 
@@ -22,6 +23,7 @@
 	let form = $state({ status: '', expectedReturnDate: '' });
 	let lastExpectedDate = $state('');
 	let delayWarning = $state('');
+	let delayBlockedBy = $state<{ userId: string; name: string; picture: string | null } | null>(null);
 	let quantityInputs = $state<Record<string, number>>({});
 	let expandedGroups = $state<Set<string>>(new Set());
 	let completing = $state(false);
@@ -155,7 +157,7 @@
 
 	function openForm(id: string) {
 		activeItemId = id; activeGroupKey = null;
-		form = { status: '', expectedReturnDate: lastExpectedDate }; delayWarning = '';
+		form = { status: '', expectedReturnDate: lastExpectedDate }; delayWarning = ''; delayBlockedBy = null;
 	}
 
 	async function returnGroupOk(g: QGroup) {
@@ -203,18 +205,28 @@
 	function openGroupForm(g: QGroup) {
 		const unhandled = g.picked.filter((i) => !i.return_status || i.return_status === 'pending');
 		activeGroupKey = g.key; activeItemId = null;
-		form = { status: '', expectedReturnDate: lastExpectedDate }; delayWarning = '';
+		form = { status: '', expectedReturnDate: lastExpectedDate }; delayWarning = ''; delayBlockedBy = null;
 		// Always reset to current unhandled count (Issue 11)
 		quantityInputs[`${g.key}_form`] = unhandled.length;
 	}
 
-	async function checkConflict(name: string, date: string) {
+	async function checkConflict(itemId: string, name: string, date: string) {
 		delayWarning = '';
+		delayBlockedBy = null;
 		if (!date) return;
 		try {
 			const a = await api.checkAvailability(date, date);
 			const g = a.find((x) => x.commercial_name === name);
-			if (!g || g.available_count === 0) delayWarning = `${name} är fullbokad ${date}`;
+			if (!g || g.available_count === 0) delayWarning = m.return_delay_fully_booked({ name, date });
+		} catch {}
+		// docs/delayed-return-swap.md: "next expected user" preview - if another
+		// booking is already waiting on this exact item, show who so the person
+		// marking it delayed knows an auto-swap will (or won't) be attempted.
+		try {
+			const preview = await api.getDelayPreview(bookingId, itemId, date);
+			if (preview.blocked) {
+				delayBlockedBy = { userId: preview.holder_user_id, name: preview.holder_name ?? '', picture: preview.holder_picture };
+			}
 		} catch {}
 	}
 </script>
@@ -307,8 +319,11 @@
 					</div>
 					{#if form.status === 'delayed'}
 						<label class="block"><span class="text-xs text-neutral-600">{m.return_expected_date()}</span>
-							<input type="date" bind:value={form.expectedReturnDate} oninput={() => checkConflict(g.name, form.expectedReturnDate)} class="block border rounded px-2 py-1 text-sm w-full" /></label>
-						{#if delayWarning}<p class="text-xs text-orange-600">⚠ {delayWarning}</p>{/if}
+							<input type="date" bind:value={form.expectedReturnDate} oninput={() => unhandled[0] && checkConflict(unhandled[0].id, g.name, form.expectedReturnDate)} class="block border rounded px-2 py-1 text-sm w-full" /></label>
+						{#if delayBlockedBy}
+							<p class="text-xs text-orange-600">⚠ {m.return_delay_blocks_booking()}</p>
+							<UserBadge userId={delayBlockedBy.userId} name={delayBlockedBy.name} picture={delayBlockedBy.picture} />
+						{:else if delayWarning}<p class="text-xs text-orange-600">⚠ {delayWarning}</p>{/if}
 					{/if}
 					{#if form.status === 'reported_usable' || form.status === 'reported_unusable' || form.status === 'missing'}
 						<p class="text-xs text-neutral-500">{m.return_desc_hint()}</p>
@@ -366,8 +381,11 @@
 				</div>
 				{#if form.status === 'delayed'}
 					<label class="block"><span class="text-xs text-neutral-600">{m.return_expected_date()}</span>
-						<input type="date" bind:value={form.expectedReturnDate} oninput={() => checkConflict(item.commercial_name, form.expectedReturnDate)} class="block border rounded px-2 py-1 text-sm w-full" /></label>
-					{#if delayWarning}<p class="text-xs text-orange-600">⚠ {delayWarning}</p>{/if}
+						<input type="date" bind:value={form.expectedReturnDate} oninput={() => checkConflict(item.id, item.commercial_name, form.expectedReturnDate)} class="block border rounded px-2 py-1 text-sm w-full" /></label>
+					{#if delayBlockedBy}
+						<p class="text-xs text-orange-600">⚠ {m.return_delay_blocks_booking()}</p>
+						<UserBadge userId={delayBlockedBy.userId} name={delayBlockedBy.name} picture={delayBlockedBy.picture} />
+					{:else if delayWarning}<p class="text-xs text-orange-600">⚠ {delayWarning}</p>{/if}
 				{/if}
 				{#if form.status === 'reported_usable' || form.status === 'reported_unusable' || form.status === 'missing'}
 					<p class="text-xs text-neutral-500">{m.return_desc_hint()}</p>
