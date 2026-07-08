@@ -284,8 +284,12 @@ ORDER BY b.start_date ASC;
 -- name: FindDelayedOrOverdueItems :many
 -- Cross-group enumeration for the nightly swap-resolution job (mirrors
 -- GetAllOverdueBookings's cross-group shape): booking_items still picked_up
--- where either a manager already marked them delayed, or the booking's
--- end_date has passed with no return status recorded at all.
+-- where either someone already explicitly marked them delayed during return,
+-- or the booking's end_date has passed @grace_cutoff (today minus the grace
+-- period) with no return status recorded at all - an explicit "delayed" mark
+-- is already a known problem and skips the grace period, but a booking that's
+-- merely a day late with nobody flagging it yet shouldn't trigger a swap
+-- before it's had a chance to come back on its own.
 SELECT bi.id AS booking_item_id, bi.group_id, bi.article_id, bi.booking_id
 FROM booking_items bi
 JOIN bookings b ON bi.booking_id = b.id
@@ -293,7 +297,7 @@ WHERE b.status = 'picked_up'
     AND bi.pickup_status IS NOT NULL
     AND (
         bi.return_status = 'delayed'
-        OR (bi.return_status IS NULL AND b.end_date < @today)
+        OR (bi.return_status IS NULL AND b.end_date < @grace_cutoff)
     );
 
 -- name: AllItemsReturned :one

@@ -468,9 +468,13 @@ type FindDelayedOrOverdueItemsRow struct {
 // Cross-group enumeration for the nightly swap-resolution job (mirrors
 // GetAllOverdueBookings's cross-group shape): booking_items still picked_up
 // where either a manager already marked them delayed, or the booking's
-// end_date has passed with no return status recorded at all.
-func (q *Queries) FindDelayedOrOverdueItems(ctx context.Context, today pgtype.Date) ([]FindDelayedOrOverdueItemsRow, error) {
-	rows, err := q.db.Query(ctx, findDelayedOrOverdueItems, today)
+// end_date has passed @grace_cutoff (today minus the grace period) with no
+// return status recorded at all - a manager's explicit "delayed" mark is
+// already a known problem and skips the grace period, but a booking that's
+// merely a day late with nobody flagging it yet shouldn't trigger a swap
+// before it's had a chance to come back on its own.
+func (q *Queries) FindDelayedOrOverdueItems(ctx context.Context, graceCutoff pgtype.Date) ([]FindDelayedOrOverdueItemsRow, error) {
+	rows, err := q.db.Query(ctx, findDelayedOrOverdueItems, graceCutoff)
 	if err != nil {
 		return nil, err
 	}

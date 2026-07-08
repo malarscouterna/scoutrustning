@@ -150,10 +150,11 @@ func TestResolveOverdueSwaps_NightlyJob(t *testing.T) {
 	articleX := articleIDs[0]
 	articleY := articleIDs[1]
 
-	// Force booking A's end_date into the past so FindDelayedOrOverdueItems
-	// picks it up as overdue (no explicit "delayed" return status needed).
+	// Force booking A's end_date into the past, beyond the nightly job's grace
+	// period, so FindDelayedOrOverdueItems picks it up as overdue (no explicit
+	// "delayed" return status needed).
 	_, err := env.Pool.Exec(context.Background(),
-		"UPDATE bookings SET start_date = CURRENT_DATE - INTERVAL '10 day', end_date = CURRENT_DATE - INTERVAL '1 day' WHERE id = $1", bookingA)
+		"UPDATE bookings SET start_date = CURRENT_DATE - INTERVAL '10 day', end_date = CURRENT_DATE - INTERVAL '3 day' WHERE id = $1", bookingA)
 	if err != nil {
 		t.Fatalf("failed to backdate booking A: %v", err)
 	}
@@ -202,6 +203,69 @@ func TestResolveOverdueSwaps_NightlyJob(t *testing.T) {
 	itemAfter := detailAfter["items"].([]any)[0].(map[string]any)
 	if itemAfter["article_id"] != articleY {
 		t.Errorf("expected article swapped to Y (%s) after nightly job, got %v", articleY, itemAfter["article_id"])
+	}
+}
+
+// TestResolveOverdueSwaps_GracePeriod exercises the nightly job's grace
+// period: a booking that's only a day late (nobody has marked it delayed)
+// should not have its item swapped out from under it just because another
+// booking happens to be waiting - only once it's overdue by more than
+// overdueSwapGracePeriod does the nightly job step in.
+func TestResolveOverdueSwaps_GracePeriod(t *testing.T) {
+	env := testutil.SetupTestEnv(t)
+	mountReturnRoutes(env)
+
+	leaderB := env.ClientAs("leader-flaskpost")
+
+	bookingA, _, articleIDs := setupReturnEnv(t, env, 2, 1)
+	articleX := articleIDs[0]
+
+	// Only 1 day overdue - well within the 48h grace period.
+	_, err := env.Pool.Exec(context.Background(),
+		"UPDATE bookings SET start_date = CURRENT_DATE - INTERVAL '6 day', end_date = CURRENT_DATE - INTERVAL '1 day' WHERE id = $1", bookingA)
+	if err != nil {
+		t.Fatalf("failed to backdate booking A: %v", err)
+	}
+
+	teamID := getTeamID(t, leaderB, "Flaskpostorné")
+	now := time.Now()
+	startB := now.Format("2006-01-02")
+	endB := now.AddDate(0, 0, 5).Format("2006-01-02")
+	b, _ := json.Marshal(map[string]any{"start_date": startB, "end_date": endB, "used_by_team_id": teamID, "title": "Booking B"})
+	resp, _ := leaderB.Post("/api/v0/bookings", bytes.NewReader(b))
+	var bookingBResp map[string]any
+	json.NewDecoder(resp.Body).Decode(&bookingBResp)
+	resp.Body.Close()
+	bookingB := bookingBResp["id"].(string)
+
+	b, _ = json.Marshal(map[string]any{"commercial_name": "ReturnTest", "quantity": 1})
+	resp, _ = leaderB.Post("/api/v0/bookings/"+bookingB+"/items", bytes.NewReader(b))
+	resp.Body.Close()
+
+	resp, _ = leaderB.Get("/api/v0/bookings/" + bookingB)
+	var detailBefore map[string]any
+	json.NewDecoder(resp.Body).Decode(&detailBefore)
+	resp.Body.Close()
+	itemBefore := detailBefore["items"].([]any)[0].(map[string]any)
+	if itemBefore["article_id"] != articleX {
+		t.Fatalf("expected booking B assigned article X (%s), got %v", articleX, itemBefore["article_id"])
+	}
+
+	swapped, err := handler.ResolveOverdueSwaps(context.Background(), env.Queries)
+	if err != nil {
+		t.Fatalf("ResolveOverdueSwaps failed: %v", err)
+	}
+	if swapped != 0 {
+		t.Errorf("expected no swaps within the grace period, got %d", swapped)
+	}
+
+	resp, _ = leaderB.Get("/api/v0/bookings/" + bookingB)
+	defer resp.Body.Close()
+	var detailAfter map[string]any
+	json.NewDecoder(resp.Body).Decode(&detailAfter)
+	itemAfter := detailAfter["items"].([]any)[0].(map[string]any)
+	if itemAfter["article_id"] != articleX {
+		t.Errorf("expected article to remain X (%s) within the grace period, got %v", articleX, itemAfter["article_id"])
 	}
 }
 
