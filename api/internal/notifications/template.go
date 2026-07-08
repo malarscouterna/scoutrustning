@@ -38,6 +38,7 @@ var eventStyles = map[string]eventStyle{
 	EventBookingCancelled:          {bannerBG: "#e5e5e6", bannerFG: "#585a5c", ctaBG: "#374b5a"},
 	EventBookingReminder:           {bannerBG: "#e6eeff", bannerFG: "#003660", ctaBG: "#003660"},
 	EventBookingOverdue:            {bannerBG: "#ffe2e2", bannerFG: "#c10007", ctaBG: "#d97706"},
+	EventBookingArchiveWarning:     {bannerBG: "#fef3c7", bannerFG: "#92400e", ctaBG: "#d97706"},
 	EventIssueCreated:              {bannerBG: "#fef3c7", bannerFG: "#92400e", ctaBG: "#d97706"},
 	EventIssueAssignedToMe:         {bannerBG: "#e6eeff", bannerFG: "#003660", ctaBG: "#003660"},
 	EventIssueResolved:             {bannerBG: "#dcfce7", bannerFG: "#008236", ctaBG: "#008236"},
@@ -90,6 +91,9 @@ type BookingEmailData struct {
 	Title         string
 	Items         []db.ListBookingItemsRow
 	Events        []db.ListBookingEventsRow
+	// ArchiveDeadline is only set for EventBookingArchiveWarning; interpolated into
+	// the email intro as an absolute date/time rather than a live countdown.
+	ArchiveDeadline pgtype.Timestamptz
 }
 
 // IssueEmailData holds all values needed to render an issue email.
@@ -107,6 +111,16 @@ type IssueEmailData struct {
 	Description  string
 	ReporterName string
 	Events       []db.ListIssueEventsRow
+}
+
+// bookingIntroKey returns the i18n key for a booking email's intro text. The archive
+// warning has distinct copy for a still-in-draft booking ("submit it") vs. one already
+// rejected ("resubmit it"), since those need different actions from the reader.
+func bookingIntroKey(d BookingEmailData) string {
+	if d.Event == EventBookingArchiveWarning {
+		return "email_intro_" + d.Event + "_" + d.Status
+	}
+	return "email_intro_" + d.Event
 }
 
 func renderBookingEmail(d BookingEmailData) (htmlOut, textOut string) {
@@ -136,7 +150,7 @@ func renderBookingEmail(d BookingEmailData) (htmlOut, textOut string) {
 		"EMAIL_BANNER_LABEL", html.EscapeString(bannerLabel),
 		"EMAIL_BANNER_BG", style.bannerBG,
 		"EMAIL_BANNER_FG", style.bannerFG,
-		"EMAIL_INTRO", html.EscapeString(i18n.T(d.Lang, "email_intro_"+d.Event)),
+		"EMAIL_INTRO", html.EscapeString(i18n.T(d.Lang, bookingIntroKey(d), map[string]string{"deadline": formatDateTime(d.Lang, d.ArchiveDeadline)})),
 		"EMAIL_START_DATE", html.EscapeString(start),
 		"EMAIL_END_DATE", html.EscapeString(end),
 		"EMAIL_TEAM_LABEL", html.EscapeString(teamLabel),
@@ -326,6 +340,16 @@ func formatDate(lang string, d pgtype.Date) string {
 	}
 	months := []string{"jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec"}
 	return fmt.Sprintf("%d %s %d", t.Day(), months[t.Month()-1], t.Year())
+}
+
+// formatDateTime formats an absolute deadline (day + time), used instead of a live
+// countdown in emails since a decaying "X hours left" number goes stale by the time
+// the recipient reads it.
+func formatDateTime(lang string, ts pgtype.Timestamptz) string {
+	if !ts.Valid {
+		return ""
+	}
+	return fmt.Sprintf("%s %02d:%02d", formatDate(lang, pgtype.Date{Time: ts.Time, Valid: true}), ts.Time.Hour(), ts.Time.Minute())
 }
 
 func uuidString(u pgtype.UUID) string {
@@ -584,7 +608,7 @@ func buildBookingText(d BookingEmailData, bannerLabel, start, end, teamLabel, bo
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n\n", bannerLabel)
 	fmt.Fprintf(&b, "Hej %s,\n\n", d.RecipientName)
-	fmt.Fprintf(&b, "%s\n\n", i18n.T(d.Lang, "email_intro_"+d.Event))
+	fmt.Fprintf(&b, "%s\n\n", i18n.T(d.Lang, bookingIntroKey(d), map[string]string{"deadline": formatDateTime(d.Lang, d.ArchiveDeadline)}))
 	fmt.Fprintf(&b, "%s - %s\n", start, end)
 	fmt.Fprintf(&b, "%s  |  %s\n\n", teamLabel, i18n.T(d.Lang, "booking_status_"+d.Status))
 	if len(d.Items) > 0 {

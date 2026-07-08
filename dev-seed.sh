@@ -450,7 +450,7 @@ END_5D=$(date -d "+5 days" +%Y-%m-%d 2>/dev/null || date -v+5d +%Y-%m-%d)
 echo "Creating booking 1 (active, picked_up, $TODAY to $END_5D)..."
 BOOKING_ID=$(curl -s -X POST "$API/api/v0/bookings" \
   -H "$LEADER" -H "Content-Type: application/json" \
-  -d "{\"start_date\":\"$TODAY\",\"end_date\":\"$END_5D\",\"used_by_team_id\":\"$TEAM_ID\",\"notes\":\"Hajk med Yggdrasil\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+  -d "{\"start_date\":\"$TODAY\",\"end_date\":\"$END_5D\",\"used_by_team_id\":\"$TEAM_ID\",\"title\":\"Hajk med Yggdrasil\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
 echo "  Booking: $BOOKING_ID"
 
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING_ID/items" \
@@ -548,7 +548,7 @@ END_12D=$(date -d "+12 days" +%Y-%m-%d 2>/dev/null || date -v+12d +%Y-%m-%d)
 echo "Creating booking 2 (confirmed, $START_7D to $END_12D)..."
 BOOKING2_ID=$(curl -s -X POST "$API/api/v0/bookings" \
   -H "$LEADER" -H "Content-Type: application/json" \
-  -d "{\"start_date\":\"$START_7D\",\"end_date\":\"$END_12D\",\"used_by_team_id\":\"$TEAM_ID\",\"notes\":\"Sommarläger vid Karsvik, 12 utmanare + 3 ledare\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+  -d "{\"start_date\":\"$START_7D\",\"end_date\":\"$END_12D\",\"used_by_team_id\":\"$TEAM_ID\",\"title\":\"Sommarläger vid Karsvik, 12 utmanare + 3 ledare\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
 
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING2_ID/items" \
   -H "$LEADER" -H "Content-Type: application/json" \
@@ -573,7 +573,7 @@ END_16D=$(date -d "+16 days" +%Y-%m-%d 2>/dev/null || date -v+16d +%Y-%m-%d)
 echo "Creating booking 3 (submitted, awaiting approval, $START_14D to $END_16D)..."
 BOOKING3_ID=$(curl -s -X POST "$API/api/v0/bookings" \
   -H "$FLASKPOST" -H "Content-Type: application/json" \
-  -d "{\"start_date\":\"$START_14D\",\"end_date\":\"$END_16D\",\"used_by_team_id\":\"$FLASK_TEAM_ID\",\"notes\":\"Helgutflykt med Flaskpostorné, övernattning vid sjön\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+  -d "{\"start_date\":\"$START_14D\",\"end_date\":\"$END_16D\",\"used_by_team_id\":\"$FLASK_TEAM_ID\",\"title\":\"Helgutflykt med Flaskpostorné, övernattning vid sjön\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
 
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING3_ID/items" \
   -H "$FLASKPOST" -H "Content-Type: application/json" \
@@ -595,7 +595,7 @@ END_22D=$(date -d "+22 days" +%Y-%m-%d 2>/dev/null || date -v+22d +%Y-%m-%d)
 echo "Creating booking 4 (trusted team, auto-confirmed, $START_21D to $END_22D)..."
 BOOKING4_ID=$(curl -s -X POST "$API/api/v0/bookings" \
   -H "$PROJECT_LEADER" -H "Content-Type: application/json" \
-  -d "{\"start_date\":\"$START_21D\",\"end_date\":\"$END_22D\",\"used_by_team_id\":\"$VALBORG_ID\",\"notes\":\"Valborg 2026 — uppställning och fest\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+  -d "{\"start_date\":\"$START_21D\",\"end_date\":\"$END_22D\",\"used_by_team_id\":\"$VALBORG_ID\",\"title\":\"Valborg 2026 — uppställning och fest\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
 
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING4_ID/items" \
   -H "$PROJECT_LEADER" -H "Content-Type: application/json" \
@@ -613,7 +613,7 @@ END_PAST=$(date -d "-10 days" +%Y-%m-%d 2>/dev/null || date -v-10d +%Y-%m-%d)
 echo "Creating booking 5 (returned, $START_PAST to $END_PAST)..."
 BOOKING5_ID=$(curl -s -X POST "$API/api/v0/bookings" \
   -H "$LEADER" -H "Content-Type: application/json" \
-  -d "{\"start_date\":\"$START_PAST\",\"end_date\":\"$END_PAST\",\"used_by_team_id\":\"$TEAM_ID\",\"notes\":\"Helgövning i skogen\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+  -d "{\"start_date\":\"$START_PAST\",\"end_date\":\"$END_PAST\",\"used_by_team_id\":\"$TEAM_ID\",\"title\":\"Helgövning i skogen\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
 
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING5_ID/items" \
   -H "$LEADER" -H "Content-Type: application/json" \
@@ -649,7 +649,7 @@ END_11D=$(date -d "+11 days" +%Y-%m-%d 2>/dev/null || date -v+11d +%Y-%m-%d)
 echo "Creating booking 6 (manager's own, confirmed, $START_10D to $END_11D)..."
 BOOKING6_ID=$(curl -s -X POST "$API/api/v0/bookings" \
   -H "$MANAGER" -H "Content-Type: application/json" \
-  -d "{\"start_date\":\"$START_10D\",\"end_date\":\"$END_11D\",\"notes\":\"Inventering av Hajkförrådet\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+  -d "{\"start_date\":\"$START_10D\",\"end_date\":\"$END_11D\",\"title\":\"Inventering av Hajkförrådet\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
 
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING6_ID/items" \
   -H "$MANAGER" -H "Content-Type: application/json" \
@@ -664,7 +664,7 @@ END_27D=$(date -d "+27 days" +%Y-%m-%d 2>/dev/null || date -v+27d +%Y-%m-%d)
 echo "Creating booking 7 (rejected then resubmitted, $START_25D to $END_27D)..."
 BOOKING7_ID=$(curl -s -X POST "$API/api/v0/bookings" \
   -H "$LEADER" -H "Content-Type: application/json" \
-  -d "{\"start_date\":\"$START_25D\",\"end_date\":\"$END_27D\",\"used_by_team_id\":\"$TEAM_ID\",\"notes\":\"Hajk med Yggdrasil — behöver tält och tarp\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+  -d "{\"start_date\":\"$START_25D\",\"end_date\":\"$END_27D\",\"used_by_team_id\":\"$TEAM_ID\",\"title\":\"Hajk med Yggdrasil — behöver tält och tarp\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
 
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING7_ID/items" \
   -H "$LEADER" -H "Content-Type: application/json" \
@@ -714,7 +714,7 @@ END_32D=$(date -d "+32 days" +%Y-%m-%d 2>/dev/null || date -v+32d +%Y-%m-%d)
 echo "Creating booking 8 (force-approval, $START_30D to $END_32D)..."
 BOOKING8_ID=$(curl -s -X POST "$API/api/v0/bookings" \
   -H "$LEADER" -H "Content-Type: application/json" \
-  -d "{\"start_date\":\"$START_30D\",\"end_date\":\"$END_32D\",\"used_by_team_id\":\"$TEAM_ID\",\"notes\":\"Prova-på-dag för nya scouter\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+  -d "{\"start_date\":\"$START_30D\",\"end_date\":\"$END_32D\",\"used_by_team_id\":\"$TEAM_ID\",\"title\":\"Prova-på-dag för nya scouter\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
 
 curl -sf -X POST "$API/api/v0/bookings/$BOOKING8_ID/items" \
   -H "$LEADER" -H "Content-Type: application/json" \
@@ -726,6 +726,53 @@ curl -sf -X POST "$API/api/v0/bookings/$BOOKING8_ID/submit" \
   -H "$LEADER" -H "Content-Type: application/json" \
   -d '{"message":"Första gången vi gör detta, vill gärna att ni kollar att vi bokar rätt grejer?","force_approval":true}' > /dev/null
 echo "  Booking 8 (submitted, force-approval): 3x Stormkök, 2x Brandfilt — leader asked for review"
+
+# ─── Booking 9: Draft with items, backdated to trigger the auto-archive warning ───
+# Group defaults (see docs/pre-release.md "Booking auto-archive setting"): a draft with
+# items is archived after 3 days. Backdating first_item_added_at puts the deadline ~23.5h
+# out, inside the hourly job's 23-24h warning window - so a reseed reliably produces a
+# booking_archive_warning email/GChat notification on the next check (every minute in dev).
+echo ""
+START_40D=$(date -d "+40 days" +%Y-%m-%d 2>/dev/null || date -v+40d +%Y-%m-%d)
+END_42D=$(date -d "+42 days" +%Y-%m-%d 2>/dev/null || date -v+42d +%Y-%m-%d)
+echo "Creating booking 9 (draft with items, backdated for auto-archive warning)..."
+BOOKING9_ID=$(curl -s -X POST "$API/api/v0/bookings" \
+  -H "$LEADER" -H "Content-Type: application/json" \
+  -d "{\"start_date\":\"$START_40D\",\"end_date\":\"$END_42D\",\"used_by_team_id\":\"$TEAM_ID\",\"title\":\"Höstläger — planering pågår\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING9_ID/items" \
+  -H "$LEADER" -H "Content-Type: application/json" \
+  -d '{"commercial_name":"Stormkök","quantity":1}' > /dev/null
+
+docker compose exec -T db psql -U utrustning -d utrustning -c "
+  UPDATE bookings SET first_item_added_at = (now() - interval '3 days') + interval '23 hours 30 minutes'
+  WHERE id = '$BOOKING9_ID';
+" > /dev/null
+echo "  Booking 9 (draft, left unsubmitted): 1x Stormkök — backdated to trigger the archive-warning notification"
+
+# ─── Booking 10: Rejected and never resubmitted, backdated to trigger the auto-archive warning ───
+# Default: a rejected booking awaiting resubmission is archived after 7 days.
+echo ""
+START_45D=$(date -d "+45 days" +%Y-%m-%d 2>/dev/null || date -v+45d +%Y-%m-%d)
+END_47D=$(date -d "+47 days" +%Y-%m-%d 2>/dev/null || date -v+47d +%Y-%m-%d)
+echo "Creating booking 10 (rejected, not resubmitted, backdated for auto-archive warning)..."
+BOOKING10_ID=$(curl -s -X POST "$API/api/v0/bookings" \
+  -H "$LEADER" -H "Content-Type: application/json" \
+  -d "{\"start_date\":\"$START_45D\",\"end_date\":\"$END_47D\",\"used_by_team_id\":\"$TEAM_ID\",\"title\":\"Vinterhajk — väntar på svar\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING10_ID/items" \
+  -H "$LEADER" -H "Content-Type: application/json" \
+  -d '{"commercial_name":"Vindskydd","quantity":1}' > /dev/null
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING10_ID/submit" -H "$LEADER" > /dev/null
+curl -sf -X POST "$API/api/v0/bookings/$BOOKING10_ID/reject" \
+  -H "$HEADER" -H "Content-Type: application/json" \
+  -d '{"message":"Kolla lagerstatus för Vindskydd innan ni skickar in igen."}' > /dev/null
+
+docker compose exec -T db psql -U utrustning -d utrustning -c "
+  UPDATE bookings SET updated_at = (now() - interval '7 days') + interval '23 hours 30 minutes'
+  WHERE id = '$BOOKING10_ID';
+" > /dev/null
+echo "  Booking 10 (rejected, not resubmitted): 1x Vindskydd — backdated to trigger the archive-warning notification"
 
 echo ""
 echo "Upserting personas into users table..."

@@ -68,6 +68,7 @@ type Booking struct {
 	Title                 string             `json:"title"`
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	FirstItemAddedAt      pgtype.Timestamptz `json:"first_item_added_at"`
 }
 
 type BookingEvent struct {
@@ -134,6 +135,8 @@ type GroupSetting struct {
 	SmtpKeyMasked                    string             `json:"smtp_key_masked"`
 	PersonalBookingRole              string             `json:"personal_booking_role"`
 	LogoSquareFileID                 pgtype.UUID        `json:"logo_square_file_id"`
+	DraftArchiveDays                 int32              `json:"draft_archive_days"`
+	RejectedArchiveDays              int32              `json:"rejected_archive_days"`
 }
 
 type IssueArticle struct {

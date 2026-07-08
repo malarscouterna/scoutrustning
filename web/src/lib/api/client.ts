@@ -162,6 +162,8 @@ export interface GroupSettings {
 	manager_notes_role: string;
 	personal_booking_role: string;
 	default_language: string;
+	draft_archive_days: number;
+	rejected_archive_days: number;
 	notification_channels: string[];
 	logo_url: string;
 	logo_square_url: string;
@@ -436,7 +438,7 @@ export function createApiClient(opts: FetchOptions = {}) {
 
 		// Group settings
 		getGroupSettings: () => request<GroupSettings>('/group-settings', opts),
-		updateGroupSettings: (data: { notification_email_from?: string; smtp_host?: string; smtp_port?: number; smtp_tls?: string; smtp_user?: string; smtp_key?: string | null; default_approval_level?: string; default_language?: string }) =>
+		updateGroupSettings: (data: { notification_email_from?: string; smtp_host?: string; smtp_port?: number; smtp_tls?: string; smtp_user?: string; smtp_key?: string | null; default_approval_level?: string; default_language?: string; draft_archive_days?: number; rejected_archive_days?: number }) =>
 			requestMut<GroupSettings>('/group-settings', 'PUT', data, opts),
 		uploadGchatKey: (keyJson: string, adminEmail: string) =>
 			requestMut<{ gchat_configured: boolean; gchat_admin_email: string; spaces: GChatSpace[] }>('/group-settings/gchat-key', 'POST', { key_json: JSON.parse(keyJson), admin_email: adminEmail }, opts),

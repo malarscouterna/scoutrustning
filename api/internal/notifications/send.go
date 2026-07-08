@@ -329,6 +329,25 @@ func bookingMsg(ctx context.Context, q *db.Queries, b db.Booking, event, baseURL
 	}
 }
 
+// archiveWarningMsg builds the booking_archive_warning email, which additionally interpolates
+// the exact archive deadline (not a live countdown - email clients can't run JS, and a number
+// like "23 hours left" goes stale the moment the recipient doesn't read it immediately).
+func archiveWarningMsg(ctx context.Context, q *db.Queries, b db.Booking, deadline pgtype.Timestamptz, baseURL string, r recipient) Message {
+	data := fetchBookingEmailData(ctx, q, b, EventBookingArchiveWarning, r.lang, r.name, baseURL)
+	data.ArchiveDeadline = deadline
+	htmlBody, textBody := renderBookingEmail(data)
+	subject := i18n.T(r.lang, "email_subject_"+EventBookingArchiveWarning)
+	if data.TeamName != "" {
+		subject = data.TeamName + ": " + subject
+	}
+	return Message{
+		To:       r.deliveryEmail(),
+		Subject:  subject,
+		Body:     htmlBody,
+		TextBody: textBody,
+	}
+}
+
 // bookingBroadcastTexts returns the GChat opener and detail text for a booking broadcast.
 func bookingBroadcastTexts(ctx context.Context, q *db.Queries, b db.Booking, event, baseURL string) (opener, detail string) {
 	data := fetchBookingEmailData(ctx, q, b, event, "sv", "", baseURL)

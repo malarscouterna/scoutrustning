@@ -93,7 +93,7 @@ const createGroupSettingsDefaults = `-- name: CreateGroupSettingsDefaults :one
 INSERT INTO group_settings (group_id)
 VALUES ($1)
 ON CONFLICT (group_id) DO NOTHING
-RETURNING group_id, notification_email_from, smtp_key_encrypted, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults, logo_file_id, enabled_channels, gchat_service_account_json_encrypted, gchat_admin_email, default_gruppkanal_channels, smtp_key_masked, personal_booking_role, logo_square_file_id
+RETURNING group_id, notification_email_from, smtp_key_encrypted, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults, logo_file_id, enabled_channels, gchat_service_account_json_encrypted, gchat_admin_email, default_gruppkanal_channels, smtp_key_masked, personal_booking_role, logo_square_file_id, draft_archive_days, rejected_archive_days
 `
 
 func (q *Queries) CreateGroupSettingsDefaults(ctx context.Context, groupID string) (GroupSetting, error) {
@@ -128,6 +128,8 @@ func (q *Queries) CreateGroupSettingsDefaults(ctx context.Context, groupID strin
 		&i.SmtpKeyMasked,
 		&i.PersonalBookingRole,
 		&i.LogoSquareFileID,
+		&i.DraftArchiveDays,
+		&i.RejectedArchiveDays,
 	)
 	return i, err
 }
@@ -189,7 +191,7 @@ func (q *Queries) GetGroupNotificationDefaults(ctx context.Context, groupID stri
 }
 
 const getGroupSettings = `-- name: GetGroupSettings :one
-SELECT group_id, notification_email_from, smtp_key_encrypted, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults, logo_file_id, enabled_channels, gchat_service_account_json_encrypted, gchat_admin_email, default_gruppkanal_channels, smtp_key_masked, personal_booking_role, logo_square_file_id FROM group_settings
+SELECT group_id, notification_email_from, smtp_key_encrypted, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults, logo_file_id, enabled_channels, gchat_service_account_json_encrypted, gchat_admin_email, default_gruppkanal_channels, smtp_key_masked, personal_booking_role, logo_square_file_id, draft_archive_days, rejected_archive_days FROM group_settings
 WHERE group_id = $1
 `
 
@@ -225,6 +227,8 @@ func (q *Queries) GetGroupSettings(ctx context.Context, groupID string) (GroupSe
 		&i.SmtpKeyMasked,
 		&i.PersonalBookingRole,
 		&i.LogoSquareFileID,
+		&i.DraftArchiveDays,
+		&i.RejectedArchiveDays,
 	)
 	return i, err
 }
@@ -321,7 +325,7 @@ UPDATE group_settings SET
     smtp_user = $5,
     updated_at = now()
 WHERE group_id = $6
-RETURNING group_id, notification_email_from, smtp_key_encrypted, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults, logo_file_id, enabled_channels, gchat_service_account_json_encrypted, gchat_admin_email, default_gruppkanal_channels, smtp_key_masked, personal_booking_role, logo_square_file_id
+RETURNING group_id, notification_email_from, smtp_key_encrypted, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults, logo_file_id, enabled_channels, gchat_service_account_json_encrypted, gchat_admin_email, default_gruppkanal_channels, smtp_key_masked, personal_booking_role, logo_square_file_id, draft_archive_days, rejected_archive_days
 `
 
 type UpdateSmtpSettingsParams struct {
@@ -372,6 +376,8 @@ func (q *Queries) UpdateSmtpSettings(ctx context.Context, arg UpdateSmtpSettings
 		&i.SmtpKeyMasked,
 		&i.PersonalBookingRole,
 		&i.LogoSquareFileID,
+		&i.DraftArchiveDays,
+		&i.RejectedArchiveDays,
 	)
 	return i, err
 }
@@ -381,13 +387,15 @@ INSERT INTO group_settings (
     group_id, notification_email_from, smtp_key_encrypted, smtp_key_masked,
     default_approval_level, default_access_unknown, default_access_troop,
     default_access_role, image_upload_role, booking_role, article_edit_role,
-    issue_resolve_role, manager_notes_role, personal_booking_role, default_language
+    issue_resolve_role, manager_notes_role, personal_booking_role, default_language,
+    draft_archive_days, rejected_archive_days
 )
 VALUES (
     $1, $2, $3, $4,
     $5, $6, $7,
     $8, $9, $10, $11,
-    $12, $13, $14, $15
+    $12, $13, $14, $15,
+    $16, $17
 )
 ON CONFLICT (group_id) DO UPDATE SET
     notification_email_from = $2,
@@ -404,8 +412,10 @@ ON CONFLICT (group_id) DO UPDATE SET
     manager_notes_role = $13,
     personal_booking_role = $14,
     default_language = $15,
+    draft_archive_days = $16,
+    rejected_archive_days = $17,
     updated_at = now()
-RETURNING group_id, notification_email_from, smtp_key_encrypted, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults, logo_file_id, enabled_channels, gchat_service_account_json_encrypted, gchat_admin_email, default_gruppkanal_channels, smtp_key_masked, personal_booking_role, logo_square_file_id
+RETURNING group_id, notification_email_from, smtp_key_encrypted, default_approval_level, default_access_unknown, default_access_troop, default_access_role, image_upload_role, booking_role, article_edit_role, issue_resolve_role, manager_notes_role, created_at, updated_at, default_language, smtp_host, smtp_port, smtp_tls, smtp_user, notification_defaults, logo_file_id, enabled_channels, gchat_service_account_json_encrypted, gchat_admin_email, default_gruppkanal_channels, smtp_key_masked, personal_booking_role, logo_square_file_id, draft_archive_days, rejected_archive_days
 `
 
 type UpsertGroupSettingsParams struct {
@@ -424,6 +434,8 @@ type UpsertGroupSettingsParams struct {
 	ManagerNotesRole      string `json:"manager_notes_role"`
 	PersonalBookingRole   string `json:"personal_booking_role"`
 	DefaultLanguage       string `json:"default_language"`
+	DraftArchiveDays      int32  `json:"draft_archive_days"`
+	RejectedArchiveDays   int32  `json:"rejected_archive_days"`
 }
 
 func (q *Queries) UpsertGroupSettings(ctx context.Context, arg UpsertGroupSettingsParams) (GroupSetting, error) {
@@ -443,6 +455,8 @@ func (q *Queries) UpsertGroupSettings(ctx context.Context, arg UpsertGroupSettin
 		arg.ManagerNotesRole,
 		arg.PersonalBookingRole,
 		arg.DefaultLanguage,
+		arg.DraftArchiveDays,
+		arg.RejectedArchiveDays,
 	)
 	var i GroupSetting
 	err := row.Scan(
@@ -474,6 +488,8 @@ func (q *Queries) UpsertGroupSettings(ctx context.Context, arg UpsertGroupSettin
 		&i.SmtpKeyMasked,
 		&i.PersonalBookingRole,
 		&i.LogoSquareFileID,
+		&i.DraftArchiveDays,
+		&i.RejectedArchiveDays,
 	)
 	return i, err
 }
