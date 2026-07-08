@@ -37,7 +37,7 @@
 
 	async function submit(e: SubmitEvent) {
 		e.preventDefault();
-		if (!tosAccepted || submitting) return;
+		if (data.demo || !tosAccepted || submitting) return;
 		submitting = true;
 		error = '';
 		try {
@@ -64,6 +64,17 @@
 	<div class="w-full max-w-md">
 		<img src="/PNG Utrustningsgruppen - Logotyp.png" alt="Utrustningsgruppen" class="w-32 mb-6 mx-auto" />
 
+		<a href="/welcome" class="inline-flex items-center gap-1 text-sm text-neutral-500 hover:text-neutral-800 mb-6">
+			← {m.page_join_back_to_welcome()}
+		</a>
+
+		{#if data.demo}
+			<div class="bg-adventurerorange-50 border border-adventurerorange-200 rounded-lg px-4 py-3 mb-6 text-sm text-adventurerorange-900">
+				<p class="font-medium mb-1">{m.page_join_demo_heading()}</p>
+				<p>{m.page_join_demo_desc()}</p>
+			</div>
+		{/if}
+
 		{#if sent}
 			<div class="text-center space-y-3">
 				<h1 class="text-xl font-bold">{m.page_join_success_title()}</h1>
@@ -83,6 +94,7 @@
 			{/if}
 
 			<form onsubmit={submit} class="space-y-5">
+			<fieldset disabled={data.demo} class="space-y-5 border-0 p-0 m-0 min-w-0" class:opacity-50={data.demo}>
 				{#if data.orgs.length > 1}
 					<div>
 						<label class="block text-sm font-medium text-neutral-700 mb-1" for="org">{m.page_join_field_org()}</label>
@@ -156,11 +168,12 @@
 
 				<button
 					type="submit"
-					disabled={submitting || !tosAccepted}
+					disabled={data.demo || submitting || !tosAccepted}
 					class="w-full bg-blue-700 text-white rounded-xl px-6 py-3 font-semibold shadow-md hover:shadow-lg disabled:opacity-50 transition-all"
 				>
 					{m.page_join_submit()}
 				</button>
+			</fieldset>
 			</form>
 		{/if}
 	</div>

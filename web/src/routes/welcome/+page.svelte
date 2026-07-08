@@ -20,6 +20,18 @@
 			>
 				{m.page_welcome_go_to_dashboard()}
 			</a>
+		{:else if data.oidcName}
+			<button
+				type="button"
+				disabled
+				class="flex items-center justify-center gap-3 w-full max-w-xs bg-neutral-100 border-2 border-neutral-200 rounded-xl px-6 py-4 text-base font-semibold text-neutral-400 cursor-not-allowed"
+			>
+				{m.page_welcome_go_to_dashboard()}
+			</button>
+			<div class="mt-4 max-w-sm w-full text-sm text-neutral-600 text-center">
+				<p class="font-medium mb-1 text-neutral-800">{m.page_welcome_no_group_heading()}</p>
+				<p>{m.page_welcome_no_group_desc({ name: data.oidcName })}</p>
+			</div>
 		{:else}
 			{#if data.demo}
 				<div class="bg-adventurerorange-50 border border-adventurerorange-200 rounded-lg px-4 py-3 mb-6 max-w-sm w-full text-sm text-adventurerorange-900">
@@ -69,14 +81,28 @@
 				</a>
 			{/if}
 
-			<!-- Group signup CTA -->
-			<a
-				href="/join"
-				class="flex items-center justify-between gap-4 border border-neutral-300 rounded-xl px-4 py-3 text-sm text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100 transition-colors"
-			>
-				<span>{m.page_welcome_join_link()}</span>
-				<span class="text-neutral-400">→</span>
-			</a>
+			<!-- Group signup CTA - users with any session (mapped or unmapped) go straight to /join;
+			     logged-out visitors sign in first, landing on /join right after via callbackUrl. -->
+			{#if data.user || data.oidcName}
+				<a
+					href="/join"
+					class="flex items-center justify-between gap-4 border border-neutral-300 rounded-xl px-4 py-3 text-sm text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100 transition-colors"
+				>
+					<span>{m.page_welcome_join_link()}</span>
+					<span class="text-neutral-400">→</span>
+				</a>
+			{:else}
+				<form method="POST" action="/auth/signin/keycloak">
+					<input type="hidden" name="callbackUrl" value="/join" />
+					<button
+						type="submit"
+						class="flex items-center justify-between gap-4 w-full border border-neutral-300 rounded-xl px-4 py-3 text-sm text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100 transition-colors"
+					>
+						<span>{m.page_welcome_join_link()}</span>
+						<span class="text-neutral-400">→</span>
+					</button>
+				</form>
+			{/if}
 
 			<!-- Description -->
 			<p class="text-sm text-neutral-600 leading-relaxed">
