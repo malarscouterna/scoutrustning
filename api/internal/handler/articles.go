@@ -1030,6 +1030,7 @@ func (h *ArticleHandler) BulkUpdate(w http.ResponseWriter, r *http.Request) {
 				GroupID:        claims.GroupID,
 				CommercialName: article.CommercialName,
 				LocationID:     article.LocationID,
+				Statuses:       []string{"ok", "reported_usable"},
 				ExcludeIds:     ids,
 				StartDate:      c.BookingStartDate,
 				EndDate:        c.BookingEndDate,

@@ -162,14 +162,16 @@ WHERE a.id = ANY(@ids::uuid[]) AND a.group_id = @group_id
     AND (bi.return_status IS NULL OR bi.return_status IN ('pending', 'delayed'));
 
 -- name: FindReplacementArticle :one
--- Finds a replacement article with the same commercial_name + location, bookable status,
--- not in the given exclude list, and not in any overlapping active booking.
+-- Finds a replacement article with the same commercial_name + location, status
+-- in the given allowed list (e.g. ['ok', 'reported_usable'] normally, or just
+-- ['ok'] for the delayed-return-swap opportunistic-upgrade case), not in the
+-- given exclude list, and not in any overlapping active booking.
 SELECT a.id
 FROM articles a
 WHERE a.group_id = @group_id
     AND a.commercial_name = @commercial_name
     AND a.location_id = @location_id
-    AND a.status IN ('ok', 'reported_usable')
+    AND a.status = ANY(@statuses::text[])
     AND a.id != ALL(@exclude_ids::uuid[])
     AND a.id NOT IN (
         SELECT bi.article_id FROM booking_items bi
