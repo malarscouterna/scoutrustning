@@ -203,3 +203,141 @@ func TestResolveOverdueSwaps_NightlyJob(t *testing.T) {
 		t.Errorf("expected article swapped to Y (%s) after nightly job, got %v", articleY, itemAfter["article_id"])
 	}
 }
+
+// TestReturnFlow_ReportedUnusableTriggersSwap exercises decision 6's
+// "genuinely unbookable" condition-change path: marking booking A's item
+// reported_unusable at return time gets the same full swap treatment as a
+// delayed item, since a waiting booking B holding that exact article is now
+// blocked just as surely as if it never came back at all.
+func TestReturnFlow_ReportedUnusableTriggersSwap(t *testing.T) {
+	env := testutil.SetupTestEnv(t)
+	mountReturnRoutes(env)
+
+	leaderB := env.ClientAs("leader-flaskpost")
+
+	bookingA, itemIDs, articleIDs := setupReturnEnv(t, env, 2, 1)
+	articleX := articleIDs[0]
+	articleY := articleIDs[1]
+
+	// Backdate booking A's window so it's already over (but A itself is still
+	// picked_up/unresolved) before booking B's window begins - otherwise B
+	// couldn't have been assigned X in the first place (still held by A for
+	// the overlap). Booking B's own window must still have started by today,
+	// since check_date for a condition-change trigger is always "today" (no
+	// manager-entered estimate like the delayed case has).
+	_, err := env.Pool.Exec(context.Background(),
+		"UPDATE bookings SET start_date = CURRENT_DATE - INTERVAL '10 day', end_date = CURRENT_DATE - INTERVAL '3 day' WHERE id = $1", bookingA)
+	if err != nil {
+		t.Fatalf("failed to backdate booking A: %v", err)
+	}
+
+	teamID := getTeamID(t, leaderB, "Flaskpostorné")
+	now := time.Now()
+	startB := now.AddDate(0, 0, -2).Format("2006-01-02")
+	endB := now.AddDate(0, 0, 3).Format("2006-01-02")
+	b, _ := json.Marshal(map[string]any{"start_date": startB, "end_date": endB, "used_by_team_id": teamID, "title": "Booking B"})
+	resp, _ := leaderB.Post("/api/v0/bookings", bytes.NewReader(b))
+	var bookingBResp map[string]any
+	json.NewDecoder(resp.Body).Decode(&bookingBResp)
+	resp.Body.Close()
+	bookingB := bookingBResp["id"].(string)
+
+	b, _ = json.Marshal(map[string]any{"commercial_name": "ReturnTest", "quantity": 1})
+	resp, _ = leaderB.Post("/api/v0/bookings/"+bookingB+"/items", bytes.NewReader(b))
+	resp.Body.Close()
+
+	resp, _ = leaderB.Get("/api/v0/bookings/" + bookingB)
+	var detailBefore map[string]any
+	json.NewDecoder(resp.Body).Decode(&detailBefore)
+	resp.Body.Close()
+	itemBefore := detailBefore["items"].([]any)[0].(map[string]any)
+	if itemBefore["article_id"] != articleX {
+		t.Fatalf("expected booking B assigned article X (%s), got %v", articleX, itemBefore["article_id"])
+	}
+
+	leaderA := env.ClientAs("leader-yggdrasil")
+	b, _ = json.Marshal(map[string]any{"return_status": "reported_unusable"})
+	resp, _ = leaderA.Put("/api/v0/bookings/"+bookingA+"/items/"+itemIDs[0]+"/return", bytes.NewReader(b))
+	resp.Body.Close()
+
+	resp, _ = leaderB.Get("/api/v0/bookings/" + bookingB)
+	defer resp.Body.Close()
+	var detailAfter map[string]any
+	json.NewDecoder(resp.Body).Decode(&detailAfter)
+	itemAfter := detailAfter["items"].([]any)[0].(map[string]any)
+	if itemAfter["article_id"] != articleY {
+		t.Errorf("expected article swapped to Y (%s), got %v", articleY, itemAfter["article_id"])
+	}
+}
+
+// TestReturnFlow_ReportedUsableUpgradeOnly exercises decision 6's opportunistic
+// upgrade: a damaged-but-still-bookable ('reported_usable') return must only
+// swap the waiting booking onto a strictly-'ok' unit, never onto another
+// reported_usable one - even if that other unit would otherwise be found first.
+func TestReturnFlow_ReportedUsableUpgradeOnly(t *testing.T) {
+	env := testutil.SetupTestEnv(t)
+	mountReturnRoutes(env)
+
+	leaderB := env.ClientAs("leader-flaskpost")
+
+	// 3 identical articles: X assigned to booking A, Y already reported_usable
+	// (created before Z, so an unrestricted search would find it first), Z
+	// fully 'ok' - the only valid upgrade target.
+	bookingA, itemIDs, articleIDs := setupReturnEnv(t, env, 3, 1)
+	articleX := articleIDs[0]
+	articleY := articleIDs[1]
+	articleZ := articleIDs[2]
+
+	_, err := env.Pool.Exec(context.Background(),
+		"UPDATE articles SET status = 'reported_usable' WHERE id = $1", articleY)
+	if err != nil {
+		t.Fatalf("failed to mark article Y reported_usable: %v", err)
+	}
+
+	// Backdate booking A's window so it's already over before booking B's
+	// window begins - otherwise B couldn't have been assigned X in the first
+	// place (still held by A for the overlap).
+	_, err = env.Pool.Exec(context.Background(),
+		"UPDATE bookings SET start_date = CURRENT_DATE - INTERVAL '10 day', end_date = CURRENT_DATE - INTERVAL '3 day' WHERE id = $1", bookingA)
+	if err != nil {
+		t.Fatalf("failed to backdate booking A: %v", err)
+	}
+
+	teamID := getTeamID(t, leaderB, "Flaskpostorné")
+	now := time.Now()
+	startB := now.AddDate(0, 0, -2).Format("2006-01-02")
+	endB := now.AddDate(0, 0, 3).Format("2006-01-02")
+	b, _ := json.Marshal(map[string]any{"start_date": startB, "end_date": endB, "used_by_team_id": teamID, "title": "Booking B"})
+	resp, _ := leaderB.Post("/api/v0/bookings", bytes.NewReader(b))
+	var bookingBResp map[string]any
+	json.NewDecoder(resp.Body).Decode(&bookingBResp)
+	resp.Body.Close()
+	bookingB := bookingBResp["id"].(string)
+
+	b, _ = json.Marshal(map[string]any{"commercial_name": "ReturnTest", "quantity": 1})
+	resp, _ = leaderB.Post("/api/v0/bookings/"+bookingB+"/items", bytes.NewReader(b))
+	resp.Body.Close()
+
+	resp, _ = leaderB.Get("/api/v0/bookings/" + bookingB)
+	var detailBefore map[string]any
+	json.NewDecoder(resp.Body).Decode(&detailBefore)
+	resp.Body.Close()
+	itemBefore := detailBefore["items"].([]any)[0].(map[string]any)
+	if itemBefore["article_id"] != articleX {
+		t.Fatalf("expected booking B assigned article X (%s), got %v", articleX, itemBefore["article_id"])
+	}
+
+	leaderA := env.ClientAs("leader-yggdrasil")
+	b, _ = json.Marshal(map[string]any{"return_status": "reported_usable"})
+	resp, _ = leaderA.Put("/api/v0/bookings/"+bookingA+"/items/"+itemIDs[0]+"/return", bytes.NewReader(b))
+	resp.Body.Close()
+
+	resp, _ = leaderB.Get("/api/v0/bookings/" + bookingB)
+	defer resp.Body.Close()
+	var detailAfter map[string]any
+	json.NewDecoder(resp.Body).Decode(&detailAfter)
+	itemAfter := detailAfter["items"].([]any)[0].(map[string]any)
+	if itemAfter["article_id"] != articleZ {
+		t.Errorf("expected article upgraded to strictly-ok Z (%s), got %v", articleZ, itemAfter["article_id"])
+	}
+}

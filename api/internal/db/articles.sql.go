@@ -256,15 +256,15 @@ FROM articles a
 WHERE a.group_id = $1
     AND a.commercial_name = $2
     AND a.location_id = $3
-    AND a.status IN ('ok', 'reported_usable')
-    AND a.id != ALL($4::uuid[])
+    AND a.status = ANY($4::text[])
+    AND a.id != ALL($5::uuid[])
     AND a.id NOT IN (
         SELECT bi.article_id FROM booking_items bi
         JOIN bookings b ON bi.booking_id = b.id
         WHERE b.group_id = $1
             AND b.status IN ('confirmed', 'approved', 'picked_up', 'submitted', 'draft')
-            AND b.start_date <= $5
-            AND b.end_date >= $6
+            AND b.start_date <= $6
+            AND b.end_date >= $7
             AND (bi.return_status IS NULL OR bi.return_status IN ('pending', 'delayed'))
     )
 ORDER BY a.created_at
@@ -275,18 +275,22 @@ type FindReplacementArticleParams struct {
 	GroupID        string        `json:"group_id"`
 	CommercialName string        `json:"commercial_name"`
 	LocationID     pgtype.UUID   `json:"location_id"`
+	Statuses       []string      `json:"statuses"`
 	ExcludeIds     []pgtype.UUID `json:"exclude_ids"`
 	EndDate        pgtype.Date   `json:"end_date"`
 	StartDate      pgtype.Date   `json:"start_date"`
 }
 
-// Finds a replacement article with the same commercial_name + location, bookable status,
-// not in the given exclude list, and not in any overlapping active booking.
+// Finds a replacement article with the same commercial_name + location, status
+// in the given allowed list (e.g. ['ok', 'reported_usable'] normally, or just
+// ['ok'] for the delayed-return-swap opportunistic-upgrade case), not in the
+// given exclude list, and not in any overlapping active booking.
 func (q *Queries) FindReplacementArticle(ctx context.Context, arg FindReplacementArticleParams) (pgtype.UUID, error) {
 	row := q.db.QueryRow(ctx, findReplacementArticle,
 		arg.GroupID,
 		arg.CommercialName,
 		arg.LocationID,
+		arg.Statuses,
 		arg.ExcludeIds,
 		arg.EndDate,
 		arg.StartDate,
