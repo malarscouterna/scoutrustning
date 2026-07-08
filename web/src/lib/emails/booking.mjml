@@ -12,9 +12,9 @@
   <mj-body background-color="#ebf1f7">
 
     <!-- Header: EMAIL_LOGO_HEADER is substituted by Go with either an <img> tag (logo) or the group name text -->
-    <mj-section background-color="#003660" padding="20px 32px">
+    <mj-section background-color="#ffffff" padding="20px 32px">
       <mj-column>
-        <mj-text font-size="18px" font-weight="bold" color="#ffffff" padding="0">
+        <mj-text font-size="18px" font-weight="bold" color="#003660" padding="0">
           EMAIL_LOGO_HEADER
         </mj-text>
       </mj-column>
