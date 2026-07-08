@@ -99,10 +99,6 @@ Categories are flat. The `categories` table supports `parent_id` but the UI does
 
 Native `<input type="date">` uses browser/OS locale for week start day. Full control requires a custom date picker component.
 
-## Unavailable items in copied bookings
-
-When copying a booking, items that aren't available for the new dates should be visually marked, not silently included.
-
 ## Race conditions on concurrent edits
 
 No optimistic locking. Booking detail polls every 10s during active statuses. Consider `updated_at` checks on writes if conflicts become a real problem.
@@ -110,14 +106,6 @@ No optimistic locking. Booking detail polls every 10s during active statuses. Co
 ## Manager article swap on active bookings
 
 Managers should be able to swap articles on `confirmed`/`approved` bookings, not just during pickup (`picked_up` status). Use cases: unexpected unavailability, delayed returns from other bookings, inventory rebalancing. When an article is given a new status, managers should be informed about potential unavailability issues.
-
-## Delayed return - conflict resolution
-
-When a delayed article overlaps with another booking:
-- Auto-swap for a free equivalent if possible
-- Alert manager if no equivalent available
-
-Currently shows a warning but doesn't resolve the conflict.
 
 ## Date validation and overdue handling
 

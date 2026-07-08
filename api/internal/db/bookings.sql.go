@@ -467,10 +467,10 @@ type FindDelayedOrOverdueItemsRow struct {
 
 // Cross-group enumeration for the nightly swap-resolution job (mirrors
 // GetAllOverdueBookings's cross-group shape): booking_items still picked_up
-// where either a manager already marked them delayed, or the booking's
-// end_date has passed @grace_cutoff (today minus the grace period) with no
-// return status recorded at all - a manager's explicit "delayed" mark is
-// already a known problem and skips the grace period, but a booking that's
+// where either someone already explicitly marked them delayed during return,
+// or the booking's end_date has passed @grace_cutoff (today minus the grace
+// period) with no return status recorded at all - an explicit "delayed" mark
+// is already a known problem and skips the grace period, but a booking that's
 // merely a day late with nobody flagging it yet shouldn't trigger a swap
 // before it's had a chance to come back on its own.
 func (q *Queries) FindDelayedOrOverdueItems(ctx context.Context, graceCutoff pgtype.Date) ([]FindDelayedOrOverdueItemsRow, error) {
@@ -639,6 +639,77 @@ func (q *Queries) GetAllOverdueBookings(ctx context.Context, date pgtype.Date) (
 			&i.UsedByTeamID,
 			&i.StartDate,
 			&i.EndDate,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getBlockedItemsForBooking = `-- name: GetBlockedItemsForBooking :many
+SELECT bi.id AS booking_item_id, a.commercial_name, a.common_name,
+    holder_b.id AS holder_booking_id, holder_b.created_by AS holder_user_id,
+    holder_u.name AS holder_name, holder_u.picture AS holder_picture,
+    holder_bi.expected_return_date
+FROM booking_items bi
+JOIN bookings b ON bi.booking_id = b.id
+JOIN articles a ON bi.article_id = a.id
+JOIN booking_items holder_bi ON holder_bi.article_id = bi.article_id AND holder_bi.id != bi.id
+JOIN bookings holder_b ON holder_bi.booking_id = holder_b.id
+LEFT JOIN users holder_u ON holder_b.created_by = holder_u.id
+WHERE b.id = $1
+    AND b.group_id = $2
+    AND b.start_date <= CURRENT_DATE
+    AND holder_b.status = 'picked_up'
+    AND holder_bi.pickup_status IS NOT NULL
+    AND (holder_bi.return_status IS NULL OR holder_bi.return_status = 'delayed')
+ORDER BY bi.id
+`
+
+type GetBlockedItemsForBookingParams struct {
+	BookingID pgtype.UUID `json:"booking_id"`
+	GroupID   string      `json:"group_id"`
+}
+
+type GetBlockedItemsForBookingRow struct {
+	BookingItemID      pgtype.UUID `json:"booking_item_id"`
+	CommercialName     string      `json:"commercial_name"`
+	CommonName         string      `json:"common_name"`
+	HolderBookingID    pgtype.UUID `json:"holder_booking_id"`
+	HolderUserID       string      `json:"holder_user_id"`
+	HolderName         pgtype.Text `json:"holder_name"`
+	HolderPicture      pgtype.Text `json:"holder_picture"`
+	ExpectedReturnDate pgtype.Date `json:"expected_return_date"`
+}
+
+// Powers the booking-detail warning section (docs/delayed-return-swap.md): this
+// booking's own items whose start_date has arrived, where another booking still
+// holds the exact same article_id, picked_up and unresolved (delayed or simply
+// never returned) - i.e. this booking is actively blocked right now, mirroring
+// FindWaitingBookingItemsForArticle's "waiting" definition but starting from the
+// waiting booking instead of the article.
+func (q *Queries) GetBlockedItemsForBooking(ctx context.Context, arg GetBlockedItemsForBookingParams) ([]GetBlockedItemsForBookingRow, error) {
+	rows, err := q.db.Query(ctx, getBlockedItemsForBooking, arg.BookingID, arg.GroupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetBlockedItemsForBookingRow{}
+	for rows.Next() {
+		var i GetBlockedItemsForBookingRow
+		if err := rows.Scan(
+			&i.BookingItemID,
+			&i.CommercialName,
+			&i.CommonName,
+			&i.HolderBookingID,
+			&i.HolderUserID,
+			&i.HolderName,
+			&i.HolderPicture,
+			&i.ExpectedReturnDate,
 		); err != nil {
 			return nil, err
 		}

@@ -101,6 +101,24 @@ export interface BookingItem {
 	return_status: string | null;
 }
 
+/** docs/delayed-return-swap.md: this booking's own item, blocked by another
+ * booking still holding the exact same article, unresolved. */
+export interface BlockedItem {
+	booking_item_id: string;
+	commercial_name: string;
+	common_name: string;
+	holder_booking_id: string;
+	holder_user_id: string;
+	holder_name: string | null;
+	holder_picture: string | null;
+	expected_return_date: string | null;
+}
+
+/** docs/delayed-return-swap.md: response of the read-only delay-preview endpoint. */
+export type DelayPreview =
+	| { blocked: false }
+	| { blocked: true; booking_id: string; holder_user_id: string; holder_name: string | null; holder_picture: string | null };
+
 export interface ArticleEvent {
 	id: string;
 	article_id: string;
@@ -361,7 +379,15 @@ export function createApiClient(opts: FetchOptions = {}) {
 		createBooking: (data: { start_date: string; end_date: string; title: string; used_by_team_id?: string; used_by_external?: string }) =>
 			requestMut<Booking>('/bookings', 'POST', data, opts),
 		listBookings: () => request<Booking[]>('/bookings', opts),
-		getBooking: (id: string) => request<{ booking: Booking; items: BookingItem[]; auto_approves: boolean; archive_deadline: string | null }>(`/bookings/${id}`, opts),
+		getBooking: (id: string) =>
+			request<{ booking: Booking; items: BookingItem[]; auto_approves: boolean; archive_deadline: string | null; blocked_items: BlockedItem[] }>(
+				`/bookings/${id}`,
+				opts
+			),
+		getDelayPreview: (bookingId: string, itemId: string, expectedReturnDate: string) => {
+			const query = new URLSearchParams({ expected_return_date: expectedReturnDate });
+			return request<DelayPreview>(`/bookings/${bookingId}/items/${itemId}/delay-preview?${query}`, opts);
+		},
 		updateBooking: (id: string, data: Record<string, unknown>) =>
 			requestMut<Booking>(`/bookings/${id}`, 'PUT', data, opts),
 		addBookingItems: (bookingId: string, commercialName: string, quantity: number, locationName?: string) =>

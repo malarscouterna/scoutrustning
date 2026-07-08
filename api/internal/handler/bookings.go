@@ -46,6 +46,7 @@ func (h *BookingHandler) Routes() chi.Router {
 	r.Post("/{id}/items/{itemId}/swap", h.SwapItem)
 	r.Post("/{id}/return", h.Return)
 	r.Put("/{id}/items/{itemId}/return", h.UpdateItemReturn)
+	r.Get("/{id}/items/{itemId}/delay-preview", h.DelayPreview)
 	return r
 }
 
@@ -295,11 +296,20 @@ func (h *BookingHandler) Get(w http.ResponseWriter, r *http.Request) {
 		autoApproves = !needsApprovalForLevel(maxLevel.(string), booking.UsedByTeamID, teamAccess)
 	}
 
+	blockedItems, err := h.Q.GetBlockedItemsForBooking(r.Context(), db.GetBlockedItemsForBookingParams{
+		BookingID: id, GroupID: claims.GroupID,
+	})
+	if err != nil {
+		slog.Error("failed to check blocked items", "error", err)
+		blockedItems = nil
+	}
+
 	WriteJSON(w, http.StatusOK, map[string]any{
-		"booking":         booking,
-		"items":           items,
-		"auto_approves":   autoApproves,
+		"booking":          booking,
+		"items":            items,
+		"auto_approves":    autoApproves,
 		"archive_deadline": archiveDeadline(r.Context(), h.Q, claims.GroupID, booking.Status, booking.CreatedAt, booking.UpdatedAt),
+		"blocked_items":    blockedItems,
 	})
 }
 
@@ -1411,6 +1421,82 @@ func (h *BookingHandler) UpdateItemReturn(w http.ResponseWriter, r *http.Request
 	}
 
 	WriteJSON(w, http.StatusOK, item)
+}
+
+// DelayPreview shows the "next expected user" (docs/delayed-return-swap.md) while a
+// manager is still filling in the expected_return_date field, before saving - read-only,
+// makes no changes. Reuses FindWaitingBookingItemsForArticle with check_date = the
+// date currently typed into the form, rather than today.
+func (h *BookingHandler) DelayPreview(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	bookingID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid booking id")
+		return
+	}
+	itemID, err := parseUUID(chi.URLParam(r, "itemId"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid item id")
+		return
+	}
+	checkDate, err := time.Parse("2006-01-02", r.URL.Query().Get("expected_return_date"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid expected_return_date")
+		return
+	}
+
+	booking, err := h.Q.GetBooking(r.Context(), db.GetBookingParams{ID: bookingID, GroupID: claims.GroupID})
+	if err != nil {
+		WriteError(w, http.StatusNotFound, "booking not found")
+		return
+	}
+	if !h.canAccessBooking(r.Context(), claims, accessFromGetBookingRow(booking)) {
+		WriteError(w, http.StatusForbidden, "forbidden")
+		return
+	}
+
+	items, err := h.Q.ListBookingItems(r.Context(), db.ListBookingItemsParams{
+		BookingID: bookingID, GroupID: claims.GroupID,
+	})
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to list booking items")
+		return
+	}
+	var articleID pgtype.UUID
+	found := false
+	for _, item := range items {
+		if item.ID == itemID {
+			articleID = item.ArticleID
+			found = true
+			break
+		}
+	}
+	if !found {
+		WriteError(w, http.StatusNotFound, "item not found")
+		return
+	}
+
+	waiting, err := h.Q.FindWaitingBookingItemsForArticle(r.Context(), db.FindWaitingBookingItemsForArticleParams{
+		ArticleID: articleID,
+		GroupID:   claims.GroupID,
+		CheckDate: pgtype.Date{Time: checkDate, Valid: true},
+	})
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to check waiting bookings")
+		return
+	}
+	if len(waiting) == 0 {
+		WriteJSON(w, http.StatusOK, map[string]any{"blocked": false})
+		return
+	}
+	earliest := waiting[0]
+	WriteJSON(w, http.StatusOK, map[string]any{
+		"blocked":        true,
+		"booking_id":     formatUUID(earliest.BookingID),
+		"holder_user_id": earliest.CreatedBy,
+		"holder_name":    earliest.CreatorName.String,
+		"holder_picture": earliest.CreatorPicture.String,
+	})
 }
 
 // Copy creates a new draft booking with the same unit and items as the source.

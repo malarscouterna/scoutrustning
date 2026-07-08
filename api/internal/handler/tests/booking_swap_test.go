@@ -527,3 +527,160 @@ func TestUpdateFlow_ConflictPathSwaps(t *testing.T) {
 		t.Errorf("expected a swap event on booking A, got events: %v", events)
 	}
 }
+
+// TestDelayPreview exercises the read-only "next expected user" preview
+// (docs/delayed-return-swap.md): called with a candidate expected_return_date
+// before the manager saves, it should report whether a waiting booking would
+// be blocked and, if so, who created it - without changing anything.
+func TestDelayPreview(t *testing.T) {
+	env := testutil.SetupTestEnv(t)
+	mountReturnRoutes(env)
+
+	leaderA := env.ClientAs("leader-yggdrasil")
+	leaderB := env.ClientAs("leader-flaskpost")
+
+	bookingA, itemIDs, articleIDs := setupReturnEnv(t, env, 1, 1)
+	articleX := articleIDs[0]
+
+	t.Run("no waiting booking reports blocked false", func(t *testing.T) {
+		resp, err := leaderA.Get("/api/v0/bookings/" + bookingA + "/items/" + itemIDs[0] + "/delay-preview?expected_return_date=" + time.Now().AddDate(0, 0, 12).Format("2006-01-02"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		var result map[string]any
+		json.NewDecoder(resp.Body).Decode(&result)
+		if result["blocked"] != false {
+			t.Errorf("expected blocked=false with no waiting booking, got %v", result)
+		}
+	})
+
+	// Booking B: a later, non-overlapping date range that also gets assigned X
+	// (the only unit of this product) since A's original window doesn't overlap.
+	teamID := getTeamID(t, leaderB, "Flaskpostorné")
+	now := time.Now()
+	startB := now.AddDate(0, 0, 10).Format("2006-01-02")
+	endB := now.AddDate(0, 0, 15).Format("2006-01-02")
+	b, _ := json.Marshal(map[string]any{"start_date": startB, "end_date": endB, "used_by_team_id": teamID, "title": "Booking B"})
+	resp, _ := leaderB.Post("/api/v0/bookings", bytes.NewReader(b))
+	var bookingBResp map[string]any
+	json.NewDecoder(resp.Body).Decode(&bookingBResp)
+	resp.Body.Close()
+	bookingB := bookingBResp["id"].(string)
+
+	b, _ = json.Marshal(map[string]any{"commercial_name": "ReturnTest", "quantity": 1})
+	resp, _ = leaderB.Post("/api/v0/bookings/"+bookingB+"/items", bytes.NewReader(b))
+	resp.Body.Close()
+
+	resp, _ = leaderB.Get("/api/v0/bookings/" + bookingB)
+	var detailB map[string]any
+	json.NewDecoder(resp.Body).Decode(&detailB)
+	resp.Body.Close()
+	itemB := detailB["items"].([]any)[0].(map[string]any)
+	if itemB["article_id"] != articleX {
+		t.Fatalf("expected booking B assigned article X (%s), got %v", articleX, itemB["article_id"])
+	}
+
+	t.Run("waiting booking reports blocked true with holder info", func(t *testing.T) {
+		expectedReturn := now.AddDate(0, 0, 12).Format("2006-01-02")
+		resp, err := leaderA.Get("/api/v0/bookings/" + bookingA + "/items/" + itemIDs[0] + "/delay-preview?expected_return_date=" + expectedReturn)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		var result map[string]any
+		json.NewDecoder(resp.Body).Decode(&result)
+		if result["blocked"] != true {
+			t.Fatalf("expected blocked=true, got %v", result)
+		}
+		if result["booking_id"] != bookingB {
+			t.Errorf("expected booking_id %s, got %v", bookingB, result["booking_id"])
+		}
+		if result["holder_name"] != "Hanna Yggdrasil" && result["holder_user_id"] == nil {
+			t.Errorf("expected holder info in preview, got %v", result)
+		}
+	})
+
+	// Preview must not have changed anything - booking A's item still holds X.
+	resp, _ = leaderA.Get("/api/v0/bookings/" + bookingA)
+	defer resp.Body.Close()
+	var detailA map[string]any
+	json.NewDecoder(resp.Body).Decode(&detailA)
+	itemA := detailA["items"].([]any)[0].(map[string]any)
+	if itemA["article_id"] != articleX {
+		t.Errorf("expected preview to be read-only, but booking A's article changed to %v", itemA["article_id"])
+	}
+}
+
+// TestGetBooking_BlockedItems exercises the booking-detail warning section's data
+// source: a booking whose own item is blocked by another booking still holding the
+// exact same article, unresolved, should see it in blocked_items - and stop seeing
+// it once the block is resolved by the delayed-item swap.
+func TestGetBooking_BlockedItems(t *testing.T) {
+	env := testutil.SetupTestEnv(t)
+	mountReturnRoutes(env)
+
+	leaderB := env.ClientAs("leader-flaskpost")
+
+	bookingA, itemIDs, articleIDs := setupReturnEnv(t, env, 1, 1)
+	articleX := articleIDs[0]
+
+	// Backdate booking A so its window has already ended (X was free when B booked
+	// it) but leave it picked_up/unresolved - and give booking B a window that's
+	// already started, so it's actively blocked right now.
+	_, err := env.Pool.Exec(context.Background(),
+		"UPDATE bookings SET start_date = CURRENT_DATE - INTERVAL '10 day', end_date = CURRENT_DATE - INTERVAL '3 day' WHERE id = $1", bookingA)
+	if err != nil {
+		t.Fatalf("failed to backdate booking A: %v", err)
+	}
+
+	teamID := getTeamID(t, leaderB, "Flaskpostorné")
+	now := time.Now()
+	startB := now.AddDate(0, 0, -2).Format("2006-01-02")
+	endB := now.AddDate(0, 0, 3).Format("2006-01-02")
+	b, _ := json.Marshal(map[string]any{"start_date": startB, "end_date": endB, "used_by_team_id": teamID, "title": "Booking B"})
+	resp, _ := leaderB.Post("/api/v0/bookings", bytes.NewReader(b))
+	var bookingBResp map[string]any
+	json.NewDecoder(resp.Body).Decode(&bookingBResp)
+	resp.Body.Close()
+	bookingB := bookingBResp["id"].(string)
+
+	b, _ = json.Marshal(map[string]any{"commercial_name": "ReturnTest", "quantity": 1})
+	resp, _ = leaderB.Post("/api/v0/bookings/"+bookingB+"/items", bytes.NewReader(b))
+	resp.Body.Close()
+
+	resp, _ = leaderB.Get("/api/v0/bookings/" + bookingB)
+	var detailB map[string]any
+	json.NewDecoder(resp.Body).Decode(&detailB)
+	resp.Body.Close()
+	itemB := detailB["items"].([]any)[0].(map[string]any)
+	if itemB["article_id"] != articleX {
+		t.Fatalf("expected booking B assigned article X (%s), got %v", articleX, itemB["article_id"])
+	}
+	blockedItems := detailB["blocked_items"].([]any)
+	if len(blockedItems) != 1 {
+		t.Fatalf("expected 1 blocked item on booking B, got %d: %v", len(blockedItems), blockedItems)
+	}
+	blocked := blockedItems[0].(map[string]any)
+	if blocked["holder_booking_id"] != bookingA {
+		t.Errorf("expected holder_booking_id %s, got %v", bookingA, blocked["holder_booking_id"])
+	}
+
+	// Resolve the block (only 1 article exists, so no equivalent is found - the
+	// swap fails and the block should still show; skip straight to marking A
+	// returned to confirm blocked_items clears once the article is free).
+	_ = itemIDs
+	leaderA := env.ClientAs("leader-yggdrasil")
+	rb, _ := json.Marshal(map[string]any{"return_status": "returned_ok"})
+	resp, _ = leaderA.Put("/api/v0/bookings/"+bookingA+"/items/"+itemIDs[0]+"/return", bytes.NewReader(rb))
+	resp.Body.Close()
+
+	resp, _ = leaderB.Get("/api/v0/bookings/" + bookingB)
+	defer resp.Body.Close()
+	var detailAfter map[string]any
+	json.NewDecoder(resp.Body).Decode(&detailAfter)
+	blockedAfter := detailAfter["blocked_items"].([]any)
+	if len(blockedAfter) != 0 {
+		t.Errorf("expected blocked_items to clear once the article was returned, got %v", blockedAfter)
+	}
+}

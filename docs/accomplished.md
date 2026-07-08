@@ -4,6 +4,16 @@ A living log of completed work — what was built, when, and why. Major features
 
 When finishing a backlog item or spec milestone, log it here and remove it from the backlog / mark it done in the spec.
 
+## 2026-07-08
+
+### Delayed return - conflict handling (auto-swap, notification, frontend)
+
+Full design and decision log in [delayed-return-swap.md](delayed-return-swap.md). When an item a booking is waiting on isn't available (still out past its own booking's end_date, damaged/broken/missing at return time, or a date change on the waiting booking itself creates the conflict), the system now tries to silently substitute an equivalent free unit before ever bothering anyone - and only notifies (naming the affected item, never the other booker) if no substitute exists.
+
+**Backend**: `booking_items.expected_return_date` finally persisted (previously validated but discarded). New `handler/booking_swap.go` (`ResolveBlockedItemsForArticle`, `ResolveOverdueSwaps`) wired into mark-as-delayed, the `reported_usable`/`reported_unusable`/`missing` return-status branches, and a nightly pass (folded into the existing cleanup loop) with a 48h grace period so a slightly-late return doesn't lose its item to someone else needlessly. `Update`'s booking-date-conflict path now also swaps before it 409s - which fixes the copy-then-reschedule flow (item 10) for free, no copy-specific code needed. Reused the existing archive-conflict `FindReplacementArticle`/`SwapBookingItemArticleByArticle` queries (parameterized status filter) instead of duplicating them. New `booking_item_blocked` notification event, reusing the generic booking email template unchanged.
+
+**Frontend**: `ReturnChecklist.svelte`'s delay form now previews the next booker who'd be blocked (via a new read-only `GET /bookings/{id}/items/{itemId}/delay-preview` endpoint) before saving; also fixed a previously-hardcoded Swedish warning string to go through Paraglide. Booking detail page shows a warning section when the booking is itself blocked on someone else's overdue item (`blocked_items`, `GetBlockedItemsForBooking` query), linking to the holder via the existing `UserBadge`/`UserInfoCard` components.
+
 ## 2026-05-24
 
 ### Notifications — post-review refactor (send.go + group_settings)
