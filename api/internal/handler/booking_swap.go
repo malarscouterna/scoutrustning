@@ -93,13 +93,22 @@ func ResolveBlockedItemsForArticle(ctx context.Context, q *db.Queries, groupID s
 	return true, nil
 }
 
+// overdueSwapGracePeriod is how long a never-flagged item may sit overdue
+// before the nightly job will swap it out from under its holder. Keeps a
+// booking that's merely a day late from immediately losing its item to
+// another booking just because someone else happened to be waiting - an
+// explicit "delayed" mark during return (decision 1) is already a known
+// problem and always resolves immediately, unaffected by this grace period.
+const overdueSwapGracePeriod = 48 * time.Hour
+
 // ResolveOverdueSwaps is the nightly entry point (docs/delayed-return-swap.md
 // decision 5), folded into the existing booking-cleanup loop. It enumerates
 // every delayed/overdue item across all groups and tries to resolve each
 // affected article's blocked bookings once. Multiple items sharing the same
 // (group, article) pair are only resolved once per pass.
 func ResolveOverdueSwaps(ctx context.Context, q *db.Queries) (int, error) {
-	items, err := q.FindDelayedOrOverdueItems(ctx, pgtype.Date{Time: time.Now(), Valid: true})
+	graceCutoff := time.Now().Add(-overdueSwapGracePeriod)
+	items, err := q.FindDelayedOrOverdueItems(ctx, pgtype.Date{Time: graceCutoff, Valid: true})
 	if err != nil {
 		return 0, err
 	}
