@@ -361,7 +361,7 @@ export function createApiClient(opts: FetchOptions = {}) {
 		createBooking: (data: { start_date: string; end_date: string; title: string; used_by_team_id?: string; used_by_external?: string }) =>
 			requestMut<Booking>('/bookings', 'POST', data, opts),
 		listBookings: () => request<Booking[]>('/bookings', opts),
-		getBooking: (id: string) => request<{ booking: Booking; items: BookingItem[]; auto_approves: boolean }>(`/bookings/${id}`, opts),
+		getBooking: (id: string) => request<{ booking: Booking; items: BookingItem[]; auto_approves: boolean; archive_deadline: string | null }>(`/bookings/${id}`, opts),
 		updateBooking: (id: string, data: Record<string, unknown>) =>
 			requestMut<Booking>(`/bookings/${id}`, 'PUT', data, opts),
 		addBookingItems: (bookingId: string, commercialName: string, quantity: number, locationName?: string) =>

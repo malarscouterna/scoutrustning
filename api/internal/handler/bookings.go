@@ -296,10 +296,40 @@ func (h *BookingHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]any{
-		"booking":       booking,
-		"items":         items,
-		"auto_approves": autoApproves,
+		"booking":         booking,
+		"items":           items,
+		"auto_approves":   autoApproves,
+		"archive_deadline": archiveDeadline(r.Context(), h.Q, claims.GroupID, booking.Status, booking.CreatedAt, booking.UpdatedAt),
 	})
+}
+
+// archiveDeadline computes when a booking will be auto-archived (docs/pre-release.md
+// "Booking auto-archive setting"), for the booking-detail countdown - nil unless the
+// booking is in one of the two timed states with a nonzero group setting. Mirrors the
+// SQL in GetBookingsNearingArchive/GetBookingsPastArchiveDeadline. The draft deadline
+// runs from created_at, so the countdown applies from the moment a draft is created,
+// with or without items yet - this supersedes the old separate 48h empty-draft cleanup.
+func archiveDeadline(ctx context.Context, q *db.Queries, groupID, status string, createdAt, updatedAt pgtype.Timestamptz) *time.Time {
+	settings, err := q.GetGroupSettings(ctx, groupID)
+	if err != nil {
+		return nil
+	}
+	switch status {
+	case "draft":
+		if settings.DraftArchiveDays <= 0 {
+			return nil
+		}
+		t := createdAt.Time.AddDate(0, 0, int(settings.DraftArchiveDays))
+		return &t
+	case "rejected":
+		if settings.RejectedArchiveDays <= 0 {
+			return nil
+		}
+		t := updatedAt.Time.AddDate(0, 0, int(settings.RejectedArchiveDays))
+		return &t
+	default:
+		return nil
+	}
 }
 
 func (h *BookingHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -620,9 +650,6 @@ func (h *BookingHandler) AddItems(w http.ResponseWriter, r *http.Request) {
 
 	WriteJSON(w, http.StatusCreated, added)
 
-	if len(added) > 0 {
-		h.Q.SetFirstItemAddedAt(r.Context(), db.SetFirstItemAddedAtParams{ID: bookingID, GroupID: claims.GroupID})
-	}
 	h.logItemsChangedEvent(r.Context(), claims.GroupID, bookingID, claims.MemberID, len(added), 0)
 
 	// Auto-transition: if confirmed booking now has approval-required items, check level

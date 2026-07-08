@@ -120,6 +120,9 @@ func bookingIntroKey(d BookingEmailData) string {
 	if d.Event == EventBookingArchiveWarning {
 		return "email_intro_" + d.Event + "_" + d.Status
 	}
+	if d.Event == EventBookingRejected && d.ArchiveDeadline.Valid {
+		return "email_intro_" + d.Event + "_with_deadline"
+	}
 	return "email_intro_" + d.Event
 }
 
@@ -258,21 +261,36 @@ func fetchBookingEmailData(ctx context.Context, q *db.Queries, b db.Booking, eve
 	items, _ := q.ListBookingItems(ctx, db.ListBookingItemsParams{BookingID: b.ID, GroupID: b.GroupID})
 	events, _ := q.ListBookingEvents(ctx, db.ListBookingEventsParams{BookingID: b.ID, GroupID: b.GroupID})
 
+	// The rejection email tells the recipient how long they have to resubmit before the
+	// booking auto-archives (docs/pre-release.md "Booking auto-archive setting") - b.UpdatedAt
+	// is already the fresh rejected-status timestamp by the time this runs (Reject sets it
+	// before calling SendBookingRejected), so the deadline is exact, not an approximation.
+	var archiveDeadline pgtype.Timestamptz
+	if event == EventBookingRejected {
+		if gs, err := q.GetGroupSettings(ctx, b.GroupID); err == nil && gs.RejectedArchiveDays > 0 {
+			archiveDeadline = pgtype.Timestamptz{
+				Time:  b.UpdatedAt.Time.AddDate(0, 0, int(gs.RejectedArchiveDays)),
+				Valid: true,
+			}
+		}
+	}
+
 	return BookingEmailData{
-		Event:         event,
-		Lang:          lang,
-		RecipientName: recipientName,
-		GroupName:     group.Name,
-		LogoURL:       GroupLogoURL(ctx, q, b.GroupID, baseURL),
-		BaseURL:       baseURL,
-		BookingID:     b.ID,
-		StartDate:     b.StartDate,
-		EndDate:       b.EndDate,
-		Status:        b.Status,
-		TeamName:      teamName,
-		Title:         b.Title,
-		Items:         items,
-		Events:        events,
+		Event:           event,
+		Lang:            lang,
+		RecipientName:   recipientName,
+		GroupName:       group.Name,
+		LogoURL:         GroupLogoURL(ctx, q, b.GroupID, baseURL),
+		BaseURL:         baseURL,
+		BookingID:       b.ID,
+		StartDate:       b.StartDate,
+		EndDate:         b.EndDate,
+		Status:          b.Status,
+		TeamName:        teamName,
+		Title:           b.Title,
+		Items:           items,
+		Events:          events,
+		ArchiveDeadline: archiveDeadline,
 	}
 }
 
@@ -705,6 +723,9 @@ func BookingDetailText(d BookingEmailData) string {
 	}
 	if d.Title != "" {
 		fmt.Fprintf(&b, "\n_%s_\n", d.Title)
+	}
+	if d.Event == EventBookingRejected && d.ArchiveDeadline.Valid {
+		fmt.Fprintf(&b, "\n⏰ Skicka in igen innan %s, annars arkiveras bokningen automatiskt.\n", formatDateTime(d.Lang, d.ArchiveDeadline))
 	}
 	return b.String()
 }

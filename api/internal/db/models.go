@@ -68,7 +68,6 @@ type Booking struct {
 	Title                 string             `json:"title"`
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
-	FirstItemAddedAt      pgtype.Timestamptz `json:"first_item_added_at"`
 }
 
 type BookingEvent struct {

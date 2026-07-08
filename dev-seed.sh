@@ -728,10 +728,11 @@ curl -sf -X POST "$API/api/v0/bookings/$BOOKING8_ID/submit" \
 echo "  Booking 8 (submitted, force-approval): 3x Stormkök, 2x Brandfilt — leader asked for review"
 
 # ─── Booking 9: Draft with items, backdated to trigger the auto-archive warning ───
-# Group defaults (see docs/pre-release.md "Booking auto-archive setting"): a draft with
-# items is archived after 3 days. Backdating first_item_added_at puts the deadline ~23.5h
-# out, inside the hourly job's 23-24h warning window - so a reseed reliably produces a
-# booking_archive_warning email/GChat notification on the next check (every minute in dev).
+# Group defaults (see docs/pre-release.md "Booking auto-archive setting"): a draft (with
+# or without items - the deadline runs from created_at) is archived after 3 days.
+# Backdating created_at puts the deadline ~23.5h out, inside the hourly job's 23-24h
+# warning window - so a reseed reliably produces a booking_archive_warning email/GChat
+# notification on the next check (every minute in dev).
 echo ""
 START_40D=$(date -d "+40 days" +%Y-%m-%d 2>/dev/null || date -v+40d +%Y-%m-%d)
 END_42D=$(date -d "+42 days" +%Y-%m-%d 2>/dev/null || date -v+42d +%Y-%m-%d)
@@ -745,7 +746,7 @@ curl -sf -X POST "$API/api/v0/bookings/$BOOKING9_ID/items" \
   -d '{"commercial_name":"Stormkök","quantity":1}' > /dev/null
 
 docker compose exec -T db psql -U utrustning -d utrustning -c "
-  UPDATE bookings SET first_item_added_at = (now() - interval '3 days') + interval '23 hours 30 minutes'
+  UPDATE bookings SET created_at = (now() - interval '3 days') + interval '23 hours 30 minutes'
   WHERE id = '$BOOKING9_ID';
 " > /dev/null
 echo "  Booking 9 (draft, left unsubmitted): 1x Stormkök — backdated to trigger the archive-warning notification"

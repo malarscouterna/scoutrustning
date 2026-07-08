@@ -107,6 +107,26 @@
 		['draft', 'submitted', 'approved', 'confirmed', 'rejected'].includes(data.existing?.booking.status ?? '')
 	);
 
+	// Auto-archive countdown (docs/pre-release.md "Booking auto-archive setting") - shown
+	// here too, not just the read-only detail page, since this is where a user is actually
+	// working on the booking. Updated every 30s; minute-level granularity, no seconds.
+	let archiveDeadline = $derived(data.existing?.archive_deadline ?? null);
+	let nowTick = $state(Date.now());
+	$effect(() => {
+		const timer = setInterval(() => nowTick = Date.now(), 30_000);
+		return () => clearInterval(timer);
+	});
+	function formatCountdown(msLeft: number): string {
+		const totalMinutes = Math.max(0, Math.floor(msLeft / 60_000));
+		const days = Math.floor(totalMinutes / (24 * 60));
+		const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+		const minutes = totalMinutes % 60;
+		if (days > 0) {
+			return m.page_booking_archive_countdown_days({ days: String(days), hours: String(hours) });
+		}
+		return m.page_booking_archive_countdown_hours({ hours: String(hours), minutes: String(minutes) });
+	}
+
 	$effect(() => {
 		if (data.existing) {
 			startDate = data.existing.booking.start_date;
@@ -347,6 +367,16 @@
 
 		{#if error}
 			<div class="bg-red-50 border border-red-200 rounded p-3 mb-4 text-red-800 text-sm">{error}</div>
+		{/if}
+
+		{#if archiveDeadline && (data.existing?.booking.status === 'draft' || data.existing?.booking.status === 'rejected')}
+			{@const msLeft = new Date(archiveDeadline).getTime() - nowTick}
+			{#if msLeft > 0}
+				<div class="border rounded p-3 mb-4 text-sm {msLeft < 24 * 3600_000 ? 'bg-red-50 border-red-300 text-red-900' : 'bg-amber-50 border-amber-300 text-amber-900'}">
+					<p class="font-medium mb-1">{formatCountdown(msLeft)}</p>
+					<p>{data.existing?.booking.status === 'draft' ? m.page_booking_archive_hint_draft() : m.page_booking_archive_hint_rejected()}</p>
+				</div>
+			{/if}
 		{/if}
 
 		{#if hasConflicts}
