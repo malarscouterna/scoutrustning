@@ -9,7 +9,7 @@
 <div class="min-h-screen bg-white text-neutral-900 flex flex-col">
 	<!-- Hero: logo + login button (or dashboard link if already logged in) always above the fold -->
 	<div class="flex flex-col items-center justify-center flex-1 px-4 py-12">
-		<img src="/PNG Utrustningsgruppen - Logotyp.png" alt="Utrustningsgruppen" class="w-40 mb-5" />
+		<img src="/PNG Utrustningsgruppen - Logotyp.png" alt="Scoutrustning" class="w-40 mb-5" />
 		<h1 class="text-2xl font-bold mb-1 tracking-tight">{m.page_welcome_title()}</h1>
 		<p class="text-sm text-neutral-500 mb-8">{m.page_welcome_subtitle()}</p>
 

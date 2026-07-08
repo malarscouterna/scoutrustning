@@ -62,7 +62,7 @@
 
 <div class="min-h-screen bg-white text-neutral-900 flex flex-col items-center px-4 py-12">
 	<div class="w-full max-w-md">
-		<img src="/PNG Utrustningsgruppen - Logotyp.png" alt="Utrustningsgruppen" class="w-32 mb-6 mx-auto" />
+		<img src="/PNG Utrustningsgruppen - Logotyp.png" alt="Scoutrustning" class="w-32 mb-6 mx-auto" />
 
 		<a href="/welcome" class="inline-flex items-center gap-1 text-sm text-neutral-500 hover:text-neutral-800 mb-6">
 			← {m.page_join_back_to_welcome()}

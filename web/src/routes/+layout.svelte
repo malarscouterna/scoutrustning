@@ -35,7 +35,7 @@
 
 {#if !data.user && (data.oidcName || data.dev)}
 	<div class="flex flex-col items-center justify-center min-h-screen px-4 bg-white text-neutral-900">
-		<img src="/PNG Utrustningsgruppen - Logotyp.png" alt="Utrustningsgruppen" class="w-48 mb-6" />
+		<img src="/PNG Utrustningsgruppen - Logotyp.png" alt="Scoutrustning" class="w-48 mb-6" />
 		{#if data.oidcName}
 			<h1 class="text-xl font-bold mb-2">Hej {data.oidcName}!</h1>
 		{/if}

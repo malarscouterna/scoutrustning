@@ -519,6 +519,8 @@
   "error_cannot_delete_the_last_manager_team": "Kan inte ta bort den sista admin-rollen.",
   "error_cannot_demote_the_last_manager_team": "Kan inte nedgradera den sista admin-rollen.",
   "error_end_date_must_be_after_start_date": "Slutdatum måste vara efter startdatum.",
+  "error_invalid_start_date": "Välj ett startdatum.",
+  "error_invalid_end_date": "Välj ett slutdatum.",
   "error_message_required": "Meddelande krävs.",
   "error_description_required": "Beskrivning krävs.",
   "error_name_is_required": "Namn krävs.",
