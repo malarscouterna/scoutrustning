@@ -150,7 +150,7 @@
 					{/if}
 
 					<div class="flex items-center justify-between gap-2 pb-2 border-b">
-						<a href="/profile" class="text-sm text-blue-700 hover:underline">{m.page_home_btn_settings()}</a>
+						<a href="/settings" class="text-sm text-blue-700 hover:underline">{m.page_home_btn_settings()}</a>
 						<form method="POST" action="/auth/signout">
 							<button type="submit" class="text-sm text-red-600 hover:underline">{m.page_profile_btn_logout()}</button>
 						</form>

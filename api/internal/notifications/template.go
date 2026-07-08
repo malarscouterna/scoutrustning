@@ -152,7 +152,7 @@ func renderBookingEmail(d BookingEmailData) (htmlOut, textOut string) {
 		"EMAIL_CTA_LABEL", html.EscapeString(i18n.T(d.Lang, "email_cta_"+d.Event)),
 		"EMAIL_CTA_URL", bookingURL,
 		"EMAIL_CTA_BG", style.ctaBG,
-		"EMAIL_UNSUBSCRIBE_URL", d.BaseURL+"/profile",
+		"EMAIL_UNSUBSCRIBE_URL", d.BaseURL+"/settings",
 		"EMAIL_FOOTER_UNSUBSCRIBE", html.EscapeString(i18n.T(d.Lang, "email_footer_unsubscribe")),
 	)
 
@@ -197,7 +197,7 @@ func renderIssueEmail(d IssueEmailData) (htmlOut, textOut string) {
 		"EMAIL_CTA_LABEL", html.EscapeString(i18n.T(d.Lang, "email_cta_"+d.Event)),
 		"EMAIL_CTA_URL", issueURL,
 		"EMAIL_CTA_BG", style.ctaBG,
-		"EMAIL_UNSUBSCRIBE_URL", d.BaseURL+"/profile",
+		"EMAIL_UNSUBSCRIBE_URL", d.BaseURL+"/settings",
 		"EMAIL_FOOTER_UNSUBSCRIBE", html.EscapeString(i18n.T(d.Lang, "email_footer_unsubscribe")),
 	)
 
@@ -219,14 +219,14 @@ func RenderTestEmail(lang, recipientName, groupName, logoURL, baseURL string) (h
 		"EMAIL_GROUP_NAME", html.EscapeString(groupName),
 		"EMAIL_BANNER_LABEL", html.EscapeString(bannerLabel),
 		"EMAIL_BODY", html.EscapeString(bodyText),
-		"EMAIL_CTA_URL", baseURL+"/profile",
+		"EMAIL_CTA_URL", baseURL+"/settings",
 		"EMAIL_CTA_LABEL", html.EscapeString(ctaLabel),
-		"EMAIL_UNSUBSCRIBE_URL", baseURL+"/profile",
+		"EMAIL_UNSUBSCRIBE_URL", baseURL+"/settings",
 		"EMAIL_FOOTER_UNSUBSCRIBE", html.EscapeString(unsubLabel),
 	)
 
 	htmlOut = replacer.Replace(testTemplate)
-	textOut = fmt.Sprintf("%s\n\n%s: %s/profile", bodyText, unsubLabel, baseURL)
+	textOut = fmt.Sprintf("%s\n\n%s: %s/settings", bodyText, unsubLabel, baseURL)
 	return
 }
 
@@ -634,7 +634,7 @@ func buildBookingText(d BookingEmailData, bannerLabel, start, end, teamLabel, bo
 		b.WriteString("\n")
 	}
 	fmt.Fprintf(&b, "%s: %s\n\n", i18n.T(d.Lang, "email_cta_"+d.Event), bookingURL)
-	fmt.Fprintf(&b, "---\n%s\n%s: %s\n", d.GroupName, i18n.T(d.Lang, "email_footer_unsubscribe"), d.BaseURL+"/profile")
+	fmt.Fprintf(&b, "---\n%s\n%s: %s\n", d.GroupName, i18n.T(d.Lang, "email_footer_unsubscribe"), d.BaseURL+"/settings")
 	return b.String()
 }
 
@@ -755,7 +755,7 @@ func buildIssueText(d IssueEmailData, desc, issueURL string) string {
 		b.WriteString("\n")
 	}
 	fmt.Fprintf(&b, "%s: %s\n\n", i18n.T(d.Lang, "email_cta_"+d.Event), issueURL)
-	fmt.Fprintf(&b, "---\n%s\n%s: %s\n", d.GroupName, i18n.T(d.Lang, "email_footer_unsubscribe"), d.BaseURL+"/profile")
+	fmt.Fprintf(&b, "---\n%s\n%s: %s\n", d.GroupName, i18n.T(d.Lang, "email_footer_unsubscribe"), d.BaseURL+"/settings")
 	return b.String()
 }
 

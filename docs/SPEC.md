@@ -802,6 +802,7 @@ See [inventory-management.md](docs/inventory-management.md) for full design doc.
 - Shared field propagation: saving an individually tracked article propagates description, instructions, manager_notes, category_id to siblings (approval_level and location are per-item) ✅
 - Article detail page: quantity tracked status summary, aggregated purchase info, collapsed group events, comment input ✅
 - Settings as "Gruppinställningar" tab on profile page (`/profile`): locations, categories, CSV import, group settings ✅
+  - **UPDATE**: route renamed `/profile` → `/settings` (same page, same three tabs) - "profile" undersold what's actually a settings page for managers.
 - `group_settings` table with explicit columns: notification_email_from, smtp_key_encrypted (AES-256-GCM, key in `.env`), gchat_webhook_url, default_approval_level ✅
 - Location/category deletion blocked if articles reference them (409 with count) ✅
 - CSV import reads `instructions` and `manager_notes` columns ✅
@@ -843,7 +844,7 @@ Connect real OIDC, add notifications, and make the system usable by actual users
 - **UPDATE**: `role-mapping.json` replaced by `team_claim_mappings` table + `init-group` CLI. OIDC claims are now resolved to teams with configurable access levels at login time. Teams are auto-created on first login or pre-created by managers. See [access-levels.md](docs/access-levels.md).
 - **UPDATE**: Token claim format changed from flat `roles` string array to structured `memberships` JSON object. Group membership is now in `memberships.groups`, troop membership in `memberships.troops` (with optional `groupId`). Auth middleware parses the `memberships` claim directly. Troops are only auto-created when their `groupId` matches the active group; troops with unknown `groupId` still resolve if already mapped in `team_claim_mappings`.
 - Login page at `/login` with ScoutID branding, auto-redirects unauthenticated users
-- User profile page at `/profile` showing teams and access levels
+- User profile page at `/profile` showing teams and access levels (**UPDATE**: route renamed to `/settings`)
 - Sign-out from profile page (clears Auth.js session)
 - Dev persona switcher kept in dev mode, includes "ScoutID login" option
 - Expired token detection - stale sessions trigger re-auth instead of 500s

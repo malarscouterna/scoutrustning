@@ -107,7 +107,7 @@ else
   check "Issues new" "$WEB/issues/new" "$LEADER_COOKIE"
   check "Guide"      "$WEB/guide"     "$LEADER_COOKIE"
   check "GDPR"       "$WEB/gdpr"      "$LEADER_COOKIE"
-  check "Profile"    "$WEB/profile"   "$LEADER_COOKIE"
+  check "Settings"   "$WEB/settings"  "$LEADER_COOKIE"
   check "Welcome"    "$WEB/welcome"   "$LEADER_COOKIE"
   check "Join"       "$WEB/join"      "$LEADER_COOKIE"
 
@@ -116,7 +116,7 @@ else
   check "Browse (mgr)"     "$WEB/browse"        "$MANAGER_COOKIE"
   check "Issues (mgr)"     "$WEB/issues"        "$MANAGER_COOKIE"
   check "Issues new (mgr)" "$WEB/issues/new"    "$MANAGER_COOKIE"
-  check "Profile (mgr)"    "$WEB/profile"       "$MANAGER_COOKIE"
+  check "Settings (mgr)"   "$WEB/settings"      "$MANAGER_COOKIE"
   check "New article"      "$WEB/articles/new"   "$MANAGER_COOKIE"
 
   # --- Dynamic pages ---
@@ -151,7 +151,7 @@ else
   VIEW_COOKIE="Cookie: dev-persona=view-only"
   check "Browse (view-only)"   "$WEB/browse"    "$VIEW_COOKIE"
   check "Issues (view-only)"   "$WEB/issues"    "$VIEW_COOKIE"
-  check "Profile (view-only)"  "$WEB/profile"   "$VIEW_COOKIE"
+  check "Settings (view-only)" "$WEB/settings"  "$VIEW_COOKIE"
 
   # --- Invalid persona cookie should not crash ---
   echo "Testing invalid persona..."
