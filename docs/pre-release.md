@@ -112,7 +112,7 @@ Done in `feat(web): copy booking UI`:
 - Backend tests added to `TestBookingFlow_Copy`: copy + set non-overlapping dates succeeds; copy + set dates overlapping another booking holding the same items 409s with populated `article_ids`. The "copy to clear dates" scenario from the original ask is superseded by the popup design above (dates are never literally cleared/null; they're always re-entered as a real range).
 - Full Go integration suite and `smoke-test.sh` both pass.
 
-**Known gap (not fixed here, flagged during manual review):** `Copy` copies each item by its exact `article_id` (e.g. specifically "Sibley 1"), not by `commercial_name` + `location` the way a normal add-item pick does. So if that exact physical unit is unavailable for the dates chosen in the modal, the `PATCH` 409s on that specific item even when another unit of the same product (e.g. "Sibley 2") is free - no auto-substitution happens. **Decided (see item 11's Auto-swap section below):** the user shouldn't care which physical unit they get, so this should silently resolve to any other available equivalent unit via the same shared swap-resolution helper item 11 introduces, falling back to the 409 only when no equivalent unit exists at all. Deferred to that item so the logic is built once and reused, not duplicated here.
+**Known gap, resolved by item 11 (not this commit):** `Copy` copies each item by its exact `article_id` (e.g. specifically "Sibley 1"), not by `commercial_name` + `location` the way a normal add-item pick does. So if that exact physical unit is unavailable for the dates chosen in the modal, the `PATCH` 409s on that specific item even when another unit of the same product (e.g. "Sibley 2") is free - no auto-substitution happens. Item 11 makes `Update`'s conflict path (which this modal's `PATCH` already goes through) swap to an equivalent unit before falling back to the 409, universally - not a copy-specific fix, so no changes needed here once that lands. See `docs/delayed-return-swap.md` decision 7.
 
 ### Booking status - cancel button state machine
 
@@ -237,6 +237,8 @@ It should be possible to add other teams (troops or roles) or specific people to
 
 ## Delayed return - conflict handling
 
+Full design plan, decisions, and implementation notes in `docs/delayed-return-swap.md` - this entry only tracks status against this checklist.
+
 When an item is still `picked_up` at the start of the next booking's date range:
 
 **Auto-swap:** If an equivalent article (same `commercial_name` + `location`) is available, automatically swap it into the waiting booking. Applies to both individually-tracked and quantity-tracked articles - the distinction does not affect swap eligibility. No confirmation required, no notification sent. A `swap` event is logged in the booking event thread so the change is visible but not disruptive.
@@ -301,12 +303,18 @@ Proposed commit sequence. Each item is a self-contained PR.
 8. ~~`fix(api,web): rename booking notes to title, require non-empty, fix self-conflict regression on update`~~ - Done. See Booking title field section above.
 9. ~~`feat(api,web): booking auto-archive setting`~~ - Done. See Booking auto-archive setting section above.
 10. ~~`feat(api,web): copy booking UI`~~ - Done as `feat(web): copy booking UI`. See Copy booking flow section above.
-11. `feat(api,web): delayed return - auto-swap, conflict overview, next-booker notification` - Auto-swap logic, booking page conflict section, notification without names. Depends on 6.
+11. `feat(api,web): delayed return - auto-swap, conflict overview, next-booker notification` - Auto-swap logic, booking page conflict section, notification without names. Depends on 6. Scope grew (2026-07-08) to also cover condition-change swaps (`reported_usable`/`reported_unusable`/`missing`) and universal swap-before-409 in `Update`'s conflict path (which also fixes item 10's copy-flow gap above for free). Full plan in `docs/delayed-return-swap.md`. **In progress**: delayed/overdue auto-swap path done (migration, `expected_return_date` persistence, `ResolveBlockedItemsForArticle`/`ResolveOverdueSwaps` wired into mark-as-delayed and the nightly job, integration tests passing). Remaining: condition-change triggers (decision 6), `Update`'s universal conflict-path swap (decision 7), "no swap available" notification (decision 4), and the frontend (delay-preview endpoint, `ReturnChecklist.svelte` preview, booking-detail warning section).
 12. `feat(api,web): collaborative bookings - add enheter and people to a booking` - New participants model, shared pickup rights. Depends on 6 and 7.
 13. ~~`feat(web): web header logo`~~ - Done. See "Web header logo" in Other frontend gaps section above.
-14. `feat(api,web): per-item descriptions for individually-tracked articles` - New `description` column on `articles`, edit field in manager article view, display on pickup checklist. Independent.
-15. `feat(web): free-form image crop in issue reporting` - Replace locked-ratio crop with free-form crop in the issue reporting upload flow. Independent.
-16. `feat(web): booking list card comment preview` - Last-comment preview + unread indicator on `BookingCard`. Split out from 7 since it needs a read/seen-state concept that doesn't exist yet. Depends on 7.
+14. `feat(web): free-form image crop in issue reporting` - Replace locked-ratio crop with free-form crop in the issue reporting upload flow. Independent.
+15. `fix(web): CSV import instructions` - Inline help text/panel in the import section (profile/settings "group" tab) plus a fuller column reference added to `docs/guide.md`. See "CSV import instructions" in Other frontend gaps section above.
+16. `feat(web,api): CSV import two-phase flow` - Dry-run preview with per-row duplicate detection, then confirm. See Phase 2 remaining section above.
+17. `feat(web): CSV export` - Client-side, import-compatible columns, on browse page. See Phase 2 remaining section above.
+18. `feat(web): print-friendly booking fetch list` - `@media print`, grouped by location, on booking detail. See Phase 2 remaining section above.
+19. `docs: separate internal planning docs from user-facing docs` - See Repo hygiene section above.
+20. `feat(web): logged-out language switcher on public pages` - Deferred UX polish noted in Multi-group support section above (`/welcome`, `/gdpr`, `/join`).
+
+Deferred out of pre-release scope, moved to `docs/BACKLOG.md` (2026-07-08): per-item descriptions for individually-tracked articles (was 14), booking list card comment preview (was 16).
 
 ---
 

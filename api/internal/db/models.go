@@ -82,12 +82,13 @@ type BookingEvent struct {
 }
 
 type BookingItem struct {
-	ID           pgtype.UUID `json:"id"`
-	GroupID      string      `json:"group_id"`
-	BookingID    pgtype.UUID `json:"booking_id"`
-	ArticleID    pgtype.UUID `json:"article_id"`
-	PickupStatus pgtype.Text `json:"pickup_status"`
-	ReturnStatus pgtype.Text `json:"return_status"`
+	ID                 pgtype.UUID `json:"id"`
+	GroupID            string      `json:"group_id"`
+	BookingID          pgtype.UUID `json:"booking_id"`
+	ArticleID          pgtype.UUID `json:"article_id"`
+	PickupStatus       pgtype.Text `json:"pickup_status"`
+	ReturnStatus       pgtype.Text `json:"return_status"`
+	ExpectedReturnDate pgtype.Date `json:"expected_return_date"`
 }
 
 type Category struct {

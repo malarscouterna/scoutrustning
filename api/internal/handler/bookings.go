@@ -1299,9 +1299,24 @@ func (h *BookingHandler) UpdateItemReturn(w http.ResponseWriter, r *http.Request
 		returnStatus = pgtype.Text{String: req.ReturnStatus, Valid: true}
 	}
 
+	// Only meaningful while return_status is 'delayed' - cleared for every other
+	// outcome (including undo), since the estimate no longer applies.
+	var expectedReturnDate pgtype.Date
+	var expectedReturnDateParsed time.Time
+	if req.ReturnStatus == "delayed" {
+		t, err := time.Parse("2006-01-02", *req.ExpectedReturnDate)
+		if err != nil {
+			WriteError(w, http.StatusBadRequest, "invalid expected_return_date")
+			return
+		}
+		expectedReturnDateParsed = t
+		expectedReturnDate = pgtype.Date{Time: t, Valid: true}
+	}
+
 	item, err := h.Q.UpdateBookingItemReturnStatus(r.Context(), db.UpdateBookingItemReturnStatusParams{
 		ID: itemID, GroupID: claims.GroupID, BookingID: bookingID,
-		ReturnStatus: returnStatus,
+		ReturnStatus:       returnStatus,
+		ExpectedReturnDate: expectedReturnDate,
 	})
 	if err != nil {
 		WriteError(w, http.StatusNotFound, "item not found")
@@ -1321,6 +1336,12 @@ func (h *BookingHandler) UpdateItemReturn(w http.ResponseWriter, r *http.Request
 		LogArticleEvent(r.Context(), h.Q, claims, item.ArticleID, "returned", "Delayed return", map[string]string{
 			"return_status": "delayed", "booking_id": formatUUID(bookingID),
 		})
+		// docs/delayed-return-swap.md: try to silently substitute an equivalent
+		// unit into whichever booking is waiting on this exact article before
+		// its expected return date arrives.
+		if _, err := ResolveBlockedItemsForArticle(r.Context(), h.Q, claims.GroupID, item.ArticleID, expectedReturnDateParsed); err != nil {
+			slog.Error("delayed-item swap resolution failed", "article_id", item.ArticleID, "error", err)
+		}
 	case "reported_usable", "reported_unusable", "missing":
 		// No article status side effect — caller creates issue via POST /issues
 	}
