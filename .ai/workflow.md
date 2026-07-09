@@ -12,7 +12,7 @@ Critical — these override all other rules.
 
 ### Before writing code
 
-- Read `docs/SPEC.md` for requirements before making architectural decisions.
+- Read `docs/implementation/SPEC.md` for requirements before making architectural decisions.
 - Clarify anything ambiguous before implementing.
 - Never start writing or modifying files until the user explicitly approves the plan. Present what you intend to do, wait for a go-ahead, then implement.
 - Build minimal viable first. Get things working end-to-end before adding complexity. Don't over-scaffold or create stubs for things not yet needed.
@@ -31,10 +31,10 @@ Critical — these override all other rules.
 - If any change requires a container rebuild, database reset, migration run, or other manual step, explicitly state what the user needs to do (e.g. `docker compose up --build`, `./dev-seed.sh`, restart a service). Never assume the user knows which changes require a rebuild.
 - Keep documentation updated proactively — don't wait to be asked:
   - `docs/API.md` — when adding or changing API endpoints
-  - `docs/SPEC.md` — when making architectural decisions or completing spec milestones. The spec is both a plan and an overarching implementation document. Completed steps that later changed must note the original was accomplished per spec, then add an **UPDATE** section with the current status. Overall descriptions (flows, architecture, data model) must always reflect the current state. Future/planned sections can describe intended behavior.
+  - `docs/implementation/SPEC.md` — when making architectural decisions or completing spec milestones. The spec is both a plan and an overarching implementation document. Completed steps that later changed must note the original was accomplished per spec, then add an **UPDATE** section with the current status. Overall descriptions (flows, architecture, data model) must always reflect the current state. Future/planned sections can describe intended behavior.
   - `.amazonq/rules/project-context.md` — when architecture, conventions, or project structure changes
-  - `docs/BACKLOG.md` and `docs/accomplished.md` — anything deferred goes in the backlog, completed items move to accomplished. Never leave resolved items in the backlog.
-  - When building a complex feature, add a dedicated doc in `docs/` (e.g. `docs/availability.md`) documenting design decisions and trade-offs, and reference it from `accomplished.md`.
+  - `docs/implementation/BACKLOG.md` and `docs/implementation/accomplished.md` — anything deferred goes in the backlog, completed items move to accomplished. Never leave resolved items in the backlog.
+  - When building a complex feature, add a dedicated doc in `docs/implementation/` (e.g. `docs/implementation/availability.md`) documenting design decisions and trade-offs, and reference it from `accomplished.md`.
 
 ### When the user says we're done
 
@@ -51,9 +51,9 @@ When the user says done or finished, perform this checklist:
 6. **Svelte warnings**: Run `cd web && PATH=/usr/local/bin:$PATH pnpm run check` and verify zero errors and warnings. Requires Node 24 — the system default `node` is v18 which cannot load the Vite plugin. Do not introduce new warnings.
 7. **Documentation** — verify each of these is still accurate and update if needed:
    - `docs/API.md` — reflects any new or changed endpoints
-   - `docs/SPEC.md` — reflects current architecture and decisions
-   - `docs/BACKLOG.md` — any resolved items removed
-   - `docs/accomplished.md` — completed work logged
+   - `docs/implementation/SPEC.md` — reflects current architecture and decisions
+   - `docs/implementation/BACKLOG.md` — any resolved items removed
+   - `docs/implementation/accomplished.md` — completed work logged
    - `.amazonq/rules/project-context.md` — reflects current state
    - `.amazonq/rules/coding-conventions.md` — any new patterns captured
    - `README.md` — reflects current status and setup instructions

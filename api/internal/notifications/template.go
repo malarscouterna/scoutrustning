@@ -98,7 +98,7 @@ type BookingEmailData struct {
 	// BlockedItemName is only set for EventBookingItemBlocked; the name of the
 	// item that couldn't be swapped to an equivalent unit, interpolated into
 	// the email intro. Deliberately does not name the late/other booker - see
-	// docs/delayed-return-swap.md decision 4.
+	// docs/implementation/delayed-return-swap.md decision 4.
 	BlockedItemName string
 }
 
@@ -268,7 +268,7 @@ func fetchBookingEmailData(ctx context.Context, q *db.Queries, b db.Booking, eve
 	events, _ := q.ListBookingEvents(ctx, db.ListBookingEventsParams{BookingID: b.ID, GroupID: b.GroupID})
 
 	// The rejection email tells the recipient how long they have to resubmit before the
-	// booking auto-archives (docs/pre-release.md "Booking auto-archive setting") - b.UpdatedAt
+	// booking auto-archives (docs/implementation/pre-release.md "Booking auto-archive setting") - b.UpdatedAt
 	// is already the fresh rejected-status timestamp by the time this runs (Reject sets it
 	// before calling SendBookingRejected), so the deadline is exact, not an approximation.
 	var archiveDeadline pgtype.Timestamptz

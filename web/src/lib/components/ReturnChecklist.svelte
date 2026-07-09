@@ -219,7 +219,7 @@
 			const g = a.find((x) => x.commercial_name === name);
 			if (!g || g.available_count === 0) delayWarning = m.return_delay_fully_booked({ name, date });
 		} catch {}
-		// docs/delayed-return-swap.md: "next expected user" preview - if another
+		// docs/implementation/delayed-return-swap.md: "next expected user" preview - if another
 		// booking is already waiting on this exact item, show who so the person
 		// marking it delayed knows an auto-swap will (or won't) be attempted.
 		try {

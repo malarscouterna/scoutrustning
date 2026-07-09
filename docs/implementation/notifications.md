@@ -551,7 +551,7 @@ Toggle table with the same layout as the user prefs table. `GET /api/v0/group-se
 
 ### Step 10: Email body templates 🚧
 
-Full design in `docs/email-templates.md`.
+Full design in `docs/implementation/email-templates.md`.
 
 **Toolchain**: MJML source templates (`web/src/lib/emails/booking.mjml`, `issue.mjml`) compiled to HTML via `pnpm compile-emails` (uses `web/scripts/compile-emails.ts`). Generated HTML is committed to `api/internal/notifications/templates/` and embedded in the Go binary via `//go:embed`.
 

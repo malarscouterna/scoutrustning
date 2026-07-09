@@ -84,7 +84,7 @@ A booking is a reservation of articles for a date range (day granularity), creat
 **Booking ownership**: A booking has a creator (the logged-in user) and a "used by" field which can be:
 - A unit (e.g. "Yggdrasil") - all leaders of that unit can see the booking, do pickup, do (partial) returns, and manage it. Units are a managed entity (database table), populated from OIDC claims or created by equipment managers. Unit membership comes from OIDC group claims. Leaders can only book for units they belong to.
 - A project (e.g. "Valborg 2026") - same as units but for temporary cross-unit activities. Project leaders can only book for projects they belong to. Projects bypass article approval requirements. Both units and projects are stored in the `units` table with a `type` column (`unit` or `project`).
-- **UPDATE**: The `project` type and `project_leader` role have been removed. Units and projects are now both stored in the `teams` table with a `type` column (`troop` or `role`). Each team has a configurable `access_level` (view, book, trusted, manager). The booking's "used by" team determines the effective access level for approval decisions. See [access-levels.md](docs/access-levels.md).
+- **UPDATE**: The `project` type and `project_leader` role have been removed. Units and projects are now both stored in the `teams` table with a `type` column (`troop` or `role`). Each team has a configurable `access_level` (view, book, trusted, manager). The booking's "used by" team determines the effective access level for approval decisions. See [access-levels.md](docs/implementation/access-levels.md).
 - An external person (free-text name + contact info) - only the creator and equipment managers can manage it.
 - Empty - personal booking, only the creator manages it.
 - Equipment managers can book for any unit, project, or external person.
@@ -101,7 +101,7 @@ Draft → Submitted → [Approved] → Confirmed → Picked up → Returned
 
 - **Draft** - user is building their cart
 - **Submitted** - booking requested. If no articles have `approval_level` != `none`, auto-transitions to Confirmed. If any article has `low` approval and user is a project leader, auto-confirms. If any article has `high` approval, only managers auto-confirm. Otherwise waits for manager approval. Leaders can set `force_approval` on submit to request manager review even when all items are freely bookable.
-- **UPDATE**: Approval is now based on the booking's team access level, not user roles. `low` auto-confirms for `trusted` and `manager` teams. `high` always needs approval (including managers - they can approve their own bookings but must go through the flow). Personal bookings (no team) use `book` level. See [access-levels.md](docs/access-levels.md).
+- **UPDATE**: Approval is now based on the booking's team access level, not user roles. `low` auto-confirms for `trusted` and `manager` teams. `high` always needs approval (including managers - they can approve their own bookings but must go through the flow). Personal bookings (no team) use `book` level. See [access-levels.md](docs/implementation/access-levels.md).
 - **Approved/Rejected** - equipment manager acts on bookings that need approval. Approval auto-transitions to Confirmed. Rejection reverts to Draft with a message so the leader can edit and resubmit.
 - **Confirmed** - booking is locked in, articles reserved
 - **Picked up** - user has collected the equipment. Per-article checklist shows which specific items to collect and where to find them. Tick off each item. Can swap assigned items for other available ones and add extras during pickup.
@@ -766,7 +766,7 @@ CSV column mapping:
 - Unit-scoped booking visibility (Yggdrasil leader sees it, Ornéerna doesn't)
 - Unit membership enforcement on booking creation (leaders can only book for own units)
 - Projects as a unit type (`units.type = 'project'`), project leaders book for own projects
-- **UPDATE**: Replaced with per-team access levels. `teams` table with `type` (`troop`/`role`) and `access_level` (view/book/trusted/manager). See [access-levels.md](docs/access-levels.md).
+- **UPDATE**: Replaced with per-team access levels. `teams` table with `type` (`troop`/`role`) and `access_level` (view/book/trusted/manager). See [access-levels.md](docs/implementation/access-levels.md).
 - Equipment managers see all bookings
 - Role enforcement across all endpoints (leader gets 403 on manager endpoints)
 - Article status role restrictions (leaders can report, managers can set any status)
@@ -779,7 +779,7 @@ CSV column mapping:
 
 #### Step 1: Approval flow ✅
 - Three-level approval model: `none` (free), `low` (project leaders auto-approve), `high` (always needs manager approval)
-- **UPDATE**: Approval is now per-team access level. `low` auto-confirms for `trusted`+ teams. `high` always needs approval (including managers). See [access-levels.md](docs/access-levels.md).
+- **UPDATE**: Approval is now per-team access level. `low` auto-confirms for `trusted`+ teams. `high` always needs approval (including managers). See [access-levels.md](docs/implementation/access-levels.md).
 - Force-approval option: leaders can request manager review even on freely bookable items
 - Booking events table for approval conversation history (submit/reject with message/resubmit/approve)
 - API: `POST /bookings/{id}/approve` and `POST /bookings/{id}/reject` (manager only, with message)
@@ -790,10 +790,10 @@ CSV column mapping:
 - Frontend: Approve/reject buttons with message field on booking detail
 - Frontend: Leader sees approval/rejection message on booking detail
 - Integration tests: 9 subtests covering all approval level × role combinations
-- **UPDATE**: Originally planned as simple boolean `requires_approval`. Evolved to three-level model with booking events for conversation history. See [article-status-refactor.md](docs/article-status-refactor.md) for the status changes that accompanied this.
+- **UPDATE**: Originally planned as simple boolean `requires_approval`. Evolved to three-level model with booking events for conversation history. See [article-status-refactor.md](docs/implementation/article-status-refactor.md) for the status changes that accompanied this.
 
 #### Step 2: Equipment manager - inventory management ✅ (mostly done)
-See [inventory-management.md](docs/inventory-management.md) for full design doc.
+See [inventory-management.md](docs/implementation/inventory-management.md) for full design doc.
 - Browse page "Hanteringsläge" toggle (session state) for inline manager controls: bulk actions, edit links, checkboxes per group/article ✅
 - Bulk actions toolbar: status change, location move, archive with conflict detection + auto-replacement in active bookings, comment input for events ✅
 - Article create/edit forms at `/articles/*` (manager-guarded), article detail page at `/articles/[id]` (all users) ✅
@@ -815,7 +815,7 @@ Remaining:
 - Print-friendly fetch list on booking detail (`@media print`, grouped by location)
 
 #### Step 3: Image upload ✅
-See [images.md](docs/images.md) for full design doc.
+See [images.md](docs/implementation/images.md) for full design doc.
 - Server-side image processing via govips: JPEG/PNG/WebP/HEIC input, EXIF strip, auto-rotate, client-side crop with selectable format (landscape 4:3, portrait 3:4, square 1:1), resize to source (1920px/q80) + thumbnail (300px height/q70) WebP variants ✅
 - On-demand JPEG conversion for download (`?format=jpeg`) ✅
 - Byte-level MIME detection including HEIC ftyp box and WebP RIFF header sniffing ✅
@@ -841,7 +841,7 @@ Connect real OIDC, add notifications, and make the system usable by actual users
   - `preferred_username` (`scoutnet|MEMBER_ID`) → member ID
   - `group:GROUP_ID:ROLE` → group ID + admin/project roles
   - `troop:TROOP_ID:ROLE` → leader role + unit membership
-- **UPDATE**: `role-mapping.json` replaced by `team_claim_mappings` table + `init-group` CLI. OIDC claims are now resolved to teams with configurable access levels at login time. Teams are auto-created on first login or pre-created by managers. See [access-levels.md](docs/access-levels.md).
+- **UPDATE**: `role-mapping.json` replaced by `team_claim_mappings` table + `init-group` CLI. OIDC claims are now resolved to teams with configurable access levels at login time. Teams are auto-created on first login or pre-created by managers. See [access-levels.md](docs/implementation/access-levels.md).
 - **UPDATE**: Token claim format changed from flat `roles` string array to structured `memberships` JSON object. Group membership is now in `memberships.groups`, troop membership in `memberships.troops` (with optional `groupId`). Auth middleware parses the `memberships` claim directly. Troops are only auto-created when their `groupId` matches the active group; troops with unknown `groupId` still resolve if already mapped in `team_claim_mappings`.
 - Login page at `/login` with ScoutID branding, auto-redirects unauthenticated users
 - User profile page at `/profile` showing teams and access levels (**UPDATE**: route renamed to `/settings`)
@@ -851,7 +851,7 @@ Connect real OIDC, add notifications, and make the system usable by actual users
 - Dev seed script checks for dev mode before running
 
 #### Step 2: Notifications ✅
-See [notifications.md](docs/notifications.md) for the full design.
+See [notifications.md](docs/implementation/notifications.md) for the full design.
 
 - Migration: `users.max_access_level`, `users.notification_prefs` (JSONB), `users.team_ids`, `group_settings` SMTP fields + `notification_defaults` (JSONB), `notification_log`, `group_settings.logo_file_id` ✅
 - Group members API: `GET /api/v0/users?access_levels=...` (manager only), demo mode protection ✅
@@ -925,7 +925,7 @@ A read-only public API for external consumers (other scout websites, apps, digit
 
 Swedish (`sv`) and English (`en`) are supported. Swedish is the default.
 
-- **Current state**: Full i18n system in place. All UI strings go through Paraglide on the frontend and `i18n.T()` on the backend. See `docs/i18n.md` for architecture details.
+- **Current state**: Full i18n system in place. All UI strings go through Paraglide on the frontend and `i18n.T()` on the backend. See `docs/implementation/i18n.md` for architecture details.
 - Language is resolved per request: user preference → group default → `sv`. Set via `PUT /api/v0/me/language` (user) or `PUT /api/v0/group-settings` (group default).
 - User-generated content (article names, category names, descriptions, issue titles) is stored as-is and not translated.
 - Code, comments, API field names, and documentation are always in English.

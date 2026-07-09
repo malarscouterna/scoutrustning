@@ -12,7 +12,7 @@ import (
 )
 
 // ResolveBlockedItemsForArticle looks for the earliest non-terminal booking
-// (docs/delayed-return-swap.md decision 2) that is blocked by articleID as of
+// (docs/implementation/delayed-return-swap.md decision 2) that is blocked by articleID as of
 // checkDate, and tries to silently substitute an equivalent available unit
 // into it. If more than one waiting booking is blocked, only the earliest by
 // start_date is resolved per call - a later pass (the next mark-delayed call,
@@ -136,12 +136,12 @@ func ResolveBlockedItemsForArticle(ctx context.Context, pool *pgxpool.Pool, q *d
 // carries a time-of-day component, but it's compared against b.end_date,
 // which is date-only. Depending on what time of day the nightly job runs,
 // the enforced grace period ranges from ~24h to ~72h rather than exactly
-// 48h. This is accepted as-is (docs/delayed-return-swap.md) since end_date
+// 48h. This is accepted as-is (docs/implementation/delayed-return-swap.md) since end_date
 // is date-only anyway - a booking is never "a few hours overdue" in this
 // model, only "overdue as of a given day".
 const overdueSwapGracePeriod = 48 * time.Hour
 
-// ResolveOverdueSwaps is the nightly entry point (docs/delayed-return-swap.md
+// ResolveOverdueSwaps is the nightly entry point (docs/implementation/delayed-return-swap.md
 // decision 5), folded into the existing booking-cleanup loop. It enumerates
 // every delayed/overdue item across all groups and tries to resolve each
 // affected article's blocked bookings once. Multiple items sharing the same

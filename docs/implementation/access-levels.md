@@ -770,7 +770,7 @@ For the eventual production deployment, the `init-group` CLI is the entry point 
 
 ## SPEC.md updates needed
 
-When implementing this feature, the following sections of `docs/SPEC.md` need updating to stay coherent:
+When implementing this feature, the following sections of `docs/implementation/SPEC.md` need updating to stay coherent:
 
 ### Roles section
 - Replace the three hardcoded roles (Leader, Project leader, Equipment manager) with the four access levels (view, book, trusted, manager)

@@ -265,7 +265,7 @@ WHERE id = @id AND group_id = @group_id AND booking_id = @booking_id
 RETURNING *;
 
 -- name: FindWaitingBookingItemsForArticle :many
--- Non-terminal bookings (docs/delayed-return-swap.md decision 2) already holding
+-- Non-terminal bookings (docs/implementation/delayed-return-swap.md decision 2) already holding
 -- the exact given article, whose own start_date has arrived by check_date - i.e.
 -- bookings actively blocked by this article right now. Also doubles as the
 -- "next expected user" preview query, called with check_date = the date typed
@@ -301,7 +301,7 @@ WHERE b.status = 'picked_up'
     );
 
 -- name: GetBlockedItemsForBooking :many
--- Powers the booking-detail warning section (docs/delayed-return-swap.md): this
+-- Powers the booking-detail warning section (docs/implementation/delayed-return-swap.md): this
 -- booking's own items whose start_date has arrived, where another booking still
 -- holds the exact same article_id, picked_up and unresolved (delayed or simply
 -- never returned) - i.e. this booking is actively blocked right now, mirroring
@@ -343,7 +343,7 @@ WHERE group_id = @group_id AND status = 'draft'
     AND created_at < @older_than;
 
 -- name: GetBookingsNearingArchive :many
--- Bookings whose auto-archive deadline (docs/pre-release.md "Booking auto-archive setting")
+-- Bookings whose auto-archive deadline (docs/implementation/pre-release.md "Booking auto-archive setting")
 -- falls between 23 and 24 hours from now (all groups). Called hourly (not the once-daily
 -- scheduler) so the one-time advance warning lands close to a true 24h-before mark rather
 -- than drifting by up to a full day between checks. Draft deadline runs from created_at,

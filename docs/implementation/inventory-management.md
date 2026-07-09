@@ -380,10 +380,10 @@ DROP TABLE IF EXISTS group_settings;
 ### Step 2f: Documentation
 
 1. Update `docs/API.md` with new/modified endpoints
-2. Update `docs/SPEC.md` — mark Phase 2 Step 2 progress
+2. Update `docs/implementation/SPEC.md` — mark Phase 2 Step 2 progress
 3. Update `docs/guide.md` — add inventory management and settings to user guide
-4. Update `docs/BACKLOG.md` — remove completed items
-5. Update `docs/accomplished.md` — log completed work
+4. Update `docs/implementation/BACKLOG.md` — remove completed items
+5. Update `docs/implementation/accomplished.md` — log completed work
 
 ## Order of implementation
 

@@ -16,7 +16,7 @@ import (
 
 // JoinHandler handles group signup submissions. It is mounted behind
 // auth.Middleware with AllowUnmapped: true, since applicants by definition
-// have no registered group yet - see docs/scout-group-signup.md.
+// have no registered group yet - see docs/implementation/scout-group-signup.md.
 type JoinHandler struct {
 	Notifier  notifications.Notifier
 	AdminTo   string

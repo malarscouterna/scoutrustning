@@ -118,7 +118,7 @@ hour/minute precision, but it's bound as `pgtype.Date` and compared against
 the date-only `b.end_date` column. The intended 48h grace period actually
 enforces anywhere from ~24h to ~72h depending on time of day the job runs.
 Not a crash or corruption risk, but it doesn't match the documented
-behavior in `docs/delayed-return-swap.md`, and
+behavior in `docs/implementation/delayed-return-swap.md`, and
 `TestResolveOverdueSwaps_GracePeriod` only covers the clearly-within-grace
 case, so the boundary isn't tested.
 
@@ -129,7 +129,7 @@ and testable at the boundary.
 
 **Decision: document, no code change.** Day-granularity is good enough for
 this feature - documented in a code comment on `overdueSwapGracePeriod` and
-in `docs/delayed-return-swap.md`'s grace-period section.
+in `docs/implementation/delayed-return-swap.md`'s grace-period section.
 
 ### 5. Duplicated, non-httpOnly cookie writes for group switching
 

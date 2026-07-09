@@ -289,7 +289,7 @@
 			{/if}
 
 			<!-- Auto-archive countdown: draft-with-items or rejected-awaiting-resubmission,
-			     per group settings (docs/pre-release.md "Booking auto-archive setting").
+			     per group settings (docs/implementation/pre-release.md "Booking auto-archive setting").
 			     Urgency increases (amber → red) under 24h left; hidden once the deadline
 			     has passed (a poll will pick up the resulting cancelled status shortly). -->
 			{#if archiveDeadline && (booking.status === 'draft' || booking.status === 'rejected')}
@@ -303,7 +303,7 @@
 			{/if}
 
 			<!-- Blocked items: this booking's own items still waiting on an exact unit
-			     another booking hasn't returned (docs/delayed-return-swap.md). Clears
+			     another booking hasn't returned (docs/implementation/delayed-return-swap.md). Clears
 			     once auto-swap resolves it or the holder returns the item. -->
 			{#if blockedItems.length > 0}
 				<div class="border rounded p-3 mb-4 text-sm bg-amber-50 border-amber-300 text-amber-900 space-y-2">

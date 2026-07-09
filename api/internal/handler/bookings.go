@@ -315,7 +315,7 @@ func (h *BookingHandler) Get(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// archiveDeadline computes when a booking will be auto-archived (docs/pre-release.md
+// archiveDeadline computes when a booking will be auto-archived (docs/implementation/pre-release.md
 // "Booking auto-archive setting"), for the booking-detail countdown - nil unless the
 // booking is in one of the two timed states with a nonzero group setting. Mirrors the
 // SQL in GetBookingsNearingArchive/GetBookingsPastArchiveDeadline. The draft deadline
@@ -531,7 +531,7 @@ func (h *BookingHandler) Update(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			// docs/delayed-return-swap.md decision 7: try to silently substitute
+			// docs/implementation/delayed-return-swap.md decision 7: try to silently substitute
 			// an equivalent unit for the new date range before falling back to
 			// the 409 - the user doesn't care which physical unit they end up
 			// with, only that they have one.
@@ -1428,7 +1428,7 @@ func (h *BookingHandler) UpdateItemReturn(w http.ResponseWriter, r *http.Request
 		LogArticleEvent(r.Context(), h.Q, claims, item.ArticleID, "returned", "Delayed return", map[string]string{
 			"return_status": "delayed", "booking_id": formatUUID(bookingID),
 		})
-		// docs/delayed-return-swap.md: try to silently substitute an equivalent
+		// docs/implementation/delayed-return-swap.md: try to silently substitute an equivalent
 		// unit into whichever booking is waiting on this exact article before
 		// its expected return date arrives.
 		if _, err := ResolveBlockedItemsForArticle(r.Context(), h.Pool, h.Q, h.Notifier, h.GChatNotifier, h.BaseURL, claims.GroupID, item.ArticleID, expectedReturnDateParsed, false); err != nil {
@@ -1436,7 +1436,7 @@ func (h *BookingHandler) UpdateItemReturn(w http.ResponseWriter, r *http.Request
 		}
 	case "reported_usable":
 		// No article status side effect — caller creates issue via POST /issues.
-		// Opportunistic upgrade only (docs/delayed-return-swap.md decision 6): the
+		// Opportunistic upgrade only (docs/implementation/delayed-return-swap.md decision 6): the
 		// unit is still bookable, so a waiting booking is never actually blocked -
 		// swap it onto a fully-ok unit if one's free, otherwise leave it as-is.
 		if _, err := ResolveBlockedItemsForArticle(r.Context(), h.Pool, h.Q, h.Notifier, h.GChatNotifier, h.BaseURL, claims.GroupID, item.ArticleID, time.Now(), true); err != nil {
@@ -1454,7 +1454,7 @@ func (h *BookingHandler) UpdateItemReturn(w http.ResponseWriter, r *http.Request
 	WriteJSON(w, http.StatusOK, item)
 }
 
-// DelayPreview shows the "next expected user" (docs/delayed-return-swap.md) while a
+// DelayPreview shows the "next expected user" (docs/implementation/delayed-return-swap.md) while a
 // manager is still filling in the expected_return_date field, before saving - read-only,
 // makes no changes. Reuses FindWaitingBookingItemsForArticle with check_date = the
 // date currently typed into the form, rather than today.

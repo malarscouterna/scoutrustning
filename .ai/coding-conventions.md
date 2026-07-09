@@ -93,13 +93,13 @@ Committed generated files must never be edited by hand - always edit the source 
 - The Go API is language-agnostic: returns data as stored, uses error keys (not human-readable messages) so the frontend can translate them.
 - Code, comments, API field names, and documentation are always in English.
 - Use ` - ` instead of em-dashes (—) in documentation and comments. Replace em-dashes when editing a file.
-- UI strings are in Swedish and English, managed via Paraglide (see `docs/i18n.md`). Never hardcode user-visible strings in Svelte templates - always use message keys.
+- UI strings are in Swedish and English, managed via Paraglide (see `docs/implementation/i18n.md`). Never hardcode user-visible strings in Svelte templates - always use message keys.
 - Never hardcode credentials or secrets. Use environment variables.
 - Never log tokens, passwords, or PII beyond what's needed for debugging.
 
 ### i18n (internationalization)
 
-- All user-visible strings go through Paraglide on the frontend and `i18n.T()` on the backend. See `docs/i18n.md` for full architecture.
+- All user-visible strings go through Paraglide on the frontend and `i18n.T()` on the backend. See `docs/implementation/i18n.md` for full architecture.
 - Message files: `api/internal/i18n/messages/sv.json` and `en.json`. Both files must have identical key sets.
 - Keys are English, underscore-separated snake_case. Namespace by component/page: `page_home_`, `page_browse_`, `article_form_`, `btn_`, `common_`, etc.
 - Before adding a new key, `grep` the JSON file to check if the exact string already exists. Reuse the existing key rather than creating a duplicate. Only create a separate key if the string is likely to diverge across contexts.

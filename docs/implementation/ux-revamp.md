@@ -224,11 +224,11 @@ After implementation, update these docs:
 
 | Document | What to update |
 |---|---|
-| `docs/SPEC.md` | User flows section (booking flow now uses cart + browse instead of dedicated /book page). Navigation description. Add UPDATE notes on changed steps. |
+| `docs/implementation/SPEC.md` | User flows section (booking flow now uses cart + browse instead of dedicated /book page). Navigation description. Add UPDATE notes on changed steps. |
 | `docs/API.md` | No changes (no new endpoints). |
 | `docs/guide.md` | Rewrite user-facing instructions: new dashboard, how to book (cart flow), how to browse, where to find settings. Screenshots if any. |
-| `docs/BACKLOG.md` | Remove this item if listed. Add any deferred items (issue assignment, draft cleanup). |
-| `docs/accomplished.md` | Log the revamp as completed work. |
+| `docs/implementation/BACKLOG.md` | Remove this item if listed. Add any deferred items (issue assignment, draft cleanup). |
+| `docs/implementation/accomplished.md` | Log the revamp as completed work. |
 | `.amazonq/rules/project-context.md` | Update project structure (new files), navigation description, user flow description. |
 | `README.md` | Update "Currently implements" list if navigation/UX is mentioned. |
 

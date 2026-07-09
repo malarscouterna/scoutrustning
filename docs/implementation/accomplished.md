@@ -18,7 +18,7 @@ Full design and decision log in [delayed-return-swap.md](delayed-return-swap.md)
 
 ### Notifications — post-review refactor (send.go + group_settings)
 
-Addressed all open items from the notifications code review (`docs/notifications-review.md`). See that doc for the full resolved list.
+Addressed all open items from the notifications code review (`docs/implementation/notifications-review.md`). See that doc for the full resolved list.
 
 **`send.go` duplication removed**: Extracted `sendBookingToTeam` (used by `SendBookingConfirmed` and `SendBookingCancelled`); replaced `issueBroadcastTexts` + `issueBroadcastEmail` (two independent `fetchIssueEmailData` calls) with a single `issueBroadcastData` returning `(msg, opener, detail)`; extracted `langOrDefault(pgtype.Text)` used by all three `from*Row` helpers.
 
@@ -36,7 +36,7 @@ Newest first.
 
 ### feat/notifications branch — pre-merge fixes
 
-Resolved all issues identified in the branch review (`docs/notifications-branch-review.md`).
+Resolved all issues identified in the branch review (`docs/implementation/notifications-branch-review.md`).
 
 **Critical — personal notification prefs end-to-end fix**
 
@@ -48,7 +48,7 @@ The Phase 3.6 JSONB shape (`{personal_email_policy, gruppkanal}`) was implemente
 - `notification_prefs_test.go` fully rewritten — all 8 subtests pass against the live DB.
 - Stale pref format in `scheduled_notifications_test.go` updated (`{"email":false}` → `{"personal_email_policy":"never"}`).
 - Stale `gchat_webhook_url` reference removed from `inventory_test.go` (column dropped in migration 00009).
-- GChat code review: booking events are fully wired; issue events have no GChat broadcast path and GChat key management endpoints lack integration tests — documented in `docs/notifications-phase35.md` and `docs/BACKLOG.md`.
+- GChat code review: booking events are fully wired; issue events have no GChat broadcast path and GChat key management endpoints lack integration tests — documented in `docs/implementation/notifications-phase35.md` and `docs/implementation/BACKLOG.md`.
 
 **High — dead code removed**
 
