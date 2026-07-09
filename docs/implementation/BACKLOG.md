@@ -14,13 +14,9 @@ Was item 16 in `docs/implementation/pre-release.md`'s Implementation order, defe
 
 The booking comment thread redesign (`docs/implementation/pre-release.md`, item 7) wires up `items_changed` events for add/remove/swap so a plain description shows in the thread. Follow-up: make those entries clickable to show an actual diff (which article(s) were added/removed, before/after state) instead of just a text line. Needs a small UI (e.g. expandable row or a modal) and probably the event `metadata` already stores enough (article id/name) to build it without further backend changes.
 
-## Remaining major-version dependency bumps
+## TypeScript 7 upgrade
 
-Deferred out of the dependency freshness audit (`docs/implementation/pre-release.md`, item 21, done 2026-07-09) - each needs its own dedicated verification pass, not a routine patch/minor bump:
-
-- `typescript` 6.x → 7.x (`web/package.json`)
-- `@types/node` 25.x → 26.x (`web/package.json`)
-- `marked` 17.x → 18.x (`web/package.json`) - used for guide/GDPR markdown rendering
+Withheld from the dependency freshness audit (`docs/implementation/pre-release.md`, item 21). TypeScript 7 is the native Go-ported compiler ("tsgo") and is still in preview - the Language Service/Compiler API surface that `svelte-check`, editor tooling, and ESLint plugins depend on isn't yet at parity with the classic 5.x/6.x compiler. Revisit once third-party ecosystem support (`svelte-check` in particular) confirms full compatibility. `@types/node` and `marked` were bumped separately (2026-07-09) since they don't share this risk.
 
 ## English user guide
 
