@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/malarscouterna/scoutrustning/api/internal/db"
 	"github.com/malarscouterna/scoutrustning/api/internal/notifications"
 )
@@ -29,7 +30,7 @@ import (
 // booking exists but no equivalent unit was found - in the latter case (and
 // only when upgradeOnly is false, per decision 6) it fires the "no swap
 // available" notification (decision 4) at the waiting booking instead.
-func ResolveBlockedItemsForArticle(ctx context.Context, q *db.Queries, n, gn notifications.Notifier, baseURL, groupID string, articleID pgtype.UUID, checkDate time.Time, upgradeOnly bool) (bool, error) {
+func ResolveBlockedItemsForArticle(ctx context.Context, pool *pgxpool.Pool, q *db.Queries, n, gn notifications.Notifier, baseURL, groupID string, articleID pgtype.UUID, checkDate time.Time, upgradeOnly bool) (bool, error) {
 	waiting, err := q.FindWaitingBookingItemsForArticle(ctx, db.FindWaitingBookingItemsForArticleParams{
 		ArticleID: articleID,
 		GroupID:   groupID,
@@ -52,7 +53,20 @@ func ResolveBlockedItemsForArticle(ctx context.Context, q *db.Queries, n, gn not
 	if upgradeOnly {
 		statuses = []string{"ok"}
 	}
-	replacementID, err := q.FindReplacementArticle(ctx, db.FindReplacementArticleParams{
+
+	// The find-and-swap must run in one transaction: FindReplacementArticle
+	// takes FOR UPDATE SKIP LOCKED on the candidate row, and that lock is only
+	// meaningful until the swap that consumes it commits. Without this, the
+	// nightly job and a request-time swap can both SELECT the same free unit
+	// before either commits its UPDATE, double-booking it.
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+	txQ := q.WithTx(tx)
+
+	replacementID, err := txQ.FindReplacementArticle(ctx, db.FindReplacementArticleParams{
 		GroupID:        groupID,
 		CommercialName: article.CommercialName,
 		LocationID:     article.LocationID,
@@ -79,12 +93,12 @@ func ResolveBlockedItemsForArticle(ctx context.Context, q *db.Queries, n, gn not
 		return false, nil
 	}
 
-	replacement, err := q.GetArticle(ctx, db.GetArticleParams{ID: replacementID, GroupID: groupID})
+	replacement, err := txQ.GetArticle(ctx, db.GetArticleParams{ID: replacementID, GroupID: groupID})
 	if err != nil {
 		return false, err
 	}
 
-	if _, err := q.SwapBookingItemArticleByArticle(ctx, db.SwapBookingItemArticleByArticleParams{
+	if _, err := txQ.SwapBookingItemArticleByArticle(ctx, db.SwapBookingItemArticleByArticleParams{
 		NewArticleID: replacementID,
 		OldArticleID: articleID,
 		BookingID:    earliest.BookingID,
@@ -93,7 +107,7 @@ func ResolveBlockedItemsForArticle(ctx context.Context, q *db.Queries, n, gn not
 		return false, err
 	}
 
-	if _, err := q.CreateBookingEvent(ctx, db.CreateBookingEventParams{
+	if _, err := txQ.CreateBookingEvent(ctx, db.CreateBookingEventParams{
 		GroupID:   groupID,
 		BookingID: earliest.BookingID,
 		ActorID:   earliest.CreatedBy,
@@ -102,6 +116,10 @@ func ResolveBlockedItemsForArticle(ctx context.Context, q *db.Queries, n, gn not
 		Metadata:  []byte("{}"),
 	}); err != nil {
 		slog.Error("swap: failed to log event", "booking_id", earliest.BookingID, "error", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return false, err
 	}
 
 	return true, nil
@@ -113,6 +131,14 @@ func ResolveBlockedItemsForArticle(ctx context.Context, q *db.Queries, n, gn not
 // another booking just because someone else happened to be waiting - an
 // explicit "delayed" mark during return (decision 1) is already a known
 // problem and always resolves immediately, unaffected by this grace period.
+//
+// Effective precision is day-granular, not hour-granular: graceCutoff below
+// carries a time-of-day component, but it's compared against b.end_date,
+// which is date-only. Depending on what time of day the nightly job runs,
+// the enforced grace period ranges from ~24h to ~72h rather than exactly
+// 48h. This is accepted as-is (docs/delayed-return-swap.md) since end_date
+// is date-only anyway - a booking is never "a few hours overdue" in this
+// model, only "overdue as of a given day".
 const overdueSwapGracePeriod = 48 * time.Hour
 
 // ResolveOverdueSwaps is the nightly entry point (docs/delayed-return-swap.md
@@ -120,7 +146,7 @@ const overdueSwapGracePeriod = 48 * time.Hour
 // every delayed/overdue item across all groups and tries to resolve each
 // affected article's blocked bookings once. Multiple items sharing the same
 // (group, article) pair are only resolved once per pass.
-func ResolveOverdueSwaps(ctx context.Context, q *db.Queries, n, gn notifications.Notifier, baseURL string) (int, error) {
+func ResolveOverdueSwaps(ctx context.Context, pool *pgxpool.Pool, q *db.Queries, n, gn notifications.Notifier, baseURL string) (int, error) {
 	graceCutoff := time.Now().Add(-overdueSwapGracePeriod)
 	items, err := q.FindDelayedOrOverdueItems(ctx, pgtype.Date{Time: graceCutoff, Valid: true})
 	if err != nil {
@@ -140,7 +166,7 @@ func ResolveOverdueSwaps(ctx context.Context, q *db.Queries, n, gn notifications
 		}
 		seen[k] = true
 
-		ok, err := ResolveBlockedItemsForArticle(ctx, q, n, gn, baseURL, item.GroupID, item.ArticleID, time.Now(), false)
+		ok, err := ResolveBlockedItemsForArticle(ctx, pool, q, n, gn, baseURL, item.GroupID, item.ArticleID, time.Now(), false)
 		if err != nil {
 			slog.Error("nightly swap resolution failed", "article_id", item.ArticleID, "error", err)
 			continue

@@ -268,6 +268,7 @@ WHERE a.group_id = $1
             AND (bi.return_status IS NULL OR bi.return_status IN ('pending', 'delayed'))
     )
 ORDER BY a.created_at
+FOR UPDATE OF a SKIP LOCKED
 LIMIT 1
 `
 
@@ -285,6 +286,14 @@ type FindReplacementArticleParams struct {
 // in the given allowed list (e.g. ['ok', 'reported_usable'] normally, or just
 // ['ok'] for the delayed-return-swap opportunistic-upgrade case), not in the
 // given exclude list, and not in any overlapping active booking.
+//
+// FOR UPDATE SKIP LOCKED so concurrent callers (the nightly job and a
+// manager's request-time swap) racing on the same candidate pool never pick
+// the same unit: whichever caller gets here first locks the row until its
+// surrounding transaction commits the swap, and every other concurrent
+// caller skips it and picks the next free candidate instead. Must be run
+// inside a transaction that also performs the swap - the lock is only
+// meaningful for the duration of that transaction.
 func (q *Queries) FindReplacementArticle(ctx context.Context, arg FindReplacementArticleParams) (pgtype.UUID, error) {
 	row := q.db.QueryRow(ctx, findReplacementArticle,
 		arg.GroupID,

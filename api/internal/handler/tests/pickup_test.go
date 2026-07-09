@@ -100,7 +100,7 @@ func mountPickupRoutes(env *testutil.TestEnv) {
 		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
-		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
+		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Pool: env.Pool, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/teams", (&handler.TeamHandler{Q: env.Queries}).Routes())
 	})
 }

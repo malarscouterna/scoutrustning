@@ -8,6 +8,7 @@
 	import type { PageData } from './$types';
 	import { goto } from '$app/navigation';
 	import * as m from '$lib/paraglide/messages.js';
+	import { switchGroup } from '$lib/activeGroup';
 
 	let { data }: { data: PageData } = $props();
 
@@ -36,10 +37,6 @@
 	let logoUrl = $derived(data.user?.group_logo_url || null);
 	let squareLogoUrl = $derived(data.user?.group_logo_square_url || null);
 
-	function switchGroup(groupId: string) {
-		document.cookie = `active-group-id=${groupId}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
-		location.reload();
-	}
 </script>
 
 <div class="max-w-4xl mx-auto p-4">

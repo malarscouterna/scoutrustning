@@ -1,9 +1,16 @@
 <script lang="ts">
+	import DOMPurify from 'isomorphic-dompurify';
+
 	let { html }: { html: string } = $props();
+
+	// Sanitize here, not at each caller, so every consumer of this component
+	// is covered regardless of whether its markdown source is a developer-
+	// controlled file (today) or user/DB-editable content (planned).
+	let safeHtml = $derived(DOMPurify.sanitize(html));
 </script>
 
 <article class="prose-doc">
-	{@html html}
+	{@html safeHtml}
 </article>
 
 <style>

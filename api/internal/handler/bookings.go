@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/malarscouterna/scoutrustning/api/internal/auth"
 	"github.com/malarscouterna/scoutrustning/api/internal/db"
@@ -20,6 +21,7 @@ import (
 
 type BookingHandler struct {
 	Q             *db.Queries
+	Pool          *pgxpool.Pool
 	Perms         *PermissionCache
 	Notifier      notifications.Notifier
 	GChatNotifier notifications.Notifier
@@ -533,30 +535,59 @@ func (h *BookingHandler) Update(w http.ResponseWriter, r *http.Request) {
 			// an equivalent unit for the new date range before falling back to
 			// the 409 - the user doesn't care which physical unit they end up
 			// with, only that they have one.
-			replacementID, err := h.Q.FindReplacementArticle(r.Context(), db.FindReplacementArticleParams{
-				GroupID:        claims.GroupID,
-				CommercialName: item.CommercialName,
-				LocationID:     item.LocationID,
-				Statuses:       []string{"ok", "reported_usable"},
-				ExcludeIds:     excludeIDs,
-				StartDate:      params.StartDate,
-				EndDate:        params.EndDate,
-			})
-			if err != nil {
-				conflictNames = append(conflictNames, item.CommonName)
-				conflictIDs = append(conflictIDs, formatUUID(item.ArticleID))
-				continue
-			}
+			//
+			// Find-and-swap runs in one transaction so FindReplacementArticle's
+			// FOR UPDATE SKIP LOCKED lock on the candidate row is held until the
+			// swap that consumes it commits - otherwise this request and a
+			// concurrent nightly-job/other-request swap could both select the
+			// same free unit before either commits.
+			var noReplacement bool
+			replacementID, err := func() (pgtype.UUID, error) {
+				tx, err := h.Pool.Begin(r.Context())
+				if err != nil {
+					return pgtype.UUID{}, err
+				}
+				defer tx.Rollback(r.Context()) //nolint:errcheck
+				txQ := h.Q.WithTx(tx)
 
-			if _, err := h.Q.SwapBookingItemArticleByArticle(r.Context(), db.SwapBookingItemArticleByArticleParams{
-				NewArticleID: replacementID,
-				OldArticleID: item.ArticleID,
-				BookingID:    bookingID,
-				GroupID:      claims.GroupID,
-			}); err != nil {
+				replacementID, err := txQ.FindReplacementArticle(r.Context(), db.FindReplacementArticleParams{
+					GroupID:        claims.GroupID,
+					CommercialName: item.CommercialName,
+					LocationID:     item.LocationID,
+					Statuses:       []string{"ok", "reported_usable"},
+					ExcludeIds:     excludeIDs,
+					StartDate:      params.StartDate,
+					EndDate:        params.EndDate,
+				})
+				if err != nil {
+					noReplacement = true
+					return pgtype.UUID{}, err
+				}
+
+				if _, err := txQ.SwapBookingItemArticleByArticle(r.Context(), db.SwapBookingItemArticleByArticleParams{
+					NewArticleID: replacementID,
+					OldArticleID: item.ArticleID,
+					BookingID:    bookingID,
+					GroupID:      claims.GroupID,
+				}); err != nil {
+					return pgtype.UUID{}, err
+				}
+
+				if err := tx.Commit(r.Context()); err != nil {
+					return pgtype.UUID{}, err
+				}
+				return replacementID, nil
+			}()
+			if err != nil {
+				if noReplacement {
+					conflictNames = append(conflictNames, item.CommonName)
+					conflictIDs = append(conflictIDs, formatUUID(item.ArticleID))
+					continue
+				}
 				WriteError(w, http.StatusInternalServerError, "failed to swap article")
 				return
 			}
+
 			excludeIDs = append(excludeIDs, replacementID)
 			replacement, err := h.Q.GetArticle(r.Context(), db.GetArticleParams{ID: replacementID, GroupID: claims.GroupID})
 			if err == nil {
@@ -1400,7 +1431,7 @@ func (h *BookingHandler) UpdateItemReturn(w http.ResponseWriter, r *http.Request
 		// docs/delayed-return-swap.md: try to silently substitute an equivalent
 		// unit into whichever booking is waiting on this exact article before
 		// its expected return date arrives.
-		if _, err := ResolveBlockedItemsForArticle(r.Context(), h.Q, h.Notifier, h.GChatNotifier, h.BaseURL, claims.GroupID, item.ArticleID, expectedReturnDateParsed, false); err != nil {
+		if _, err := ResolveBlockedItemsForArticle(r.Context(), h.Pool, h.Q, h.Notifier, h.GChatNotifier, h.BaseURL, claims.GroupID, item.ArticleID, expectedReturnDateParsed, false); err != nil {
 			slog.Error("delayed-item swap resolution failed", "article_id", item.ArticleID, "error", err)
 		}
 	case "reported_usable":
@@ -1408,14 +1439,14 @@ func (h *BookingHandler) UpdateItemReturn(w http.ResponseWriter, r *http.Request
 		// Opportunistic upgrade only (docs/delayed-return-swap.md decision 6): the
 		// unit is still bookable, so a waiting booking is never actually blocked -
 		// swap it onto a fully-ok unit if one's free, otherwise leave it as-is.
-		if _, err := ResolveBlockedItemsForArticle(r.Context(), h.Q, h.Notifier, h.GChatNotifier, h.BaseURL, claims.GroupID, item.ArticleID, time.Now(), true); err != nil {
+		if _, err := ResolveBlockedItemsForArticle(r.Context(), h.Pool, h.Q, h.Notifier, h.GChatNotifier, h.BaseURL, claims.GroupID, item.ArticleID, time.Now(), true); err != nil {
 			slog.Error("reported_usable upgrade resolution failed", "article_id", item.ArticleID, "error", err)
 		}
 	case "reported_unusable", "missing":
 		// No article status side effect — caller creates issue via POST /issues.
 		// The article becomes genuinely unbookable, so any waiting booking gets
 		// the full swap-or-notify treatment, identical to a delayed item.
-		if _, err := ResolveBlockedItemsForArticle(r.Context(), h.Q, h.Notifier, h.GChatNotifier, h.BaseURL, claims.GroupID, item.ArticleID, time.Now(), false); err != nil {
+		if _, err := ResolveBlockedItemsForArticle(r.Context(), h.Pool, h.Q, h.Notifier, h.GChatNotifier, h.BaseURL, claims.GroupID, item.ArticleID, time.Now(), false); err != nil {
 			slog.Error("condition-change swap resolution failed", "article_id", item.ArticleID, "error", err)
 		}
 	}
