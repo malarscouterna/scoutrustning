@@ -29,6 +29,14 @@ Message imports (`import * as m from '$lib/paraglide/messages.js'`) and the 637 
 
 Do this as its own focused PR, after the rename.
 
+## Remaining major-version dependency bumps
+
+Deferred out of the dependency freshness audit (`docs/implementation/pre-release.md`, item 21, done 2026-07-09) - each needs its own dedicated verification pass, not a routine patch/minor bump:
+
+- `typescript` 6.x → 7.x (`web/package.json`)
+- `@types/node` 25.x → 26.x (`web/package.json`)
+- `marked` 17.x → 18.x (`web/package.json`) - used for guide/GDPR markdown rendering
+
 ## English user guide
 
 `docs/guide.md` is the source for the in-app guide page and is currently written in Swedish only. An English version is needed once the English UI is fully rolled out. Deferred — low priority until there are actual English-speaking users.

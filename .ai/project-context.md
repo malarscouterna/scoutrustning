@@ -145,7 +145,7 @@ Demo mode requires `DEV_MODE=true` (for persona switcher) but gates access behin
 ## Version pinning
 
 Check `api/go.mod` for Go dependency versions and `web/package.json` for frontend dependency versions. Notable constraints:
-- TypeScript must be ^5.x (not 6.x) - SvelteKit requires ^5.3.3
+- TypeScript is on ^6.x - SvelteKit requires ^5.3.3 as a floor, not a ceiling; 6.x builds and type-checks cleanly (verified 2026-07-09). Do not bump to 7.x without a dedicated pass.
 - PostgreSQL 17.x
 
 ## Development environment
