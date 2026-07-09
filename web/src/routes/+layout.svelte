@@ -5,8 +5,6 @@
 	import FloatingCart from '$lib/components/FloatingCart.svelte';
 	import UserAvatar from '$lib/components/UserAvatar.svelte';
 	import UserInfoCard from '$lib/components/UserInfoCard.svelte';
-	import { ParaglideJS } from '@inlang/paraglide-sveltekit';
-	import { i18n } from '$lib/i18n';
 
 	let { children, data } = $props();
 
@@ -26,7 +24,6 @@
 	let profileCardOpen = $state(false);
 </script>
 
-<ParaglideJS {i18n} languageTag={(data.user?.language ?? 'sv') as 'sv' | 'en'}>
 {#if data.demo}
 	<a href="/guide" class="block bg-adventurerorange-100 border-b border-adventurerorange-300 text-adventurerorange-900 text-center text-sm py-2 px-4 font-medium hover:bg-adventurerorange-200">
 		🏕️ Demo — detta är en testmiljö. Bokningar och data kan återställas när som helst.
@@ -91,4 +88,3 @@
 {#if data.user}
 	<FloatingCart />
 {/if}
-</ParaglideJS>

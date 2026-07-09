@@ -2,7 +2,8 @@ import type { Handle } from '@sveltejs/kit';
 import { redirect } from '@sveltejs/kit';
 import { sequence } from '@sveltejs/kit/hooks';
 import { authHandle } from './auth';
-import { i18n } from '$lib/i18n';
+import { paraglideMiddleware } from '$lib/paraglide/server';
+import { getTextDirection } from '$lib/paraglide/runtime';
 
 const API_URL = process.env.API_URL || 'http://localhost:8080';
 const DEV_MODE = process.env.DEV_MODE === 'true';
@@ -194,9 +195,18 @@ const appHandle: Handle = async ({ event, resolve }) => {
 
 const hasOIDC = !!(process.env.AUTH_KEYCLOAK_ID && process.env.AUTH_KEYCLOAK_SECRET && process.env.AUTH_KEYCLOAK_ISSUER);
 
+const paraglideHandle: Handle = ({ event, resolve }) =>
+	paraglideMiddleware(event.request, ({ request: localizedRequest, locale }) => {
+		event.request = localizedRequest;
+		return resolve(event, {
+			transformPageChunk: ({ html }) =>
+				html.replace('%lang%', locale).replace('%dir%', getTextDirection(locale))
+		});
+	});
+
 const innerHandle: Handle = hasOIDC
-	? sequence(authHandle, i18n.handle(), appHandle)
-	: sequence(i18n.handle(), appHandle);
+	? sequence(authHandle, paraglideHandle, appHandle)
+	: sequence(paraglideHandle, appHandle);
 
 // Outer wrapper: post-processes all responses, including thrown redirects.
 // throw redirect() propagates as a JS exception and bypasses normal response

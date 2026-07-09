@@ -14,21 +14,6 @@ Was item 16 in `docs/implementation/pre-release.md`'s Implementation order, defe
 
 The booking comment thread redesign (`docs/implementation/pre-release.md`, item 7) wires up `items_changed` events for add/remove/swap so a plain description shows in the thread. Follow-up: make those entries clickable to show an actual diff (which article(s) were added/removed, before/after state) instead of just a text line. Needs a small UI (e.g. expandable row or a modal) and probably the event `metadata` already stores enough (article id/name) to build it without further backend changes.
 
-## Migrate Paraglide to v2
-
-`@inlang/paraglide-sveltekit@0.16.1` is deprecated. The replacement is `@inlang/paraglide-js` v2+ — the SvelteKit adapter is no longer needed.
-
-**What changes:**
-- Remove `@inlang/paraglide-sveltekit`, add `@inlang/paraglide-js` v2
-- Delete `src/lib/i18n.ts` and the `createI18n` setup
-- Remove `<ParaglideJS>` wrapper from `+layout.svelte`
-- Replace `i18n.handle()` in `hooks.server.ts` with v2 hook
-- Cookie-based language detection (no URL prefixing) must be explicitly configured as a custom `languageTag` strategy — v2 defaults to URL-based routing
-
-Message imports (`import * as m from '$lib/paraglide/messages.js'`) and the 637 message functions should survive unchanged. The tricky part is preserving the `paraglide_lang` cookie approach without URL prefixes.
-
-Do this as its own focused PR, after the rename.
-
 ## Remaining major-version dependency bumps
 
 Deferred out of the dependency freshness audit (`docs/implementation/pre-release.md`, item 21, done 2026-07-09) - each needs its own dedicated verification pass, not a routine patch/minor bump:

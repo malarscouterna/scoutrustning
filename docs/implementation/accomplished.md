@@ -4,6 +4,21 @@ A living log of completed work — what was built, when, and why. Major features
 
 When finishing a backlog item or spec milestone, log it here and remove it from the backlog / mark it done in the spec.
 
+## 2026-07-09
+
+### Paraglide v2 migration
+
+`@inlang/paraglide-sveltekit@0.16.1` (deprecated upstream, see `docs/implementation/BACKLOG.md`'s "Migrate Paraglide to v2" entry) replaced with `@inlang/paraglide-js` v2 used directly - the SvelteKit-specific adapter is no longer needed under v2. See [i18n.md](i18n.md) for the current architecture.
+
+- `project.inlang/settings.json`: `sourceLanguageTag`/`languageTags` → `baseLocale`/`locales`, pathPattern placeholder `{languageTag}` → `{locale}`. Same underlying files (`api/internal/i18n/messages/{sv,en}.json`).
+- `vite.config.ts`: `paraglide-sveltekit/vite` → `paraglideVitePlugin` from `@inlang/paraglide-js`, with an explicit `strategy: ['cookie', 'baseLocale']` and `cookieName: 'paraglide_lang'` - preserves the existing cookie-only, no-URL-prefix behavior exactly.
+- `hooks.server.ts`: `i18n.handle()` replaced with `paraglideMiddleware()` (from generated `$lib/paraglide/server.js`) in the same position in the handle `sequence()`. `app.html`'s hardcoded `<html lang="sv">` changed to `<html lang="%lang%">`, filled in by the middleware's `transformPageChunk`.
+- `+layout.svelte`: `<ParaglideJS>` wrapper and `i18n.ts` import removed entirely - v2 has no wrapper component, locale is request-scoped via `AsyncLocalStorage` set up by the middleware.
+- Deleted `src/lib/i18n.ts` (the `createI18n(...)` setup). `src/lib/msg.ts`'s dynamic `m[key]()` lookup pattern needed no changes.
+- **Verification note:** confirmed the core mechanism (cookie → per-request locale → `m.key()` resolution) directly by calling the generated `paraglideMiddleware` with fake `Request` objects carrying different `paraglide_lang` cookies, since scripting a full Keycloak OIDC login for an end-to-end curl check wasn't practical. Also hit a red herring while verifying in the dev container: `docker-compose.override.yml`'s anonymous `/app/node_modules` volume survives `docker compose up --build`, so the running dev container kept the pre-migration `node_modules` until the volume was explicitly removed and the container recreated - not a code issue, just a gotcha for anyone rebuilding this container after a dependency change.
+- **Real bug found and fixed:** the web dev container has no route to `api/internal/i18n/messages/*.json` at all - `docker-compose.override.yml` only bind-mounts `./web:/app`, so `project.inlang/settings.json`'s `pathPattern` (`../api/internal/i18n/messages/{locale}.json`, resolving to `/api/...` inside the container) pointed nowhere. This is pre-existing, not introduced by this migration - under the old `paraglide-sveltekit`, a failed/skipped compile silently left whatever compiled output already existed on disk (inherited via the bind mount from a host-side `pnpm dev`/`pnpm build` run) untouched. Under v2, a cold start of the dev server (e.g. any container restart) actively recompiles and overwrites that file with an empty result when the source is unreachable, hard-crashing every page (`m.key is not a function`) instead of degrading silently. Fixed by adding `./api/internal/i18n/messages:/api/internal/i18n/messages:ro` to the `web` service in `docker-compose.override.yml`, so the container can compile from source like the host can.
+- `pnpm run build`, `svelte-check` (0 errors/0 warnings), Go integration suite, and `smoke-test.sh` (7/7) all pass. Manually verified logged in via Keycloak in the running dev stack.
+
 ## 2026-07-08
 
 ### Delayed return - conflict handling (auto-swap, notification, frontend)
