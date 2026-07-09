@@ -38,7 +38,7 @@ func getMe(t *testing.T, client *testutil.TestClient) map[string]any {
 
 // project-unit-leader (Julia) belongs to two registered groups (766, 999) -
 // see dev-personas.json. This exercises the cookie-hint -> pickActiveGroup
-// path added for group switching (docs/scout-group-signup.md §3).
+// path added for group switching (docs/implementation/scout-group-signup.md §3).
 func TestActiveGroup_MultiGroupPersonaSwitch(t *testing.T) {
 	env := testutil.SetupTestEnv(t)
 	mountActiveGroupRoutes(env)

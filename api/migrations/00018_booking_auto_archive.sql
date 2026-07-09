@@ -1,6 +1,6 @@
 -- +goose Up
 
--- Per-group auto-archive timeouts (docs/pre-release.md "Booking auto-archive setting").
+-- Per-group auto-archive timeouts (docs/implementation/pre-release.md "Booking auto-archive setting").
 -- 0 disables auto-archiving for that stage. The existing 48h empty-draft cleanup
 -- (CleanupEmptyDrafts) is unrelated and unaffected by these settings.
 ALTER TABLE group_settings ADD COLUMN draft_archive_days integer NOT NULL DEFAULT 3;

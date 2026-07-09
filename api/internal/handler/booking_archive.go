@@ -9,7 +9,7 @@ import (
 
 // ArchiveExpiredBookings cancels every booking past its group's auto-archive
 // deadline (draft-with-items or rejected-awaiting-resubmission, per
-// docs/pre-release.md "Booking auto-archive setting"), releasing their items
+// docs/implementation/pre-release.md "Booking auto-archive setting"), releasing their items
 // and recording the archival in the booking's event thread rather than
 // deleting the row - unlike a manual Cancel of a draft, so the history stays
 // visible for anyone who had the booking open.

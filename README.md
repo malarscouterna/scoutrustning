@@ -4,7 +4,7 @@ Equipment booking service for scout groups. Leaders book scouting gear (tents, s
 
 Built for Mälarscouterna and designed from the start to support multiple scout groups in the same deployment.
 
-See [docs/SPEC.md](docs/SPEC.md) for the full specification and [docs/API.md](docs/API.md) for the API reference.
+See [docs/implementation/SPEC.md](docs/implementation/SPEC.md) for the full specification and [docs/API.md](docs/API.md) for the API reference.
 
 ## What it does
 
@@ -105,7 +105,7 @@ To test GChat notifications locally you need a Google Workspace service account 
    ```
 3. Re-run `./dev-seed.sh` — it will upload and validate the key, then link **Yggdrasil** (email + GChat) and **Utrustningsgruppen** (GChat only) to the space. Subsequent booking events in the seed will trigger GChat notifications to that space.
 
-**What reaches the space**: booking events (`booking_confirmed`, `booking_needs_approval`, `booking_reminder`, etc.) for Yggdrasil bookings. Issue events do not yet have a GChat broadcast path (known gap — see `docs/notifications-phase35.md`).
+**What reaches the space**: booking events (`booking_confirmed`, `booking_needs_approval`, `booking_reminder`, etc.) for Yggdrasil bookings. Issue events do not yet have a GChat broadcast path (known gap — see `docs/implementation/notifications-phase35.md`).
 
 You still need `docker compose up --build` when adding Go or Node dependencies, or changing a Dockerfile.
 
@@ -193,7 +193,7 @@ Register each domain's callback URL in Keycloak as a valid redirect URI:
 
 Caddy handles TLS for both domains automatically.
 
-For full deployment details, security model, and reverse proxy setup see the [Deployment section in specifications](docs/SPEC.md) or `docker-compose.yml` and `gen-env.sh`.
+For full deployment details, security model, and reverse proxy setup see the [Deployment section in specifications](docs/implementation/SPEC.md) or `docker-compose.yml` and `gen-env.sh`.
 
 ## License
 

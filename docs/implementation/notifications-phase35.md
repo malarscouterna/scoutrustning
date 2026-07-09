@@ -779,7 +779,7 @@ Group defaults UI keeps three-way radio. Middle option relabelled "Föredra grup
 - ~~**GChat two-message thread pattern not implemented**~~ → Phase 3.7.
 - ~~**Manager team (Utrustningsgruppen) not receiving GChat notifications**~~ → Investigate after Phase 3.7 is tested; may be resolved by the issue-event fixes.
 
-Deferred items (personal email override, GChat card richness, Slack/Teams, push notifications, logo in web header) moved to `docs/BACKLOG.md`.
+Deferred items (personal email override, GChat card richness, Slack/Teams, push notifications, logo in web header) moved to `docs/implementation/BACKLOG.md`.
 
 ---
 

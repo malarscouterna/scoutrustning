@@ -101,7 +101,7 @@ export interface BookingItem {
 	return_status: string | null;
 }
 
-/** docs/delayed-return-swap.md: this booking's own item, blocked by another
+/** docs/implementation/delayed-return-swap.md: this booking's own item, blocked by another
  * booking still holding the exact same article, unresolved. */
 export interface BlockedItem {
 	booking_item_id: string;
@@ -114,7 +114,7 @@ export interface BlockedItem {
 	expected_return_date: string | null;
 }
 
-/** docs/delayed-return-swap.md: response of the read-only delay-preview endpoint. */
+/** docs/implementation/delayed-return-swap.md: response of the read-only delay-preview endpoint. */
 export type DelayPreview =
 	| { blocked: false }
 	| { blocked: true; booking_id: string; holder_user_id: string; holder_name: string | null; holder_picture: string | null };

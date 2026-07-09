@@ -8,7 +8,7 @@ Reference material for AI assistance. Describes what the project is, how it's bu
 
 An equipment booking service for scout groups. Leaders book scouting equipment (tents, stoves, knives, etc.), pick it up with a checklist, and return it. Equipment managers maintain inventory and handle issue reports.
 
-The full specification is in `docs/SPEC.md` - read it before making architectural decisions.
+The full specification is in `docs/implementation/SPEC.md` - read it before making architectural decisions.
 
 ## Architecture
 
@@ -16,7 +16,7 @@ The full specification is in `docs/SPEC.md` - read it before making architectura
 - **SvelteKit 2 frontend** - Svelte 5, responsive web app, mobile-first for leaders, uses `@scouterna/ui-webc` web components and `@scouterna/tailwind-theme`
 - **PostgreSQL 17** - single database, all tables scoped by `group_id` for multi-tenancy
 - **Docker Compose** - Go API + SvelteKit + Postgres, behind a reverse proxy
-- **i18n** - Swedish (`sv`) + English (`en`). Paraglide-SvelteKit on frontend, `i18n.T()` on backend. Single source of truth: `api/internal/i18n/messages/{sv,en}.json`. See `docs/i18n.md`.
+- **i18n** - Swedish (`sv`) + English (`en`). Paraglide-SvelteKit on frontend, `i18n.T()` on backend. Single source of truth: `api/internal/i18n/messages/{sv,en}.json`. See `docs/implementation/i18n.md`.
 
 Auth: SvelteKit handles OIDC login with ScoutID (Keycloak) via Auth.js (`@auth/sveltekit`). Go API validates JWTs and extracts claims. No user registration - users are upserted from token claims on login.
 

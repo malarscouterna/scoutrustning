@@ -728,7 +728,7 @@ curl -sf -X POST "$API/api/v0/bookings/$BOOKING8_ID/submit" \
 echo "  Booking 8 (submitted, force-approval): 3x Stormkök, 2x Brandfilt — leader asked for review"
 
 # ─── Booking 9: Draft with items, backdated to trigger the auto-archive warning ───
-# Group defaults (see docs/pre-release.md "Booking auto-archive setting"): a draft (with
+# Group defaults (see docs/implementation/pre-release.md "Booking auto-archive setting"): a draft (with
 # or without items - the deadline runs from created_at) is archived after 3 days.
 # Backdating created_at puts the deadline ~23.5h out, inside the hourly job's 23-24h
 # warning window - so a reseed reliably produces a booking_archive_warning email/GChat
@@ -777,7 +777,7 @@ docker compose exec -T db psql -U utrustning -d utrustning -c "
 " > /dev/null
 echo "  Booking 10 (rejected, not resubmitted): 1x Vindskydd — backdated to trigger the archive-warning notification"
 
-# ─── Booking 11 & 12: Overdue item blocking a waiting booking (docs/delayed-return-swap.md) ───
+# ─── Booking 11 & 12: Overdue item blocking a waiting booking (docs/implementation/delayed-return-swap.md) ───
 # Fana is a singleton (exactly 1 unit in the seed CSV, approval_level=high), so no
 # equivalent unit ever exists to auto-swap into - the block persists indefinitely for
 # demo purposes, instead of the nightly job silently resolving it within a minute (dev

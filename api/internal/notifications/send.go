@@ -356,7 +356,7 @@ func bookingBroadcastTexts(ctx context.Context, q *db.Queries, b db.Booking, eve
 
 // bookingItemBlockedMsg builds the booking_item_blocked email, which additionally
 // interpolates the name of the item that couldn't be swapped - the affected item's
-// name only, never the other (late) booker (docs/delayed-return-swap.md decision 4).
+// name only, never the other (late) booker (docs/implementation/delayed-return-swap.md decision 4).
 func bookingItemBlockedMsg(ctx context.Context, q *db.Queries, b db.Booking, itemName, baseURL string, r recipient) Message {
 	data := fetchBookingEmailData(ctx, q, b, EventBookingItemBlocked, r.lang, r.name, baseURL)
 	data.BlockedItemName = itemName
@@ -380,7 +380,7 @@ func bookingItemBlockedBroadcastTexts(ctx context.Context, q *db.Queries, b db.B
 }
 
 // SendBookingItemBlocked notifies a waiting booking that one of its items couldn't be
-// silently swapped to an equivalent unit (docs/delayed-return-swap.md decision 4) - the
+// silently swapped to an equivalent unit (docs/implementation/delayed-return-swap.md decision 4) - the
 // article it's waiting on is unavailable and no substitute was found. Broadcasts to the
 // booking's team channels and sends a personal email to the booking's creator only (not
 // the full team roster, unlike sendBookingToTeam) - deduped on blockedItemID, not the

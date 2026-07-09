@@ -282,12 +282,12 @@ Get booking with its items (including article details).
   ]
 }
 ```
-`blocked_items` (docs/delayed-return-swap.md) lists this booking's own items whose `start_date` has arrived but the exact same article is still held, unresolved, by another `picked_up` booking - empty once auto-swap resolves it or the holder returns the item.
+`blocked_items` (docs/implementation/delayed-return-swap.md) lists this booking's own items whose `start_date` has arrived but the exact same article is still held, unresolved, by another `picked_up` booking - empty once auto-swap resolves it or the holder returns the item.
 
 ### `PUT /api/v0/bookings/{id}`
 Update a booking. Allowed on draft, submitted, approved, and confirmed bookings. Blocked once the booking is in `picked_up` status - use item-level endpoints instead. Access: creator, team members, or equipment manager.
 
-All fields are optional - only provided fields are updated. `title`, if provided, must be non-empty. If dates change, all existing items are re-validated against availability - conflicting items are first silently swapped to an equivalent free unit if one exists (docs/delayed-return-swap.md decision 7); only items with no equivalent still 409.
+All fields are optional - only provided fields are updated. `title`, if provided, must be non-empty. If dates change, all existing items are re-validated against availability - conflicting items are first silently swapped to an equivalent free unit if one exists (docs/implementation/delayed-return-swap.md decision 7); only items with no equivalent still 409.
 
 **Body**
 ```json
@@ -465,12 +465,12 @@ Side effects: `reported_usable`/`reported_unusable`/`missing` no longer set arti
 ```
 Valid values: `returned_ok`, `delayed`, `reported_usable`, `reported_unusable`, `missing`, `""` (undo). `expected_return_date` required when status is `delayed`.
 
-Side effects (docs/delayed-return-swap.md): `delayed`, `reported_unusable`, and `missing` each try to silently substitute an equivalent free unit into whichever other booking is currently blocked by this exact article, logging a `swap` booking event on that booking; `reported_usable` only upgrades a waiting booking onto a strictly-`ok` unit if one exists (opportunistic, never notifies). If no equivalent unit is found, the blocked booking's team/creator is notified instead - the current (late) booker is never named in that notification.
+Side effects (docs/implementation/delayed-return-swap.md): `delayed`, `reported_unusable`, and `missing` each try to silently substitute an equivalent free unit into whichever other booking is currently blocked by this exact article, logging a `swap` booking event on that booking; `reported_usable` only upgrades a waiting booking onto a strictly-`ok` unit if one exists (opportunistic, never notifies). If no equivalent unit is found, the blocked booking's team/creator is notified instead - the current (late) booker is never named in that notification.
 
 **Response** `200` | `400` | `403` | `404`
 
 ### `GET /api/v0/bookings/{id}/items/{itemId}/delay-preview`
-Read-only preview (docs/delayed-return-swap.md) of who would be blocked if this item's return were delayed until the given date - powers the "next expected user" hint while a manager is still filling in the form, before saving. Makes no changes. Access: creator, team members, or equipment manager.
+Read-only preview (docs/implementation/delayed-return-swap.md) of who would be blocked if this item's return were delayed until the given date - powers the "next expected user" hint while a manager is still filling in the form, before saving. Makes no changes. Access: creator, team members, or equipment manager.
 
 **Query params**: `expected_return_date` (required, `YYYY-MM-DD`).
 

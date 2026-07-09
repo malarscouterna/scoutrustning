@@ -471,11 +471,11 @@ This revamp intentionally breaks backwards compatibility. The system is pre-rele
 
 | File | What to change |
 |---|---|
-| `docs/SPEC.md` | Update "Issue Reports" section (currently says "no separate issue table"). Add UPDATE note to Step 7. Update return checklist flow ("Broken/Lost auto-creates issue report" - now creates an issue_reports row). Add new tables to Data Model section. Update Equipment manager: Issues user flow. |
-| `docs/issues-and-events.md` | Mark as superseded by this document. Add a one-line redirect: "This design has been superseded by [issues-revamp.md](issues-revamp.md)." |
-| `docs/BACKLOG.md` | Strike out / mark resolved: "Report issue - standalone entry point", "Issue reporting - rethink and browser entry points", "Ärenden - per-user filtering", "Issue reporting - booking context in event history". Update "Quantity-tracked items - issue reporting during pickup" to reference new ReportIssueSheet. Remove dead-code note from PickupChecklist.svelte item. |
+| `docs/implementation/SPEC.md` | Update "Issue Reports" section (currently says "no separate issue table"). Add UPDATE note to Step 7. Update return checklist flow ("Broken/Lost auto-creates issue report" - now creates an issue_reports row). Add new tables to Data Model section. Update Equipment manager: Issues user flow. |
+| `docs/implementation/issues-and-events.md` | Mark as superseded by this document. Add a one-line redirect: "This design has been superseded by [issues-revamp.md](issues-revamp.md)." |
+| `docs/implementation/BACKLOG.md` | Strike out / mark resolved: "Report issue - standalone entry point", "Issue reporting - rethink and browser entry points", "Ärenden - per-user filtering", "Issue reporting - booking context in event history". Update "Quantity-tracked items - issue reporting during pickup" to reference new ReportIssueSheet. Remove dead-code note from PickupChecklist.svelte item. |
 | `docs/API.md` | Add new issue endpoints section. Update articles status endpoint restrictions. Update booking return endpoint (no longer sets article status). |
-| `docs/accomplished.md` | Log this revamp as completed once implemented. |
+| `docs/implementation/accomplished.md` | Log this revamp as completed once implemented. |
 | `.amazonq/rules/project-context.md` | Update project structure (new routes, new tables). Update issue reporting description. |
 | `smoke-test.sh` | Add checks for `/issues/new` and a seeded `/issues/[id]`. |
 
@@ -488,7 +488,7 @@ There is no separate issue table. An article with a reported status *is* an open
 
 # After (UPDATE note)
 UPDATE: Issues are now first-class entities in the `issue_reports` table.
-See docs/issues-revamp.md for the full design.
+See docs/implementation/issues-revamp.md for the full design.
 ```
 
 **Data Model section**: add `issue_reports`, `issue_articles`, `issue_assignees`, `issue_events` tables.
@@ -496,7 +496,7 @@ See docs/issues-revamp.md for the full design.
 **Step 7** in Phase 1:
 ```
 UPDATE: The article-status-only model has been superseded. Issues are now
-stored as issue_reports rows. See docs/issues-revamp.md.
+stored as issue_reports rows. See docs/implementation/issues-revamp.md.
 ```
 
 **Return checklist** ("Broken/Lost auto-creates issue report"):

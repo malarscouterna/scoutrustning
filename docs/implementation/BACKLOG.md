@@ -4,15 +4,15 @@ Deferred work items - things to grab when there's time, smaller tasks set aside 
 
 ## Per-item descriptions for individually-tracked articles
 
-Was item 14 in `docs/pre-release.md`'s Implementation order, deferred out of the pre-release scope (2026-07-08). New `description` column on `articles`, edit field in manager article view, display on pickup checklist. Independent, no dependencies.
+Was item 14 in `docs/implementation/pre-release.md`'s Implementation order, deferred out of the pre-release scope (2026-07-08). New `description` column on `articles`, edit field in manager article view, display on pickup checklist. Independent, no dependencies.
 
 ## Booking list card comment preview
 
-Was item 16 in `docs/pre-release.md`'s Implementation order, deferred out of the pre-release scope (2026-07-08). Last-comment preview + unread indicator on `BookingCard`. Split out from the comment thread redesign (item 7) since it needs a read/seen-state concept that doesn't exist yet.
+Was item 16 in `docs/implementation/pre-release.md`'s Implementation order, deferred out of the pre-release scope (2026-07-08). Last-comment preview + unread indicator on `BookingCard`. Split out from the comment thread redesign (item 7) since it needs a read/seen-state concept that doesn't exist yet.
 
 ## Clickable item-change entries in booking event thread
 
-The booking comment thread redesign (`docs/pre-release.md`, item 7) wires up `items_changed` events for add/remove/swap so a plain description shows in the thread. Follow-up: make those entries clickable to show an actual diff (which article(s) were added/removed, before/after state) instead of just a text line. Needs a small UI (e.g. expandable row or a modal) and probably the event `metadata` already stores enough (article id/name) to build it without further backend changes.
+The booking comment thread redesign (`docs/implementation/pre-release.md`, item 7) wires up `items_changed` events for add/remove/swap so a plain description shows in the thread. Follow-up: make those entries clickable to show an actual diff (which article(s) were added/removed, before/after state) instead of just a text line. Needs a small UI (e.g. expandable row or a modal) and probably the event `metadata` already stores enough (article id/name) to build it without further backend changes.
 
 ## Migrate Paraglide to v2
 
@@ -268,7 +268,7 @@ Managers cannot distinguish personal bookings (no team, no external name) from o
 
 These must be resolved before the `feat/notifications` branch can merge.
 
-**GChat broadcast for issue events** — Partially fixed (IssueHandler gained `GChatNotifier`; `SendIssueCreated/Resolved/Commented` call `sendBroadcastGChat`). Full resolution tracked in Phase 3.7: `issue_resolved` and `issue_commented` need Gruppkanal system defaults, `sendBroadcastEmail` for all issue events, and teamID plumbing for personal email policy. See `docs/notifications-phase35.md` Phase 3.7.
+**GChat broadcast for issue events** — Partially fixed (IssueHandler gained `GChatNotifier`; `SendIssueCreated/Resolved/Commented` call `sendBroadcastGChat`). Full resolution tracked in Phase 3.7: `issue_resolved` and `issue_commented` need Gruppkanal system defaults, `sendBroadcastEmail` for all issue events, and teamID plumbing for personal email policy. See `docs/implementation/notifications-phase35.md` Phase 3.7.
 
 **Integration tests for GChat key management** — `POST /gchat-key`, `DELETE /gchat-key`, `GET /gchat-spaces`, `PUT /teams/{id}/gchat-space`, and `DELETE /teams/{id}/gchat-space` have zero test coverage. A mock `GChatNotifier` (similar to `CapturingNotifier`) seeded with fake credentials would cover the happy path without a real Google account.
 

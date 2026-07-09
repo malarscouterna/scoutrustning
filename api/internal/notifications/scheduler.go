@@ -110,7 +110,7 @@ func SendOverdueAlerts(ctx context.Context, q *db.Queries, n Notifier, today pgt
 // SendArchiveWarnings sends a one-time booking_archive_warning - to the team's broadcast
 // channels (Gruppkanal email/GChat) plus a personal email to the creator and team members -
 // for any draft-with-items or rejected-awaiting-resubmission booking whose auto-archive
-// deadline (docs/pre-release.md "Booking auto-archive setting") falls within the next 24
+// deadline (docs/implementation/pre-release.md "Booking auto-archive setting") falls within the next 24
 // hours. Deduped via notification_log like reminders/overdue alerts.
 func SendArchiveWarnings(ctx context.Context, q *db.Queries, n, gn Notifier, baseURL string) {
 	bookings, err := q.GetBookingsNearingArchive(ctx)

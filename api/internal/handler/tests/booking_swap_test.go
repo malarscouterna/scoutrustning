@@ -15,7 +15,7 @@ import (
 )
 
 // TestReturnFlow_DelayedTriggersSwap exercises the delayed-return swap
-// (docs/delayed-return-swap.md): marking an item delayed on booking A, whose
+// (docs/implementation/delayed-return-swap.md): marking an item delayed on booking A, whose
 // article is also assigned to a later booking B, silently substitutes the
 // equivalent free unit into B and logs a "swap" event - rather than leaving B
 // blocked on an article that won't come back in time.
@@ -529,7 +529,7 @@ func TestUpdateFlow_ConflictPathSwaps(t *testing.T) {
 }
 
 // TestDelayPreview exercises the read-only "next expected user" preview
-// (docs/delayed-return-swap.md): called with a candidate expected_return_date
+// (docs/implementation/delayed-return-swap.md): called with a candidate expected_return_date
 // before the manager saves, it should report whether a waiting booking would
 // be blocked and, if so, who created it - without changing anything.
 func TestDelayPreview(t *testing.T) {

@@ -1,7 +1,7 @@
 -- +goose Up
 
 -- Persists the expected return date a manager enters when marking an item delayed
--- (docs/pre-release.md "Delayed return - conflict handling"). Previously required by
+-- (docs/implementation/pre-release.md "Delayed return - conflict handling"). Previously required by
 -- the API but never stored anywhere. Used for the conflict-overview warning and the
 -- "next expected user" preview shown when marking an item delayed.
 ALTER TABLE booking_items ADD COLUMN expected_return_date date;

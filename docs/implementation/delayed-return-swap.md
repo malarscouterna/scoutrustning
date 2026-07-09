@@ -1,6 +1,6 @@
 # Delayed return - conflict handling (design plan)
 
-Implementation plan for `docs/pre-release.md` item 11. Written before coding per the checklist's "ask first" step - this doc is the answer to "what did we decide and why," `pre-release.md` item 11 just tracks status against it.
+Implementation plan for `docs/implementation/pre-release.md` item 11. Written before coding per the checklist's "ask first" step - this doc is the answer to "what did we decide and why," `pre-release.md` item 11 just tracks status against it.
 
 ## Problem
 

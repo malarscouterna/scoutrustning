@@ -107,7 +107,7 @@
 		['draft', 'submitted', 'approved', 'confirmed', 'rejected'].includes(data.existing?.booking.status ?? '')
 	);
 
-	// Auto-archive countdown (docs/pre-release.md "Booking auto-archive setting") - shown
+	// Auto-archive countdown (docs/implementation/pre-release.md "Booking auto-archive setting") - shown
 	// here too, not just the read-only detail page, since this is where a user is actually
 	// working on the booking. Updated every 30s; minute-level granularity, no seconds.
 	let archiveDeadline = $derived(data.existing?.archive_deadline ?? null);

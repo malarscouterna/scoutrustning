@@ -295,7 +295,7 @@ func TestPersonalEmailPolicy_GchatSpaceConfigured(t *testing.T) {
 }
 
 // TestNotificationDispatch_BookingItemBlocked exercises decision 4's "no swap
-// available" notification (docs/delayed-return-swap.md): a personal email to the
+// available" notification (docs/implementation/delayed-return-swap.md): a personal email to the
 // booking's creator, naming the blocked item but not any other booker, deduped on
 // the blocked booking_item's own ID rather than the booking's ID (so a second
 // blocked item on the same booking isn't silently suppressed by the first one's
