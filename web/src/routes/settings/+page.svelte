@@ -6,6 +6,7 @@
 	import { msg } from '$lib/msg';
 	import * as m from '$lib/paraglide/messages.js';
 	import { translateError } from '$lib/errors';
+	import { switchGroup } from '$lib/activeGroup';
 
 	let { data }: { data: PageData } = $props();
 	let user = $derived(data.user);
@@ -259,6 +260,7 @@
 	let rejectedArchiveDays = $state(7);
 	let archiveSaving = $state(false);
 	let archiveMessage = $state('');
+	let archiveError = $state(false);
 	$effect(() => {
 		if (data.groupSettings) {
 			draftArchiveDays = data.groupSettings.draft_archive_days ?? 3;
@@ -269,6 +271,7 @@
 	async function saveArchiveSettings() {
 		archiveSaving = true;
 		archiveMessage = '';
+		archiveError = false;
 		try {
 			groupSettings = await api.updateGroupSettings({
 				draft_archive_days: draftArchiveDays,
@@ -276,11 +279,13 @@
 			});
 			flash(v => archiveMessage = v, m.common_saved());
 		} catch (e: any) {
+			archiveError = true;
 			archiveMessage = m.page_profile_error_prefix() + translateError(e);
 		}
 		archiveSaving = false;
 	}
 	let permMessage = $state('');
+	let permError = $state(false);
 
 	$effect(() => {
 		if (data.groupSettings) {
@@ -303,11 +308,13 @@
 	async function savePermissions() {
 		permSaving = true;
 		permMessage = '';
+		permError = false;
 		try {
 			await api.updateGroupSettings(permForm as any);
 			permMessage = m.common_saved();
 			setTimeout(() => permMessage = '', 3000);
 		} catch (e: any) {
+			permError = true;
 			permMessage = m.page_profile_error_prefix() + translateError(e);
 		}
 		permSaving = false;
@@ -785,11 +792,6 @@ async function linkGchatTeamSpace(teamId: string) {
 	$effect(() => { userLanguage = data.user?.language ?? 'sv'; });
 	let languageSaving = $state(false);
 	let languageMessage = $state('');
-
-	function switchGroup(groupId: string) {
-		document.cookie = `active-group-id=${groupId}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
-		location.reload();
-	}
 
 	// --- Account removal ---
 	let removeConfirming = $state(false);
@@ -1856,7 +1858,7 @@ async function linkGchatTeamSpace(teamId: string) {
 					{permSaving ? m.btn_saving() : m.page_profile_btn_save_permissions()}
 				</button>
 				{#if permMessage}
-					<span class="text-sm {permMessage.startsWith('Fel') ? 'text-red-600' : 'text-green-600'}">{permMessage}</span>
+					<span class="text-sm {permError ? 'text-red-600' : 'text-green-600'}">{permMessage}</span>
 				{/if}
 			</div>
 		</section>
@@ -1881,7 +1883,7 @@ async function linkGchatTeamSpace(teamId: string) {
 					{archiveSaving ? m.btn_saving() : m.btn_save()}
 				</button>
 				{#if archiveMessage}
-					<span class="text-sm {archiveMessage.startsWith('Fel') ? 'text-red-600' : 'text-green-600'}">{archiveMessage}</span>
+					<span class="text-sm {archiveError ? 'text-red-600' : 'text-green-600'}">{archiveMessage}</span>
 				{/if}
 			</div>
 		</section>

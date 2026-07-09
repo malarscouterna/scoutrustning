@@ -20,7 +20,7 @@ func TestBookingFlow_FullLifecycle(t *testing.T) {
 		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
-		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
+		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Pool: env.Pool, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/teams", (&handler.TeamHandler{Q: env.Queries}).Routes())
 	})
 
@@ -212,7 +212,7 @@ func TestBookingFlow_ItemChangeEvents(t *testing.T) {
 		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
-		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
+		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Pool: env.Pool, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/teams", (&handler.TeamHandler{Q: env.Queries}).Routes())
 	})
 
@@ -406,7 +406,7 @@ func TestBookingFlow_NoDoubleBooking(t *testing.T) {
 		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
-		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
+		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Pool: env.Pool, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 	})
 
 	manager := env.ClientAs("manager-equipment")
@@ -501,7 +501,7 @@ func TestBookingFlow_UpdateConfirmedBooking(t *testing.T) {
 		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
-		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
+		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Pool: env.Pool, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/teams", (&handler.TeamHandler{Q: env.Queries}).Routes())
 	})
 
@@ -700,7 +700,7 @@ func TestBookingFlow_AccessControl(t *testing.T) {
 		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
-		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
+		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Pool: env.Pool, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 	})
 
 	leaderYgg := env.ClientAs("leader-yggdrasil")
@@ -763,7 +763,7 @@ func TestBookingFlow_CancelAndDeleteDraft(t *testing.T) {
 		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
-		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
+		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Pool: env.Pool, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/teams", (&handler.TeamHandler{Q: env.Queries}).Routes())
 	})
 
@@ -914,7 +914,7 @@ func TestBookingFlow_IncrementalAddNoDuplicates(t *testing.T) {
 		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
-		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
+		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Pool: env.Pool, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 	})
 
 	manager := env.ClientAs("manager-equipment")
@@ -1016,7 +1016,7 @@ func TestBookingFlow_LocationScopedAvailability(t *testing.T) {
 		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
-		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
+		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Pool: env.Pool, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 	})
 
 	manager := env.ClientAs("manager-equipment")
@@ -1133,7 +1133,7 @@ func TestBookingFlow_Copy(t *testing.T) {
 		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
-		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
+		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Pool: env.Pool, Perms: handler.NewPermissionCache(env.Queries)}).Routes())
 	})
 
 	manager := env.ClientAs("manager-equipment")
@@ -1293,7 +1293,7 @@ func TestPersonalBookingAccess(t *testing.T) {
 	env := testutil.SetupTestEnv(t)
 	perms := handler.NewPermissionCache(env.Queries)
 	env.V1(func(r chi.Router) {
-		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Perms: perms}).Routes())
+		r.Mount("/bookings", (&handler.BookingHandler{Q: env.Queries, Pool: env.Pool, Perms: perms}).Routes())
 		r.Mount("/group-settings", (&handler.GroupSettingsHandler{Q: env.Queries, Pool: env.Pool, Perms: perms}).Routes())
 	})
 

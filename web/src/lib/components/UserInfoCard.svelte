@@ -4,6 +4,7 @@
 	import UserAvatar from '$lib/components/UserAvatar.svelte';
 	import * as m from '$lib/paraglide/messages.js';
 	import { msg } from '$lib/msg';
+	import { switchGroup } from '$lib/activeGroup';
 
 	interface Props {
 		userId: string;
@@ -20,11 +21,6 @@
 	const activeGroupId = $derived($page.data.user?.group_id);
 	const activeGroupName = $derived($page.data.user?.group_name);
 	let groupMenuOpen = $state(false);
-
-	function switchGroup(groupId: string) {
-		document.cookie = `active-group-id=${groupId}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
-		location.reload();
-	}
 
 	let info = $state<UserInfo | null>(null);
 	let loading = $state(false);

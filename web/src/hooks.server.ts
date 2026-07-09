@@ -66,6 +66,25 @@ const appHandle: Handle = async ({ event, resolve }) => {
 		});
 	}
 
+	// POST /group/switch — set or clear the active-group cookie server-side.
+	// httpOnly + Secure (outside dev) so no page/component ever writes this
+	// cookie directly, matching how the dev-persona cookie is handled.
+	if (event.url.pathname === '/group/switch' && event.request.method === 'POST') {
+		const { groupId } = await event.request.json();
+		const maxAge = 60 * 60 * 24 * 365;
+		const secureAttr = DEV_MODE ? '' : '; Secure';
+		const cookie = groupId
+			? `${ACTIVE_GROUP_COOKIE}=${groupId}; Path=/; Max-Age=${maxAge}; HttpOnly; SameSite=Lax${secureAttr}`
+			: `${ACTIVE_GROUP_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${secureAttr}`;
+		return new Response(JSON.stringify({ ok: true }), {
+			status: 200,
+			headers: {
+				'Content-Type': 'application/json',
+				'Set-Cookie': cookie
+			}
+		});
+	}
+
 	// Skip auth for public paths
 	if (isPublicPath(event.url.pathname)) {
 		return resolve(event);

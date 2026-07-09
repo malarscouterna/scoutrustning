@@ -109,7 +109,7 @@ func main() {
 		locations := &handler.LocationHandler{Q: queries}
 		categories := &handler.CategoryHandler{Q: queries}
 
-		bookings := &handler.BookingHandler{Q: queries, Perms: permCache, Notifier: eventNotifier, GChatNotifier: eventGChatNotifier, BaseURL: appBaseURL}
+		bookings := &handler.BookingHandler{Q: queries, Pool: pool, Perms: permCache, Notifier: eventNotifier, GChatNotifier: eventGChatNotifier, BaseURL: appBaseURL}
 		teams := &handler.TeamHandler{Q: queries, DemoMode: demoMode}
 		groupSettings := &handler.GroupSettingsHandler{Q: queries, Pool: pool, Perms: permCache, DemoMode: demoMode}
 		issueHandler := &handler.IssueHandler{Q: queries, Perms: permCache, Notifier: eventNotifier, GChatNotifier: eventGChatNotifier, BaseURL: appBaseURL}
@@ -189,7 +189,7 @@ func main() {
 
 		notifications.SendArchiveWarnings(ctx, queries, schedulerNotifier, schedulerGChatNotifier, baseURL)
 
-		swapped, err := handler.ResolveOverdueSwaps(ctx, queries, schedulerNotifier, schedulerGChatNotifier, baseURL)
+		swapped, err := handler.ResolveOverdueSwaps(ctx, pool, queries, schedulerNotifier, schedulerGChatNotifier, baseURL)
 		if err != nil {
 			slog.Error("overdue swap resolution failed", "error", err)
 		} else if swapped > 0 {

@@ -46,6 +46,8 @@ All three reduce to the same underlying operation (find an equivalent available 
 
    **Grace period (added 2026-07-08).** The nightly job doesn't swap the instant an item is a day late - a `48h` grace period (`overdueSwapGracePeriod` in `booking_swap.go`) must pass before a never-flagged overdue item is eligible, so a booking that's merely running slightly behind isn't punished just because someone else happens to be waiting. This only applies to items nobody has flagged: if the person returning items explicitly marks one "delayed" (decision 1) the problem is already known and it always resolves immediately, with no grace period. The grace period doesn't create a "how far forward do we swap" question either - `FindWaitingBookingItemsForArticle` only ever considers a booking "waiting" once its own `start_date` has already arrived, so a booking still weeks out is never preemptively touched regardless of how overdue the blocking item is; each nightly pass only resolves whichever single booking is actually blocked *right now*.
 
+   **Precision is day-granular, not hour-granular (decided 2026-07-09).** `graceCutoff` is computed from `time.Now()` (carries a time-of-day), but it's compared against `b.end_date`, which is date-only - so depending on what time of day the nightly job happens to run, the effective grace period enforced ranges from ~24h to ~72h rather than exactly 48h. Accepted as-is: `end_date` being date-only already means this feature doesn't reason about bookings being "a few hours overdue," only "overdue as of a given day," so hour-level precision on the cutoff wouldn't actually buy anything. Documented in code at `overdueSwapGracePeriod`.
+
 ## Design
 
 ### Trigger conditions (unified)

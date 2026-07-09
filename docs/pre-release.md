@@ -53,6 +53,33 @@ Done in a series of commits building out `docs/scout-group-signup.md` §1/§2/§
 
 ---
 
+## Dependency freshness
+
+- [ ] Audit `api/go.mod` (`go list -m -u all`) and `web/package.json` (`pnpm outdated`) for outdated dependencies before v1.0. No dedicated tooling/skill for this in the current environment - a manual pass. Decide per-dependency whether to bump now or defer (e.g. respect the documented TypeScript `^5.x` pin in `CLAUDE.md`).
+
+---
+
+## User guide updates
+
+- [ ] `docs/guide.md` needs to catch up with everything shipped in this round of work before release: booking comment thread + approval flow redesign, auto-archive countdowns, copy booking, personal bookings, collaborative bookings (once done), the user info card, delayed-return auto-swap behavior (what a user sees when their item gets silently swapped), and CSV import column reference (already tracked separately above). Audit section-by-section against the "Implementation order" list below rather than guessing what's missing.
+
+---
+
+## Contact / admin-email scoping
+
+Two distinct contact concepts exist and are currently conflated under a single `ADMIN_EMAIL` env var:
+
+- **`notification_email_from`** (existing group setting) - the address automated notifications are sent *from*. Not expected to be read/replied to by anyone - stays as-is.
+- **`ADMIN_EMAIL`** (existing env var) - is actually the **system/platform admin contact**, not a group-level setting. Scope clarified:
+  - Shown on the public `/join` page, so a prospective applicant (not yet a member of any group) knows who to contact about the system itself before/while applying.
+  - Also surfaced to a group's own manager-access team(s) (e.g. in `/settings`) as their escalation contact for system-level problems - not shown to regular members (leaders/bookers/trusted).
+- **Missing:** regular end users have no in-app way to contact *their own group's* equipment managers (a group-level concern, distinct from the system admin). Add a "contact your equipment managers" surface (e.g. on `/guide` or a footer/help link) listing the individual members of the team(s) with `manager` access level, by name and personal notification email - **not** the Gruppkanal/GChat channel, which is a fine broadcast destination for the system but not where a user with a question would expect a reply. A user with a question wants to pick a specific person to email directly. What matters here is the **manager access level itself**, not any individual manager.
+- At group creation (`/join` flow), pre-fill the first manager team member's notification email from the signup form's contact email, so the contact surface isn't empty from day one. No server-side guard against later clearing it - if a group ends up with no manager email set, that's assumed to be a deliberate choice by the group, not something worth enforcing against.
+
+Not yet scoped as an implementation task - needs a short design pass on exact UI placement of the contact list before picking up.
+
+---
+
 ## Other frontend gaps
 
 - [x] ~~Web header logo~~ - Done. Rendered on the dashboard root (`/`), inline with the primary CTA row, to the left of the group name/switcher (not the top nav, per the placement decision made when the CTA row was restructured). No backend/settings-fetch needed for this page - `web/src/routes/+page.svelte` hits the existing unauthenticated `/api/v0/public/groups/{groupId}/logo` endpoint directly using `data.user.group_id` (already available from the layout), and hides itself via `onerror` when no logo is set (404) rather than requiring a separate "does a logo exist" check. `alt` text is the group name (`data.user.group_name`) for accessibility. A `$effect` resets the failed-state flag when `group_id` changes, so switching groups retries loading the new group's logo instead of staying hidden from a stale failure. `svelte-check`: 0 errors/0 warnings.
@@ -313,6 +340,9 @@ Proposed commit sequence. Each item is a self-contained PR.
 18. `feat(web): print-friendly booking fetch list` - `@media print`, grouped by location, on booking detail. See Phase 2 remaining section above.
 19. `docs: separate internal planning docs from user-facing docs` - See Repo hygiene section above.
 20. `feat(web): logged-out language switcher on public pages` - Deferred UX polish noted in Multi-group support section above (`/welcome`, `/gdpr`, `/join`).
+21. `chore: dependency freshness audit` - Manual `go list -m -u all` / `pnpm outdated` pass, bump what's safe. See Dependency freshness section above.
+22. `docs: update guide.md for booking flow redesign, auto-archive, copy, personal/collaborative bookings, user info card, delayed-return swaps` - See User guide updates section above.
+23. `feat(web,api): system-admin and equipment-manager contact surfaces` - Scope `ADMIN_EMAIL` display to `/join` + manager-only settings view; add a group-manager contact list for regular members. Needs a short design pass first - see Contact / admin-email scoping section above.
 
 Deferred out of pre-release scope, moved to `docs/BACKLOG.md` (2026-07-08): per-item descriptions for individually-tracked articles (was 14), booking list card comment preview (was 16).
 

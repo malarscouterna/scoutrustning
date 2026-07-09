@@ -189,7 +189,7 @@ func TestResolveOverdueSwaps_NightlyJob(t *testing.T) {
 		t.Fatalf("expected booking B assigned article X (%s), got %v", articleX, itemBefore["article_id"])
 	}
 
-	swapped, err := handler.ResolveOverdueSwaps(context.Background(), env.Queries, notifications.NoopNotifier{}, notifications.NoopNotifier{}, "http://localhost:5173")
+	swapped, err := handler.ResolveOverdueSwaps(context.Background(), env.Pool, env.Queries, notifications.NoopNotifier{}, notifications.NoopNotifier{}, "http://localhost:5173")
 	if err != nil {
 		t.Fatalf("ResolveOverdueSwaps failed: %v", err)
 	}
@@ -252,7 +252,7 @@ func TestResolveOverdueSwaps_GracePeriod(t *testing.T) {
 		t.Fatalf("expected booking B assigned article X (%s), got %v", articleX, itemBefore["article_id"])
 	}
 
-	swapped, err := handler.ResolveOverdueSwaps(context.Background(), env.Queries, notifications.NoopNotifier{}, notifications.NoopNotifier{}, "http://localhost:5173")
+	swapped, err := handler.ResolveOverdueSwaps(context.Background(), env.Pool, env.Queries, notifications.NoopNotifier{}, notifications.NoopNotifier{}, "http://localhost:5173")
 	if err != nil {
 		t.Fatalf("ResolveOverdueSwaps failed: %v", err)
 	}
