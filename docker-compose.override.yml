@@ -40,3 +40,5 @@ services:
       - ./dev-personas.json:/app/dev-personas.json:ro
       - ./docs/guide.md:/app/guide.md:ro
       - ./docs/gchat-manager-guide.md:/app/gchat-manager-guide.md:ro
+      # Source messages for Paraglide's pathPattern (../api/internal/i18n/messages/{locale}.json)
+      - ./api/internal/i18n/messages:/api/internal/i18n/messages:ro

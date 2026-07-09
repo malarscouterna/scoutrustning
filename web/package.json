@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@auth/sveltekit": "^1.11.2",
-    "@inlang/paraglide-sveltekit": "^0.16.1",
+    "@inlang/paraglide-js": "^2.21.0",
     "@scouterna/design-tokens": "^0.0.7",
     "@scouterna/tailwind-theme": "^0.0.6",
     "@scouterna/ui-webc": "^4.4.4",
