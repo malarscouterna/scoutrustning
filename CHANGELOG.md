@@ -1,5 +1,71 @@
 # Changelog
 
+## [0.11.0](https://github.com/malarscouterna/scoutrustning/compare/v0.10.5...v0.11.0) (2026-07-10)
+
+
+### Features
+
+* **api,web:** active-group cookie for multi-group members ([fd25288](https://github.com/malarscouterna/scoutrustning/commit/fd252882ad4d690f333e1cdaf16165e5f6fe9e86))
+* **api,web:** booking auto-archive setting ([e3dc99d](https://github.com/malarscouterna/scoutrustning/commit/e3dc99d018828dbca00fa54f8df9c5bfd8d28600))
+* **api,web:** booking comment thread and approval flow redesign ([c9aaa80](https://github.com/malarscouterna/scoutrustning/commit/c9aaa807ceada7524e671a5288aa18015735f8b1))
+* **api,web:** group logo display, compact variant, dashboard CTA layout ([6138dde](https://github.com/malarscouterna/scoutrustning/commit/6138dde600d98fe31e0a74da1b4c50289e9313be))
+* **api,web:** group signup page (/join) ([59a2e2c](https://github.com/malarscouterna/scoutrustning/commit/59a2e2c5f5ed51b31eef341af03bfaf2a9be62b2))
+* **api,web:** personal bookings - group access switch + server-side approval enforcement ([31f4a68](https://github.com/malarscouterna/scoutrustning/commit/31f4a681da637dc88b895002c2658f9b4ef26eb8))
+* **api,web:** self-service account removal (global across all groups) ([f81ba7c](https://github.com/malarscouterna/scoutrustning/commit/f81ba7c07f9d7993fec260ca50367d0d45c018a0))
+* **api,web:** show who's blocking a booking and preview it before marking delayed ([eb71ceb](https://github.com/malarscouterna/scoutrustning/commit/eb71ceb28263c088d4107818fe3dd0f868e3d92f))
+* **api,web:** user info card component - full card and compact view ([95a5080](https://github.com/malarscouterna/scoutrustning/commit/95a508021f0e619625ae8612b6e3babb4b651011))
+* **api:** auto-swap delayed/overdue booking items to a free equivalent unit ([c488ba8](https://github.com/malarscouterna/scoutrustning/commit/c488ba8f04e65c082991f5e04350fc861daf1c16))
+* **api:** composite users PK for multi-group profiles ([f020545](https://github.com/malarscouterna/scoutrustning/commit/f020545912577ba853d767110b48de6643bf9419))
+* **api:** give overdue items a grace period before auto-swapping ([d97e8ca](https://github.com/malarscouterna/scoutrustning/commit/d97e8caf6049da3ac1fde886f941984b66c43032))
+* **api:** multi-group dev persona + active-group integration test ([6adb43e](https://github.com/malarscouterna/scoutrustning/commit/6adb43e324fbf16de442aef243cf273d2843a414))
+* **api:** notify a booking when its item can't be swapped to a replacement ([660a3df](https://github.com/malarscouterna/scoutrustning/commit/660a3df318ec9c0401d57d04b1236fee7f3323fa))
+* **api:** swap equipment when a return comes back damaged, broken, or missing ([2db3914](https://github.com/malarscouterna/scoutrustning/commit/2db39140c26519a8d6e2c50f62afd7be26498515))
+* **api:** swap to an equivalent unit before rejecting a booking date change ([16820be](https://github.com/malarscouterna/scoutrustning/commit/16820be9f0485a696c2130b95e3792000ffbd095))
+* countdown to reset ([61f979d](https://github.com/malarscouterna/scoutrustning/commit/61f979db50da6cf435e8564d631dc38613d9b4c0))
+* **web:** add GDPR information page ([c8ec55a](https://github.com/malarscouterna/scoutrustning/commit/c8ec55ab404bc041c731dafc5b2cf11061843e1a))
+* **web:** copy booking UI ([3aee38f](https://github.com/malarscouterna/scoutrustning/commit/3aee38f9609f5a0124d999b571363c40bdbeecca))
+* **web:** group switcher, settings link, sign-out in UserInfoCard ([7fae9ae](https://github.com/malarscouterna/scoutrustning/commit/7fae9ae64e42739dc4dbccbeac58b06f51f87bbc))
+* **web:** migrate to paraglide-js v2, drop deprecated sveltekit adapter ([baf4033](https://github.com/malarscouterna/scoutrustning/commit/baf4033492c86075c0aa9cb3719d538cede30fcd))
+* **web:** own-profile avatar popup and /welcome discoverability ([f868274](https://github.com/malarscouterna/scoutrustning/commit/f868274e50bd157f0f60c6069593bfaad1382984))
+* **web:** replace /login with public /welcome landing page ([baa719e](https://github.com/malarscouterna/scoutrustning/commit/baa719e33f8387691ab171cc3e6cf3e29a307206))
+
+
+### Bug Fixes
+
+* **api,web:** rename booking notes to title, require non-empty, fix self-conflict regressions ([2fc9f30](https://github.com/malarscouterna/scoutrustning/commit/2fc9f30f1699f55fae6f4da54bbb8e1bb950e140))
+* **api,web:** swap-locking, group-switch cookie hygiene, and review follow-ups ([af5a3ef](https://github.com/malarscouterna/scoutrustning/commit/af5a3ef47cf4374336dec9fa03bcfea0be560d96))
+* **api,web:** tie persona-switcher gates to DEV_MODE OR DEMO_MODE ([1f93f8c](https://github.com/malarscouterna/scoutrustning/commit/1f93f8c47dbf3cf81d38086c451e6eb613cdffa5))
+* **api:** apply ExcludingBooking consistently on booking date change ([841ca65](https://github.com/malarscouterna/scoutrustning/commit/841ca65f8e4f4b5c766fbce2ce5edf212ec08fd3))
+* **api:** coalesce item-change events and fix rejected/submit wording ([77c0b59](https://github.com/malarscouterna/scoutrustning/commit/77c0b59ab673ac760fd0f23075269934d1f53782))
+* **dev:** seed data for the delayed-return-swap blocked-item scenario ([e3451eb](https://github.com/malarscouterna/scoutrustning/commit/e3451eb2f1d9d7e8138a2255d13d9ac7d64ddd18))
+* **web,api:** cancel button - correct cancellable status allowlist ([e0b68c6](https://github.com/malarscouterna/scoutrustning/commit/e0b68c6e70021c921b3478362da346e70d7e65ea))
+* **web:** consistent avdelning/roll phrasing, sort troops before roles ([94632c6](https://github.com/malarscouterna/scoutrustning/commit/94632c615a0daba92615a2a41b3aaa2f98092155))
+* **web:** reposition group switcher, add it to /profile and dashboard ([e349784](https://github.com/malarscouterna/scoutrustning/commit/e349784588fc867e094238b711e2bfad44f5164c))
+* **web:** unmapped-user welcome state, join demo gate, direct signin CTA ([f2db8c0](https://github.com/malarscouterna/scoutrustning/commit/f2db8c0839253521585c004db480f0220e08fe8c))
+* **web:** validate booking dates/title client-side, add page title ([b0a88a3](https://github.com/malarscouterna/scoutrustning/commit/b0a88a33d2017018b7514f35e36b851c1c5e0a58))
+* **web:** white email header background so transparent logos render legibly ([eb22755](https://github.com/malarscouterna/scoutrustning/commit/eb22755e1c7b527cf1231cd0835982e380d903fb))
+
+
+### Refactoring
+
+* **web:** rename /profile to /settings, reorganize dashboard CTAs ([907ceb4](https://github.com/malarscouterna/scoutrustning/commit/907ceb4a57bd10b4ab0d29078fe21591ebf519aa))
+
+
+### Miscellaneous
+
+* **api:** bump testcontainers-go and go-mail (minor) ([b7442db](https://github.com/malarscouterna/scoutrustning/commit/b7442dbb66c1c2a1bcb31507bc6f0f3015db126c))
+* bump postgres 17.9 -&gt; 17.10 ([e5a45b9](https://github.com/malarscouterna/scoutrustning/commit/e5a45b9033707839839ff5834cc018b8658f866f))
+* dependency freshness audit ([15792a9](https://github.com/malarscouterna/scoutrustning/commit/15792a9191e15f4b99b17ea5367cf5409193a849))
+* **web:** bump marked 17-&gt;18 and @types/node 25-&gt;26 ([3954d7c](https://github.com/malarscouterna/scoutrustning/commit/3954d7cd14e2cef52f69954dd517f3139d6c90e3))
+
+
+### Documentation
+
+* add multi-group support plan (landing page, group signup, ([baa719e](https://github.com/malarscouterna/scoutrustning/commit/baa719e33f8387691ab171cc3e6cf3e29a307206))
+* fill in completion notes for commits 3-5 in pre-release plan ([9dc9dbf](https://github.com/malarscouterna/scoutrustning/commit/9dc9dbf9c71226d9b3c887e477fee1dcc281ba94))
+* pre-release plan for booking UX and v1 feature work ([9d37615](https://github.com/malarscouterna/scoutrustning/commit/9d376153273b654f54b6fb3897d7dc49554b5b13))
+* separate internal planning docs from user-facing docs ([e01570a](https://github.com/malarscouterna/scoutrustning/commit/e01570af014cb78008bf8d7b098f717514b4a431))
+
 ## [0.10.5](https://github.com/malarscouterna/scoutrustning/compare/v0.10.4...v0.10.5) (2026-06-28)
 
 
