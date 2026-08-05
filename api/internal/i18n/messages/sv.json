@@ -683,6 +683,7 @@
   "page_join_field_contact_email": "Kontakt-e-post",
   "page_join_field_contact_email_help": "Använd gärna en gruppmejl till de ansvariga, inte en personlig adress.",
   "page_join_field_group_size": "Ungefärligt antal medlemmar",
+  "page_join_field_group_size_help": "För att vi ska förstå hur Scoutrustning används. Ange totalt antal medlemmar, inte förväntat antal användare.",
   "page_join_field_custom_domain": "Vi är intresserade av att ha en egen domän (ex. utrustning.scoutkar.se)",
   "page_join_field_custom_domain_note": "Vi hör av oss med detaljer ifall ni är intresserade.",
   "page_join_field_tos": "Jag har läst och godkänner {gdpr_link}",

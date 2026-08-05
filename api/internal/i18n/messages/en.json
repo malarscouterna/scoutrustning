@@ -683,6 +683,7 @@
   "page_join_field_contact_email": "Contact email",
   "page_join_field_contact_email_help": "Prefer a shared group mailbox for those responsible, not a personal address.",
   "page_join_field_group_size": "Approximate number of members",
+  "page_join_field_group_size_help": "So we understand how Scoutrustning is used. Enter the total number of members, not the expected number of users.",
   "page_join_field_custom_domain": "We're interested in having a custom domain (e.g. utrustning.scoutkar.se)",
   "page_join_field_custom_domain_note": "We'll follow up with details if you're interested.",
   "page_join_field_tos": "I have read and accept the {gdpr_link}",
