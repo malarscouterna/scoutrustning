@@ -8,7 +8,8 @@
 	let groupName = $state('');
 	let roleId = $state<number | null>(null);
 	let roleNameFreeText = $state('');
-	let teamName = $state('Utrustningsgruppen');
+	let teamName = $state('');
+	let teamNameTouched = $state(false);
 	let contactEmail = $state('');
 	let groupSize = $state('');
 	let interestedInDomain = $state(false);
@@ -27,6 +28,12 @@
 		const org = data.orgs.find((o) => o.id === orgId);
 		groupName = org?.name ?? '';
 		roleId = org?.roles[0]?.id ?? null;
+	});
+
+	// Pre-fill the manager team name from the chosen Scoutnet role, tracking changes to it
+	// (org/role switch) until the applicant edits the field themselves.
+	$effect(() => {
+		if (!teamNameTouched) teamName = roleName;
 	});
 
 	let submitting = $state(false);
@@ -128,7 +135,7 @@
 
 				<div>
 					<label class="block text-sm font-medium text-neutral-700 mb-1" for="team-name">{m.page_join_field_team_name()}</label>
-					<input id="team-name" type="text" required bind:value={teamName} class="w-full border rounded-lg px-3 py-2 text-sm" />
+					<input id="team-name" type="text" required bind:value={teamName} oninput={() => (teamNameTouched = true)} class="w-full border rounded-lg px-3 py-2 text-sm" />
 					<p class="text-xs text-neutral-400 mt-1">{m.page_join_field_team_name_help()}</p>
 				</div>
 
@@ -141,6 +148,7 @@
 				<div>
 					<label class="block text-sm font-medium text-neutral-700 mb-1" for="group-size">{m.page_join_field_group_size()}</label>
 					<input id="group-size" type="text" inputmode="numeric" bind:value={groupSize} class="w-full border rounded-lg px-3 py-2 text-sm" />
+					<p class="text-xs text-neutral-400 mt-1">{m.page_join_field_group_size_help()}</p>
 				</div>
 
 				<div>
