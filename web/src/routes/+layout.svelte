@@ -1,6 +1,7 @@
 <script lang="ts">
 	import '../app.css';
 	import { page } from '$app/stores';
+	import * as m from '$lib/paraglide/messages.js';
 	import DevPersonaSwitcher from '$lib/components/DevPersonaSwitcher.svelte';
 	import FloatingCart from '$lib/components/FloatingCart.svelte';
 	import UserAvatar from '$lib/components/UserAvatar.svelte';
@@ -21,6 +22,11 @@
 	// True when we're on the section's own index page (the breadcrumb leaf, not a sub-page)
 	let onSectionRoot = $derived(section !== null && $page.url.pathname === section.href);
 
+	// /welcome and /join have their own handling of the "logged in, unmapped group" state
+	// (join CTA, demo link, the join form itself) - this layout's generic contact-your-manager
+	// box must not intercept them, or those pages' own content never renders.
+	let isPublicUnmappedPage = $derived($page.url.pathname === '/welcome' || $page.url.pathname === '/join');
+
 	let profileCardOpen = $state(false);
 </script>
 
@@ -30,20 +36,14 @@
 	</a>
 {/if}
 
-{#if !data.user && (data.oidcName || data.dev)}
+{#if !data.user && data.dev && !isPublicUnmappedPage}
+	<!-- Only reachable when the selected/default dev persona failed to resolve via /me
+	     (misconfigured dev-personas.json, API down, etc.) - a local debugging aid, not
+	     the "unmapped group" case, which /welcome and /join handle themselves. -->
 	<div class="flex flex-col items-center justify-center min-h-screen px-4 bg-white text-neutral-900">
 		<img src="/PNG Utrustningsgruppen - Logotyp.png" alt="Scoutrustning" class="w-48 mb-6" />
-		{#if data.oidcName}
-			<h1 class="text-xl font-bold mb-2">Hej {data.oidcName}!</h1>
-		{/if}
-		{#if data.demo}
-			<p class="text-sm text-neutral-600 mb-4 max-w-sm text-center">Din scoutkår är inte konfigurerad i den här demomiljön. Använd persona-väljaren nedan för att testa systemet.</p>
-			{#if data.dev}
-				<DevPersonaSwitcher personas={data.dev.personas} currentPersona={data.dev.currentPersona} user={null} />
-			{/if}
-		{:else}
-			<p class="text-sm text-neutral-600 mb-4 max-w-sm text-center">Din scoutkår är inte konfigurerad för det här systemet. Kontakta din utrustningsansvarige om du tror att det är fel.</p>
-		{/if}
+		<p class="text-sm text-neutral-600 mb-4 max-w-sm text-center">{m.layout_dev_no_persona()}</p>
+		<DevPersonaSwitcher personas={data.dev.personas} currentPersona={data.dev.currentPersona} user={null} />
 	</div>
 {:else if data.user}
 	<nav class="sticky top-0 z-10 bg-white border-b">
@@ -80,7 +80,7 @@
 {/if}
 
 <div>
-	{#if data.user || (!data.oidcName && !data.dev)}
+	{#if data.user || isPublicUnmappedPage || (!data.oidcName && !data.dev)}
 		{@render children()}
 	{/if}
 </div>
