@@ -365,7 +365,14 @@ All tables have `group_id` (text, FK → groups). Omitted below for brevity.
 | expected_available_date | date | Nullable, for incoming/under_repair - when the article is expected to be usable |
 | created_at / updated_at | timestamptz | |
 
-### packages
+### packages / package_items
+
+**UPDATE**: reshaped from the original design below - item grain is now
+`commercial_name + location_id` instead of `category_id`/`article_id`, no
+personal scope, plus `color`, `archived`, and a `package_events` edit
+trail. Full design in [packages.md](packages.md). Tables below reflect the
+original, never-implemented Phase 4 plan and are superseded.
+
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
@@ -375,7 +382,7 @@ All tables have `group_id` (text, FK → groups). Omitted below for brevity.
 | owner_id | text | Nullable, FK → users (for personal) |
 | created_at / updated_at | timestamptz | |
 
-### package_items
+package_items (original):
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
@@ -880,7 +887,7 @@ Remaining (frontend only):
 - Deployment is manual: pull new images on VPS, `docker compose up -d` ✅
 
 ### Phase 4 - Packages + polish
-- Package CRUD (org-wide + personal)
+- Package CRUD, access-level gated (see [packages.md](packages.md) - supersedes org/personal scope below)
 - Package → cart flow
 - Print-friendly checklist view
 - Booking history per user
