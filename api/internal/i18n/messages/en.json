@@ -457,6 +457,7 @@
   "page_welcome_no_group_desc": "Your account ({name}) isn't linked to any scout group using Scoutrustning. Ask your equipment manager for an invite, or sign up your group below.",
   "page_welcome_gdpr_link": "Privacy / GDPR information",
   "page_welcome_join_link": "Sign up your scout group",
+  "layout_dev_no_persona": "No profile could be loaded. Pick one below to test the system.",
   "page_home_btn_about": "About Scoutrustning",
   "availability_pre_approved": "Pre-approved",
   "page_article_added_to_booking": "Added to booking!",

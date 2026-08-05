@@ -457,6 +457,7 @@
   "page_welcome_no_group_desc": "Ditt konto ({name}) är inte kopplat till någon scoutkår som använder Scoutrustning. Be din utrustningsansvarige om en inbjudan, eller registrera din kår nedan.",
   "page_welcome_gdpr_link": "Information om personuppgifter (GDPR)",
   "page_welcome_join_link": "Registrera din scoutkår",
+  "layout_dev_no_persona": "Ingen profil kunde läsas in. Välj en profil nedan för att testa systemet.",
   "page_home_btn_about": "Om Scoutrustning",
   "availability_pre_approved": "Förgodkänd",
   "page_article_added_to_booking": "Tillagd i bokning!",
