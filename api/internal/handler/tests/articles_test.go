@@ -199,6 +199,54 @@ func TestArticleCSVImport(t *testing.T) {
 		t.Logf("categories after import: %d", len(categories))
 	})
 
+	t.Run("canonical place column maps directly, location untouched", func(t *testing.T) {
+		csv := "commercial_name,common_name,location,place,tags\n" +
+			"Kikare,Kikare 1,Karsvik,\"Östergården, Hylla 2\",Mat\n"
+		result := doImport(t, env, manager, csv)
+		if imported := int(result["imported"].(float64)); imported != 1 {
+			t.Fatalf("expected 1 imported, got %d: %v", imported, result)
+		}
+
+		resp, _ := manager.Get("/api/v0/articles?search=Kikare")
+		var articles []map[string]any
+		json.NewDecoder(resp.Body).Decode(&articles)
+		resp.Body.Close()
+		if len(articles) != 1 {
+			t.Fatalf("expected 1 article, got %d", len(articles))
+		}
+		a := articles[0]
+		if a["location_name"] != "Karsvik" {
+			t.Errorf("expected location_name 'Karsvik' (unchanged), got %v", a["location_name"])
+		}
+		if a["place"] != "Östergården, Hylla 2" {
+			t.Errorf("expected place to map directly from the canonical column, got %v", a["place"])
+		}
+	})
+
+	t.Run("legacy plats/rum/lage compose into place, location untouched", func(t *testing.T) {
+		csv := "commercial_name,common_name,location,plats,rum,lage,tags\n" +
+			"Kokkärl,Kokkärl 1,Karsvik,ostergarden,Pysselhurts,Hylla 3,Mat\n"
+		result := doImport(t, env, manager, csv)
+		if imported := int(result["imported"].(float64)); imported != 1 {
+			t.Fatalf("expected 1 imported, got %d: %v", imported, result)
+		}
+
+		resp, _ := manager.Get("/api/v0/articles?search=Kokk%C3%A4rl")
+		var articles []map[string]any
+		json.NewDecoder(resp.Body).Decode(&articles)
+		resp.Body.Close()
+		if len(articles) != 1 {
+			t.Fatalf("expected 1 article, got %d", len(articles))
+		}
+		a := articles[0]
+		if a["location_name"] != "Karsvik" {
+			t.Errorf("expected location_name 'Karsvik' (unchanged, no more location override), got %v", a["location_name"])
+		}
+		if a["place"] != "Östergården, Pysselhurts, Hylla 3" {
+			t.Errorf("expected place composed from normalized plats + rum + lage, got %v", a["place"])
+		}
+	})
+
 	t.Run("leader cannot import", func(t *testing.T) {
 		leader := env.ClientAs("leader-yggdrasil")
 		var buf bytes.Buffer
@@ -221,6 +269,34 @@ func TestArticleCSVImport(t *testing.T) {
 			t.Fatalf("expected 403, got %d", resp.StatusCode)
 		}
 	})
+}
+
+// doImport uploads a small in-memory CSV string via the import endpoint and returns the
+// decoded JSON result ({"imported": ..., "skipped": ..., "errors": [...]}).
+func doImport(t *testing.T, env *testutil.TestEnv, manager *testutil.TestClient, csv string) map[string]any {
+	t.Helper()
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+	part, _ := writer.CreateFormFile("file", "inventory.csv")
+	part.Write([]byte(csv))
+	writer.Close()
+
+	req, _ := http.NewRequest("POST", env.Server.URL+"/api/v0/articles/import", &buf)
+	req.Header.Set("X-Dev-Role-Override", "manager-equipment")
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, body)
+	}
+	var result map[string]any
+	json.NewDecoder(resp.Body).Decode(&result)
+	return result
 }
 
 func findCSVPath() string {

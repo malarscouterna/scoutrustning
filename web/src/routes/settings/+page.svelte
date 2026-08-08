@@ -1917,6 +1917,33 @@ async function linkGchatTeamSpace(teamId: string) {
 		<!-- CSV Import -->
 		<section class="mb-6 border rounded-lg p-4">
 			<h3 class="font-medium mb-2">{m.page_profile_import_heading()}</h3>
+			<details class="mb-3 text-sm">
+				<summary class="cursor-pointer text-neutral-600">{m.page_profile_import_help_toggle()}</summary>
+				<div class="mt-2 space-y-3 text-neutral-700">
+					<p>{m.page_profile_import_help_intro()}</p>
+					<div>
+						<p class="font-medium mb-1">{m.page_profile_import_help_columns_heading()}</p>
+						<table class="w-full text-xs border-collapse">
+							<tbody>
+								<tr class="border-t"><td class="py-1 pr-2 align-top font-mono whitespace-nowrap">commercial_name</td><td class="py-1">{m.page_profile_import_col_commercial_name()}</td></tr>
+								<tr class="border-t"><td class="py-1 pr-2 align-top font-mono whitespace-nowrap">common_name</td><td class="py-1">{m.page_profile_import_col_common_name()}</td></tr>
+								<tr class="border-t"><td class="py-1 pr-2 align-top font-mono whitespace-nowrap">count</td><td class="py-1">{m.page_profile_import_col_count()}</td></tr>
+								<tr class="border-t"><td class="py-1 pr-2 align-top font-mono whitespace-nowrap">description</td><td class="py-1">{m.page_profile_import_col_description()}</td></tr>
+								<tr class="border-t"><td class="py-1 pr-2 align-top font-mono whitespace-nowrap">instructions</td><td class="py-1">{m.page_profile_import_col_instructions()}</td></tr>
+								<tr class="border-t"><td class="py-1 pr-2 align-top font-mono whitespace-nowrap">manager_notes</td><td class="py-1">{m.page_profile_import_col_manager_notes()}</td></tr>
+								<tr class="border-t"><td class="py-1 pr-2 align-top font-mono whitespace-nowrap">location</td><td class="py-1">{m.page_profile_import_col_location()}</td></tr>
+								<tr class="border-t"><td class="py-1 pr-2 align-top font-mono whitespace-nowrap">place</td><td class="py-1">{m.page_profile_import_col_place()}</td></tr>
+								<tr class="border-t"><td class="py-1 pr-2 align-top font-mono whitespace-nowrap">tags</td><td class="py-1">{m.page_profile_import_col_tags()}</td></tr>
+								<tr class="border-t"><td class="py-1 pr-2 align-top font-mono whitespace-nowrap">requires_approval</td><td class="py-1">{m.page_profile_import_col_requires_approval()}</td></tr>
+							</tbody>
+						</table>
+					</div>
+					<p>
+						{m.page_profile_import_help_example()}
+						<a href="https://github.com/malarscouterna/scoutrustning/blob/main/docs/import-example.csv" target="_blank" rel="noopener noreferrer" class="text-blue-700 underline">{m.page_profile_import_help_example_link()}</a>
+					</p>
+				</div>
+			</details>
 			<div class="flex flex-wrap items-center gap-2 mb-2">
 				<input type="file" accept=".csv" onchange={handleFileSelect} class="text-sm file:mr-2 file:px-3 file:py-1 file:rounded file:border file:border-neutral-300 file:bg-white file:text-sm file:text-neutral-700 file:cursor-pointer hover:file:bg-neutral-50" />
 				<button onclick={runImport} disabled={!importFile || importLoading} class="text-sm bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50">

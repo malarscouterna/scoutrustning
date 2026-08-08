@@ -231,6 +231,27 @@ Som utrustningsansvarig kan du hantera bilder för alla artikelgrupper:
 
 Vem som får ladda upp bilder styrs av inställningen "Vem kan ladda upp bilder?" under Kårinställningar.
 
+### Importera artiklar (CSV)
+
+Under **Kårinställningar → Importera artiklar** kan du ladda upp en CSV-fil för att skapa flera artiklar på en gång. Filen ska vara **kommaseparerad** (inte semikolon) med en rubrikrad - standardformatet när du exporterar som CSV från t.ex. Excel eller Google Sheets. Om du redigerar filen för hand i en textredigerare: text som innehåller kommatecken (t.ex. i `description`) måste omges av citattecken (`"..."`), annars tolkas kommatecknet som en kolumngräns - spreadsheet-program gör detta automatiskt vid export. Varje rad skapar en ny artikel - importen känner **inte** igen befintliga artiklar, så att importera samma fil två gånger skapar dubbletter (ingen automatisk dubblettdetektering ännu). Endast kolumnen `common_name` krävs; rader utan den hoppas över tyst.
+
+| Kolumn | Krävs | Beskrivning |
+|---|---|---|
+| `commercial_name` | Nej | Produktnamn (t.ex. "Stormkök"), grupperar artiklar i bläddra-vyn |
+| `common_name` | Ja | Namn på den enskilda artikeln (t.ex. "Stormkök 1") |
+| `count` | Nej | Om satt till mer än 1 skapas så många styckräknade kopior istället för en styckspårad artikel |
+| `description` | Nej | Fri text, visas för alla som bokar |
+| `instructions` | Nej | Fri text, t.ex. skötsel- eller uppsättningsanvisningar |
+| `manager_notes` | Nej | Fri text, syns bara för utrustningsansvariga |
+| `location` | Nej | Geografisk plats (t.ex. "Hajkförrådet"). Det enda platsfältet som går att bläddra och filtrera på. Skapas automatiskt om den inte finns. Standard är "Övrigt" om tom |
+| `place` | Nej | Frivillig fri text för mer specifik placering inom platsen (t.ex. "Köksrummet, Hylla 1"). Syns vid uthämtning, går inte att filtrera på |
+| `tags` | Nej | Mappas till kategori. Skapas automatiskt om den inte finns. Standard är "Övrigt" om tom |
+| `requires_approval` | Nej | `none` (standard), `low` eller `high` - styr om bokning av artikeln kräver godkännande |
+
+Se ett komplett exempel med alla kolumner ifyllda: [`import-example.csv`](https://github.com/malarscouterna/scoutrustning/blob/main/docs/import-example.csv) på GitHub.
+
+Äldre exportformat med separata kolumner `plats`, `rum` och `lage` istället för `place` stöds fortfarande - de slås automatiskt ihop till en enda platsbeskrivning (samma resultat som att fylla i `place` direkt). Använd `place` för nya filer.
+
 ---
 
 ---

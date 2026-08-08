@@ -751,7 +751,10 @@ func (h *ArticleHandler) AvailableArticlesList(w http.ResponseWriter, r *http.Re
 	WriteJSON(w, http.StatusOK, articles)
 }
 
-// Import handles CSV upload matching the Mälarscouterna inventory spreadsheet format.
+// Import handles CSV article upload. Canonical columns map directly to the article model
+// (commercial_name, common_name, count, description, instructions, manager_notes, location,
+// place, tags, requires_approval). The legacy plats/rum/lage split (old Mälarscouterna
+// exports) is still accepted as a fallback when "place" is absent, composed into one string.
 // Auto-creates categories and locations that don't exist.
 func (h *ArticleHandler) Import(w http.ResponseWriter, r *http.Request) {
 	claims, _ := auth.ClaimsFromContext(r.Context())
@@ -786,6 +789,17 @@ func (h *ArticleHandler) Import(w http.ResponseWriter, r *http.Request) {
 	col := func(record []string, name string) string {
 		if i, ok := colIdx[name]; ok && i < len(record) {
 			return strings.TrimSpace(record[i])
+		}
+		return ""
+	}
+	// colAny tries the canonical column name first, falling back to legacy names
+	// (e.g. old Mälarscouterna exports using "title"/"titelgrupp" instead of
+	// "common_name"/"commercial_name") when the canonical column is absent.
+	colAny := func(record []string, names ...string) string {
+		for _, name := range names {
+			if v := col(record, name); v != "" {
+				return v
+			}
 		}
 		return ""
 	}
@@ -846,7 +860,7 @@ func (h *ArticleHandler) Import(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		commonName := col(record, "title")
+		commonName := colAny(record, "common_name", "title")
 		if commonName == "" {
 			skipped++
 			continue
@@ -855,17 +869,9 @@ func (h *ArticleHandler) Import(w http.ResponseWriter, r *http.Request) {
 		description := col(record, "description")
 		instructions := col(record, "instructions")
 		managerNotes := col(record, "manager_notes")
-		rawLocation := col(record, "location")
-		plats := col(record, "plats")
-		rum := col(record, "rum")
-		lage := col(record, "lage")
+		locationName := col(record, "location")
 		tag := col(record, "tags")
 
-		// Resolve location: Karsvik items use plats as the real location
-		locationName := rawLocation
-		if strings.EqualFold(rawLocation, "Karsvik") && plats != "" {
-			locationName = normalizeKarsvikPlats(plats)
-		}
 		if locationName == "" {
 			locationName = "Övrigt"
 		}
@@ -889,17 +895,24 @@ func (h *ArticleHandler) Import(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		// Build place from rum + lage
-		var placeParts []string
-		if rum != "" {
-			placeParts = append(placeParts, rum)
+		// place: canonical column maps directly to articles.place. If absent, fall back to
+		// composing the legacy plats/rum/lage split (kept for old Mälarscouterna exports).
+		place := col(record, "place")
+		if place == "" {
+			var placeParts []string
+			if plats := normalizePlats(col(record, "plats")); plats != "" {
+				placeParts = append(placeParts, plats)
+			}
+			if rum := col(record, "rum"); rum != "" {
+				placeParts = append(placeParts, rum)
+			}
+			if lage := col(record, "lage"); lage != "" {
+				placeParts = append(placeParts, lage)
+			}
+			place = strings.Join(placeParts, ", ")
 		}
-		if lage != "" {
-			placeParts = append(placeParts, lage)
-		}
-		place := strings.Join(placeParts, ", ")
 
-		commercialName := col(record, "titelgrupp")
+		commercialName := colAny(record, "commercial_name", "titelgrupp")
 
 		// Determine approval level from CSV column, default to 'none'
 		approvalLevel := "none"
@@ -1258,7 +1271,9 @@ func (h *ArticleHandler) GroupCount(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]any{"count": req.NewCount})
 }
 
-func normalizeKarsvikPlats(plats string) string {
+// normalizePlats fixes ASCII-transliterated Swedish spelling in the legacy "plats" column
+// (e.g. "ostergarden" -> "Östergården"), used only for old Mälarscouterna-format exports.
+func normalizePlats(plats string) string {
 	switch strings.ToLower(plats) {
 	case "ladan":
 		return "Ladan"
