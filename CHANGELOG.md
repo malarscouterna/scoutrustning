@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.12.0](https://github.com/malarscouterna/scoutrustning/compare/v0.11.0...v0.12.0) (2026-10-01)
+
+
+### Features
+
+* add convert-tracking endpoint and add-another shortcut ([4f77555](https://github.com/malarscouterna/scoutrustning/commit/4f77555b18b04eaa5c51ceb9a42cc300f532b087))
+
+
+### Bug Fixes
+
+* **api,web:** CSV import - fix hardcoded location override, add inline help docs ([dd2240e](https://github.com/malarscouterna/scoutrustning/commit/dd2240ec24ce6efd17a122b68a08f33eeeeddfa0))
+* **web:** improve /join signup form usability ([e69379a](https://github.com/malarscouterna/scoutrustning/commit/e69379aa0a676f43142b2f1e9273f367cd08c4b7))
+* **web:** stop layout fallback from intercepting /welcome and /join for unmapped users ([b9757c3](https://github.com/malarscouterna/scoutrustning/commit/b9757c3b5157f9f8ea03c29e79b64fcce7405c1f))
+
+
+### Documentation
+
+* **spec:** design equipment packages feature ([fed0838](https://github.com/malarscouterna/scoutrustning/commit/fed083810b54132ce639dc204b016a0e3d4546cf))
+
 ## [0.11.0](https://github.com/malarscouterna/scoutrustning/compare/v0.10.5...v0.11.0) (2026-07-10)
 
 
