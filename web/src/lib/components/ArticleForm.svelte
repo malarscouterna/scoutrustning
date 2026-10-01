@@ -97,7 +97,8 @@
 				if (!baseChanged && i < names.length) {
 					next.push(names[i]);
 				} else {
-					next.push(`${base} ${i + 1}`);
+					// Leave blank when prefilling from an existing group - names are free text
+					next.push(initial ? '' : `${base} ${i + 1}`);
 				}
 			}
 			names = next;
@@ -428,7 +429,7 @@
 								value={name}
 								oninput={(e) => updateName(i, (e.target as HTMLInputElement).value)}
 								placeholder="{m.article_form_article_name()} {i + 1}"
-								class="border rounded px-2 py-1.5 text-sm w-full"
+								class="border rounded px-2 py-1.5 text-sm w-full {name.trim() === '' ? 'border-orange-400 bg-orange-50' : ''}"
 							/>
 						{/each}
 					</div>

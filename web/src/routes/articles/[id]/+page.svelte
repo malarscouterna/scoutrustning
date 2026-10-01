@@ -283,6 +283,9 @@
 			</button>
 			{#if isManager}
 				<a href="/articles/{article.id}/edit{isQuantityTracked ? '?group=true' : ''}" class="inline-flex items-center gap-1 text-xs text-neutral-600 border border-neutral-200 bg-neutral-50 rounded px-2 py-1 hover:bg-neutral-100">{m.page_article_edit_heading()} ›</a>
+				{#if article.individually_tracked}
+					<a href="/articles/new?from={encodeURIComponent(article.commercial_name)}&location={article.location_id}" class="inline-flex items-center gap-1 text-xs text-neutral-600 border border-neutral-200 bg-neutral-50 rounded px-2 py-1 hover:bg-neutral-100">{m.page_browse_btn_add_another()}</a>
+				{/if}
 			{/if}
 		</div>
 

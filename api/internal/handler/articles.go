@@ -41,6 +41,7 @@ func (h *ArticleHandler) Routes() chi.Router {
 	r.With(editPerm).Post("/import", h.Import)
 	r.With(editPerm).Put("/bulk", h.BulkUpdate)
 	r.With(editPerm).Post("/group-count", h.GroupCount)
+	r.With(editPerm).Post("/{id}/convert-tracking", h.ConvertTracking)
 	return r
 }
 
@@ -1269,6 +1270,82 @@ func (h *ArticleHandler) GroupCount(w http.ResponseWriter, r *http.Request) {
 	})
 
 	WriteJSON(w, http.StatusOK, map[string]any{"count": req.NewCount})
+}
+
+// ConvertTracking converts all articles in a group between individually-tracked
+// and quantity-tracked. For quantity->individual, auto-generates common_name as
+// "{commercial_name} 1", "{commercial_name} 2", etc. ordered by created_at.
+func (h *ArticleHandler) ConvertTracking(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	ctx := r.Context()
+
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	var req struct {
+		IndividuallyTracked bool `json:"individually_tracked"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	article, err := h.Q.GetArticle(ctx, db.GetArticleParams{ID: id, GroupID: claims.GroupID})
+	if err != nil {
+		WriteError(w, http.StatusNotFound, "article not found")
+		return
+	}
+
+	if article.IndividuallyTracked == req.IndividuallyTracked {
+		WriteJSON(w, http.StatusOK, map[string]any{"converted": 0})
+		return
+	}
+
+	ids, err := h.Q.ListArticleIDsInGroup(ctx, db.ListArticleIDsInGroupParams{
+		GroupID:        claims.GroupID,
+		CommercialName: article.CommercialName,
+		LocationID:     article.LocationID,
+	})
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to list group")
+		return
+	}
+
+	if _, err := h.Q.BulkSetArticleTracking(ctx, db.BulkSetArticleTrackingParams{
+		IndividuallyTracked: req.IndividuallyTracked,
+		GroupID:             claims.GroupID,
+		CommercialName:      article.CommercialName,
+		LocationID:          article.LocationID,
+	}); err != nil {
+		slog.Error("failed to set article tracking", "error", err)
+		WriteError(w, http.StatusInternalServerError, "failed to convert tracking")
+		return
+	}
+
+	if req.IndividuallyTracked {
+		for i, aid := range ids {
+			if err := h.Q.UpdateArticleTracking(ctx, db.UpdateArticleTrackingParams{
+				ID:         aid,
+				GroupID:    claims.GroupID,
+				CommonName: article.CommercialName + " " + strconv.Itoa(i+1),
+			}); err != nil {
+				slog.Error("failed to name article after tracking conversion", "error", err)
+				WriteError(w, http.StatusInternalServerError, "failed to convert tracking")
+				return
+			}
+		}
+	}
+
+	direction := "quantity → individual"
+	if !req.IndividuallyTracked {
+		direction = "individual → quantity"
+	}
+	LogArticleEvent(ctx, h.Q, claims, article.ID, "note", "Tracking converted: "+direction+" ("+strconv.Itoa(len(ids))+" articles)", nil)
+
+	WriteJSON(w, http.StatusOK, map[string]any{"converted": len(ids)})
 }
 
 // normalizePlats fixes ASCII-transliterated Swedish spelling in the legacy "plats" column
