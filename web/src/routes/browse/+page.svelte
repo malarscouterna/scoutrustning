@@ -740,6 +740,13 @@ import type { TeamMembership } from '$lib/user';
 									{/if}
 								{/each}
 							</div>
+							{#if isManager}
+								<div class="flex gap-2 pt-2 pb-1">
+									{#if group.articles[0]}
+										<a href="/articles/new?from={encodeURIComponent(group.commercialName)}&location={group.articles[0].location_id}" class="inline-flex items-center gap-1 text-xs text-neutral-600 border border-neutral-200 bg-neutral-50 rounded px-2 py-1 hover:bg-neutral-100">{m.page_browse_btn_add_another()}</a>
+									{/if}
+								</div>
+							{/if}
 							{#if hasTextInfo}
 								{@render inlineTextInfo(rep, group.key)}
 							{/if}

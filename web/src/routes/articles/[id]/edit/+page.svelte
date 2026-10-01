@@ -20,6 +20,7 @@
 	let saving = $state(false);
 	let showItems = $state(false);
 	let imageIds = $state<string[]>([]);
+	let converting = $state(false);
 
 	$effect(() => {
 		imageIds = data.article.image_ids ?? [];
@@ -51,6 +52,23 @@
 		} catch (e) {
 			error = translateError(e);
 			saving = false;
+		}
+	}
+
+	async function handleConvertTracking() {
+		const toIndividual = !data.article.individually_tracked;
+		const confirmMsg = toIndividual
+			? m.article_form_convert_confirm_to_individual({ commercial_name: data.article.commercial_name })
+			: m.article_form_convert_confirm_to_quantity();
+		if (!confirm(confirmMsg)) return;
+		converting = true;
+		error = '';
+		try {
+			await api.convertTracking(data.article.id, toIndividual);
+			goto('/browse');
+		} catch (e) {
+			error = translateError(e);
+			converting = false;
 		}
 	}
 
@@ -136,6 +154,18 @@
 					{/each}
 				</div>
 			{/if}
+		</div>
+	{/if}
+
+	{#if isGroupEdit || data.article.individually_tracked}
+		<div class="mt-6 pt-4 border-t">
+			<button
+				onclick={handleConvertTracking}
+				disabled={converting}
+				class="text-sm text-neutral-500 underline disabled:opacity-50"
+			>
+				{converting ? m.btn_saving() : (data.article.individually_tracked ? m.article_form_convert_to_quantity() : m.article_form_convert_to_individual())}
+			</button>
 		</div>
 	{/if}
 </div>

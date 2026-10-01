@@ -286,6 +286,22 @@ UPDATE articles SET approval_level = @approval_level, updated_at = now()
 WHERE id = ANY(@ids::uuid[]) AND group_id = @group_id;
 
 
+-- name: BulkSetArticleTracking :execrows
+-- Sets individually_tracked for all articles in a group (commercial_name + location_id).
+-- Used as the first step of tracking conversion; name updates follow per-row.
+UPDATE articles SET individually_tracked = @individually_tracked, updated_at = now()
+WHERE group_id = @group_id
+    AND commercial_name = @commercial_name
+    AND location_id = @location_id;
+
+-- name: UpdateArticleTracking :exec
+-- Updates common_name for a single article. Used after BulkSetArticleTracking
+-- to assign sequential names when converting to individually tracked.
+UPDATE articles SET
+    common_name = @common_name,
+    updated_at = now()
+WHERE id = @id AND group_id = @group_id;
+
 -- name: UpdateArticleGroupImageIds :execrows
 -- Sets image_ids for all articles matching commercial_name + location_id in a group.
 UPDATE articles SET image_ids = @image_ids, updated_at = now()
