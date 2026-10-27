@@ -120,12 +120,20 @@ const appHandle: Handle = async ({ event, resolve }) => {
 		} else {
 			const auth = await getAuthResult(event);
 			if (auth.status === 'ok') {
-				accessToken = auth.token;
-				authMode = 'oidc';
+				if (DEMO_MODE) {
+					// Demo: auto-assign a default persona for logged-in users without a selection
+					event.cookies.set(PERSONA_COOKIE, DEFAULT_PERSONA, { path: '/', httpOnly: false, secure: false, sameSite: 'lax' });
+					personaKey = DEFAULT_PERSONA;
+					accessToken = auth.token;
+					authMode = 'persona';
+				} else {
+					accessToken = auth.token;
+					authMode = 'oidc';
+				}
 			} else if (auth.status === 'error') {
 				clearSessionAndRedirect(event,event.url.pathname + event.url.search);
 			} else if (DEMO_MODE) {
-				// Demo: require OIDC login, no auto-persona fallback
+				// Demo: require OIDC login
 				const callbackUrl = event.url.pathname + event.url.search;
 				throw redirect(302, `/welcome?callbackUrl=${encodeURIComponent(callbackUrl)}`);
 			} else {

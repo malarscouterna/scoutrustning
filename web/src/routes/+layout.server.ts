@@ -91,6 +91,15 @@ export const load: LayoutServerLoad = async ({ cookies, locals, url, fetch: skFe
 				setLangCookie(cookies, user.language);
 				return { user, dev: { personas, currentPersona: null }, demo: DEMO_MODE, oidcName: null };
 			}
+			if (DEMO_MODE) {
+				// Demo: auto-assign default persona for unmapped OIDC users so they can explore
+				cookies.set(PERSONA_COOKIE, DEFAULT_PERSONA, { path: '/', httpOnly: false, secure: false, sameSite: 'lax' });
+				const personaUser = await fetchMe(skFetch);
+				if (personaUser) {
+					setLangCookie(cookies, personaUser.language);
+					return { user: personaUser, dev: { personas, currentPersona: DEFAULT_PERSONA }, demo: true, oidcName: null };
+				}
+			}
 			// Logged in via OIDC but group not found — show friendly message + persona switcher in demo
 			const oidcName = extractNameFromToken(session.accessToken);
 			if (url.pathname !== '/welcome' && url.pathname !== '/join') throw redirect(302, '/welcome');
