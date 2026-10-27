@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.1](https://github.com/malarscouterna/scoutrustning/compare/v0.12.0...v0.12.1) (2026-10-27)
+
+
+### Bug Fixes
+
+* **web:** fix stuck state for unmapped users in demo mode ([e21c644](https://github.com/malarscouterna/scoutrustning/commit/e21c6443652776854daca9f113d6e27dc21b2acf))
+
 ## [0.12.0](https://github.com/malarscouterna/scoutrustning/compare/v0.11.0...v0.12.0) (2026-10-01)
 
 
