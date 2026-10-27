@@ -1,11 +1,13 @@
 <script lang="ts">
 	import '../app.css';
 	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import * as m from '$lib/paraglide/messages.js';
 	import DevPersonaSwitcher from '$lib/components/DevPersonaSwitcher.svelte';
 	import FloatingCart from '$lib/components/FloatingCart.svelte';
 	import UserAvatar from '$lib/components/UserAvatar.svelte';
 	import UserInfoCard from '$lib/components/UserInfoCard.svelte';
+
 
 	let { children, data } = $props();
 
@@ -28,6 +30,13 @@
 	let isPublicUnmappedPage = $derived($page.url.pathname === '/welcome' || $page.url.pathname === '/join');
 
 	let profileCardOpen = $state(false);
+
+	$effect(() => {
+		if (!data.user && data.oidcName && $page.url.pathname !== '/welcome' && $page.url.pathname !== '/join') {
+			goto('/welcome');
+		}
+	});
+
 </script>
 
 {#if data.demo}
