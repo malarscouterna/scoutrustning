@@ -475,6 +475,8 @@
   "page_welcome_go_to_dashboard": "Öppna Scoutrustning",
   "page_welcome_no_group_heading": "Ingen registrerad scoutkår hittades",
   "page_welcome_no_group_desc": "Ditt konto ({name}) är inte kopplat till någon scoutkår som använder Scoutrustning. Be din utrustningsansvarige om en inbjudan, eller registrera din kår nedan.",
+  "page_welcome_no_group_demo_heading": "Välkommen till demon!",
+  "page_welcome_no_group_demo_desc": "Du är inloggad, men din scoutkår är inte registrerad i denna testmiljö. Använd persona-väljaren uppe i högra hörnet för att testa systemet som en registrerad användare.",
   "page_welcome_gdpr_link": "Information om personuppgifter (GDPR)",
   "page_welcome_join_link": "Registrera din scoutkår",
   "layout_dev_no_persona": "Ingen profil kunde läsas in. Välj en profil nedan för att testa systemet.",

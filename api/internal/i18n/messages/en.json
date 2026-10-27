@@ -475,6 +475,8 @@
   "page_welcome_go_to_dashboard": "Open Scoutrustning",
   "page_welcome_no_group_heading": "No registered scout group found",
   "page_welcome_no_group_desc": "Your account ({name}) isn't linked to any scout group using Scoutrustning. Ask your equipment manager for an invite, or sign up your group below.",
+  "page_welcome_no_group_demo_heading": "Welcome to the demo!",
+  "page_welcome_no_group_demo_desc": "You are logged in, but your scout group is not registered in this test environment. Use the persona selector in the top right corner to test the system as a registered user.",
   "page_welcome_gdpr_link": "Privacy / GDPR information",
   "page_welcome_join_link": "Sign up your scout group",
   "layout_dev_no_persona": "No profile could be loaded. Pick one below to test the system.",

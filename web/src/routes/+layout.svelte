@@ -45,38 +45,47 @@
 		<p class="text-sm text-neutral-600 mb-4 max-w-sm text-center">{m.layout_dev_no_persona()}</p>
 		<DevPersonaSwitcher personas={data.dev.personas} currentPersona={data.dev.currentPersona} user={null} />
 	</div>
-{:else if data.user}
-	<nav class="sticky top-0 z-10 bg-white border-b">
-		<div class="max-w-4xl mx-auto px-4 py-2 flex items-center justify-between">
-			<a href="/">
-				<img src="/PNG Utrustningsgruppen - Logotyp.png" alt="Hem" class="w-10 h-10 object-contain" />
-			</a>
-			<div class="flex items-center gap-3">
-				<div class="flex items-center gap-1 text-sm text-neutral-500" aria-label="Brödsmulor">
-					<a href="/" class="hover:text-neutral-900 {$page.url.pathname === '/' ? 'font-medium text-neutral-900' : ''}">Hem</a>
-					{#if section}
-						<span class="select-none">/</span>
-						{#if onSectionRoot}
-							<span class="font-medium text-neutral-900">{section.label}</span>
-						{:else}
-							<a href={section.href} class="hover:text-neutral-900">{section.label}</a>
+{:else}
+	{#if data.user}
+		<nav class="sticky top-0 z-10 bg-white border-b">
+			<div class="max-w-4xl mx-auto px-4 py-2 flex items-center justify-between">
+				<a href="/">
+					<img src="/PNG Utrustningsgruppen - Logotyp.png" alt="Hem" class="w-10 h-10 object-contain" />
+				</a>
+				<div class="flex items-center gap-3">
+					<div class="flex items-center gap-1 text-sm text-neutral-500" aria-label="Brödsmulor">
+						<a href="/" class="hover:text-neutral-900 {$page.url.pathname === '/' ? 'font-medium text-neutral-900' : ''}">Hem</a>
+						{#if section}
+							<span class="select-none">/</span>
+							{#if onSectionRoot}
+								<span class="font-medium text-neutral-900">{section.label}</span>
+							{:else}
+								<a href={section.href} class="hover:text-neutral-900">{section.label}</a>
+							{/if}
 						{/if}
+					</div>
+					{#if data.dev}
+						<DevPersonaSwitcher personas={data.dev.personas} currentPersona={data.dev.currentPersona} user={data.user} />
+					{/if}
+					{#if data.user}
+						<button
+							type="button"
+							aria-label={data.user.name}
+							onclick={() => (profileCardOpen = true)}
+						>
+							<UserAvatar name={data.user.name} picture={data.user.picture} size={32} />
+						</button>
 					{/if}
 				</div>
-				{#if data.dev && data.user}
-					<DevPersonaSwitcher personas={data.dev.personas} currentPersona={data.dev.currentPersona} user={data.user} />
-				{/if}
-				<button
-					type="button"
-					aria-label={data.user.name}
-					onclick={() => (profileCardOpen = true)}
-				>
-					<UserAvatar name={data.user.name} picture={data.user.picture} size={32} />
-				</button>
 			</div>
+		</nav>
+		<UserInfoCard bind:open={profileCardOpen} userId={data.user.member_id} />
+	{:else if data.dev}
+		<!-- Show persona switcher in a floating bubble for unmapped users in dev/demo mode -->
+		<div class="fixed top-4 right-4 z-50">
+			<DevPersonaSwitcher personas={data.dev.personas} currentPersona={data.dev.currentPersona} user={null} />
 		</div>
-	</nav>
-	<UserInfoCard bind:open={profileCardOpen} userId={data.user.member_id} />
+	{/if}
 {/if}
 
 <div>

@@ -29,8 +29,13 @@
 				{m.page_welcome_go_to_dashboard()}
 			</button>
 			<div class="mt-4 max-w-sm w-full text-sm text-neutral-600 text-center">
-				<p class="font-medium mb-1 text-neutral-800">{m.page_welcome_no_group_heading()}</p>
-				<p>{m.page_welcome_no_group_desc({ name: data.oidcName })}</p>
+				{#if data.demo}
+					<p class="font-medium mb-1 text-neutral-800">{m.page_welcome_no_group_demo_heading()}</p>
+					<p>{m.page_welcome_no_group_demo_desc()}</p>
+				{:else}
+					<p class="font-medium mb-1 text-neutral-800">{m.page_welcome_no_group_heading()}</p>
+					<p>{m.page_welcome_no_group_desc({ name: data.oidcName })}</p>
+				{/if}
 			</div>
 		{:else}
 			{#if data.demo}
