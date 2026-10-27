@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.3](https://github.com/malarscouterna/scoutrustning/compare/v0.12.2...v0.12.3) (2026-10-27)
+
+
+### Bug Fixes
+
+* **web:** auto-assign default persona in demo mode for unmapped OIDC users ([a7c788a](https://github.com/malarscouterna/scoutrustning/commit/a7c788a5ab8f2391c7d945cb1e29cab7b5692ab4))
+
 ## [0.12.2](https://github.com/malarscouterna/scoutrustning/compare/v0.12.1...v0.12.2) (2026-10-27)
 
 
