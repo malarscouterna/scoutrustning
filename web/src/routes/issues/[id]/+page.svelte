@@ -28,6 +28,41 @@
 	let updatingStatus = $state(false);
 	let statusError = $state('');
 
+	let editing = $state(false);
+	let editDescription = $state('');
+	let editSeverity = $state<IssueDetail['severity']>('usable');
+	let savingEdit = $state(false);
+	let editError = $state('');
+
+	function startEdit() {
+		editDescription = issue.description;
+		editSeverity = issue.severity;
+		editError = '';
+		editing = true;
+	}
+
+	async function saveEdit() {
+		const description = editDescription.trim();
+		if (!description) { editError = m.page_issue_description_required(); return; }
+
+		// Send only what changed. The title is not editable: the API regenerates it
+		// from the article and severity ("Sibley - Ej användbar").
+		const changes: { description?: string; severity?: IssueDetail['severity'] } = {};
+		if (description !== issue.description) changes.description = description;
+		if (editSeverity !== issue.severity) changes.severity = editSeverity;
+		if (Object.keys(changes).length === 0) { editing = false; return; }
+
+		editError = '';
+		savingEdit = true;
+		try {
+			issue = await api.updateIssue(issue.id, changes);
+			editing = false;
+		} catch (e: any) {
+			editError = translateError(e);
+		}
+		savingEdit = false;
+	}
+
 	let eventsEl = $state<HTMLElement | null>(null);
 	let lightbox: any = null;
 
@@ -161,6 +196,21 @@
 		}
 		return '';
 	}
+
+	// details_changed: one line per changed field, in a fixed order.
+	function formatDetailChanges(event: IssueDetail['events'][0]): { label: string; text: string }[] {
+		if (event.event_type !== 'details_changed') return [];
+		const changes = (event.metadata?.changes ?? {}) as Record<string, { old: string; new: string }>;
+		const lines: { label: string; text: string }[] = [];
+		if (changes.severity) {
+			const label = (s: string) => msg(`issue_severity_${s}`) ?? s;
+			lines.push({ label: m.report_issue_severity_legend(), text: `${label(changes.severity.old)} → ${label(changes.severity.new)}` });
+		}
+		if (changes.description) {
+			lines.push({ label: m.page_issue_field_description(), text: changes.description.new });
+		}
+		return lines;
+	}
 </script>
 
 <div class="max-w-2xl mx-auto p-4">
@@ -184,6 +234,72 @@
 			<span>· {m.page_issue_updated()} {formatDate(issue.updated_at)}</span>
 		{/if}
 	</div>
+
+	<!-- Description + edit -->
+	{#if editing}
+		<form
+			class="border rounded p-3 mb-4 space-y-3"
+			onsubmit={(e) => { e.preventDefault(); saveEdit(); }}
+		>
+			<p class="text-sm font-medium">{m.page_issue_edit_heading()}</p>
+			{#if editError}
+				<p class="text-red-600 text-xs">{editError}</p>
+			{/if}
+			<div>
+				<label for="edit-description" class="block text-sm font-medium mb-1">{m.page_issue_description_label()}</label>
+				<textarea id="edit-description" bind:value={editDescription} rows="3" class="w-full border rounded px-3 py-2 text-sm"></textarea>
+			</div>
+			<fieldset>
+				<legend class="block text-sm font-medium mb-2">{m.report_issue_severity_legend()}</legend>
+				<div class="space-y-2">
+					<label class="flex items-start gap-2 text-sm cursor-pointer">
+						<input type="radio" bind:group={editSeverity} value="usable" class="mt-0.5" />
+						<span>
+							<span class="font-medium">{m.issue_severity_usable()}</span>
+							<span class="text-neutral-500"> – {m.report_issue_severity_usable_desc()}</span>
+						</span>
+					</label>
+					<label class="flex items-start gap-2 text-sm cursor-pointer">
+						<input type="radio" bind:group={editSeverity} value="unusable" class="mt-0.5" />
+						<span>
+							<span class="font-medium">{m.issue_severity_unusable()}</span>
+							<span class="text-neutral-500"> – {m.report_issue_severity_unusable_desc()}</span>
+						</span>
+					</label>
+					<label class="flex items-start gap-2 text-sm cursor-pointer">
+						<input type="radio" bind:group={editSeverity} value="missing" class="mt-0.5" />
+						<span>
+							<span class="font-medium">{m.issue_severity_missing()}</span>
+							<span class="text-neutral-500"> – {m.report_issue_severity_missing_desc()}</span>
+						</span>
+					</label>
+				</div>
+			</fieldset>
+			<div class="flex gap-2">
+				<button type="submit" disabled={savingEdit} class="text-sm bg-blue-700 text-white px-4 py-1.5 rounded disabled:opacity-50">
+					{m.btn_save()}
+				</button>
+				<button type="button" onclick={() => (editing = false)} disabled={savingEdit} class="text-sm border border-neutral-300 text-neutral-600 px-4 py-1.5 rounded hover:bg-neutral-50 disabled:opacity-50">
+					{m.btn_cancel()}
+				</button>
+			</div>
+		</form>
+	{:else}
+		{#if issue.description}
+			<div class="mb-4">
+				<p class="text-xs font-medium text-neutral-500 uppercase tracking-wide mb-1">{m.page_issue_description_heading()}</p>
+				<p class="text-sm text-neutral-800 whitespace-pre-line">{issue.description}</p>
+			</div>
+		{/if}
+		{#if issue.can_edit}
+			<button
+				onclick={startEdit}
+				class="text-sm border border-blue-300 text-blue-700 px-3 py-1.5 rounded hover:bg-blue-50 mb-4"
+			>
+				{m.btn_edit()}
+			</button>
+		{/if}
+	{/if}
 
 	<!-- Articles -->
 	{#if issue.articles.length > 0}
@@ -333,6 +449,9 @@
 									{/if}
 								{/if}
 							</div>
+							{#each formatDetailChanges(event) as change}
+								<p class="text-neutral-700 mt-0.5"><span class="text-neutral-500">{change.label}:</span> {change.text}</p>
+							{/each}
 							{#if event.description}
 								<p class="text-neutral-700 mt-0.5">{event.description}</p>
 							{/if}

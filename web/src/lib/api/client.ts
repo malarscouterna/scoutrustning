@@ -300,6 +300,8 @@ export interface IssueDetail {
 	articles: IssueArticle[];
 	assignees: IssueAssignee[];
 	events: IssueEvent[];
+	/** Reporter or issue_resolve_role, and the issue is open/in progress. */
+	can_edit: boolean;
 }
 
 export interface SharedImage {
@@ -679,7 +681,7 @@ updateLanguage: (language: string | null) =>
 			requestMut<IssueDetail>('/issues', 'POST', data, opts),
 		getIssue: (id: string) =>
 			request<IssueDetail>(`/issues/${id}`, opts),
-		updateIssue: (id: string, data: { title?: string; description?: string; status?: string; comment?: string }) =>
+		updateIssue: (id: string, data: { description?: string; severity?: IssueDetail['severity']; status?: string; comment?: string }) =>
 			requestMut<IssueDetail>(`/issues/${id}`, 'PUT', data, opts),
 		addIssueComment: (id: string, data: { description: string; image_ids?: string[] }) =>
 			requestMut<IssueDetail>(`/issues/${id}/comments`, 'POST', data, opts),

@@ -109,8 +109,7 @@ func (h *IssueHandler) Create(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusBadRequest, "article_id required")
 		return
 	}
-	validSeverities := map[string]bool{"usable": true, "unusable": true, "missing": true}
-	if !validSeverities[req.Severity] {
+	if !validIssueSeverities[req.Severity] {
 		WriteError(w, http.StatusBadRequest, "severity must be usable, unusable, or missing")
 		return
 	}
@@ -134,18 +133,7 @@ func (h *IssueHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	lang := "sv"
-	if c, err := r.Cookie("paraglide_lang"); err == nil && i18n.Supported(c.Value) {
-		lang = c.Value
-	}
-	name := article.CommercialName
-	if name == "" {
-		name = article.CommonName
-	}
-	title := i18n.T(lang, "issue_title", map[string]string{
-		"commercialName": name,
-		"severity":       i18n.T(lang, "issue_severity_"+req.Severity),
-	})
+	title := issueTitle(requestLang(r), issueArticleName(article.CommercialName, article.CommonName), req.Severity)
 
 	var bookingID pgtype.UUID
 	if req.BookingID != nil && *req.BookingID != "" {
@@ -265,9 +253,10 @@ func (h *IssueHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// No title: it is always generated from the article and severity (issueTitle).
 	var req struct {
-		Title       *string `json:"title"`
 		Description *string `json:"description"`
+		Severity    *string `json:"severity"`
 		Status      *string `json:"status"`
 		Comment     string  `json:"comment"`
 	}
@@ -276,9 +265,10 @@ func (h *IssueHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	perms := h.Perms.Get(r, claims.GroupID)
+
 	// Status changes require issue_resolve_role
 	if req.Status != nil {
-		perms := h.Perms.Get(r, claims.GroupID)
 		if !auth.AccessAtLeast(claims.MaxAccess, perms.IssueResolve) {
 			WriteError(w, http.StatusForbidden, "forbidden")
 			return
@@ -296,12 +286,60 @@ func (h *IssueHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Editing the details (description, severity) is allowed for the reporter and
+	// for issue_resolve_role, and only while the issue is still open or in progress.
+	editingDetails := req.Description != nil || req.Severity != nil
+	if editingDetails {
+		if !canEditIssueDetails(claims, perms, existing.ReporterID) {
+			WriteError(w, http.StatusForbidden, "forbidden")
+			return
+		}
+		if !isIssueActive(existing.Status) {
+			WriteError(w, http.StatusConflict, "issue_not_editable")
+			return
+		}
+	}
+	if req.Description != nil {
+		d := strings.TrimSpace(*req.Description)
+		if d == "" {
+			WriteError(w, http.StatusBadRequest, "description required")
+			return
+		}
+		req.Description = &d
+	}
+	if req.Severity != nil && !validIssueSeverities[*req.Severity] {
+		WriteError(w, http.StatusBadRequest, "severity must be usable, unusable, or missing")
+		return
+	}
+
+	// The title is derived ("Sibley - Ej användbar"), so it is regenerated on every
+	// details edit rather than edited. Not logged as a change of its own.
+	var newTitle string
+	if editingDetails {
+		severity := existing.Severity
+		if req.Severity != nil {
+			severity = *req.Severity
+		}
+		newTitle = h.regenerateIssueTitle(r, claims, id, existing.Title, existing.Severity, severity)
+	}
+
+	changes := map[string]map[string]string{}
+	if req.Description != nil && *req.Description != existing.Description {
+		changes["description"] = map[string]string{"old": existing.Description, "new": *req.Description}
+	}
+	if req.Severity != nil && *req.Severity != existing.Severity {
+		changes["severity"] = map[string]string{"old": existing.Severity, "new": *req.Severity}
+	}
+
 	params := db.UpdateIssueParams{ID: id, GroupID: claims.GroupID}
-	if req.Title != nil {
-		params.Title = pgtype.Text{String: *req.Title, Valid: true}
+	if newTitle != "" && newTitle != existing.Title {
+		params.Title = pgtype.Text{String: newTitle, Valid: true}
 	}
 	if req.Description != nil {
 		params.Description = pgtype.Text{String: *req.Description, Valid: true}
+	}
+	if req.Severity != nil {
+		params.Severity = pgtype.Text{String: *req.Severity, Valid: true}
 	}
 	if req.Status != nil {
 		params.Status = pgtype.Text{String: *req.Status, Valid: true}
@@ -311,6 +349,28 @@ func (h *IssueHandler) Update(w http.ResponseWriter, r *http.Request) {
 		slog.Error("failed to update issue", "error", err)
 		WriteError(w, http.StatusInternalServerError, "failed to update issue")
 		return
+	}
+
+	if len(changes) > 0 {
+		meta, _ := json.Marshal(map[string]any{"changes": changes})
+		h.Q.CreateIssueEvent(r.Context(), db.CreateIssueEventParams{
+			IssueID:   id,
+			GroupID:   claims.GroupID,
+			ActorID:   claims.MemberID,
+			EventType: "details_changed",
+			Metadata:  meta,
+		})
+	}
+
+	// A severity change moves the linked articles between reported_usable and
+	// reported_unusable/reported_missing (the worst open issue decides).
+	if _, ok := changes["severity"]; ok {
+		articles, _ := h.Q.ListOpenIssueArticles(r.Context(), db.ListOpenIssueArticlesParams{
+			IssueID: id, GroupID: claims.GroupID,
+		})
+		for _, artID := range articles {
+			h.reapplyDerivedStatus(r, claims, artID)
+		}
 	}
 
 	// Log status change event if status changed
@@ -734,9 +794,88 @@ func (h *IssueHandler) buildIssueDetail(r *http.Request, claims auth.Claims, id 
 		"articles":   articles,
 		"assignees":  assignees,
 		"events":     events,
+		"can_edit":   isIssueActive(issue.Status) && canEditIssueDetails(claims, h.Perms.Get(r, claims.GroupID), issue.ReporterID),
 		"created_at": issue.CreatedAt,
 		"updated_at": issue.UpdatedAt,
 	}, nil
+}
+
+var validIssueSeverities = map[string]bool{"usable": true, "unusable": true, "missing": true}
+
+// isIssueActive reports whether an issue still counts towards article condition
+// and can have its details edited.
+func isIssueActive(status string) bool {
+	return status == "open" || status == "in_progress"
+}
+
+// canEditIssueDetails reports whether the user may edit an issue's title,
+// description and severity: the reporter, or anyone at issue_resolve_role.
+func canEditIssueDetails(claims auth.Claims, perms Permissions, reporterID string) bool {
+	return claims.MemberID == reporterID || auth.AccessAtLeast(claims.MaxAccess, perms.IssueResolve)
+}
+
+// issueTitle builds an issue's title from the article name and severity
+// (i18n key issue_title, e.g. "Sibley - Ej användbar"). Titles are never free text.
+func issueTitle(lang, articleName, severity string) string {
+	return i18n.T(lang, "issue_title", map[string]string{
+		"commercialName": articleName,
+		"severity":       i18n.T(lang, "issue_severity_"+severity),
+	})
+}
+
+// issueArticleName is the name an issue title uses for an article.
+func issueArticleName(commercialName, commonName string) string {
+	if commercialName != "" {
+		return commercialName
+	}
+	return commonName
+}
+
+// requestLang is the UI language of the request (paraglide_lang cookie), default sv.
+func requestLang(r *http.Request) string {
+	if c, err := r.Cookie("paraglide_lang"); err == nil && i18n.Supported(c.Value) {
+		return c.Value
+	}
+	return "sv"
+}
+
+// regenerateIssueTitle rebuilds an issue's title for the given severity, the same
+// way Create does. The name comes from the linked articles; if they disagree (or
+// none are linked) the name part of the current title is kept. The title stays in
+// the language it was generated in, falling back to the request language.
+func (h *IssueHandler) regenerateIssueTitle(r *http.Request, claims auth.Claims, issueID pgtype.UUID, currentTitle, currentSeverity, severity string) string {
+	lang, name := "", ""
+	for _, l := range []string{"sv", "en"} {
+		suffix := issueTitle(l, "", currentSeverity)
+		if strings.HasSuffix(currentTitle, suffix) {
+			lang, name = l, strings.TrimSuffix(currentTitle, suffix)
+			break
+		}
+	}
+	if lang == "" {
+		lang = requestLang(r)
+	}
+
+	articles, _ := h.Q.ListIssueArticles(r.Context(), db.ListIssueArticlesParams{
+		IssueID: issueID, GroupID: claims.GroupID,
+	})
+	articleName := ""
+	for i, a := range articles {
+		n := issueArticleName(a.CommercialName, a.CommonName)
+		if i == 0 {
+			articleName = n
+		} else if n != articleName {
+			articleName = ""
+			break
+		}
+	}
+	if articleName != "" {
+		name = articleName
+	}
+	if name == "" {
+		return currentTitle
+	}
+	return issueTitle(lang, name, severity)
 }
 
 // deriveAndApplyArticleStatus sets article status to reported_{severity} if it is worse
