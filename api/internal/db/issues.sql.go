@@ -684,15 +684,17 @@ const updateIssue = `-- name: UpdateIssue :one
 UPDATE issue_reports SET
     title       = COALESCE($1::text, title),
     description = COALESCE($2::text, description),
-    status      = COALESCE($3::text, status),
+    severity    = COALESCE($3::text, severity),
+    status      = COALESCE($4::text, status),
     updated_at  = now()
-WHERE id = $4 AND group_id = $5
+WHERE id = $5 AND group_id = $6
 RETURNING id, group_id, title, description, severity, status, reporter_id, booking_id, created_at, updated_at
 `
 
 type UpdateIssueParams struct {
 	Title       pgtype.Text `json:"title"`
 	Description pgtype.Text `json:"description"`
+	Severity    pgtype.Text `json:"severity"`
 	Status      pgtype.Text `json:"status"`
 	ID          pgtype.UUID `json:"id"`
 	GroupID     string      `json:"group_id"`
@@ -702,6 +704,7 @@ func (q *Queries) UpdateIssue(ctx context.Context, arg UpdateIssueParams) (Issue
 	row := q.db.QueryRow(ctx, updateIssue,
 		arg.Title,
 		arg.Description,
+		arg.Severity,
 		arg.Status,
 		arg.ID,
 		arg.GroupID,

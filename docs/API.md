@@ -529,20 +529,29 @@ Get full issue detail including events, assignees, and linked articles. Any auth
   "booking_id": "uuid|null",
   "articles": [{"id": "uuid", "commercial_name": "string", "common_name": "string", "location_name": "string", "individually_tracked": true}],
   "assignees": [{"user_id": "string", "user_name": "string", "assigned_at": "timestamptz"}],
-  "events": [{"id": "uuid", "actor_name": "string", "event_type": "comment|status_change|assignment|article_added|article_removed", "description": "string", "metadata": {}, "created_at": "timestamptz"}],
+  "events": [{"id": "uuid", "actor_name": "string", "event_type": "comment|status_change|assignment|article_added|article_removed|details_changed", "description": "string", "metadata": {}, "created_at": "timestamptz"}],
+  "can_edit": true,
   "created_at": "timestamptz", "updated_at": "timestamptz"
 }
 ```
 
+`can_edit` is true when the current user may edit `description`/`severity` (see `PUT` below) and the issue is `open` or `in_progress`.
+
 ### `PUT /api/v0/issues/{id}`
-Update issue fields. `status` changes require manager access (`issue_resolve_role`). `title`/`description` can be updated by any user.
+Update issue fields. All fields are optional; only the ones sent are changed.
+
+- `status` requires `issue_resolve_role` (manager by default).
+- `description` and `severity` (the issue's details) can be edited by the reporter or anyone at `issue_resolve_role`, and only while the issue is `open` or `in_progress` (`409 issue_not_editable` otherwise). `description` is trimmed and must not be blank. The linked article cannot be changed here.
+- `title` is not editable (a `title` field in the body is ignored). It is always generated as `"<commercial name> - <severity>"` (i18n key `issue_title`) and is regenerated on every details edit: name from the linked article(s), severity from the new value, in the language the title was first generated in.
+- A `severity` change re-derives the condition of the linked articles (e.g. `usable` → `unusable` moves them from `reported_usable` to `reported_unusable`).
+- Changed details are logged as one `details_changed` event with `metadata.changes` = `{"<field>": {"old": "...", "new": "..."}}` for `description`/`severity` when the value actually changed. The derived title change is not logged separately.
 
 **Body**
 ```json
-{"title": "string", "description": "string", "status": "in_progress", "comment": "Optional comment logged alongside the status change"}
+{"description": "string", "severity": "usable|unusable|missing", "status": "in_progress", "comment": "Optional comment logged alongside the status change"}
 ```
 
-**Response** `200` (full issue detail) | `400` | `403` | `404`
+**Response** `200` (full issue detail) | `400` | `403` | `404` | `409`
 
 ### `POST /api/v0/issues/{id}/comments`
 Add a comment (with optional images). Any authenticated user.

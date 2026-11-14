@@ -203,6 +203,15 @@ Klicka på en artikel för att se historiken och ändra status:
 
 Varje statusändring loggas med datum, vem som gjorde det, och en valfri kommentar. Det ger en komplett historik per artikel.
 
+#### Redigera ett ärende
+
+Har du skrivit fel, eller visade sig problemet vara större eller mindre än du trodde? Öppna ärendet och tryck **Redigera**. Där kan du ändra beskrivning och allvarlighetsgrad (**Användbar**, **Ej användbar** eller **Saknas**). Vilken utrustning ärendet gäller går inte att ändra. Rubriken skrivs inte för hand: den byggs alltid av utrustningens namn och allvarlighetsgraden (t.ex. "Stormkök - Ej användbar") och uppdateras av sig själv.
+
+- Den som rapporterade ärendet och utrustningsansvariga kan redigera. Andra kan kommentera.
+- Det går bara medan ärendet är öppet eller pågår. Ett löst eller arkiverat ärende är låst.
+- Ändrar du allvarlighetsgraden ändras artikelns skick direkt: sätter du **Ej användbar** kan artikeln inte längre bokas, och går du tillbaka till **Användbar** blir den bokbar igen.
+- Ändringen syns i ärendets händelser som **Uppgifter ändrade**, med vad som ändrades.
+
 ### Artikelstatus
 
 Artiklar har en status som beskriver deras *skick*, det är skilt från om de är bokade eller utlånade (det räknas ut automatiskt från bokningsdata).

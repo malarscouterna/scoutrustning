@@ -54,6 +54,7 @@ ORDER BY ir.created_at DESC;
 UPDATE issue_reports SET
     title       = COALESCE(sqlc.narg('title')::text, title),
     description = COALESCE(sqlc.narg('description')::text, description),
+    severity    = COALESCE(sqlc.narg('severity')::text, severity),
     status      = COALESCE(sqlc.narg('status')::text, status),
     updated_at  = now()
 WHERE id = @id AND group_id = @group_id
