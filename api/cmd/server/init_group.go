@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -14,21 +15,32 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 
+	"github.com/malarscouterna/scoutrustning/api/internal/auth"
 	"github.com/malarscouterna/scoutrustning/api/internal/db"
 )
 
 func runInitGroup(args []string) {
 	fs := flag.NewFlagSet("init-group", flag.ExitOnError)
-	groupID := fs.String("group-id", "", "Scoutnet group number (required)")
-	groupName := fs.String("group-name", "", "Display name for the group (only used on first run; ignored if group already exists)")
+	orgType := fs.String("org-type", auth.OrgTypeGroup, "Scoutnet organisation type: group, district, region, organisation, corps, network or project")
+	orgID := fs.String("org-id", "", "Scoutnet organisation ID (required; for groups this is the group number)")
+	groupID := fs.String("group-id", "", "Alias for --org-id, kept for backwards compatibility")
+	groupName := fs.String("group-name", "", "Display name for the organisation (only used on first run; ignored if it already exists)")
 	roleKey := fs.String("role-key", "", "Scoutnet role key granting manager access, e.g. it_manager (required)")
 	teamName := fs.String("team-name", "", "Name for the manager team (optional; defaults to role key)")
 	seedLocations := fs.Bool("seed-locations", false, "Create default locations for Mälarscouterna")
 	fs.Parse(args)
 
-	if *groupID == "" || *roleKey == "" {
+	scoutnetID := *orgID
+	if scoutnetID == "" {
+		scoutnetID = *groupID
+	}
+	if scoutnetID == "" || *roleKey == "" {
 		fs.Usage()
-		fmt.Fprintln(os.Stderr, "\n--group-id and --role-key are required")
+		fmt.Fprintln(os.Stderr, "\n--org-id (or --group-id) and --role-key are required")
+		os.Exit(1)
+	}
+	if !auth.IsOrgType(*orgType) {
+		fmt.Fprintf(os.Stderr, "Unknown --org-type %q. Valid types: %s\n", *orgType, strings.Join(auth.OrgTypes, ", "))
 		os.Exit(1)
 	}
 
@@ -36,6 +48,7 @@ func runInitGroup(args []string) {
 	if resolvedTeamName == "" {
 		resolvedTeamName = *roleKey
 	}
+	tenantID := auth.TenantKey(*orgType, scoutnetID)
 
 	scope := "group"
 	claimID := *roleKey
@@ -58,30 +71,30 @@ func runInitGroup(args []string) {
 
 	q := db.New(pool)
 
-	// 1. Create group (idempotent; name only applied on first run)
+	// 1. Create organisation (idempotent; name only applied on first run)
 	if *groupName != "" {
-		_, err = q.CreateGroup(ctx, db.CreateGroupParams{ID: *groupID, Name: *groupName})
+		_, err = q.CreateGroup(ctx, db.CreateGroupParams{ID: tenantID, Name: *groupName, OrgType: *orgType, ScoutnetID: scoutnetID})
 		if err != nil {
-			existing, getErr := q.GetGroup(ctx, *groupID)
+			existing, getErr := q.GetGroup(ctx, tenantID)
 			if getErr != nil {
 				fmt.Fprintf(os.Stderr, "Failed to create/get group: %v\n", err)
 				os.Exit(1)
 			}
-			fmt.Printf("Group already exists: %s (%s) — name not changed\n", existing.ID, existing.Name)
+			fmt.Printf("Organisation already exists: %s (%s, %s) — name not changed\n", existing.ID, existing.Name, existing.OrgType)
 		} else {
-			fmt.Printf("Created group: %s (%s)\n", *groupID, *groupName)
+			fmt.Printf("Created organisation: %s (%s, %s)\n", tenantID, *groupName, *orgType)
 		}
 	} else {
-		existing, getErr := q.GetGroup(ctx, *groupID)
+		existing, getErr := q.GetGroup(ctx, tenantID)
 		if getErr != nil {
-			fmt.Fprintln(os.Stderr, "Group does not exist and --group-name was not provided; cannot create it")
+			fmt.Fprintln(os.Stderr, "Organisation does not exist and --group-name was not provided; cannot create it")
 			os.Exit(1)
 		}
-		fmt.Printf("Group exists: %s (%s)\n", existing.ID, existing.Name)
+		fmt.Printf("Organisation exists: %s (%s, %s)\n", existing.ID, existing.Name, existing.OrgType)
 	}
 
 	// 2. Create group_settings with defaults (idempotent)
-	_, err = q.CreateGroupSettingsDefaults(ctx, *groupID)
+	_, err = q.CreateGroupSettingsDefaults(ctx, tenantID)
 	if err != nil {
 		// Already exists
 		fmt.Println("Group settings already exist")
@@ -90,10 +103,10 @@ func runInitGroup(args []string) {
 	}
 
 	// 3. Create default category "Övrigt" (idempotent — check first)
-	cats, _ := q.ListCategories(ctx, *groupID)
+	cats, _ := q.ListCategories(ctx, tenantID)
 	if len(cats) == 0 {
 		_, err = q.CreateCategory(ctx, db.CreateCategoryParams{
-			GroupID: *groupID, Name: "Övrigt", SortOrder: 1,
+			GroupID: tenantID, Name: "Övrigt", SortOrder: 1,
 		})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: could not create default category: %v\n", err)
@@ -103,10 +116,10 @@ func runInitGroup(args []string) {
 	}
 
 	// 4. Create manager team (idempotent — check by name)
-	team, err := q.GetTeamByName(ctx, db.GetTeamByNameParams{GroupID: *groupID, Name: resolvedTeamName})
+	team, err := q.GetTeamByName(ctx, db.GetTeamByNameParams{GroupID: tenantID, Name: resolvedTeamName})
 	if err != nil {
 		team, err = q.CreateTeam(ctx, db.CreateTeamParams{
-			GroupID: *groupID, Name: resolvedTeamName, Type: "role", AccessLevel: "manager",
+			GroupID: tenantID, Name: resolvedTeamName, Type: "role", AccessLevel: "manager",
 		})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to create team: %v\n", err)
@@ -119,7 +132,7 @@ func runInitGroup(args []string) {
 
 	// 5. Create claim mapping (idempotent via ON CONFLICT DO NOTHING)
 	mapping, err := q.CreateTeamClaimMapping(ctx, db.CreateTeamClaimMappingParams{
-		GroupID: *groupID, TeamID: team.ID, ClaimScope: scope, ClaimID: claimID,
+		GroupID: tenantID, TeamID: team.ID, ClaimScope: scope, ClaimID: claimID,
 	})
 	if err != nil || mapping.ID.Bytes == [16]byte{} {
 		fmt.Printf("Claim mapping already exists: %s:%s → %s\n", scope, claimID, *teamName)
@@ -129,11 +142,11 @@ func runInitGroup(args []string) {
 
 	// 6. Optionally seed locations
 	if *seedLocations {
-		locs, _ := q.ListLocations(ctx, *groupID)
+		locs, _ := q.ListLocations(ctx, tenantID)
 		if len(locs) == 0 {
 			for i, name := range []string{"Kammaren", "Östergården", "Ladan", "Kallförrådet", "Hajkförrådet", "Magasinet", "Verkstan"} {
 				q.CreateLocation(ctx, db.CreateLocationParams{
-					GroupID: *groupID, Name: name, SortOrder: int32(i + 1),
+					GroupID: tenantID, Name: name, SortOrder: int32(i + 1),
 				})
 			}
 			fmt.Println("Created default locations")
@@ -144,7 +157,6 @@ func runInitGroup(args []string) {
 
 	fmt.Println("Done.")
 }
-
 
 func runMigrationsForInit(dbURL string) error {
 	migrationsDir := getenv("MIGRATIONS_DIR", "migrations")

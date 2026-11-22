@@ -1,6 +1,6 @@
 # scoutrustning - Equipment Booking Service
 
-An equipment booking service for Mälarscouterna (and eventually other scout groups). Leaders book scouting equipment (tents, stoves, knives, etc.), pick it up with a checklist, and return it. Equipment managers maintain inventory and handle issue reports.
+An equipment booking service for Mälarscouterna (and eventually other scout groups and districts). Leaders book scouting equipment (tents, stoves, knives, etc.), pick it up with a checklist, and return it. Equipment managers maintain inventory and handle issue reports.
 
 ## Context
 
@@ -8,7 +8,7 @@ This is a standalone service, unrelated to the ScoutSync project in ms-integrati
 
 ## Roles
 
-All roles come from OIDC token claims (ScoutID via Keycloak). Users are identified by their Keycloak member ID (e.g. `3000924`), groups by their Keycloak org ID (e.g. `766` for Mälarscouterna).
+All roles come from OIDC token claims (ScoutID via Keycloak). Users are identified by their Keycloak member ID (e.g. `3000924`). A tenant is a Scoutnet organisation: a group (e.g. `766` for Mälarscouterna) or another entity type such as a district (`district:111`, from Scoutnet district `111`). See [organisation-types.md](organisation-types.md).
 
 - **Leader** - can book from bookable articles. Some articles require equipment manager approval. Can report issues on any article.
 - **Project leader** - can book anything without approval. Can report issues.
@@ -163,12 +163,13 @@ Per-user preference for which channel. Start with whichever is easiest to implem
 
 ### Multi-tenancy
 
-Every table has a `group_id` column. Every query filters on it. The group is derived from the OIDC token's group/org claims.
+Every table has a `group_id` column. Every query filters on it. The active tenant is derived from the OIDC token's `memberships` claim; a tenant is a Scoutnet group or another organisation type (currently groups and districts are provisioned). Non-group tenants use a prefixed key such as `district:111`.
 
-For v1, there is one group (Mälarscouterna). The data model supports multiple groups from day one so we don't have to retrofit it.
+For v1, there is one group (Mälarscouterna). The data model supports multiple groups and other organisation types from day one so we don't have to retrofit it.
 
 What's deferred:
-- Group onboarding UI
+- Allowing member groups to book a district's equipment (needs a local district → groups link; ScoutID has no hierarchy claim)
+- Group onboarding UI (signup currently sends an email and provisioning is manual)
 - Per-group OIDC configuration
 - Cross-group anything
 
@@ -316,8 +317,10 @@ All tables have `group_id` (text, FK → groups). Omitted below for brevity.
 ### groups
 | Column | Type | Notes |
 |---|---|---|
-| id | text | PK, Keycloak org ID (e.g. "766") |
+| id | text | PK, tenant key: the Scoutnet group number for groups ("766"), or `<type>:<scoutnet_id>` for other organisations ("district:111") |
 | name | text | e.g. "Mälarscouterna" |
+| org_type | text | `group`, `district`, `region`, `organisation`, `corps`, `network`, `project` |
+| scoutnet_id | text | Entity ID in that type's Scoutnet namespace; equals `id` for groups |
 | created_at | timestamptz | |
 
 ### users
@@ -852,6 +855,7 @@ Connect real OIDC, add notifications, and make the system usable by actual users
   - `troop:TROOP_ID:ROLE` → leader role + unit membership
 - **UPDATE**: `role-mapping.json` replaced by `team_claim_mappings` table + `init-group` CLI. OIDC claims are now resolved to teams with configurable access levels at login time. Teams are auto-created on first login or pre-created by managers. See [access-levels.md](docs/implementation/access-levels.md).
 - **UPDATE**: Token claim format changed from flat `roles` string array to structured `memberships` JSON object. Group membership is now in `memberships.groups`, troop membership in `memberships.troops` (with optional `groupId`). Auth middleware parses the `memberships` claim directly. Troops are only auto-created when their `groupId` matches the active group; troops with unknown `groupId` still resolve if already mapped in `team_claim_mappings`.
+- **UPDATE**: All `memberships` entity types are parsed (`groups`, `districts`, `regions`, `organisations`, `corps`, `networks`, `projects`). A tenant may be any type; non-group tenants use `<type>:<scoutnet_id>` as `groups.id` because Scoutnet ID namespaces are separate. See [organisation-types.md](organisation-types.md).
 - Login page at `/login` with ScoutID branding, auto-redirects unauthenticated users
 - User profile page at `/profile` showing teams and access levels (**UPDATE**: route renamed to `/settings`)
 - Sign-out from profile page (clears Auth.js session)

@@ -7,6 +7,7 @@
 	import * as m from '$lib/paraglide/messages.js';
 	import { translateError } from '$lib/errors';
 	import { switchGroup } from '$lib/activeGroup';
+	import { orgTypeLabel } from '$lib/org';
 
 	let { data }: { data: PageData } = $props();
 	let user = $derived(data.user);
@@ -1031,7 +1032,7 @@ async function linkGchatTeamSpace(teamId: string) {
 								onclick={() => switchGroup(group.id)}
 								class="w-full flex items-center justify-between gap-2 rounded px-2 py-1 text-sm text-left {group.id === user!.group_id ? 'bg-blue-50 font-medium' : 'hover:bg-neutral-50'}"
 							>
-								<span>{group.name}</span>
+								<span>{group.name} <span class="text-neutral-400 text-xs">{orgTypeLabel(group.type)}</span></span>
 								{#if group.id === user!.group_id}
 									<span class="text-neutral-500 text-xs">{m.user_info_card_current_group_badge()}</span>
 								{/if}

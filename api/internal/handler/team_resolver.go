@@ -3,6 +3,8 @@ package handler
 import (
 	"context"
 	"fmt"
+	"strings"
+	"unicode"
 
 	"github.com/malarscouterna/scoutrustning/api/internal/auth"
 	"github.com/malarscouterna/scoutrustning/api/internal/db"
@@ -63,6 +65,18 @@ func (r *DBTeamResolver) ResolveTeamsByClaims(ctx context.Context, groupID strin
 		}
 	}
 	return memberships, nil
+}
+
+// humanizeRoleKey turns a Scoutnet role key into a readable team name for
+// entity types that do not expose a translated role name.
+func humanizeRoleKey(key string) string {
+	name := strings.TrimSpace(strings.ReplaceAll(key, "_", " "))
+	if name == "" {
+		return "Roll"
+	}
+	runes := []rune(name)
+	runes[0] = unicode.ToUpper(runes[0])
+	return string(runes)
 }
 
 func (r *DBTeamResolver) DefaultAccessForUnknown(ctx context.Context, groupID string) (string, error) {
@@ -136,7 +150,8 @@ func (r *DBTeamResolver) AutoCreateTeams(ctx context.Context, groupID string, cl
 			teamType = "role"
 			teamName = c.Name
 			if teamName == "" {
-				teamName = "Roll " + c.RoleName
+				// Higher-level entities only expose a role key, not a name.
+				teamName = humanizeRoleKey(c.RoleName)
 			}
 			accessLevel = defaultRole
 		default:

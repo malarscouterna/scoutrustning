@@ -18,8 +18,8 @@ import (
 // auth.Middleware with AllowUnmapped: true, since applicants by definition
 // have no registered group yet - see docs/implementation/scout-group-signup.md.
 type JoinHandler struct {
-	Notifier  notifications.Notifier
-	AdminTo   string
+	Notifier notifications.Notifier
+	AdminTo  string
 }
 
 func (h *JoinHandler) Routes() chi.Router {
@@ -30,6 +30,7 @@ func (h *JoinHandler) Routes() chi.Router {
 
 type joinRequest struct {
 	OrgID              string `json:"org_id"`
+	OrgType            string `json:"org_type"`
 	GroupName          string `json:"group_name"`
 	RoleName           string `json:"role_name"`
 	RoleKey            string `json:"role_key"`
@@ -51,6 +52,14 @@ func (h *JoinHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	req.OrgType = strings.TrimSpace(req.OrgType)
+	if req.OrgType == "" {
+		req.OrgType = auth.OrgTypeGroup
+	}
+	if !auth.IsOrgType(req.OrgType) {
+		WriteError(w, http.StatusBadRequest, "invalid org_type")
+		return
+	}
 	req.GroupName = strings.TrimSpace(req.GroupName)
 	req.RoleName = strings.TrimSpace(req.RoleName)
 	req.RoleKey = strings.TrimSpace(req.RoleKey)
@@ -67,7 +76,7 @@ func (h *JoinHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	// authenticated-but-unmapped user from claiming an org they don't belong to.
 	var roleKeyOK bool
 	for _, o := range claims.Orgs {
-		if o.ID == req.OrgID {
+		if o.ID == req.OrgID && o.Type == req.OrgType {
 			roleKeyOK = true
 			break
 		}
@@ -89,14 +98,15 @@ func (h *JoinHandler) Submit(w http.ResponseWriter, r *http.Request) {
 
 	roleKey := firstNonEmptyStr(req.RoleKey, "<role-key-not-provided>")
 	initCmd := fmt.Sprintf(
-		"go run ./cmd/server init-group --group-id=%s --group-name=%q --role-key=%s --team-name=%q",
-		req.OrgID, req.GroupName, roleKey, req.TeamName,
+		"go run ./cmd/server init-group --org-type=%s --org-id=%s --group-name=%q --role-key=%s --team-name=%q",
+		req.OrgType, req.OrgID, req.GroupName, roleKey, req.TeamName,
 	)
 
 	adminHTML, adminText := notifications.RenderJoinAdminEmail(notifications.JoinAdminEmailData{
 		ApplicantName:      claims.Name,
 		ApplicantEmail:     claims.Email,
 		OrgID:              req.OrgID,
+		OrgType:            req.OrgType,
 		GroupName:          req.GroupName,
 		RoleName:           req.RoleName,
 		TeamName:           req.TeamName,
@@ -122,6 +132,7 @@ func (h *JoinHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		Lang:               lang,
 		Name:               claims.Name,
 		OrgID:              req.OrgID,
+		OrgType:            req.OrgType,
 		GroupName:          req.GroupName,
 		RoleName:           req.RoleName,
 		ContactEmail:       req.ContactEmail,

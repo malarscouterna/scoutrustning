@@ -2,6 +2,14 @@
 
 Deferred work items - things to grab when there's time, smaller tasks set aside during major work. When an item is completed, move it to [accomplished.md](accomplished.md).
 
+## Let member groups book a district's equipment
+
+Phase 2 of [organisation-types.md](organisation-types.md). Districts are now valid tenants, but only people who hold a district role in ScoutID can use them. To let a district lend equipment to its member kårer:
+
+- Add `district_member_groups (district_group_id, member_group_id)`; ScoutID exposes no district → group hierarchy.
+- Grant members of linked groups access to the district tenant (configurable default access level) and show it in their organisation switcher.
+- Add a district setting to enable/disable member-group booking, plus UI to manage linked groups.
+
 ## Per-item descriptions for individually-tracked articles
 
 Was item 14 in `docs/implementation/pre-release.md`'s Implementation order, deferred out of the pre-release scope (2026-07-08). New `description` column on `articles`, edit field in manager article view, display on pickup checklist. Independent, no dependencies.

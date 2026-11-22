@@ -18,6 +18,7 @@ type JoinAdminEmailData struct {
 	ApplicantName      string
 	ApplicantEmail     string
 	OrgID              string
+	OrgType            string
 	GroupName          string
 	RoleName           string
 	TeamName           string
@@ -33,6 +34,7 @@ type JoinApplicantEmailData struct {
 	Lang               string
 	Name               string
 	OrgID              string
+	OrgType            string
 	GroupName          string
 	RoleName           string
 	ContactEmail       string
@@ -43,8 +45,9 @@ type JoinApplicantEmailData struct {
 func RenderJoinAdminEmail(d JoinAdminEmailData) (htmlOut, textOut string) {
 	rows := []struct{ label, value string }{
 		{"Applicant", d.ApplicantName + " <" + d.ApplicantEmail + ">"},
+		{"Org type", d.OrgType},
 		{"Org ID", d.OrgID},
-		{"Group name", d.GroupName},
+		{"Organisation name", d.GroupName},
 		{"Role", d.RoleName},
 		{"Manager team name", d.TeamName},
 		{"Contact email", d.ContactEmail},
@@ -58,7 +61,7 @@ func RenderJoinAdminEmail(d JoinAdminEmailData) (htmlOut, textOut string) {
 	}
 	body.WriteString("<br>Run:<br><code style=\"background:#f1f5f9;padding:2px 6px;border-radius:4px;\">" + html.EscapeString(d.InitGroupCmd) + "</code>")
 
-	title := "New group signup: " + d.GroupName
+	title := "New organisation signup: " + d.GroupName
 	replacer := strings.NewReplacer(
 		"EMAIL_TITLE", html.EscapeString(title),
 		"EMAIL_BODY_HTML", body.String(),
@@ -88,6 +91,7 @@ func RenderJoinApplicantEmail(d JoinApplicantEmailData) (htmlOut, textOut string
 		domainAnswer = i18n.T(d.Lang, "email_join_summary_yes")
 	}
 	rows := []struct{ label, value string }{
+		{i18n.T(d.Lang, "email_join_summary_org_type"), localizedOrgType(d.Lang, d.OrgType)},
 		{i18n.T(d.Lang, "email_join_summary_group_name"), d.GroupName},
 		{i18n.T(d.Lang, "email_join_summary_org_id"), d.OrgID},
 		{i18n.T(d.Lang, "email_join_summary_role"), d.RoleName},
@@ -132,7 +136,18 @@ func stripTags(s string) string {
 	return s
 }
 
+// localizedOrgType renders a Scoutnet organisation type using the same labels
+// as the UI, falling back to the generic "organisation" label for types that
+// do not have a dedicated translation.
+func localizedOrgType(lang, orgType string) string {
+	key := "org_type_" + orgType
+	if label := i18n.T(lang, key); label != key {
+		return label
+	}
+	return i18n.T(lang, "org_type_organisation")
+}
+
 // JoinAdminSubject returns the (untranslated - internal/technical) admin email subject.
 func JoinAdminSubject(groupName string) string {
-	return fmt.Sprintf("New group signup: %s", groupName)
+	return fmt.Sprintf("New organisation signup: %s", groupName)
 }

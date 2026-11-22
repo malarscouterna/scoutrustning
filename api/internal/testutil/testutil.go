@@ -130,14 +130,17 @@ func SetupTestEnv(t *testing.T) *TestEnv {
 
 	// Re-insert seed data
 	_, err = shared.pool.Exec(ctx, `
-		INSERT INTO groups (id, name) VALUES ('766', 'Mälarscouterna'), ('999', 'Testkåren');
+		INSERT INTO groups (id, name, org_type, scoutnet_id) VALUES
+			('766', 'Mälarscouterna', 'group', '766'),
+			('999', 'Testkåren', 'group', '999'),
+			('district:111', 'Mälardalens distrikt', 'district', '111');
 		INSERT INTO locations (group_id, name, sort_order) VALUES
 			('766', 'Kammaren', 1), ('766', 'Östergården', 2), ('766', 'Ladan', 3),
 			('766', 'Kallförrådet', 4), ('766', 'Hajkförrådet', 5), ('766', 'Magasinet', 6),
 			('766', 'Verkstan', 7), ('999', 'Förrådet', 1);
 		INSERT INTO categories (group_id, name, sort_order) VALUES
 			('766', 'Övrigt', 1), ('999', 'Övrigt', 1);
-		INSERT INTO group_settings (group_id) VALUES ('766'), ('999');
+		INSERT INTO group_settings (group_id) VALUES ('766'), ('999'), ('district:111');
 
 		-- Teams with access levels
 		INSERT INTO teams (group_id, name, type, access_level) VALUES
@@ -148,7 +151,8 @@ func SetupTestEnv(t *testing.T) *TestEnv {
 			('766', 'Utrustningsgruppen', 'role', 'manager'),
 			('766', 'IT-gruppen', 'role', 'manager'),
 			('766', 'Läger', 'role', 'trusted'),
-			('999', 'Avdelning 1', 'troop', 'book');
+			('999', 'Avdelning 1', 'troop', 'book'),
+			('district:111', 'Distriktsstyrelsen', 'role', 'manager');
 	`)
 	if err != nil {
 		t.Fatalf("failed to re-seed tables: %v", err)

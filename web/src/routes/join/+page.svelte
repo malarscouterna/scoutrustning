@@ -1,10 +1,15 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages.js';
 	import { createApiClient } from '$lib/api/client';
+	import { orgTypeLabel } from '$lib/org';
 
 	let { data } = $props();
 
-	let orgId = $state('');
+	// Group and district IDs live in separate Scoutnet namespaces, so the same
+	// numeric ID can appear twice. Key the selector by type + id.
+	const orgKey = (org: { type: string; id: string }) => `${org.type}:${org.id}`;
+
+	let selectedOrgKey = $state('');
 	let groupName = $state('');
 	let roleId = $state<number | null>(null);
 	let roleNameFreeText = $state('');
@@ -16,16 +21,17 @@
 	let tosAccepted = $state(false);
 
 	$effect(() => {
-		orgId = data.orgs[0]?.id ?? '';
+		selectedOrgKey = data.orgs[0] ? orgKey(data.orgs[0]) : '';
 	});
 
-	let selectedOrgRoles = $derived(data.orgs.find((o) => o.id === orgId)?.roles ?? []);
+	let selectedOrg = $derived(data.orgs.find((o) => orgKey(o) === selectedOrgKey));
+	let selectedOrgRoles = $derived(selectedOrg?.roles ?? []);
 	let selectedRole = $derived(selectedOrgRoles.find((r) => r.id === roleId));
 	let roleName = $derived(selectedRole?.name ?? roleNameFreeText);
 	let roleKey = $derived(selectedRole?.key ?? '');
 
 	$effect(() => {
-		const org = data.orgs.find((o) => o.id === orgId);
+		const org = selectedOrg;
 		groupName = org?.name ?? '';
 		roleId = org?.roles[0]?.id ?? null;
 	});
@@ -49,7 +55,8 @@
 		error = '';
 		try {
 			await api.submitJoin({
-				org_id: orgId,
+				org_id: selectedOrg?.id ?? '',
+				org_type: selectedOrg?.type ?? 'group',
 				group_name: groupName,
 				role_name: roleName,
 				role_key: roleKey,
@@ -105,9 +112,13 @@
 				{#if data.orgs.length > 1}
 					<div>
 						<label class="block text-sm font-medium text-neutral-700 mb-1" for="org">{m.page_join_field_org()}</label>
-						<select id="org" bind:value={orgId} class="w-full border rounded-lg px-3 py-2 text-sm">
-							{#each data.orgs as org (org.id)}
-								<option value={org.id}>{org.name ? `${org.name} (${org.id})` : org.id}</option>
+						<select id="org" bind:value={selectedOrgKey} class="w-full border rounded-lg px-3 py-2 text-sm">
+							{#each data.orgs as org (orgKey(org))}
+								<option value={orgKey(org)}>
+									{org.name
+										? `${org.name} – ${orgTypeLabel(org.type)} (${org.id})`
+										: `${orgTypeLabel(org.type)} ${org.id}`}
+								</option>
 							{/each}
 						</select>
 					</div>
