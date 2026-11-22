@@ -39,6 +39,10 @@
 
 </script>
 
+<svelte:head>
+	<title>{data.demo ? 'Demo Scoutrustning' : data.dev ? 'Dev Scoutrustning' : 'Scoutrustning'}</title>
+</svelte:head>
+
 {#if data.demo}
 	<a href="/guide" class="block bg-adventurerorange-100 border-b border-adventurerorange-300 text-adventurerorange-900 text-center text-sm py-2 px-4 font-medium hover:bg-adventurerorange-200">
 		🏕️ Demo — detta är en testmiljö. Bokningar och data kan återställas när som helst.
