@@ -57,9 +57,14 @@ Each event has a recipient class (who gets it) and a trigger condition.
 | `booking_confirmed` | Status transitions to `confirmed` (auto or after approval) | Booking creator + used-by team members |
 | `booking_rejected` | Manager rejects booking | Booking creator |
 | `booking_cancelled` | Booking cancelled by any party | Booking creator + used-by team members |
+| `booking_items_changed` | Booking edited and submitted again; item types added/removed since the previous submission | Same audience as that submission: managers when approval is required, otherwise team + managers |
 | `booking_reminder` | 1 day before `start_date` for `confirmed`/`picked_up` bookings | Booking creator + used-by team members |
 | `booking_overdue` | `end_date` has passed and booking is still `picked_up` | Booking creator + team members + managers (opt-in) |
 | `booking_any_created` | Any booking created (draft or submitted) | Opt-in only — managers who want full group visibility |
+
+### Item-change diffs
+
+Item edits do not notify on their own. Each `submitted` booking event stores a snapshot of the booking's item types (commercial name + location + count) in its event metadata. When the booking is edited and submitted again, the new submission is compared with the previous snapshot and a `booking_items_changed` notification is sent with the net additions and removals, grouped one row per item type. The diff message is threaded into the same per-booking email/GChat thread as the original submission, and stays silent when nothing changed or when the previous event predates snapshots. Adding/removing items on a `picked_up` booking does not submit, so it does not trigger a diff.
 
 ### Issue events
 
@@ -88,6 +93,7 @@ Missing rows fall back to the **group default**, which falls back to the **syste
 | `booking_confirmed` | `true` | `true` |
 | `booking_rejected` | `true` | `true` |
 | `booking_cancelled` | `true` | `true` |
+| `booking_items_changed` | `true` | `true` |
 | `booking_reminder` | `true` | `true` |
 | `booking_overdue` | `true` | `true` |
 | `booking_any_created` | `false` | `false` |

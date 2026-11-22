@@ -6,6 +6,10 @@ When finishing a backlog item or spec milestone, log it here and remove it from 
 
 ## 2026-11-22
 
+### Booking item-change notifications on resubmit
+
+Editing a pre-checkout booking now returns it to draft, so the next submission is the right moment to tell everyone what changed. Each `submitted` booking event stores a snapshot of item types (commercial name + location + count) in its metadata. On a resubmission, the server compares the snapshot with the current items and sends a `booking_items_changed` notification with net additions and removals, one row per item type. The diff is threaded into the same per-booking email/GChat thread and sent to the same audience as that submission's normal notifications: managers when approval is required, otherwise team + managers. Both email and GChat render a concise diff (added/removed sections); the email reuses the booking template with the full item list and comment history omitted. No notification is sent when nothing changed, on a first submission, or for legacy submitted events without a snapshot. The event is configurable in notification settings and defaults on.
+
 ### Pre-checkout edits and pickup completion
 
 Editing a submitted, approved or confirmed booking now returns it to draft via `POST /bookings/{id}/reopen` (also called implicitly by update/add/remove item). Items stay reserved because draft is a reserving status, and the user must resubmit. A `reopened` booking event records the previous status in `metadata.from`; rejected bookings keep their original behavior so the manager's rejection reason stays as the last event. The `/book` edit page activates the cart for all pre-checkout statuses and waits for the reopen before linking to browse, so "Lägg till utrustning" no longer strands the user. `picked_up` bookings are unaffected by the edit downgrade.
