@@ -45,6 +45,7 @@ func (h *BookingHandler) Routes() chi.Router {
 	r.Post("/{id}/approve", auth.RequireRole("equipment_manager")(http.HandlerFunc(h.Approve)).ServeHTTP)
 	r.Post("/{id}/reject", auth.RequireRole("equipment_manager")(http.HandlerFunc(h.Reject)).ServeHTTP)
 	r.Post("/{id}/pickup", h.Pickup)
+	r.Post("/{id}/finish-pickup", h.FinishPickup)
 	r.Put("/{id}/items/{itemId}/pickup", h.UpdateItemPickup)
 	r.Post("/{id}/items/{itemId}/swap", h.SwapItem)
 	r.Post("/{id}/return", h.Return)
@@ -1197,6 +1198,70 @@ func (h *BookingHandler) Pickup(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, updated)
 }
 
+// FinishPickup closes a partial pickup. Items that were not actually collected
+// are marked not_picked_up so their reservation is released and they are
+// excluded from the return checklist. Collected items keep the normal return
+// flow, and the booking stays in picked_up status.
+func (h *BookingHandler) FinishPickup(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	bookingID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	booking, err := h.Q.GetBooking(r.Context(), db.GetBookingParams{ID: bookingID, GroupID: claims.GroupID})
+	if err != nil {
+		WriteError(w, http.StatusNotFound, "booking not found")
+		return
+	}
+	if !h.canAccessBooking(r.Context(), claims, accessFromGetBookingRow(booking)) {
+		WriteError(w, http.StatusForbidden, "forbidden")
+		return
+	}
+	if booking.Status != "picked_up" {
+		WriteError(w, http.StatusBadRequest, "booking must be in picked_up status")
+		return
+	}
+
+	items, err := h.Q.ListBookingItems(r.Context(), db.ListBookingItemsParams{
+		BookingID: bookingID, GroupID: claims.GroupID,
+	})
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to list booking items")
+		return
+	}
+	picked := 0
+	for _, item := range items {
+		if item.PickupStatus.Valid && (item.PickupStatus.String == "picked_up" || item.PickupStatus.String == "swapped") {
+			picked++
+		}
+	}
+	if picked == 0 {
+		WriteError(w, http.StatusBadRequest, "pickup_requires_picked_item")
+		return
+	}
+
+	released, err := h.Q.FinishBookingPickup(r.Context(), db.FinishBookingPickupParams{
+		BookingID: bookingID, GroupID: claims.GroupID,
+	})
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to finish pickup")
+		return
+	}
+	if released > 0 {
+		metadata, _ := json.Marshal(map[string]int{"not_picked_up": int(released)})
+		h.Q.CreateBookingEvent(r.Context(), db.CreateBookingEventParams{
+			GroupID: claims.GroupID, BookingID: bookingID, ActorID: claims.MemberID,
+			EventType: "pickup_finished",
+			Message:   "Uthämtning avslutad - föremål som inte hämtades är fria igen",
+			Metadata:  metadata,
+		})
+	}
+
+	WriteJSON(w, http.StatusOK, map[string]any{"released": released, "picked": picked})
+}
+
 // UpdateItemPickup sets the pickup_status for a single booking item.
 func (h *BookingHandler) UpdateItemPickup(w http.ResponseWriter, r *http.Request) {
 	claims, _ := auth.ClaimsFromContext(r.Context())
@@ -1479,7 +1544,7 @@ func (h *BookingHandler) UpdateItemReturn(w http.ResponseWriter, r *http.Request
 	// Article status is derived from issue entities, not set directly here.
 	switch req.ReturnStatus {
 	case "":
-		// Undo — no-op
+		// Undo - no-op
 	case "returned_ok":
 		LogArticleEvent(r.Context(), h.Q, claims, item.ArticleID, "returned", "Returned OK", map[string]string{
 			"booking_id": formatUUID(bookingID),
@@ -1495,7 +1560,7 @@ func (h *BookingHandler) UpdateItemReturn(w http.ResponseWriter, r *http.Request
 			slog.Error("delayed-item swap resolution failed", "article_id", item.ArticleID, "error", err)
 		}
 	case "reported_usable":
-		// No article status side effect — caller creates issue via POST /issues.
+		// No article status side effect - caller creates issue via POST /issues.
 		// Opportunistic upgrade only (docs/implementation/delayed-return-swap.md decision 6): the
 		// unit is still bookable, so a waiting booking is never actually blocked -
 		// swap it onto a fully-ok unit if one's free, otherwise leave it as-is.
@@ -1503,7 +1568,7 @@ func (h *BookingHandler) UpdateItemReturn(w http.ResponseWriter, r *http.Request
 			slog.Error("reported_usable upgrade resolution failed", "article_id", item.ArticleID, "error", err)
 		}
 	case "reported_unusable", "missing":
-		// No article status side effect — caller creates issue via POST /issues.
+		// No article status side effect - caller creates issue via POST /issues.
 		// The article becomes genuinely unbookable, so any waiting booking gets
 		// the full swap-or-notify treatment, identical to a delayed item.
 		if _, err := ResolveBlockedItemsForArticle(r.Context(), h.Pool, h.Q, h.Notifier, h.GChatNotifier, h.BaseURL, claims.GroupID, item.ArticleID, time.Now(), false); err != nil {

@@ -237,7 +237,7 @@
 												{#if item.return_status && item.return_status !== 'returned_ok' && item.return_status !== 'pending'}
 													<span class="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700"
 													>{msg(`return_status_${item.return_status}`) ?? item.return_status}</span>
-												{:else if !item.pickup_status}
+												{:else if !item.pickup_status || item.pickup_status === 'not_picked_up'}
 													<span class="text-xs text-neutral-400">{m.return_not_picked_up()}</span>
 												{/if}
 												{#if editable && onRemove}

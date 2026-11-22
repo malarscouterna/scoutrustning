@@ -54,7 +54,7 @@
 		for (const i of items) {
 			if (i.individually_tracked) continue;
 			const k = `${i.commercial_name}|${i.location_name}`;
-			const isPicked = i.pickup_status;
+			const isPicked = i.pickup_status === 'picked_up' || i.pickup_status === 'swapped';
 			const g = m.get(k);
 			if (g) { if (isPicked) g.picked.push(i); else g.notPicked++; }
 			else m.set(k, { key: k, name: i.commercial_name, loc: i.location_name, place: i.place, picked: isPicked ? [i] : [], notPicked: isPicked ? 0 : 1 });
@@ -128,7 +128,7 @@
 		return rows;
 	}
 
-	let pickedUp = $derived(items.filter((i) => i.pickup_status));
+	let pickedUp = $derived(items.filter((i) => i.pickup_status === 'picked_up' || i.pickup_status === 'swapped'));
 	let returnedCount = $derived(pickedUp.filter((i) => i.return_status && i.return_status !== 'pending').length);
 	let canComplete = $derived(pickedUp.length > 0 && pickedUp.every((i) => i.return_status && i.return_status !== 'pending' && i.return_status !== 'delayed'));
 
@@ -347,7 +347,7 @@
 		{@const expandable = hasExpandable(tGroup.imageIds, tGroup.description, tGroup.instructions)}
 		{@const expanded = expandedGroups.has(tKey)}
 		{#each tGroup.items as item}
-		{@const notPicked = !item.pickup_status}
+		{@const notPicked = !item.pickup_status || item.pickup_status === 'not_picked_up'}
 		{@const hasReturn = item.return_status && item.return_status !== 'pending'}
 		<div class="border rounded" class:bg-green-50={item.return_status === 'returned_ok'} class:bg-orange-50={item.return_status === 'delayed' || item.return_status === 'reported_usable'} class:bg-red-50={item.return_status === 'reported_unusable'} class:bg-challengerpink-50={item.return_status === 'missing'} class:bg-neutral-50={notPicked}>
 			<div class="px-4 py-3 flex items-center gap-3">

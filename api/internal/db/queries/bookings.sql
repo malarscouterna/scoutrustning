@@ -120,6 +120,7 @@ WHERE a.group_id = @group_id
             AND b.start_date <= @end_date
             AND b.end_date >= @start_date
             AND (bi.return_status IS NULL OR bi.return_status IN ('pending', 'delayed'))
+            AND bi.pickup_status IS DISTINCT FROM 'not_picked_up'
     )
     AND (
         NOT @exclude_own_items::boolean
@@ -185,6 +186,7 @@ WHERE a.group_id = @group_id
             AND b.start_date <= @end_date
             AND b.end_date >= @start_date
             AND (bi.return_status IS NULL OR bi.return_status IN ('pending', 'delayed'))
+            AND bi.pickup_status IS DISTINCT FROM 'not_picked_up'
     )
 ORDER BY CASE a.status WHEN 'ok' THEN 0 WHEN 'incoming' THEN 1 WHEN 'under_repair' THEN 2 WHEN 'reported_usable' THEN 3 ELSE 4 END, a.commercial_name, a.common_name;
 
@@ -258,6 +260,14 @@ UPDATE booking_items SET pickup_status = @pickup_status
 WHERE id = @id AND group_id = @group_id AND booking_id = @booking_id
 RETURNING *;
 
+-- name: FinishBookingPickup :execrows
+-- Marks every still-unpicked item as not_picked_up when the leader finishes a
+-- partial pickup. Such items no longer reserve stock and are excluded from the
+-- return checklist, while picked-up items keep their normal return flow.
+UPDATE booking_items
+SET pickup_status = 'not_picked_up', return_status = NULL, expected_return_date = NULL
+WHERE booking_id = @booking_id AND group_id = @group_id AND pickup_status IS NULL;
+
 -- name: SwapBookingItemArticle :one
 UPDATE booking_items SET article_id = @new_article_id, pickup_status = 'swapped'
 WHERE id = @id AND group_id = @group_id AND booking_id = @booking_id
@@ -291,6 +301,7 @@ WHERE bi.article_id = @article_id
     AND b.group_id = @group_id
     AND b.status IN ('draft', 'submitted', 'approved', 'confirmed')
     AND b.start_date <= @check_date
+    AND bi.pickup_status IS DISTINCT FROM 'not_picked_up'
 ORDER BY b.start_date ASC;
 
 -- name: FindDelayedOrOverdueItems :many
@@ -306,7 +317,7 @@ SELECT bi.id AS booking_item_id, bi.group_id, bi.article_id, bi.booking_id
 FROM booking_items bi
 JOIN bookings b ON bi.booking_id = b.id
 WHERE b.status = 'picked_up'
-    AND bi.pickup_status IS NOT NULL
+    AND bi.pickup_status IN ('picked_up', 'swapped')
     AND (
         bi.return_status = 'delayed'
         OR (bi.return_status IS NULL AND b.end_date < @grace_cutoff)
@@ -333,18 +344,19 @@ WHERE b.id = @booking_id
     AND b.group_id = @group_id
     AND b.start_date <= CURRENT_DATE
     AND holder_b.status = 'picked_up'
-    AND holder_bi.pickup_status IS NOT NULL
+    AND holder_bi.pickup_status IN ('picked_up', 'swapped')
     AND (holder_bi.return_status IS NULL OR holder_bi.return_status = 'delayed')
 ORDER BY bi.id;
 
 -- name: AllItemsReturned :one
 -- Returns true if every picked-up item has a final return status.
--- Delayed items are NOT final — they must be resolved before completing.
--- Items that were never picked up are excluded.
+-- Delayed items are NOT final - they must be resolved before completing.
+-- Items that were never picked up (including those marked not_picked_up when
+-- the pickup was finished) are excluded.
 SELECT NOT EXISTS (
     SELECT 1 FROM booking_items
     WHERE booking_id = @booking_id AND group_id = @group_id
-        AND pickup_status IS NOT NULL AND pickup_status != 'lost'
+        AND pickup_status IN ('picked_up', 'swapped')
         AND (return_status IS NULL OR return_status = 'delayed')
 ) AS all_returned;
 

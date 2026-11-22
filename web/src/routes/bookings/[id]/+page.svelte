@@ -127,12 +127,13 @@
 		['draft', 'submitted', 'approved', 'confirmed', 'rejected'].includes(booking.status)
 	);
 
-	let anyPickedUp = $derived(items.some((i) => i.pickup_status));
+	let anyPickedUp = $derived(items.some((i) => i.pickup_status === 'picked_up' || i.pickup_status === 'swapped'));
 	let allPickedUp = $derived(items.length > 0 && items.every((i) => i.pickup_status));
 	let displayStatus = $derived(displayBookingStatus(booking, allPickedUp));
 	let anyReturnStarted = $derived(items.some((i) => i.return_status && i.return_status !== 'pending'));
 
 	let pickupMode = $state(false);
+	let finishingPickup = $state(false);
 	let returnMode = $state(false);
 	let showAddItemSheet = $state(false);
 
@@ -186,6 +187,23 @@
 			setTimeout(() => message = '', 4000);
 		} catch (e) {
 			error = translateError(e);
+		}
+	}
+
+	async function finishPickup() {
+		if (!confirm(m.page_booking_confirm_finish_pickup())) return;
+		error = '';
+		finishingPickup = true;
+		try {
+			await api.finishPickup(booking.id);
+			await reload();
+			pickupMode = false;
+			message = m.page_booking_pickup_finished();
+			setTimeout(() => message = '', 4000);
+		} catch (e) {
+			error = translateError(e);
+		} finally {
+			finishingPickup = false;
 		}
 	}
 
@@ -435,6 +453,13 @@
 				onclick={() => showAddItemSheet = true}
 				class="bg-blue-700 text-white rounded px-4 py-2 text-sm"
 			>+ {m.page_booking_btn_add_items()}</button>
+			{#if !allPickedUp && anyPickedUp}
+				<button
+					onclick={finishPickup}
+					disabled={finishingPickup}
+					class="bg-green-700 text-white rounded px-4 py-2 text-sm disabled:opacity-50"
+				>{m.page_booking_btn_finish_pickup()}</button>
+			{/if}
 		{/if}
 	</div>
 {/if}

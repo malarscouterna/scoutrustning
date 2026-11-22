@@ -145,6 +145,7 @@ När din bokning är bekräftad (eller godkänd) kan du starta utlämningen:
 4. Om en artikel är felrapporterad visas den med en färgmarkering: orange (kan användas) eller röd (ej tillgänglig). Orange artiklar kan bockas av med "Hämtad ändå" eller tas bort från bokningen. Röda artiklar kan inte hämtas ut.
 5. Om en individuellt spårad artikel inte finns där den ska, använd **byt**-funktionen för att välja en annan tillgänglig artikel av samma typ.
 6. Behöver du hämta fler saker? Klicka **Lägg till utrustning** för att söka och lägga till fler artiklar direkt i utlämningsläget.
+7. Om något inte finns i förrådet kan du klicka **Avsluta utlämning** när minst en artikel är hämtad. Artiklar du inte hämtat markeras "Ej hämtad", frigörs för andra bokningar och behöver inte lämnas tillbaka.
 
 Bokningen kan inte redigeras (datum, enhet, anteckningar) efter att utlämningen startats. Vill du lägga till mer utrustning skapar du en ny bokning.
 

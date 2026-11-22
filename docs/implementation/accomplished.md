@@ -4,6 +4,16 @@ A living log of completed work — what was built, when, and why. Major features
 
 When finishing a backlog item or spec milestone, log it here and remove it from the backlog / mark it done in the spec.
 
+## 2026-11-22
+
+### Pre-checkout edits and pickup completion
+
+Editing a submitted, approved or confirmed booking now returns it to draft via `POST /bookings/{id}/reopen` (also called implicitly by update/add/remove item). Items stay reserved because draft is a reserving status, and the user must resubmit. A `reopened` booking event records the previous status in `metadata.from`; rejected bookings keep their original behavior so the manager's rejection reason stays as the last event. The `/book` edit page activates the cart for all pre-checkout statuses and waits for the reopen before linking to browse, so "Lägg till utrustning" no longer strands the user. `picked_up` bookings are unaffected by the edit downgrade.
+
+A `picked_up` booking whose items are not all collected is labelled "Utlämning pågår" / "Pickup in progress" in list and detail badges. This is derived in the UI from item progress (`all_picked_up` from list queries, loaded items on the detail page), not a new database status.
+
+New `POST /bookings/{id}/finish-pickup` lets a leader close a partial pickup. Uncollected items become `not_picked_up` (migration 00023), which releases their reservation and hides them from the return checklist; collected items keep the normal return flow. Availability, swap, delayed and return-completion queries were updated to ignore `not_picked_up` items. A `pickup_finished` event records how many items were released. Tests cover release, return completion, event logging, the no-picked-items error and cross-team access control.
+
 ## 2026-11-14
 
 ### Edit issue details (description, severity)
