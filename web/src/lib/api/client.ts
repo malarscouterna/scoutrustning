@@ -392,6 +392,10 @@ export function createApiClient(opts: FetchOptions = {}) {
 		},
 		updateBooking: (id: string, data: Record<string, unknown>) =>
 			requestMut<Booking>(`/bookings/${id}`, 'PUT', data, opts),
+		// Editing a pre-checkout booking returns it to draft (items stay reserved,
+		// must be resubmitted). No-op for drafts.
+		reopenBooking: (id: string) =>
+			requestMut<Booking>(`/bookings/${id}/reopen`, 'POST', {}, opts),
 		addBookingItems: (bookingId: string, commercialName: string, quantity: number, locationName?: string) =>
 			requestMut<BookingItem[]>(`/bookings/${bookingId}/items`, 'POST', { commercial_name: commercialName, quantity, location_name: locationName }, opts),
 		removeBookingItem: (bookingId: string, itemId: string) =>

@@ -299,6 +299,7 @@
   "booking_card_personal": "Personlig",
   "page_book_btn_create": "Skapa bokning",
   "page_book_your_booking": "Din bokning",
+  "page_book_reopened_banner": "Bokningen är nu ett utkast igen. Utrustningen är fortfarande reserverad — skicka in bokningen när du är klar.",
   "page_book_date_conflict": "Datumkonflikt — {count} artiklar inte tillgängliga för de nya datumen.",
   "page_book_date_conflict_hint": "Ta bort de markerade artiklarna eller ändra tillbaka datumen för att kunna skicka bokningen.",
   "page_book_btn_save_changes": "Spara ändringar",

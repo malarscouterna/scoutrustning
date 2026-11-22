@@ -39,6 +39,7 @@ func (h *BookingHandler) Routes() chi.Router {
 	r.Post("/{id}/items", h.AddItems)
 	r.Delete("/{id}/items/{itemId}", h.RemoveItem)
 	r.Post("/{id}/submit", h.Submit)
+	r.Post("/{id}/reopen", h.Reopen)
 	r.Post("/{id}/cancel", h.Cancel)
 	r.Post("/{id}/copy", h.Copy)
 	r.Post("/{id}/approve", auth.RequireRole("equipment_manager")(http.HandlerFunc(h.Approve)).ServeHTTP)
@@ -92,16 +93,33 @@ func isEditable(status string) bool {
 		status == "submitted" || status == "approved" || status == "rejected"
 }
 
-// reopenIfRejected transitions a rejected booking to draft the moment the user
-// starts editing it (Update/AddItems/RemoveItem), rather than on reject itself.
-// Returns the effective status to use for the rest of the caller's logic.
-func (h *BookingHandler) reopenIfRejected(ctx context.Context, groupID string, bookingID pgtype.UUID, status string) string {
-	if status != "rejected" {
+// reopenForEdit returns a pre-checkout booking to draft the moment the user
+// edits it (Update/AddItems/RemoveItem, or the explicit Reopen endpoint).
+// Items stay reserved; the booking must be explicitly resubmitted. Rejected
+// bookings keep their original behavior; submitted/approved/confirmed bookings
+// are pulled back the moment the leader changes anything. picked_up bookings
+// are NOT downgraded - mid-pickup item adds must keep the booking in
+// picked_up. Returns the effective status.
+func (h *BookingHandler) reopenForEdit(ctx context.Context, groupID string, actorID string, bookingID pgtype.UUID, status string) string {
+	switch status {
+	case "rejected", "submitted", "approved", "confirmed":
+	default:
 		return status
 	}
 	h.Q.UpdateBookingStatus(ctx, db.UpdateBookingStatusParams{
 		ID: bookingID, GroupID: groupID, Status: "draft",
 	})
+	// Rejected bookings keep their original behavior: no extra event, so the
+	// manager's rejection reason stays as the last message in the history.
+	if status != "rejected" {
+		metadata, _ := json.Marshal(map[string]string{"from": status})
+		h.Q.CreateBookingEvent(ctx, db.CreateBookingEventParams{
+			GroupID: groupID, BookingID: bookingID, ActorID: actorID,
+			EventType: "reopened",
+			Message:   "Bokningen återgick till utkast för redigering",
+			Metadata:  metadata,
+		})
+	}
 	return "draft"
 }
 
@@ -408,7 +426,7 @@ func (h *BookingHandler) Update(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusBadRequest, "booking is not editable")
 		return
 	}
-	booking.Status = h.reopenIfRejected(r.Context(), claims.GroupID, bookingID, booking.Status)
+	booking.Status = h.reopenForEdit(r.Context(), claims.GroupID, claims.MemberID, bookingID, booking.Status)
 
 	var req struct {
 		StartDate             *string `json:"start_date"`
@@ -680,7 +698,7 @@ func (h *BookingHandler) AddItems(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusBadRequest, "booking is not editable")
 		return
 	}
-	booking.Status = h.reopenIfRejected(r.Context(), claims.GroupID, bookingID, booking.Status)
+	booking.Status = h.reopenForEdit(r.Context(), claims.GroupID, claims.MemberID, bookingID, booking.Status)
 
 	var req struct {
 		CommercialName string `json:"commercial_name"`
@@ -786,7 +804,7 @@ func (h *BookingHandler) RemoveItem(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusBadRequest, "booking is not editable")
 		return
 	}
-	booking.Status = h.reopenIfRejected(r.Context(), claims.GroupID, bookingID, booking.Status)
+	booking.Status = h.reopenForEdit(r.Context(), claims.GroupID, claims.MemberID, bookingID, booking.Status)
 
 	items, err := h.Q.ListBookingItems(r.Context(), db.ListBookingItemsParams{
 		BookingID: bookingID, GroupID: claims.GroupID,
@@ -831,6 +849,48 @@ func (h *BookingHandler) RemoveItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// Reopen returns a pre-checkout booking to draft for editing ("Redigera"):
+// items stay reserved, the booking must be explicitly resubmitted afterwards.
+// Rejected bookings keep their original behavior; submitted/approved/confirmed
+// bookings are pulled back before any change is made, so the edit page always
+// works in draft mode. A no-op for drafts; picked_up and later statuses are
+// not editable this way.
+func (h *BookingHandler) Reopen(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	bookingID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	booking, err := h.Q.GetBooking(r.Context(), db.GetBookingParams{ID: bookingID, GroupID: claims.GroupID})
+	if err != nil {
+		WriteError(w, http.StatusNotFound, "booking not found")
+		return
+	}
+	if !h.canAccessBooking(r.Context(), claims, accessFromGetBookingRow(booking)) {
+		WriteError(w, http.StatusForbidden, "forbidden")
+		return
+	}
+
+	switch booking.Status {
+	case "draft":
+		// Already editable - idempotent no-op.
+	case "submitted", "approved", "confirmed", "rejected":
+		h.reopenForEdit(r.Context(), claims.GroupID, claims.MemberID, bookingID, booking.Status)
+	default:
+		WriteError(w, http.StatusBadRequest, "booking is not editable")
+		return
+	}
+
+	updated, err := h.Q.GetBooking(r.Context(), db.GetBookingParams{ID: bookingID, GroupID: claims.GroupID})
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to update booking")
+		return
+	}
+	WriteJSON(w, http.StatusOK, updated)
 }
 
 func (h *BookingHandler) Submit(w http.ResponseWriter, r *http.Request) {
