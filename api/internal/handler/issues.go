@@ -808,8 +808,8 @@ func isIssueActive(status string) bool {
 	return status == "open" || status == "in_progress"
 }
 
-// canEditIssueDetails reports whether the user may edit an issue's title,
-// description and severity: the reporter, or anyone at issue_resolve_role.
+// canEditIssueDetails reports whether the user may edit an issue's details
+// (description and severity): the reporter, or anyone at issue_resolve_role.
 func canEditIssueDetails(claims auth.Claims, perms Permissions, reporterID string) bool {
 	return claims.MemberID == reporterID || auth.AccessAtLeast(claims.MaxAccess, perms.IssueResolve)
 }
