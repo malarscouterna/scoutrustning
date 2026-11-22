@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.13.0](https://github.com/malarscouterna/scoutrustning/compare/v0.12.3...v0.13.0) (2026-11-22)
+
+
+### Features
+
+* **bookings:** editing a pre-checkout booking returns it to draft ([f2e2001](https://github.com/malarscouterna/scoutrustning/commit/f2e200161f11d8721dc874f4eeed851b1eb8a726))
+* **bookings:** finish partial pickup and release uncollected items ([d1e5195](https://github.com/malarscouterna/scoutrustning/commit/d1e5195a3095eaf88d8b38691519425a3acc7b25))
+* edit issue description and severity ([#94](https://github.com/malarscouterna/scoutrustning/issues/94)) ([67ab5fa](https://github.com/malarscouterna/scoutrustning/commit/67ab5fa9a26a38e007bdc9f1e819395de0c77352))
+* **notifications:** send item diff when a booking is resubmitted ([11117fa](https://github.com/malarscouterna/scoutrustning/commit/11117fa2df529aa18e10fc671d8ef8909cc35c2a))
+* **web:** show pickup in progress instead of fully picked up ([de1b2d7](https://github.com/malarscouterna/scoutrustning/commit/de1b2d72f295714ef056f5e0cca788323a48704c))
+
+
+### Bug Fixes
+
+* **web:** serve ScoutID logo locally ([2479145](https://github.com/malarscouterna/scoutrustning/commit/24791452287da8f7f8f8489259cd9a176de0a0f2))
+
 ## [0.12.3](https://github.com/malarscouterna/scoutrustning/compare/v0.12.2...v0.12.3) (2026-10-27)
 
 
