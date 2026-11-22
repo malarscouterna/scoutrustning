@@ -272,6 +272,8 @@ Any leader with access to the booking (creator, or unit member if unit booking) 
 
 **UPDATE**: Booking stays `picked_up` once entered - undoing all pickups no longer reverts to confirmed. Editing a `picked_up` booking is blocked; add items instead via `AddItemSheet`.
 
+**UPDATE (2026-11-22)**: A leader who cannot collect every item can press "Avsluta utlämning" (Finish pickup). `POST /bookings/{id}/finish-pickup` marks the remaining items `not_picked_up`: their reservation is released so other bookings can use them, and they are hidden from the return checklist. Collected items keep the normal return flow. The booking's database status stays `picked_up`; the UI label is derived from item progress, so a fully finished pickup shows "Uthämtad" and a partial one shows "Utlämning pågår". No new booking status was introduced.
+
 ### Leader: Return equipment
 
 Any leader with access to the booking can do (partial) returns. Different leaders can return different items at different times.
@@ -423,7 +425,7 @@ package_items (original):
 | id | uuid | PK |
 | booking_id | uuid | FK → bookings |
 | article_id | uuid | FK → articles |
-| pickup_status | text | Nullable: picked_up, swapped, not_available |
+| pickup_status | text | Nullable: picked_up, swapped, not_picked_up |
 | return_status | text | Nullable: returned_ok, delayed, broken, missing, pending |
 | notes | text | |
 

@@ -295,6 +295,7 @@ WHERE a.group_id = $1
             AND b.start_date <= $6
             AND b.end_date >= $7
             AND (bi.return_status IS NULL OR bi.return_status IN ('pending', 'delayed'))
+            AND bi.pickup_status IS DISTINCT FROM 'not_picked_up'
     )
 ORDER BY a.created_at
 FOR UPDATE OF a SKIP LOCKED
@@ -518,6 +519,7 @@ LEFT JOIN teams t ON b.used_by_team_id = t.id
 WHERE a.id = ANY($1::uuid[]) AND a.group_id = $2
     AND b.status IN ('confirmed', 'approved', 'picked_up')
     AND (bi.return_status IS NULL OR bi.return_status IN ('pending', 'delayed'))
+    AND bi.pickup_status IS DISTINCT FROM 'not_picked_up'
 `
 
 type ListActiveBookingConflictsParams struct {
@@ -827,6 +829,7 @@ LEFT JOIN LATERAL (
         AND b.start_date <= $1
         AND b.end_date >= $1
         AND (bi.return_status IS NULL OR bi.return_status IN ('pending', 'delayed'))
+        AND bi.pickup_status IS DISTINCT FROM 'not_picked_up'
     ORDER BY b.start_date
     LIMIT 1
 ) cur_booking ON true
@@ -945,6 +948,7 @@ WHERE a.group_id = $1
         WHERE b.group_id = $1
             AND b.status IN ('confirmed', 'approved', 'picked_up', 'submitted', 'draft')
             AND (bi.return_status IS NULL OR bi.return_status IN ('pending', 'delayed'))
+            AND bi.pickup_status IS DISTINCT FROM 'not_picked_up'
     )
 ORDER BY a.created_at DESC
 `

@@ -408,6 +408,8 @@ export function createApiClient(opts: FetchOptions = {}) {
 			requestMut<{ booking: Booking; items_copied: number; items_total: number }>(`/bookings/${id}/copy`, 'POST', {}, opts),
 		pickupBooking: (id: string) =>
 			requestMut<Booking>(`/bookings/${id}/pickup`, 'POST', {}, opts),
+		finishPickup: (id: string) =>
+			requestMut<{ released: number; picked: number }>(`/bookings/${id}/finish-pickup`, 'POST', {}, opts),
 		updateItemPickup: (bookingId: string, itemId: string, pickupStatus: string, articleStatus?: string, comment?: string, imageIds?: string[]) =>
 			requestMut<BookingItem>(`/bookings/${bookingId}/items/${itemId}/pickup`, 'PUT', {
 				pickup_status: pickupStatus,

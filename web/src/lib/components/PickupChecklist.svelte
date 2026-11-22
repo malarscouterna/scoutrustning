@@ -46,6 +46,11 @@
 		swapped: m.pickup_status_swapped()
 	});
 
+	// Items released when a partial pickup was finished are no longer part of
+	// the pickup checklist. They stay in the booking history and on the detail
+	// item list, but must not be re-picked or un-released from here.
+	let activeItems = $derived(items.filter((i) => i.pickup_status !== 'not_picked_up'));
+
 	function isReported(status: string | null | undefined) {
 		return status === 'reported_usable' || status === 'reported_unusable' || status === 'reported_missing';
 	}
@@ -79,10 +84,10 @@
 		items: BookingItem[];
 	}
 
-	let trackedItems = $derived(items.filter((i) => i.individually_tracked));
+	let trackedItems = $derived(activeItems.filter((i) => i.individually_tracked));
 	let quantitySubGroups = $derived.by(() => {
 		const map = new Map<string, QuantitySubGroup>();
-		for (const item of items) {
+		for (const item of activeItems) {
 			if (item.individually_tracked) continue;
 			const cat = statusCategory(item.article_status);
 			const key = `${item.commercial_name}|${item.location_name}|${cat}`;
@@ -129,7 +134,7 @@
 		return imageIds.length > 0 || !!desc || !!instr;
 	}
 
-	let checkedCount = $derived(items.filter((i) => i.pickup_status !== null).length);
+	let checkedCount = $derived(activeItems.filter((i) => i.pickup_status !== null).length);
 
 	async function markPickup(itemId: string, status: string) {
 		error = '';
@@ -305,7 +310,7 @@
 	<div class="bg-red-50 border border-red-200 rounded p-3 mb-3 text-red-800 text-sm">{error}</div>
 {/if}
 
-<p class="text-sm text-neutral-500 mb-3">{m.pickup_checked_label()} {checkedCount} / {items.length}</p>
+<p class="text-sm text-neutral-500 mb-3">{m.pickup_checked_label()} {checkedCount} / {activeItems.length}</p>
 
 <div class="space-y-1">
 	<!-- Quantity-tracked sub-groups (split by status category) -->

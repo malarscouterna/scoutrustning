@@ -416,6 +416,15 @@ Transition a confirmed or approved booking to `picked_up`. Once in `picked_up` s
 
 **Response** `200` | `400` | `403` | `404`
 
+### `POST /api/v0/bookings/{id}/finish-pickup`
+Finish a partial pickup. Items still lacking a pickup status are set to `not_picked_up`, which releases their reservation (they become bookable for overlapping dates) and excludes them from the return checklist. At least one item must already be marked `picked_up` or `swapped`; the booking stays in `picked_up` status so collected items can be returned normally. Logs a `pickup_finished` booking event with the number of released items in `metadata.not_picked_up`. Access: creator, team members, or equipment manager.
+
+**Response** `200` | `400` | `403` | `404`
+
+```json
+{"released": 2, "picked": 3}
+```
+
 ### `PUT /api/v0/bookings/{id}/items/{itemId}/pickup`
 Set the pickup status for a single booking item. Booking must be in `picked_up` status. Access: creator, team members, or equipment manager. Logs a `picked_up` article event with the acting user.
 
@@ -425,7 +434,7 @@ Sending an empty string clears the pickup status (undo). The booking stays in `p
 ```json
 {"pickup_status": "picked_up"}
 ```
-Valid `pickup_status` values: `picked_up`, `not_available`, `""` (undo).
+Valid `pickup_status` values for this endpoint: `picked_up`, `""` (undo). Swaps set `swapped` via the swap endpoint, and finishing a partial pickup sets `not_picked_up` via `POST /bookings/{id}/finish-pickup`.
 
 To report an issue discovered at pickup, use `POST /api/v0/issues` separately after marking the item.
 

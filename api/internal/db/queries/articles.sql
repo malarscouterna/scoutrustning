@@ -111,6 +111,7 @@ LEFT JOIN LATERAL (
         AND b.start_date <= @as_of_date
         AND b.end_date >= @as_of_date
         AND (bi.return_status IS NULL OR bi.return_status IN ('pending', 'delayed'))
+        AND bi.pickup_status IS DISTINCT FROM 'not_picked_up'
     ORDER BY b.start_date
     LIMIT 1
 ) cur_booking ON true
@@ -159,7 +160,8 @@ JOIN bookings b ON bi.booking_id = b.id
 LEFT JOIN teams t ON b.used_by_team_id = t.id
 WHERE a.id = ANY(@ids::uuid[]) AND a.group_id = @group_id
     AND b.status IN ('confirmed', 'approved', 'picked_up')
-    AND (bi.return_status IS NULL OR bi.return_status IN ('pending', 'delayed'));
+    AND (bi.return_status IS NULL OR bi.return_status IN ('pending', 'delayed'))
+    AND bi.pickup_status IS DISTINCT FROM 'not_picked_up';
 
 -- name: FindReplacementArticle :one
 -- Finds a replacement article with the same commercial_name + location, status
@@ -189,6 +191,7 @@ WHERE a.group_id = @group_id
             AND b.start_date <= @end_date
             AND b.end_date >= @start_date
             AND (bi.return_status IS NULL OR bi.return_status IN ('pending', 'delayed'))
+            AND bi.pickup_status IS DISTINCT FROM 'not_picked_up'
     )
 ORDER BY a.created_at
 FOR UPDATE OF a SKIP LOCKED
@@ -248,6 +251,7 @@ WHERE a.group_id = @group_id
         WHERE b.group_id = @group_id
             AND b.status IN ('confirmed', 'approved', 'picked_up', 'submitted', 'draft')
             AND (bi.return_status IS NULL OR bi.return_status IN ('pending', 'delayed'))
+            AND bi.pickup_status IS DISTINCT FROM 'not_picked_up'
     )
 ORDER BY a.created_at DESC;
 

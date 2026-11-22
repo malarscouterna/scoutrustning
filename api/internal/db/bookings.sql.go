@@ -64,7 +64,7 @@ const allItemsReturned = `-- name: AllItemsReturned :one
 SELECT NOT EXISTS (
     SELECT 1 FROM booking_items
     WHERE booking_id = $1 AND group_id = $2
-        AND pickup_status IS NOT NULL AND pickup_status != 'lost'
+        AND pickup_status IN ('picked_up', 'swapped')
         AND (return_status IS NULL OR return_status = 'delayed')
 ) AS all_returned
 `
@@ -75,8 +75,9 @@ type AllItemsReturnedParams struct {
 }
 
 // Returns true if every picked-up item has a final return status.
-// Delayed items are NOT final — they must be resolved before completing.
-// Items that were never picked up are excluded.
+// Delayed items are NOT final - they must be resolved before completing.
+// Items that were never picked up (including those marked not_picked_up when
+// the pickup was finished) are excluded.
 func (q *Queries) AllItemsReturned(ctx context.Context, arg AllItemsReturnedParams) (bool, error) {
 	row := q.db.QueryRow(ctx, allItemsReturned, arg.BookingID, arg.GroupID)
 	var all_returned bool
@@ -138,6 +139,7 @@ WHERE a.group_id = $1
             AND b.start_date <= $3
             AND b.end_date >= $2
             AND (bi.return_status IS NULL OR bi.return_status IN ('pending', 'delayed'))
+            AND bi.pickup_status IS DISTINCT FROM 'not_picked_up'
     )
 ORDER BY CASE a.status WHEN 'ok' THEN 0 WHEN 'incoming' THEN 1 WHEN 'under_repair' THEN 2 WHEN 'reported_usable' THEN 3 ELSE 4 END, a.commercial_name, a.common_name
 `
@@ -225,6 +227,7 @@ WHERE a.group_id = $1
             AND b.start_date <= $4
             AND b.end_date >= $2
             AND (bi.return_status IS NULL OR bi.return_status IN ('pending', 'delayed'))
+            AND bi.pickup_status IS DISTINCT FROM 'not_picked_up'
     )
     AND (
         NOT $5::boolean
@@ -451,7 +454,7 @@ SELECT bi.id AS booking_item_id, bi.group_id, bi.article_id, bi.booking_id
 FROM booking_items bi
 JOIN bookings b ON bi.booking_id = b.id
 WHERE b.status = 'picked_up'
-    AND bi.pickup_status IS NOT NULL
+    AND bi.pickup_status IN ('picked_up', 'swapped')
     AND (
         bi.return_status = 'delayed'
         OR (bi.return_status IS NULL AND b.end_date < $1)
@@ -508,6 +511,7 @@ WHERE bi.article_id = $1
     AND b.group_id = $2
     AND b.status IN ('draft', 'submitted', 'approved', 'confirmed')
     AND b.start_date <= $3
+    AND bi.pickup_status IS DISTINCT FROM 'not_picked_up'
 ORDER BY b.start_date ASC
 `
 
@@ -558,6 +562,28 @@ func (q *Queries) FindWaitingBookingItemsForArticle(ctx context.Context, arg Fin
 		return nil, err
 	}
 	return items, nil
+}
+
+const finishBookingPickup = `-- name: FinishBookingPickup :execrows
+UPDATE booking_items
+SET pickup_status = 'not_picked_up', return_status = NULL, expected_return_date = NULL
+WHERE booking_id = $1 AND group_id = $2 AND pickup_status IS NULL
+`
+
+type FinishBookingPickupParams struct {
+	BookingID pgtype.UUID `json:"booking_id"`
+	GroupID   string      `json:"group_id"`
+}
+
+// Marks every still-unpicked item as not_picked_up when the leader finishes a
+// partial pickup. Such items no longer reserve stock and are excluded from the
+// return checklist, while picked-up items keep their normal return flow.
+func (q *Queries) FinishBookingPickup(ctx context.Context, arg FinishBookingPickupParams) (int64, error) {
+	result, err := q.db.Exec(ctx, finishBookingPickup, arg.BookingID, arg.GroupID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getAllBookingsStartingOn = `-- name: GetAllBookingsStartingOn :many
@@ -665,7 +691,7 @@ WHERE b.id = $1
     AND b.group_id = $2
     AND b.start_date <= CURRENT_DATE
     AND holder_b.status = 'picked_up'
-    AND holder_bi.pickup_status IS NOT NULL
+    AND holder_bi.pickup_status IN ('picked_up', 'swapped')
     AND (holder_bi.return_status IS NULL OR holder_bi.return_status = 'delayed')
 ORDER BY bi.id
 `
