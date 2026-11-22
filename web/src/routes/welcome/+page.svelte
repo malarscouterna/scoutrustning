@@ -52,7 +52,7 @@
 					class="flex items-center justify-center gap-3 w-full bg-white border-2 border-neutral-300 rounded-xl px-6 py-4 shadow-md hover:shadow-lg hover:border-neutral-400 transition-all text-base font-semibold"
 				>
 					<img
-						src="https://dev.id.scouterna.se/resources/rip1y/login/scoutid/dist/assets/scoutid-BKqgYpbU.png"
+						src="/scoutid.png"
 						alt="ScoutID"
 						class="h-6"
 					/>
