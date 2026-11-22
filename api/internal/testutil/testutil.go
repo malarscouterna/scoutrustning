@@ -49,7 +49,12 @@ func SetupShared() {
 				"POSTGRES_PASSWORD": "test",
 				"POSTGRES_DB":       "test",
 			},
-			WaitingFor: wait.ForListeningPort("5432/tcp").WithStartupTimeout(30 * time.Second),
+			// The official Postgres image opens the port during init and then
+			// restarts the server. Wait for the second ready log line so the
+			// migrations don't race the database startup.
+			WaitingFor: wait.ForLog("database system is ready to accept connections").
+				WithOccurrence(2).
+				WithStartupTimeout(60 * time.Second),
 		},
 		Started: true,
 	})
