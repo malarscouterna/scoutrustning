@@ -354,6 +354,32 @@ func bookingBroadcastTexts(ctx context.Context, q *db.Queries, b db.Booking, eve
 	return BookingOpenerText(data), BookingDetailText(data)
 }
 
+// bookingChangesMsg builds the minimal email for a submitted item diff.
+func bookingChangesMsg(ctx context.Context, q *db.Queries, b db.Booking, changes BookingItemChanges, baseURL string, r recipient) Message {
+	data := fetchBookingEmailData(ctx, q, b, EventBookingItemsChanged, r.lang, r.name, baseURL)
+	data.Changes = changes
+	data.Items = nil
+	data.Events = nil
+	htmlBody, textBody := renderBookingEmail(data)
+	subject := i18n.T(r.lang, "email_subject_"+EventBookingItemsChanged)
+	if data.TeamName != "" {
+		subject = data.TeamName + ": " + subject
+	}
+	return Message{
+		To:       r.deliveryEmail(),
+		Subject:  subject,
+		Body:     htmlBody,
+		TextBody: textBody,
+	}
+}
+
+// bookingChangesTexts returns the GChat opener and detail text for a submitted item diff.
+func bookingChangesTexts(ctx context.Context, q *db.Queries, b db.Booking, changes BookingItemChanges, baseURL string) (opener, detail string) {
+	data := fetchBookingEmailData(ctx, q, b, EventBookingItemsChanged, "sv", "", baseURL)
+	data.Changes = changes
+	return bookingChangesOpenerText(data), bookingChangesDetailText(data)
+}
+
 // bookingItemBlockedMsg builds the booking_item_blocked email, which additionally
 // interpolates the name of the item that couldn't be swapped - the affected item's
 // name only, never the other (late) booker (docs/implementation/delayed-return-swap.md decision 4).
@@ -469,34 +495,51 @@ func SendBookingSubmittedNoApproval(ctx context.Context, q *db.Queries, n Notifi
 
 // sendBookingToManagers broadcasts to the manager team and sends personal email to each manager.
 func sendBookingToManagers(ctx context.Context, q *db.Queries, n Notifier, gn Notifier, b db.Booking, event, baseURL string) {
+	sendBookingToManagersWith(ctx, q, n, gn, b, event,
+		func(r recipient) Message { return bookingMsg(ctx, q, b, event, baseURL, r) },
+		func() (string, string) { return bookingBroadcastTexts(ctx, q, b, event, baseURL) },
+	)
+}
+
+// sendBookingToManagersWith is the shared manager fan-out for booking notifications.
+// The builders keep the recipients/threading logic identical across event types.
+func sendBookingToManagersWith(ctx context.Context, q *db.Queries, n Notifier, gn Notifier, b db.Booking, event string, msg func(recipient) Message, texts func() (string, string)) {
 	mgrTeam := managerTeamID(ctx, q, b.GroupID)
 	ds := loadDispatchSettings(ctx, q, b.GroupID, formatUUID(mgrTeam))
 	dsBooking := loadDispatchSettings(ctx, q, b.GroupID, formatUUID(b.UsedByTeamID))
 	tk := bookingThreadKey(b)
-	broadcastMsg := bookingMsg(ctx, q, b, event, baseURL, recipient{lang: "sv"})
-	opener, detail := bookingBroadcastTexts(ctx, q, b, event, baseURL)
+	broadcastMsg := msg(recipient{lang: "sv"})
+	opener, detail := texts()
 	sendBroadcastEmail(ctx, q, n, b.GroupID, mgrTeam, ds, event, b.ID, tk, broadcastMsg)
 	sendBroadcastGChat(ctx, q, gn, b.GroupID, mgrTeam, ds, event, b.ID, tk, opener, detail)
 	for _, r := range groupManagers(ctx, q, b.GroupID) {
 		r := r
-		sendTo(ctx, q, n, dsBooking, b.GroupID, r, event, "email", b.ID, tk, func(lang string) Message {
-			return bookingMsg(ctx, q, b, event, baseURL, r)
+		sendTo(ctx, q, n, dsBooking, b.GroupID, r, event, "email", b.ID, tk, func(string) Message {
+			return msg(r)
 		})
 	}
 }
 
 // sendBookingToTeam broadcasts to the booking team and sends personal email to the creator and team members.
 func sendBookingToTeam(ctx context.Context, q *db.Queries, n Notifier, gn Notifier, b db.Booking, event, baseURL string) {
+	sendBookingToTeamWith(ctx, q, n, gn, b, event,
+		func(r recipient) Message { return bookingMsg(ctx, q, b, event, baseURL, r) },
+		func() (string, string) { return bookingBroadcastTexts(ctx, q, b, event, baseURL) },
+	)
+}
+
+// sendBookingToTeamWith is the shared team fan-out for booking notifications.
+func sendBookingToTeamWith(ctx context.Context, q *db.Queries, n Notifier, gn Notifier, b db.Booking, event string, msg func(recipient) Message, texts func() (string, string)) {
 	ds := loadDispatchSettings(ctx, q, b.GroupID, formatUUID(b.UsedByTeamID))
 	tk := bookingThreadKey(b)
-	broadcastMsg := bookingMsg(ctx, q, b, event, baseURL, recipient{lang: "sv"})
-	opener, detail := bookingBroadcastTexts(ctx, q, b, event, baseURL)
+	broadcastMsg := msg(recipient{lang: "sv"})
+	opener, detail := texts()
 	sendBroadcastEmail(ctx, q, n, b.GroupID, b.UsedByTeamID, ds, event, b.ID, tk, broadcastMsg)
 	sendBroadcastGChat(ctx, q, gn, b.GroupID, b.UsedByTeamID, ds, event, b.ID, tk, opener, detail)
 	for _, r := range bookingRecipients(ctx, q, b.GroupID, b.CreatedBy, b.UsedByTeamID) {
 		r := r
-		sendTo(ctx, q, n, ds, b.GroupID, r, event, "email", b.ID, tk, func(lang string) Message {
-			return bookingMsg(ctx, q, b, event, baseURL, r)
+		sendTo(ctx, q, n, ds, b.GroupID, r, event, "email", b.ID, tk, func(string) Message {
+			return msg(r)
 		})
 	}
 }
@@ -523,6 +566,24 @@ func SendBookingRejected(ctx context.Context, q *db.Queries, n Notifier, gn Noti
 
 func SendBookingCancelled(ctx context.Context, q *db.Queries, n Notifier, gn Notifier, b db.Booking, baseURL string) {
 	sendBookingToTeam(ctx, q, n, gn, b, EventBookingCancelled, baseURL)
+}
+
+// SendBookingItemsChangedToManagers sends the submitted item diff to the same
+// audience the submission itself notified: the manager team and its managers.
+func SendBookingItemsChangedToManagers(ctx context.Context, q *db.Queries, n Notifier, gn Notifier, b db.Booking, changes BookingItemChanges, baseURL string) {
+	sendBookingToManagersWith(ctx, q, n, gn, b, EventBookingItemsChanged,
+		func(r recipient) Message { return bookingChangesMsg(ctx, q, b, changes, baseURL, r) },
+		func() (string, string) { return bookingChangesTexts(ctx, q, b, changes, baseURL) },
+	)
+}
+
+// SendBookingItemsChangedToTeam sends the submitted item diff to the booking's
+// team: broadcast channels plus creator and team members.
+func SendBookingItemsChangedToTeam(ctx context.Context, q *db.Queries, n Notifier, gn Notifier, b db.Booking, changes BookingItemChanges, baseURL string) {
+	sendBookingToTeamWith(ctx, q, n, gn, b, EventBookingItemsChanged,
+		func(r recipient) Message { return bookingChangesMsg(ctx, q, b, changes, baseURL, r) },
+		func() (string, string) { return bookingChangesTexts(ctx, q, b, changes, baseURL) },
+	)
 }
 
 // --- Issue events ---
@@ -589,4 +650,3 @@ func sendIssueBroadcastAndPersonal(ctx context.Context, q *db.Queries, n Notifie
 		})
 	}
 }
-

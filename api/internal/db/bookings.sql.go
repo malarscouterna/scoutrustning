@@ -949,6 +949,36 @@ func (q *Queries) GetLatestBookingEvent(ctx context.Context, arg GetLatestBookin
 	return i, err
 }
 
+const getLatestSubmittedBookingEvent = `-- name: GetLatestSubmittedBookingEvent :one
+SELECT id, group_id, booking_id, actor_id, event_type, message, metadata, created_at FROM booking_events
+WHERE booking_id = $1 AND group_id = $2 AND event_type = 'submitted'
+ORDER BY created_at DESC
+LIMIT 1
+`
+
+type GetLatestSubmittedBookingEventParams struct {
+	BookingID pgtype.UUID `json:"booking_id"`
+	GroupID   string      `json:"group_id"`
+}
+
+// The previous submission's item snapshot, used to build the add/remove diff
+// notification when a booking is edited and submitted again.
+func (q *Queries) GetLatestSubmittedBookingEvent(ctx context.Context, arg GetLatestSubmittedBookingEventParams) (BookingEvent, error) {
+	row := q.db.QueryRow(ctx, getLatestSubmittedBookingEvent, arg.BookingID, arg.GroupID)
+	var i BookingEvent
+	err := row.Scan(
+		&i.ID,
+		&i.GroupID,
+		&i.BookingID,
+		&i.ActorID,
+		&i.EventType,
+		&i.Message,
+		&i.Metadata,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getTeamByID = `-- name: GetTeamByID :one
 SELECT id, group_id, name, type, access_level, created_at, notification_email, notification_prefs, gchat_space_id, gruppkanal_channels FROM teams
 WHERE id = $1 AND group_id = $2

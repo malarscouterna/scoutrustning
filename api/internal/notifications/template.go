@@ -31,19 +31,20 @@ type eventStyle struct {
 }
 
 var eventStyles = map[string]eventStyle{
-	EventBookingNeedsApproval:      {bannerBG: "#fef3c7", bannerFG: "#92400e", ctaBG: "#d97706"},
+	EventBookingNeedsApproval:       {bannerBG: "#fef3c7", bannerFG: "#92400e", ctaBG: "#d97706"},
 	EventBookingSubmittedNoApproval: {bannerBG: "#dcfce7", bannerFG: "#008236", ctaBG: "#008236"},
-	EventBookingConfirmed:          {bannerBG: "#dcfce7", bannerFG: "#008236", ctaBG: "#008236"},
-	EventBookingRejected:           {bannerBG: "#ffe2e2", bannerFG: "#c10007", ctaBG: "#374b5a"},
-	EventBookingCancelled:          {bannerBG: "#e5e5e6", bannerFG: "#585a5c", ctaBG: "#374b5a"},
-	EventBookingReminder:           {bannerBG: "#e6eeff", bannerFG: "#003660", ctaBG: "#003660"},
-	EventBookingOverdue:            {bannerBG: "#ffe2e2", bannerFG: "#c10007", ctaBG: "#d97706"},
-	EventBookingArchiveWarning:     {bannerBG: "#fef3c7", bannerFG: "#92400e", ctaBG: "#d97706"},
-	EventBookingItemBlocked:        {bannerBG: "#ffe2e2", bannerFG: "#c10007", ctaBG: "#374b5a"},
-	EventIssueCreated:              {bannerBG: "#fef3c7", bannerFG: "#92400e", ctaBG: "#d97706"},
-	EventIssueAssignedToMe:         {bannerBG: "#e6eeff", bannerFG: "#003660", ctaBG: "#003660"},
-	EventIssueResolved:             {bannerBG: "#dcfce7", bannerFG: "#008236", ctaBG: "#008236"},
-	EventIssueCommented:            {bannerBG: "#e6eeff", bannerFG: "#003660", ctaBG: "#003660"},
+	EventBookingConfirmed:           {bannerBG: "#dcfce7", bannerFG: "#008236", ctaBG: "#008236"},
+	EventBookingRejected:            {bannerBG: "#ffe2e2", bannerFG: "#c10007", ctaBG: "#374b5a"},
+	EventBookingCancelled:           {bannerBG: "#e5e5e6", bannerFG: "#585a5c", ctaBG: "#374b5a"},
+	EventBookingReminder:            {bannerBG: "#e6eeff", bannerFG: "#003660", ctaBG: "#003660"},
+	EventBookingOverdue:             {bannerBG: "#ffe2e2", bannerFG: "#c10007", ctaBG: "#d97706"},
+	EventBookingArchiveWarning:      {bannerBG: "#fef3c7", bannerFG: "#92400e", ctaBG: "#d97706"},
+	EventBookingItemBlocked:         {bannerBG: "#ffe2e2", bannerFG: "#c10007", ctaBG: "#374b5a"},
+	EventBookingItemsChanged:        {bannerBG: "#e6eeff", bannerFG: "#003660", ctaBG: "#003660"},
+	EventIssueCreated:               {bannerBG: "#fef3c7", bannerFG: "#92400e", ctaBG: "#d97706"},
+	EventIssueAssignedToMe:          {bannerBG: "#e6eeff", bannerFG: "#003660", ctaBG: "#003660"},
+	EventIssueResolved:              {bannerBG: "#dcfce7", bannerFG: "#008236", ctaBG: "#008236"},
+	EventIssueCommented:             {bannerBG: "#e6eeff", bannerFG: "#003660", ctaBG: "#003660"},
 }
 
 // statusBadge holds inline colors for booking status badges.
@@ -92,6 +93,9 @@ type BookingEmailData struct {
 	Title         string
 	Items         []db.ListBookingItemsRow
 	Events        []db.ListBookingEventsRow
+	// Changes is only set for EventBookingItemsChanged; when present the email
+	// renders the add/remove diff instead of the full item list.
+	Changes BookingItemChanges
 	// ArchiveDeadline is only set for EventBookingArchiveWarning; interpolated into
 	// the email intro as an absolute date/time rather than a live countdown.
 	ArchiveDeadline pgtype.Timestamptz
@@ -110,13 +114,13 @@ type IssueEmailData struct {
 	GroupName     string
 	LogoURL       string // PNG URL for email header; empty if no logo configured
 	BaseURL       string
-	IssueID      pgtype.UUID
-	Title        string
-	Severity     string
-	Status       string
-	Description  string
-	ReporterName string
-	Events       []db.ListIssueEventsRow
+	IssueID       pgtype.UUID
+	Title         string
+	Severity      string
+	Status        string
+	Description   string
+	ReporterName  string
+	Events        []db.ListIssueEventsRow
 }
 
 // bookingIntroKey returns the i18n key for a booking email's intro text. The archive
@@ -145,6 +149,17 @@ func renderBookingEmail(d BookingEmailData) (htmlOut, textOut string) {
 
 	teamLabel, teamBG, teamFG := teamBadge(d.Lang, d.TeamName)
 	itemsHTML := buildItemsHTML(d.Lang, d.Items)
+	itemsHeadingKey := "email_items_heading"
+	titleBlock := buildTitleBlock(d.Lang, d.Title)
+	eventsBlock := buildBookingEventsHTML(d.Lang, d.Events)
+	if d.Event == EventBookingItemsChanged {
+		// The diff email stays minimal: only the item changes, no full packing
+		// list or comment history.
+		itemsHTML = buildItemChangesHTML(d.Lang, d.Changes)
+		itemsHeadingKey = "email_changes_heading"
+		titleBlock = ""
+		eventsBlock = ""
+	}
 
 	bannerLabel := i18n.T(d.Lang, "email_banner_"+d.Event)
 	if d.TeamName != "" {
@@ -168,10 +183,10 @@ func renderBookingEmail(d BookingEmailData) (htmlOut, textOut string) {
 		"EMAIL_STATUS", html.EscapeString(i18n.T(d.Lang, "booking_status_"+d.Status)),
 		"EMAIL_STATUS_BG", statusBadge.bg,
 		"EMAIL_STATUS_FG", statusBadge.fg,
-		"EMAIL_ITEMS_HEADING", html.EscapeString(i18n.T(d.Lang, "email_items_heading")),
+		"EMAIL_ITEMS_HEADING", html.EscapeString(i18n.T(d.Lang, itemsHeadingKey)),
 		"EMAIL_ITEMS_HTML", itemsHTML,
-		"EMAIL_TITLE_BLOCK", buildTitleBlock(d.Lang, d.Title),
-		"EMAIL_BOOKING_EVENTS_BLOCK", buildBookingEventsHTML(d.Lang, d.Events),
+		"EMAIL_TITLE_BLOCK", titleBlock,
+		"EMAIL_BOOKING_EVENTS_BLOCK", eventsBlock,
 		"EMAIL_CTA_LABEL", html.EscapeString(i18n.T(d.Lang, "email_cta_"+d.Event)),
 		"EMAIL_CTA_URL", bookingURL,
 		"EMAIL_CTA_BG", style.ctaBG,
@@ -508,6 +523,45 @@ func buildItemsHTML(lang string, items []db.ListBookingItemsRow) string {
 	return b.String()
 }
 
+// buildItemChangesHTML renders the submitted item diff as compact cards:
+// one row per item type, grouped into added and removed sections.
+func buildItemChangesHTML(lang string, changes BookingItemChanges) string {
+	if changes.IsEmpty() {
+		return ""
+	}
+
+	var b strings.Builder
+	writeSection := func(headingKey, headingColor string, items []ItemChange) {
+		if len(items) == 0 {
+			return
+		}
+		fmt.Fprintf(&b,
+			`<div style="font-size:11px;font-weight:700;color:%s;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">%s</div>`,
+			headingColor, html.EscapeString(i18n.T(lang, headingKey)),
+		)
+		for _, it := range items {
+			location := ""
+			if it.LocationName != "" {
+				location = fmt.Sprintf(
+					`<span style="color:#608199;font-size:13px;margin-left:8px">%s</span>`,
+					html.EscapeString(it.LocationName),
+				)
+			}
+			fmt.Fprintf(&b,
+				`<table width="100%%" cellpadding="0" cellspacing="0" style="border:1px solid #d7e4f0;margin-bottom:6px;border-collapse:collapse">`+
+					`<tr><td style="padding:6px 10px;font-size:14px;color:#131d24">%s%s`+
+					`<span style="float:right;color:#608199;font-size:13px;font-weight:400">%d st</span></td></tr></table>`,
+				html.EscapeString(it.CommercialName), location, it.Count,
+			)
+		}
+		b.WriteString(`<div style="height:10px"></div>`)
+	}
+
+	writeSection("email_changes_added_heading", "#008236", changes.Added)
+	writeSection("email_changes_removed_heading", "#c10007", changes.Removed)
+	return b.String()
+}
+
 // buildEventsHTML renders the issue event history as HTML.
 func buildEventsHTML(lang string, events []db.ListIssueEventsRow) string {
 	if len(events) == 0 {
@@ -635,7 +689,12 @@ func buildBookingText(d BookingEmailData, bannerLabel, start, end, teamLabel, bo
 	fmt.Fprintf(&b, "%s\n\n", i18n.T(d.Lang, bookingIntroKey(d), map[string]string{"deadline": formatDateTime(d.Lang, d.ArchiveDeadline), "item_name": d.BlockedItemName}))
 	fmt.Fprintf(&b, "%s - %s\n", start, end)
 	fmt.Fprintf(&b, "%s  |  %s\n\n", teamLabel, i18n.T(d.Lang, "booking_status_"+d.Status))
-	if len(d.Items) > 0 {
+	if d.Event == EventBookingItemsChanged {
+		fmt.Fprintf(&b, "%s\n", i18n.T(d.Lang, "email_changes_heading"))
+		writeChangesTextSection(&b, d.Lang, "email_changes_added_heading", d.Changes.Added)
+		writeChangesTextSection(&b, d.Lang, "email_changes_removed_heading", d.Changes.Removed)
+		b.WriteString("\n")
+	} else if len(d.Items) > 0 {
 		fmt.Fprintf(&b, "%s\n", i18n.T(d.Lang, "email_items_heading"))
 		curLoc := ""
 		for _, it := range d.Items {
@@ -658,10 +717,10 @@ func buildBookingText(d BookingEmailData, bannerLabel, start, end, teamLabel, bo
 		}
 		b.WriteString("\n")
 	}
-	if d.Title != "" {
+	if d.Event != EventBookingItemsChanged && d.Title != "" {
 		fmt.Fprintf(&b, "%s\n%s\n\n", i18n.T(d.Lang, "email_booking_title_heading"), d.Title)
 	}
-	if hasNotes(d.Events) {
+	if d.Event != EventBookingItemsChanged && hasNotes(d.Events) {
 		fmt.Fprintf(&b, "%s\n", i18n.T(d.Lang, "email_booking_events_heading"))
 		for _, ev := range d.Events {
 			var ts string
@@ -734,6 +793,66 @@ func BookingDetailText(d BookingEmailData) string {
 		fmt.Fprintf(&b, "\n⏰ Skicka in igen innan %s, annars arkiveras bokningen automatiskt.\n", formatDateTime(d.Lang, d.ArchiveDeadline))
 	}
 	return b.String()
+}
+
+// writeChangesTextSection writes one added/removed section of a plain-text diff.
+func writeChangesTextSection(b *strings.Builder, lang, headingKey string, items []ItemChange) {
+	if len(items) == 0 {
+		return
+	}
+	fmt.Fprintf(b, "%s\n", i18n.T(lang, headingKey))
+	curLoc := ""
+	for _, it := range items {
+		if it.LocationName != curLoc {
+			curLoc = it.LocationName
+			if curLoc != "" {
+				fmt.Fprintf(b, "  [%s]\n", curLoc)
+			}
+		}
+		fmt.Fprintf(b, "  - %s ×%d\n", it.CommercialName, it.Count)
+	}
+}
+
+// bookingChangesOpenerText returns a compact GChat opener for a submitted item diff,
+// matching the normal booking opener's link/date layout.
+func bookingChangesOpenerText(d BookingEmailData) string {
+	start := formatDate(d.Lang, d.StartDate)
+	end := formatDate(d.Lang, d.EndDate)
+	status := i18n.T(d.Lang, "booking_status_"+d.Status)
+	prefix := d.TeamName
+	if prefix == "" {
+		prefix = d.GroupName
+	}
+	bookingURL := d.BaseURL + "/bookings/" + uuidString(d.BookingID)
+	linkText := fmt.Sprintf("Bokning uppdaterad för %s - %s–%s", prefix, start, end)
+	return fmt.Sprintf("<%s|%s> · %d artiklar · %s", bookingURL, linkText, len(d.Items), status)
+}
+
+// bookingChangesDetailText returns the GChat detail reply for a submitted item diff:
+// the same location-grouped bullet layout as BookingDetailText, split into added/removed.
+func bookingChangesDetailText(d BookingEmailData) string {
+	var b strings.Builder
+	writeGChatChangesSection(&b, d.Lang, "email_changes_added_heading", d.Changes.Added)
+	writeGChatChangesSection(&b, d.Lang, "email_changes_removed_heading", d.Changes.Removed)
+	return strings.TrimRight(b.String(), "\n")
+}
+
+func writeGChatChangesSection(b *strings.Builder, lang, headingKey string, items []ItemChange) {
+	if len(items) == 0 {
+		return
+	}
+	fmt.Fprintf(b, "%s:\n", i18n.T(lang, headingKey))
+	curLoc := ""
+	for _, it := range items {
+		if it.LocationName != curLoc {
+			curLoc = it.LocationName
+			if curLoc != "" {
+				fmt.Fprintf(b, "[%s]\n", curLoc)
+			}
+		}
+		fmt.Fprintf(b, "• %s ×%d\n", it.CommercialName, it.Count)
+	}
+	b.WriteString("\n")
 }
 
 // IssueDetailText returns the GChat detail reply for an issue — reporter + description + history.
@@ -809,4 +928,3 @@ func buildIssueText(d IssueEmailData, desc, issueURL string) string {
 	fmt.Fprintf(&b, "---\n%s\n%s: %s\n", d.GroupName, i18n.T(d.Lang, "email_footer_unsubscribe"), d.BaseURL+"/settings")
 	return b.String()
 }
-

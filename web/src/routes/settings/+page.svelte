@@ -428,6 +428,7 @@
 		{ key: 'booking_overdue', label: m.notif_booking_overdue },
 		{ key: 'booking_needs_approval', label: m.notif_booking_needs_approval },
 		{ key: 'booking_submitted_no_approval', label: m.notif_booking_submitted_no_approval },
+		{ key: 'booking_items_changed', label: m.notif_booking_items_changed },
 		{ key: 'booking_any_created', label: m.notif_booking_any_created },
 	];
 	const allIssueEvents: EventRow[] = [
@@ -451,6 +452,7 @@
 		{ key: 'booking_overdue', label: m.notif_booking_overdue },
 		{ key: 'booking_needs_approval', label: m.notif_booking_needs_approval },
 		{ key: 'booking_submitted_no_approval', label: m.notif_booking_submitted_no_approval },
+		{ key: 'booking_items_changed', label: m.notif_booking_items_changed },
 		{ key: 'booking_any_created', label: m.notif_booking_any_created },
 		{ key: 'issue_created', label: m.notif_issue_created },
 		{ key: 'issue_resolved', label: m.notif_issue_resolved },
@@ -667,6 +669,7 @@
 			{ key: 'booking_cancelled', label: m.notif_booking_cancelled },
 			{ key: 'booking_reminder', label: m.notif_booking_reminder },
 			{ key: 'booking_overdue', label: m.notif_booking_overdue },
+			{ key: 'booking_items_changed', label: m.notif_booking_items_changed },
 		];
 		if (accessLevel === 'manager') {
 			base.push(

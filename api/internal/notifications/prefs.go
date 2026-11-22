@@ -22,6 +22,7 @@ const (
 	EventBookingOverdue             EventKey = "booking_overdue"
 	EventBookingArchiveWarning      EventKey = "booking_archive_warning"
 	EventBookingItemBlocked         EventKey = "booking_item_blocked"
+	EventBookingItemsChanged        EventKey = "booking_items_changed"
 	EventBookingAnyCreated          EventKey = "booking_any_created"
 	EventIssueCreated               EventKey = "issue_created"
 	EventIssueAssignedToMe          EventKey = "issue_assigned_to_me"
@@ -40,6 +41,7 @@ var AllEvents = []EventKey{
 	EventBookingOverdue,
 	EventBookingArchiveWarning,
 	EventBookingItemBlocked,
+	EventBookingItemsChanged,
 	EventBookingAnyCreated,
 	EventIssueCreated,
 	EventIssueAssignedToMe,
@@ -104,10 +106,11 @@ func BroadcastSystemDefaults() NotificationPrefs {
 		EventBookingOverdue:             {Gruppkanal: on, PersonalEmailPolicy: PolicyIfNoBroadcast},
 		EventBookingArchiveWarning:      {Gruppkanal: on, PersonalEmailPolicy: PolicyIfNoBroadcast},
 		EventBookingItemBlocked:         {Gruppkanal: on, PersonalEmailPolicy: PolicyIfNoBroadcast},
+		EventBookingItemsChanged:        {Gruppkanal: on, PersonalEmailPolicy: PolicyIfNoBroadcast},
 		EventBookingAnyCreated:          {Gruppkanal: on, PersonalEmailPolicy: PolicyIfNoBroadcast},
-		EventIssueCreated:   {Gruppkanal: on, PersonalEmailPolicy: PolicyIfNoBroadcast},
-		EventIssueResolved:  {Gruppkanal: on, PersonalEmailPolicy: PolicyIfNoBroadcast},
-		EventIssueCommented: {Gruppkanal: on, PersonalEmailPolicy: PolicyIfNoBroadcast},
+		EventIssueCreated:               {Gruppkanal: on, PersonalEmailPolicy: PolicyIfNoBroadcast},
+		EventIssueResolved:              {Gruppkanal: on, PersonalEmailPolicy: PolicyIfNoBroadcast},
+		EventIssueCommented:             {Gruppkanal: on, PersonalEmailPolicy: PolicyIfNoBroadcast},
 		// Personal events — no Gruppkanal, always-on by default.
 		EventBookingRejected:   {PersonalEmailPolicy: PolicyAlways},
 		EventIssueAssignedToMe: {PersonalEmailPolicy: PolicyAlways},

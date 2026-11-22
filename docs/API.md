@@ -329,6 +329,8 @@ If `force_approval` is true, the booking always goes to `submitted` regardless o
 
 If any item triggers approval (or `force_approval` is set), the whole booking transitions to `submitted` and a `submitted` booking event is created with the optional message.
 
+Each submitted event stores an item snapshot. On a resubmission, the server compares the current items with the previous snapshot and sends a `booking_items_changed` notification when item types were added or removed. The diff goes to the same recipients and email/GChat thread as the submission notification.
+
 **Body**
 ```json
 {

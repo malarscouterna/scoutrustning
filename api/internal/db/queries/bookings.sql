@@ -240,6 +240,14 @@ SELECT EXISTS (
     WHERE booking_id = @booking_id AND group_id = @group_id AND event_type = 'submitted'
 );
 
+-- name: GetLatestSubmittedBookingEvent :one
+-- The previous submission's item snapshot, used to build the add/remove diff
+-- notification when a booking is edited and submitted again.
+SELECT * FROM booking_events
+WHERE booking_id = @booking_id AND group_id = @group_id AND event_type = 'submitted'
+ORDER BY created_at DESC
+LIMIT 1;
+
 -- name: UpdateBookingEventMessage :one
 -- Bumps created_at so the merged entry still sorts as the most recent activity.
 UPDATE booking_events SET message = @message, metadata = @metadata, created_at = now()

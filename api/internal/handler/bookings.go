@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -954,10 +956,23 @@ func (h *BookingHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	if req.Message != "" {
 		message = req.Message + " - " + message
 	}
+
+	// Compare against the previous submission so a resubmit can send an
+	// item diff. The snapshot is stored on this submitted event for next time.
+	changes := notifications.BookingItemChanges{}
+	previous, prevErr := h.Q.GetLatestSubmittedBookingEvent(r.Context(), db.GetLatestSubmittedBookingEventParams{
+		BookingID: bookingID, GroupID: claims.GroupID,
+	})
+	if prevErr == nil {
+		changes = diffBookingItems(previous.Metadata, items)
+	} else if !errors.Is(prevErr, pgx.ErrNoRows) {
+		slog.Error("failed to load previous submitted booking event", "booking_id", bookingID, "error", prevErr)
+	}
+	snapshot, _ := json.Marshal(bookingItemsSnapshotFor(items))
 	h.Q.CreateBookingEvent(r.Context(), db.CreateBookingEventParams{
 		GroupID: claims.GroupID, BookingID: bookingID,
 		ActorID: claims.MemberID, EventType: "submitted",
-		Metadata: []byte("{}"),
+		Metadata: snapshot,
 		Message:  message,
 	})
 
@@ -968,6 +983,16 @@ func (h *BookingHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		} else {
 			go notifications.SendBookingConfirmed(context.Background(), q, n, gn, b, u)
 			go notifications.SendBookingSubmittedNoApproval(context.Background(), q, n, gn, b, u)
+		}
+		if !changes.IsEmpty() {
+			// Mirror the submission audience: managers when approval is needed,
+			// otherwise team + managers (both receive the auto-confirm emails).
+			if newStatus == "submitted" {
+				go notifications.SendBookingItemsChangedToManagers(context.Background(), q, n, gn, b, changes, u)
+			} else {
+				go notifications.SendBookingItemsChangedToTeam(context.Background(), q, n, gn, b, changes, u)
+				go notifications.SendBookingItemsChangedToManagers(context.Background(), q, n, gn, b, changes, u)
+			}
 		}
 	}
 
