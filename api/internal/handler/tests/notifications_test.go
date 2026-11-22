@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/malarscouterna/scoutrustning/api/internal/handler"
+	"github.com/malarscouterna/scoutrustning/api/internal/i18n"
 	"github.com/malarscouterna/scoutrustning/api/internal/notifications"
 	"github.com/malarscouterna/scoutrustning/api/internal/testutil"
 )
@@ -26,15 +27,21 @@ func mountNotifRoutes(env *testutil.TestEnv, notifier *notifications.CapturingNo
 	})
 }
 
-// waitForMessages blocks until the capturing notifier has collected at least n messages.
-func waitForMessages(notifier *notifications.CapturingNotifier, n int) {
-	deadline := time.Now().Add(2 * time.Second)
+// waitForMessage blocks until a message matching pred arrives. Predicates keep
+// these tests independent of async notifications from earlier subtests.
+func waitForMessage(t *testing.T, notifier *notifications.CapturingNotifier, pred func(notifications.Message) bool) notifications.Message {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
-		if len(notifier.Messages()) >= n {
-			return
+		for _, m := range notifier.Messages() {
+			if pred(m) {
+				return m
+			}
 		}
-		time.Sleep(5 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
+	t.Fatalf("expected notification was not sent; got: %+v", notifier.Messages())
+	return notifications.Message{}
 }
 
 func mountTestEmailRoutes(env *testutil.TestEnv, notifier *notifications.CapturingNotifier, personaIDs map[string]bool) {
@@ -174,21 +181,9 @@ func TestNotifications_EventTriggered(t *testing.T) {
 		}
 
 		// Two managers exist: mgr-1 and the manager-equipment persona user.
-		waitForMessages(notifier, 2)
-		if len(notifier.Messages()) == 0 {
-			t.Fatal("expected at least one notification for booking_needs_approval, got none")
-		}
-		found := false
-		var msg notifications.Message
-		for _, m := range notifier.Messages() {
-			if m.To == "manager@test.example" {
-				found = true
-				msg = m
-			}
-		}
-		if !found {
-			t.Errorf("expected notification to manager@test.example, got: %+v", notifier.Messages())
-		}
+		msg := waitForMessage(t, notifier, func(m notifications.Message) bool {
+			return m.To == "manager@test.example" && strings.Contains(m.Subject, i18n.T("sv", "email_subject_booking_needs_approval"))
+		})
 		if !strings.Contains(msg.Body, "http://test.example/bookings/"+bookingID) {
 			t.Errorf("expected body to contain booking URL, got: %s", msg.Body)
 		}
@@ -221,10 +216,9 @@ func TestNotifications_EventTriggered(t *testing.T) {
 			t.Fatalf("approve: got %d", resp.StatusCode)
 		}
 
-		waitForMessages(notifier, 1)
-		if len(notifier.Messages()) == 0 {
-			t.Fatal("expected notification for booking_confirmed, got none")
-		}
+		waitForMessage(t, notifier, func(m notifications.Message) bool {
+			return strings.Contains(m.Subject, i18n.T("sv", "email_subject_booking_confirmed"))
+		})
 	})
 
 	t.Run("booking_rejected sends to creator", func(t *testing.T) {
@@ -243,10 +237,9 @@ func TestNotifications_EventTriggered(t *testing.T) {
 			t.Fatalf("reject: got %d", resp.StatusCode)
 		}
 
-		waitForMessages(notifier, 1)
-		if len(notifier.Messages()) == 0 {
-			t.Fatal("expected notification for booking_rejected, got none")
-		}
+		waitForMessage(t, notifier, func(m notifications.Message) bool {
+			return strings.Contains(m.Subject, i18n.T("sv", "email_subject_booking_rejected"))
+		})
 	})
 
 	t.Run("booking_cancelled sends after cancel", func(t *testing.T) {
@@ -255,16 +248,20 @@ func TestNotifications_EventTriggered(t *testing.T) {
 
 		resp, _ := leader.Post("/api/v0/bookings/"+bookingID+"/submit", nil)
 		resp.Body.Close()
-		waitForMessages(notifier, 3) // drain confirmed + submitted_no_approval goroutines before reset
+		// The submit may auto-confirm or need approval depending on the article
+		// level; either way, drain its notification before resetting.
+		waitForMessage(t, notifier, func(m notifications.Message) bool {
+			return strings.Contains(m.Subject, i18n.T("sv", "email_subject_booking_confirmed")) ||
+				strings.Contains(m.Subject, i18n.T("sv", "email_subject_booking_needs_approval"))
+		})
 		notifier.Reset()
 
 		resp, _ = leader.Post("/api/v0/bookings/"+bookingID+"/cancel", nil)
 		resp.Body.Close()
 
-		waitForMessages(notifier, 1)
-		if len(notifier.Messages()) == 0 {
-			t.Fatal("expected notification for booking_cancelled, got none")
-		}
+		waitForMessage(t, notifier, func(m notifications.Message) bool {
+			return strings.Contains(m.Subject, i18n.T("sv", "email_subject_booking_cancelled"))
+		})
 	})
 
 	t.Run("issue_created sends to managers", func(t *testing.T) {
@@ -282,19 +279,9 @@ func TestNotifications_EventTriggered(t *testing.T) {
 		}
 
 		// Two managers exist: mgr-1 and the manager-equipment persona user.
-		waitForMessages(notifier, 2)
-		if len(notifier.Messages()) == 0 {
-			t.Fatal("expected notification for issue_created, got none")
-		}
-		found := false
-		for _, m := range notifier.Messages() {
-			if m.To == "manager@test.example" {
-				found = true
-			}
-		}
-		if !found {
-			t.Errorf("expected notification to manager@test.example, got: %+v", notifier.Messages())
-		}
+		waitForMessage(t, notifier, func(m notifications.Message) bool {
+			return m.To == "manager@test.example" && strings.Contains(m.Subject, "Nytt ärende")
+		})
 	})
 
 	t.Run("no send when SMTP not configured — action still succeeds", func(t *testing.T) {
