@@ -299,6 +299,7 @@
   "booking_card_personal": "Personal",
   "page_book_btn_create": "Create booking",
   "page_book_your_booking": "Your booking",
+  "page_book_reopened_banner": "The booking is back in draft. The equipment is still reserved — submit the booking when you're done.",
   "page_book_date_conflict": "Date conflict — {count} articles not available for the new dates.",
   "page_book_date_conflict_hint": "Remove the marked articles or change the dates back to be able to submit the booking.",
   "page_book_btn_save_changes": "Save changes",

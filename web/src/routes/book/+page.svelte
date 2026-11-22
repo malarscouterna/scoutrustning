@@ -98,6 +98,7 @@
 	let saving = $state(false);
 	let submitting = $state(false);
 	let submitted = $state(false);
+	let reopenedFrom = $state<string | null>(null);
 
 	// Conflict detection
 	let conflictingIds = $state<Set<string>>(new Set());
@@ -128,17 +129,26 @@
 	}
 
 	$effect(() => {
-		if (data.existing) {
-			startDate = data.existing.booking.start_date;
-			endDate = data.existing.booking.end_date;
-			title = data.existing.booking.title;
-			selectedUnit = data.existing.booking.used_by_team_id ?? '';
-			unitInitialized = true;
-			cartItems = data.existing.items;
-			// Activate cart if not already
-			if (data.existing.booking.status === 'draft') {
-				cart.activate(data.existing.booking.id);
+		const existing = data.existing;
+		if (!existing) return;
+		startDate = existing.booking.start_date;
+		endDate = existing.booking.end_date;
+		title = existing.booking.title;
+		selectedUnit = existing.booking.used_by_team_id ?? '';
+		unitInitialized = true;
+		cartItems = existing.items;
+
+		const status = existing.booking.status;
+		if (['draft', 'submitted', 'approved', 'confirmed', 'rejected'].includes(status)) {
+			// Pressing "Redigera" means going back to a draft: pre-checkout
+			// bookings are pulled back here so browse-page add controls work.
+			// Items stay reserved; the booking must be resubmitted.
+			if (status !== 'draft') {
+				api.reopenBooking(existing.booking.id)
+					.then(() => { reopenedFrom = status; })
+					.catch(() => { /* mutations below reopen too; keep the edit form usable */ });
 			}
+			cart.activate(existing.booking.id);
 		}
 	});
 
@@ -163,6 +173,19 @@
 		if (ids) {
 			conflictingIds = new Set(ids.split(','));
 		}
+	}
+
+	async function openBrowse() {
+		const status = data.existing?.booking.status;
+		if (bookingId && status && status !== 'draft' && !reopenedFrom) {
+			try {
+				await api.reopenBooking(bookingId);
+				reopenedFrom = status;
+			} catch {
+				// Item mutations reopen on the server too - don't block navigation.
+			}
+		}
+		goto('/browse');
 	}
 
 	async function saveDetails() {
@@ -369,6 +392,12 @@
 			<div class="bg-red-50 border border-red-200 rounded p-3 mb-4 text-red-800 text-sm">{error}</div>
 		{/if}
 
+		{#if reopenedFrom}
+			<div class="bg-blue-50 border border-blue-200 rounded p-3 mb-4 text-blue-900 text-sm">
+				{m.page_book_reopened_banner()}
+			</div>
+		{/if}
+
 		{#if archiveDeadline && (data.existing?.booking.status === 'draft' || data.existing?.booking.status === 'rejected')}
 			{@const msLeft = new Date(archiveDeadline).getTime() - nowTick}
 			{#if msLeft > 0}
@@ -448,7 +477,8 @@
 
 		<!-- Primary actions -->
 		<div class="flex flex-wrap gap-3 mt-6">
-			<scout-button type="link" href="/browse" variant="outlined">{m.page_book_btn_add_items()}</scout-button>
+			<!-- svelte-ignore a11y_click_events_have_key_events --><!-- svelte-ignore a11y_no_static_element_interactions -->
+			<scout-button type="button" variant="outlined" onclick={openBrowse}>{m.page_book_btn_add_items()}</scout-button>
 			<!-- svelte-ignore a11y_click_events_have_key_events --><!-- svelte-ignore a11y_no_static_element_interactions -->
 			<scout-button
 				type="button"
