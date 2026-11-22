@@ -14,6 +14,7 @@ export const bookingStatusColors: Record<string, string> = {
 	approved: 'bg-blue-100 text-blue-800',
 	confirmed: 'bg-green-100 text-green-800',
 	picked_up: 'bg-blue-100 text-blue-800',
+	picking_up: 'bg-blue-50 text-blue-700',
 	returned: 'bg-neutral-100',
 	rejected: 'bg-red-100 text-red-800',
 	cancelled: 'bg-neutral-100 text-neutral-500'
@@ -23,7 +24,8 @@ export const bookingStatusLeftBorder: Record<string, string> = {
 	submitted: 'border-l-4 border-l-orange-400',
 	approved: 'border-l-4 border-l-blue-500',
 	confirmed: 'border-l-4 border-l-blue-500',
-	picked_up: 'border-l-4 border-l-blue-500'
+	picked_up: 'border-l-4 border-l-blue-500',
+	picking_up: 'border-l-4 border-l-blue-300'
 };
 
 export const issueStatusColors: Record<string, string> = {

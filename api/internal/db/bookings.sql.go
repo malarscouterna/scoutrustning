@@ -974,7 +974,11 @@ func (q *Queries) HasSubmittedEvent(ctx context.Context, arg HasSubmittedEventPa
 }
 
 const listAllBookings = `-- name: ListAllBookings :many
-SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.title, b.created_at, b.updated_at, t.name AS team_name, u.name AS creator_name
+SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.title, b.created_at, b.updated_at, t.name AS team_name, u.name AS creator_name,
+    NOT EXISTS (
+        SELECT 1 FROM booking_items bi
+        WHERE bi.booking_id = b.id AND bi.group_id = b.group_id AND bi.pickup_status IS NULL
+    ) AS all_picked_up
 FROM bookings b
 LEFT JOIN teams t ON b.used_by_team_id = t.id
 LEFT JOIN users u ON b.created_by = u.id
@@ -997,6 +1001,7 @@ type ListAllBookingsRow struct {
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 	TeamName              pgtype.Text        `json:"team_name"`
 	CreatorName           pgtype.Text        `json:"creator_name"`
+	AllPickedUp           bool               `json:"all_picked_up"`
 }
 
 func (q *Queries) ListAllBookings(ctx context.Context, groupID string) ([]ListAllBookingsRow, error) {
@@ -1023,6 +1028,7 @@ func (q *Queries) ListAllBookings(ctx context.Context, groupID string) ([]ListAl
 			&i.UpdatedAt,
 			&i.TeamName,
 			&i.CreatorName,
+			&i.AllPickedUp,
 		); err != nil {
 			return nil, err
 		}
@@ -1224,7 +1230,11 @@ func (q *Queries) ListBookingTeams(ctx context.Context, groupID string) ([]ListB
 }
 
 const listBookingsByStatus = `-- name: ListBookingsByStatus :many
-SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.title, b.created_at, b.updated_at, t.name AS team_name, u.name AS creator_name
+SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.title, b.created_at, b.updated_at, t.name AS team_name, u.name AS creator_name,
+    NOT EXISTS (
+        SELECT 1 FROM booking_items bi
+        WHERE bi.booking_id = b.id AND bi.group_id = b.group_id AND bi.pickup_status IS NULL
+    ) AS all_picked_up
 FROM bookings b
 LEFT JOIN teams t ON b.used_by_team_id = t.id
 LEFT JOIN users u ON b.created_by = u.id
@@ -1252,6 +1262,7 @@ type ListBookingsByStatusRow struct {
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 	TeamName              pgtype.Text        `json:"team_name"`
 	CreatorName           pgtype.Text        `json:"creator_name"`
+	AllPickedUp           bool               `json:"all_picked_up"`
 }
 
 func (q *Queries) ListBookingsByStatus(ctx context.Context, arg ListBookingsByStatusParams) ([]ListBookingsByStatusRow, error) {
@@ -1278,6 +1289,7 @@ func (q *Queries) ListBookingsByStatus(ctx context.Context, arg ListBookingsBySt
 			&i.UpdatedAt,
 			&i.TeamName,
 			&i.CreatorName,
+			&i.AllPickedUp,
 		); err != nil {
 			return nil, err
 		}
@@ -1290,7 +1302,11 @@ func (q *Queries) ListBookingsByStatus(ctx context.Context, arg ListBookingsBySt
 }
 
 const listBookingsByUser = `-- name: ListBookingsByUser :many
-SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.title, b.created_at, b.updated_at, t.name AS team_name, u.name AS creator_name
+SELECT b.id, b.group_id, b.created_by, b.used_by_team_id, b.used_by_external, b.used_by_external_contact, b.status, b.start_date, b.end_date, b.title, b.created_at, b.updated_at, t.name AS team_name, u.name AS creator_name,
+    NOT EXISTS (
+        SELECT 1 FROM booking_items bi
+        WHERE bi.booking_id = b.id AND bi.group_id = b.group_id AND bi.pickup_status IS NULL
+    ) AS all_picked_up
 FROM bookings b
 LEFT JOIN teams t ON b.used_by_team_id = t.id
 LEFT JOIN users u ON b.created_by = u.id
@@ -1322,6 +1338,7 @@ type ListBookingsByUserRow struct {
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 	TeamName              pgtype.Text        `json:"team_name"`
 	CreatorName           pgtype.Text        `json:"creator_name"`
+	AllPickedUp           bool               `json:"all_picked_up"`
 }
 
 func (q *Queries) ListBookingsByUser(ctx context.Context, arg ListBookingsByUserParams) ([]ListBookingsByUserRow, error) {
@@ -1348,6 +1365,7 @@ func (q *Queries) ListBookingsByUser(ctx context.Context, arg ListBookingsByUser
 			&i.UpdatedAt,
 			&i.TeamName,
 			&i.CreatorName,
+			&i.AllPickedUp,
 		); err != nil {
 			return nil, err
 		}
