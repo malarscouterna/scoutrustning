@@ -78,6 +78,8 @@ export interface Booking {
 	end_date: string;
 	title: string;
 	created_at: string;
+	/** List endpoints only: true when every item has a pickup_status. */
+	all_picked_up?: boolean;
 }
 
 export interface BookingItem {

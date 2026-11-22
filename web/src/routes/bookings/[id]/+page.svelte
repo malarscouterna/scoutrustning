@@ -15,6 +15,7 @@
 	import { onDestroy } from 'svelte';
 	import { msg } from '$lib/msg';
 	import { bookingStatusColors } from '$lib/styles';
+	import { displayBookingStatus } from '$lib/bookings';
 	import * as m from '$lib/paraglide/messages.js';
 	import { translateError } from '$lib/errors';
 
@@ -128,6 +129,7 @@
 
 	let anyPickedUp = $derived(items.some((i) => i.pickup_status));
 	let allPickedUp = $derived(items.length > 0 && items.every((i) => i.pickup_status));
+	let displayStatus = $derived(displayBookingStatus(booking, allPickedUp));
 	let anyReturnStarted = $derived(items.some((i) => i.return_status && i.return_status !== 'pending'));
 
 	let pickupMode = $state(false);
@@ -266,8 +268,8 @@
 				<h1 class="text-heading-sm font-bold">
 					{booking.start_date} — {booking.end_date}
 				</h1>
-				<span class="text-sm px-2 py-0.5 rounded {bookingStatusColors[booking.status] ?? 'bg-neutral-100'}">
-					{msg(`booking_status_${booking.status}`) ?? booking.status}
+				<span class="text-sm px-2 py-0.5 rounded {bookingStatusColors[displayStatus] ?? 'bg-neutral-100'}">
+					{msg(`booking_status_${displayStatus}`) ?? displayStatus}
 				</span>
 			</div>
 			{#if booking.title}

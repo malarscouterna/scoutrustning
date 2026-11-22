@@ -14,6 +14,7 @@
   "booking_status_approved": "Godkänd",
   "booking_status_confirmed": "Bekräftad",
   "booking_status_picked_up": "Uthämtad",
+  "booking_status_picking_up": "Utlämning pågår",
   "booking_status_returned": "Återlämnad",
   "booking_status_rejected": "Nekad",
   "booking_status_cancelled": "Avbokad",

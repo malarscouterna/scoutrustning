@@ -3,6 +3,7 @@
 	import { msg } from '$lib/msg';
 	import * as m from '$lib/paraglide/messages.js';
 	import { bookingStatusColors, bookingStatusLeftBorder } from '$lib/styles';
+	import { displayBookingStatus } from '$lib/bookings';
 
 	interface Props {
 		booking: Booking;
@@ -11,10 +12,11 @@
 	}
 
 	let { booking, href, onCopy }: Props = $props();
+	let displayStatus = $derived(displayBookingStatus(booking));
 </script>
 
 <div class="relative">
-	<a {href} class="block border rounded px-4 py-3 hover:bg-neutral-50 {bookingStatusLeftBorder[booking.status] ?? ''}">
+	<a {href} class="block border rounded px-4 py-3 hover:bg-neutral-50 {bookingStatusLeftBorder[displayStatus] ?? ''}">
 		<div class="flex flex-wrap items-center justify-between gap-1 pr-8">
 			<div class="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
 				<span class="font-medium">{booking.start_date} — {booking.end_date}</span>
@@ -29,8 +31,8 @@
 					{/if}
 				{/if}
 			</div>
-			<span class="text-xs px-2 py-0.5 rounded {bookingStatusColors[booking.status] ?? 'bg-neutral-100'}">
-				{msg(`booking_status_${booking.status}`) ?? booking.status}
+			<span class="text-xs px-2 py-0.5 rounded {bookingStatusColors[displayStatus] ?? 'bg-neutral-100'}">
+				{msg(`booking_status_${displayStatus}`) ?? displayStatus}
 			</span>
 		</div>
 		{#if booking.title}

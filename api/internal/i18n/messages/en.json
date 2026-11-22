@@ -14,6 +14,7 @@
   "booking_status_approved": "Approved",
   "booking_status_confirmed": "Confirmed",
   "booking_status_picked_up": "Picked up",
+  "booking_status_picking_up": "Pickup in progress",
   "booking_status_returned": "Returned",
   "booking_status_rejected": "Rejected",
   "booking_status_cancelled": "Cancelled",

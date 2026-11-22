@@ -32,7 +32,11 @@ LEFT JOIN users u ON b.created_by = u.id
 WHERE b.id = @id AND b.group_id = @group_id;
 
 -- name: ListBookingsByUser :many
-SELECT b.*, t.name AS team_name, u.name AS creator_name
+SELECT b.*, t.name AS team_name, u.name AS creator_name,
+    NOT EXISTS (
+        SELECT 1 FROM booking_items bi
+        WHERE bi.booking_id = b.id AND bi.group_id = b.group_id AND bi.pickup_status IS NULL
+    ) AS all_picked_up
 FROM bookings b
 LEFT JOIN teams t ON b.used_by_team_id = t.id
 LEFT JOIN users u ON b.created_by = u.id
@@ -43,7 +47,11 @@ WHERE b.group_id = @group_id
 ORDER BY b.created_at DESC;
 
 -- name: ListAllBookings :many
-SELECT b.*, t.name AS team_name, u.name AS creator_name
+SELECT b.*, t.name AS team_name, u.name AS creator_name,
+    NOT EXISTS (
+        SELECT 1 FROM booking_items bi
+        WHERE bi.booking_id = b.id AND bi.group_id = b.group_id AND bi.pickup_status IS NULL
+    ) AS all_picked_up
 FROM bookings b
 LEFT JOIN teams t ON b.used_by_team_id = t.id
 LEFT JOIN users u ON b.created_by = u.id
@@ -51,7 +59,11 @@ WHERE b.group_id = @group_id
 ORDER BY b.created_at DESC;
 
 -- name: ListBookingsByStatus :many
-SELECT b.*, t.name AS team_name, u.name AS creator_name
+SELECT b.*, t.name AS team_name, u.name AS creator_name,
+    NOT EXISTS (
+        SELECT 1 FROM booking_items bi
+        WHERE bi.booking_id = b.id AND bi.group_id = b.group_id AND bi.pickup_status IS NULL
+    ) AS all_picked_up
 FROM bookings b
 LEFT JOIN teams t ON b.used_by_team_id = t.id
 LEFT JOIN users u ON b.created_by = u.id
