@@ -101,9 +101,11 @@ type Category struct {
 }
 
 type Group struct {
-	ID        string             `json:"id"`
-	Name      string             `json:"name"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	ID         string             `json:"id"`
+	Name       string             `json:"name"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	OrgType    string             `json:"org_type"`
+	ScoutnetID string             `json:"scoutnet_id"`
 }
 
 type GroupSetting struct {

@@ -146,14 +146,17 @@ docker compose pull && docker compose up -d
 
 Migrations run automatically on startup.
 
-### Bootstrapping a group
+### Bootstrapping an organisation
 
-Every scout group (scoutkår) that should have access needs to be bootstrapped with `init-group`. This creates the group record, default settings, and a manager team mapped to a Scoutnet role. The command is idempotent — safe to re-run to add more manager teams.
+Every organisation (scoutkår, distrikt, etc.) that should have access needs to be bootstrapped with `init-group` (alias `init-org`). This creates the tenant record, default settings, and a manager team mapped to a Scoutnet role. The command is idempotent — safe to re-run to add more manager teams.
+
+Groups use their Scoutnet group number directly. Other organisation types use `<type>:<scoutnet_id>` internally, so their IDs cannot collide with group numbers.
 
 **Production** (`BUILD_TARGET=production`):
 ```bash
 docker compose exec api /bin/server init-group \
-  --group-id   YOUR_GROUP_NUMBER \
+  --org-type   group \
+  --org-id     YOUR_GROUP_NUMBER \
   --group-name "Your Scout Group" \
   --role-key   ROLE_KEY
 ```
@@ -161,17 +164,19 @@ docker compose exec api /bin/server init-group \
 **Dev** (`BUILD_TARGET=dev`, Air hot-reload):
 ```bash
 docker compose exec api ./tmp/server init-group \
-  --group-id   YOUR_GROUP_NUMBER \
+  --org-type   group \
+  --org-id     YOUR_GROUP_NUMBER \
   --group-name "Your Scout Group" \
   --role-key   ROLE_KEY
 ```
 
-- `--group-id` — the Scoutnet group number (e.g. `766` for Mälarscouterna). Find it in Scoutnet.
-- `--group-name` — display name shown in the UI. Only applied on the first run; ignored if the group already exists, so it can be omitted on reruns.
+- `--org-type` — `group` (default), `district`, `region`, `organisation`, `corps`, `network` or `project`.
+- `--org-id` — the Scoutnet ID in that entity type's namespace (e.g. `766` for Mälarscouterna as a group, or `111` for a district). `--group-id` remains as a backwards-compatible alias.
+- `--group-name` — display name shown in the UI. Only applied on the first run; ignored if the organisation already exists, so it can be omitted on reruns. Required for non-group organisations, since ScoutID does not expose their names.
 - `--role-key` — the Scoutnet role key that should grant manager access (e.g. `it_manager`, `material_responsible`).
 - `--team-name` — optional name for the manager team in the UI. Defaults to the role key if omitted. Managers can rename teams in the settings UI at any time.
 
-To add a second manager team for a different role, re-run with the same `--group-id` and a new `--role-key`. To seed default storage locations (Mälarscouterna-specific), add `--seed-locations` on the first run.
+To add a second manager team for a different role, re-run with the same `--org-id` and a new `--role-key`. To seed default storage locations (Mälarscouterna-specific), add `--seed-locations` on the first run.
 
 Once bootstrapped, all other teams (troops, other roles) are auto-created on first login from Scoutnet claims. Managers can adjust access levels in the settings UI.
 

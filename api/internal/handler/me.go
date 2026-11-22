@@ -76,8 +76,10 @@ func (h *MeHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	groupName := ""
+	groupType := ""
 	if g, err := h.Q.GetGroup(r.Context(), claims.GroupID); err == nil {
 		groupName = g.Name
+		groupType = g.OrgType
 	}
 	perms := h.Perms.Get(r, claims.GroupID)
 
@@ -106,10 +108,28 @@ func (h *MeHandler) Get(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// The frontend uses groups[].id as the active-organisation switch value, so
+	// expose the internal tenant key there rather than the Scoutnet entity ID.
+	groups := make([]map[string]any, len(claims.Groups))
+	for i, g := range claims.Groups {
+		tenantID := g.TenantID
+		if tenantID == "" {
+			tenantID = g.ID
+		}
+		groups[i] = map[string]any{
+			"id":          tenantID,
+			"scoutnet_id": g.ID,
+			"type":        g.Type,
+			"name":        g.Name,
+			"is_primary":  g.IsPrimary,
+		}
+	}
+
 	WriteJSON(w, http.StatusOK, map[string]any{
 		"member_id":             claims.MemberID,
 		"group_id":              claims.GroupID,
 		"group_name":            groupName,
+		"group_type":            groupType,
 		"group_logo_url":        logoURL,
 		"group_logo_square_url": logoSquareURL,
 		"name":                  claims.Name,
@@ -119,7 +139,7 @@ func (h *MeHandler) Get(w http.ResponseWriter, r *http.Request) {
 		"teams":                 claims.Teams,
 		"max_access":            claims.MaxAccess,
 		"language":              lang,
-		"groups":                claims.Groups,
+		"groups":                groups,
 		"permissions": map[string]string{
 			"image_upload":     perms.ImageUpload,
 			"booking":          perms.Booking,

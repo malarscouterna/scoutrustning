@@ -71,6 +71,11 @@ docker compose exec -T api $SERVER_BIN init-group \
   --group-id $TEST_GROUP_ID --group-name "$TEST_GROUP_NAME" \
   --role-key "admin" --team-name "Admin"
 
+# A district tenant, to exercise non-group organisations in dev.
+docker compose exec -T api $SERVER_BIN init-group \
+  --org-type district --org-id "111" --group-name "Mälardalens distrikt" \
+  --role-key "distriktsstyrelsen" --team-name "Distriktsstyrelsen"
+
 # Check that the API is in dev mode (X-Dev-Role-Override must work)
 HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v0/locations" -H "$HEADER")
 if [ "$HTTP_CODE" != "200" ]; then

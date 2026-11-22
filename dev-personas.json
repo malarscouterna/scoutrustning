@@ -62,7 +62,8 @@
       "name": "Vera Visa",
       "email": "vera@example.com",
       "groups": {
-        "766": []
+        "766": [],
+        "district:111": ["Distriktsstyrelsen"]
       }
     }
   }

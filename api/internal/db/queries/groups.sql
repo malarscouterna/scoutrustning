@@ -1,6 +1,6 @@
 -- name: CreateGroup :one
-INSERT INTO groups (id, name)
-VALUES (@id, @name)
+INSERT INTO groups (id, name, org_type, scoutnet_id)
+VALUES (@id, @name, @org_type, @scoutnet_id)
 ON CONFLICT (id) DO NOTHING
 RETURNING *;
 

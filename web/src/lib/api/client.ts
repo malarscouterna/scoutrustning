@@ -706,7 +706,7 @@ updateLanguage: (language: string | null) =>
 			requestMut<IssueDetail>(`/issues/${id}/articles`, 'POST', { article_id: articleId }, opts),
 		removeIssueArticle: (id: string, articleId: string) =>
 			requestMut<void>(`/issues/${id}/articles/${articleId}`, 'DELETE', undefined, opts),
-		submitJoin: (data: { org_id: string; group_name: string; role_name: string; role_key: string; team_name: string; contact_email: string; group_size: string; interested_in_custom_domain: boolean }) =>
+		submitJoin: (data: { org_id: string; org_type: string; group_name: string; role_name: string; role_key: string; team_name: string; contact_email: string; group_size: string; interested_in_custom_domain: boolean }) =>
 			requestMut<{ sent: boolean }>('/join', 'POST', data, opts),
 	};
 }

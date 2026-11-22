@@ -5,6 +5,7 @@
 	import * as m from '$lib/paraglide/messages.js';
 	import { msg } from '$lib/msg';
 	import { switchGroup } from '$lib/activeGroup';
+	import { orgTypeLabel } from '$lib/org';
 
 	interface Props {
 		userId: string;
@@ -131,7 +132,7 @@
 												onclick={() => switchGroup(group.id)}
 												class="w-full flex items-center justify-between gap-2 px-3 py-1.5 text-sm text-left {group.id === activeGroupId ? 'bg-blue-50 font-medium' : 'hover:bg-neutral-50'}"
 											>
-												<span>{group.name}</span>
+												<span>{group.name} <span class="text-neutral-400 text-xs">{orgTypeLabel(group.type)}</span></span>
 												{#if group.id === activeGroupId}
 													<span class="text-neutral-500 text-xs">{m.user_info_card_current_group_badge()}</span>
 												{/if}

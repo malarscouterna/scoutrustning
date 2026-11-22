@@ -23,21 +23,29 @@ type tokenMembershipRole struct {
 	Name string `json:"name"`
 }
 
-type tokenGroupMembership struct {
+// tokenOrgMembership is one entry in any memberships entity type. Only groups
+// populate Name and IsPrimary in ScoutID; higher-level entities carry roles only.
+type tokenOrgMembership struct {
 	Name      string                `json:"name"`
 	Roles     []tokenMembershipRole `json:"roles"`
 	IsPrimary bool                  `json:"is_primary"`
 }
 
 type tokenTroopMembership struct {
-	Name    string               `json:"name"`
-	GroupID *int                 `json:"groupId"`
+	Name    string                `json:"name"`
+	GroupID *int                  `json:"groupId"`
 	Roles   []tokenMembershipRole `json:"roles"`
 }
 
 type tokenMemberships struct {
-	Groups map[string]tokenGroupMembership `json:"groups"`
-	Troops map[string]tokenTroopMembership `json:"troops"`
+	Groups        map[string]tokenOrgMembership   `json:"groups"`
+	Districts     map[string]tokenOrgMembership   `json:"districts"`
+	Regions       map[string]tokenOrgMembership   `json:"regions"`
+	Organisations map[string]tokenOrgMembership   `json:"organisations"`
+	Corps         map[string]tokenOrgMembership   `json:"corps"`
+	Networks      map[string]tokenOrgMembership   `json:"networks"`
+	Projects      map[string]tokenOrgMembership   `json:"projects"`
+	Troops        map[string]tokenTroopMembership `json:"troops"`
 }
 
 type contextKey string
@@ -57,6 +65,64 @@ const (
 	AccessTrusted = "trusted"
 	AccessManager = "manager"
 )
+
+// Organisation types mirrored from ScoutID's memberships claim. Scoutrustning
+// currently registers groups and districts; the remaining types parse
+// generically so a tenant of any type works without further auth changes.
+const (
+	OrgTypeGroup        = "group"
+	OrgTypeDistrict     = "district"
+	OrgTypeRegion       = "region"
+	OrgTypeOrganisation = "organisation"
+	OrgTypeCorps        = "corps"
+	OrgTypeNetwork      = "network"
+	OrgTypeProject      = "project"
+)
+
+// OrgTypes is the canonical order used when flattening the memberships claim.
+var OrgTypes = []string{
+	OrgTypeGroup,
+	OrgTypeDistrict,
+	OrgTypeRegion,
+	OrgTypeOrganisation,
+	OrgTypeCorps,
+	OrgTypeNetwork,
+	OrgTypeProject,
+}
+
+// IsOrgType reports whether t is a known Scoutnet organisation type.
+func IsOrgType(t string) bool {
+	for _, known := range OrgTypes {
+		if t == known {
+			return true
+		}
+	}
+	return false
+}
+
+// TenantKey maps a Scoutnet entity to the internal groups.id. Groups keep the
+// raw Scoutnet group number for backwards compatibility; every other entity
+// type is prefixed because its ID namespace is separate from groups.
+func TenantKey(orgType, scoutnetID string) string {
+	if orgType == "" || orgType == OrgTypeGroup {
+		return scoutnetID
+	}
+	return orgType + ":" + scoutnetID
+}
+
+// splitTenantKey reverses TenantKey for dev personas and tooling.
+func splitTenantKey(tenantID string) (orgType, scoutnetID string) {
+	for _, t := range OrgTypes {
+		if t == OrgTypeGroup {
+			continue
+		}
+		prefix := t + ":"
+		if strings.HasPrefix(tenantID, prefix) {
+			return t, strings.TrimPrefix(tenantID, prefix)
+		}
+	}
+	return OrgTypeGroup, tenantID
+}
 
 var accessOrder = map[string]int{
 	AccessView:    0,
@@ -192,31 +258,70 @@ type OrgRole struct {
 }
 
 // OrgMembership is a raw org/name/role tuple read directly from the JWT
-// memberships claim, for use when the org has no registered group yet.
+// memberships claim. ID is the Scoutnet ID in the entity's own namespace;
+// TenantID is the matching internal groups.id (empty when not registered).
 type OrgMembership struct {
 	ID        string    `json:"id"`
+	TenantID  string    `json:"tenant_id,omitempty"`
+	Type      string    `json:"type"`
 	Name      string    `json:"name"`
 	Roles     []OrgRole `json:"roles"`
 	IsPrimary bool      `json:"is_primary"`
 }
 
-// pickActiveGroup chooses which of a member's registered groups is active,
-// preferring the hint (from ActiveGroupHeader) if it matches one of them,
-// then the primary org, then a stable first match. Returns "" if registered
-// is empty.
+// parseOrgMemberships flattens the per-entity-type maps in the memberships
+// claim into one list. Types are appended in canonical order and IDs within a
+// type are sorted so organisation selection stays stable across requests.
+func parseOrgMemberships(ms tokenMemberships) []OrgMembership {
+	byType := map[string]map[string]tokenOrgMembership{
+		OrgTypeGroup:        ms.Groups,
+		OrgTypeDistrict:     ms.Districts,
+		OrgTypeRegion:       ms.Regions,
+		OrgTypeOrganisation: ms.Organisations,
+		OrgTypeCorps:        ms.Corps,
+		OrgTypeNetwork:      ms.Networks,
+		OrgTypeProject:      ms.Projects,
+	}
+
+	var out []OrgMembership
+	for _, orgType := range OrgTypes {
+		members := byType[orgType]
+		ids := make([]string, 0, len(members))
+		for id := range members {
+			ids = append(ids, id)
+		}
+		sort.Strings(ids)
+		for _, id := range ids {
+			m := members[id]
+			roles := make([]OrgRole, len(m.Roles))
+			for i, role := range m.Roles {
+				roles[i] = OrgRole{ID: role.ID, Key: role.Key, Name: role.Name}
+			}
+			out = append(out, OrgMembership{
+				ID: id, Type: orgType, Name: m.Name, Roles: roles, IsPrimary: m.IsPrimary,
+			})
+		}
+	}
+	return out
+}
+
+// pickActiveGroup chooses which of a member's registered organisations is
+// active, preferring the hint (from ActiveGroupHeader) if it matches one of
+// them, then the primary org, then a stable first match. Returns "" if
+// registered is empty.
 func pickActiveGroup(registered []OrgMembership, hint string) string {
 	for _, g := range registered {
-		if g.ID == hint {
-			return g.ID
+		if g.TenantID == hint {
+			return g.TenantID
 		}
 	}
 	for _, g := range registered {
 		if g.IsPrimary {
-			return g.ID
+			return g.TenantID
 		}
 	}
 	if len(registered) > 0 {
-		return registered[0].ID
+		return registered[0].TenantID
 	}
 	return ""
 }
@@ -324,33 +429,35 @@ func Middleware(cfg MiddlewareConfig) func(http.Handler) http.Handler {
 			}
 
 			// Raw org memberships from the token, independent of which (if any)
-			// resolves to a registered group - used by /join so a user with one
+			// resolves to a registered tenant - used by /join so a user with one
 			// registered org can still apply for a second, unregistered one.
-			var orgs []OrgMembership
-			for gid, gm := range ms.Groups {
-				roles := make([]OrgRole, len(gm.Roles))
-				for i, role := range gm.Roles {
-					roles[i] = OrgRole{ID: role.ID, Key: role.Key, Name: role.Name}
-				}
-				orgs = append(orgs, OrgMembership{ID: gid, Name: gm.Name, Roles: roles, IsPrimary: gm.IsPrimary})
-			}
+			orgs := parseOrgMemberships(ms)
 
-			// Determine which registered groups this member belongs to. A member can
-			// match more than one; which one is "active" is resolved below, preferring
-			// the ActiveGroupHeader hint (set by the frontend's group switcher cookie)
-			// over the primary org, over a stable (sorted) first match. Iterating a Go
-			// map directly here would pick a different, arbitrary group on every
-			// request once a member has 2+ registered orgs.
+			// Determine which registered organisations this member belongs to. A
+			// member can match more than one; which one is "active" is resolved
+			// below, preferring the ActiveGroupHeader hint (set by the frontend's
+			// organisation switcher cookie) over the primary org, over a stable
+			// first match. parseOrgMemberships sorts within each entity type.
 			var registeredGroups []OrgMembership
 			if cfg.Resolver != nil {
 				for _, org := range orgs {
-					exists, _ := cfg.Resolver.GroupExists(r.Context(), org.ID)
-					if exists {
-						registeredGroups = append(registeredGroups, org)
+					tenantID := TenantKey(org.Type, org.ID)
+					exists, _ := cfg.Resolver.GroupExists(r.Context(), tenantID)
+					if !exists {
+						continue
 					}
+					org.TenantID = tenantID
+					if org.Name == "" {
+						// Higher-level Scoutnet entities carry no name; use the
+						// locally stored organisation name instead.
+						if name, err := cfg.Resolver.GroupName(r.Context(), tenantID); err == nil {
+							org.Name = name
+						}
+					}
+					registeredGroups = append(registeredGroups, org)
 				}
 				sort.Slice(registeredGroups, func(i, j int) bool {
-					return registeredGroups[i].ID < registeredGroups[j].ID
+					return registeredGroups[i].TenantID < registeredGroups[j].TenantID
 				})
 			}
 
@@ -377,9 +484,14 @@ func Middleware(cfg MiddlewareConfig) func(http.Handler) http.Handler {
 			// Build OIDC claims from memberships
 			var oidcClaims []OIDCClaim
 
-			// One claim per role the user holds in the active group
-			if gm, ok := ms.Groups[groupID]; ok {
-				for _, role := range gm.Roles {
+			// One claim per role the user holds in the active organisation. The
+			// "group" scope means "role in the active tenant" regardless of its
+			// Scoutnet entity type, so existing claim mappings keep working.
+			for _, org := range registeredGroups {
+				if org.TenantID != groupID {
+					continue
+				}
+				for _, role := range org.Roles {
 					oidcClaims = append(oidcClaims, OIDCClaim{
 						Scope:    "group",
 						ID:       role.Key,
@@ -387,6 +499,7 @@ func Middleware(cfg MiddlewareConfig) func(http.Handler) http.Handler {
 						Name:     role.Name,
 					})
 				}
+				break
 			}
 
 			// One claim per troop; pass groupId so auto-create can gate on it
@@ -465,16 +578,19 @@ func resolveDevPersona(ctx context.Context, personas map[string]devPersona, name
 
 	var registeredGroups []OrgMembership
 	for gid := range p.Groups {
+		orgType, scoutnetID := splitTenantKey(gid)
 		groupName := gid
 		if resolver != nil {
 			if n, err := resolver.GroupName(ctx, gid); err == nil {
 				groupName = n
 			}
 		}
-		registeredGroups = append(registeredGroups, OrgMembership{ID: gid, Name: groupName})
+		registeredGroups = append(registeredGroups, OrgMembership{
+			ID: scoutnetID, TenantID: gid, Type: orgType, Name: groupName,
+		})
 	}
 	sort.Slice(registeredGroups, func(i, j int) bool {
-		return registeredGroups[i].ID < registeredGroups[j].ID
+		return registeredGroups[i].TenantID < registeredGroups[j].TenantID
 	})
 
 	groupID := pickActiveGroup(registeredGroups, hint)
@@ -523,6 +639,7 @@ func resolveDevPersona(ctx context.Context, personas map[string]devPersona, name
 		Email:     p.Email,
 		Teams:     teams,
 		MaxAccess: maxAccess,
+		Orgs:      registeredGroups,
 		Groups:    registeredGroups,
 	}, nil
 }
@@ -566,4 +683,3 @@ func getStringClaim(m jwt.MapClaims, key string) string {
 	}
 	return ""
 }
-

@@ -840,9 +840,10 @@ Returns the authenticated user's resolved profile.
 **Response** `200`
 ```json
 {
-  "member_id": 12345,
-  "group_id": 67,
+  "member_id": "12345",
+  "group_id": "766",
   "group_name": "Mälarscouterna",
+  "group_type": "group",
   "name": "Anna Svensson",
   "email": "anna@example.com",
   "picture": "string | null",
@@ -850,8 +851,8 @@ Returns the authenticated user's resolved profile.
   "max_access": "manager",
   "language": "sv",
   "groups": [
-    { "id": "67", "name": "Mälarscouterna", "is_primary": true },
-    { "id": "99", "name": "Testkåren", "is_primary": false }
+    { "id": "766", "scoutnet_id": "766", "type": "group", "name": "Mälarscouterna", "is_primary": true },
+    { "id": "district:111", "scoutnet_id": "111", "type": "district", "name": "Mälardalens distrikt", "is_primary": false }
   ],
   "permissions": {
     "image_upload": "book",
@@ -864,7 +865,7 @@ Returns the authenticated user's resolved profile.
 ```
 `language` is the resolved language (`sv` or `en`): user preference → group default → `sv`.
 
-`groups` lists every registered scout group the member belongs to (from the JWT's `memberships.groups` claim, filtered to ones with a matching DB group) - normally just one entry. `group_id`/`group_name` reflect whichever one is currently active, resolved from an `X-Active-Group-Id` header (set by the frontend from an `active-group-id` cookie) if present and valid, else the primary org, else the first match.
+`groups` lists every registered organisation the member belongs to (from all entity types in the JWT's `memberships` claim, filtered to ones with a matching DB tenant) - normally just one entry. `id` is the internal tenant key (`766` for a group, `district:111` for a district), while `scoutnet_id` is the entity ID in its own Scoutnet namespace; `type` is the Scoutnet entity type. `group_id`/`group_name`/`group_type` reflect whichever organisation is currently active, resolved from an `X-Active-Group-Id` header (set by the frontend from an `active-group-id` cookie) if present and valid, else the primary org, else the first match.
 
 ### `DELETE /api/v0/me`
 Self-service removal of the caller's own profile - **global, across every registered group the member belongs to**, not just the currently-active one. Does not delete any row - scrubs `name`, `email`, `picture`, `notification_email`, `notification_prefs`, `team_ids`, and resets `max_access_level` to `view` on all of the member's `(id, group_id)` rows in one statement, so existing bookings/events/etc. authored by this member stay linked but are no longer attributable. Logging in again with the same member ID restores the full profile for whichever group they log back into (the existing upsert-on-login overwrites the scrubbed fields).
@@ -988,6 +989,35 @@ Returns group settings. SMTP key is returned masked.
 **Response** `200` | `400` | `403`
 
 ---
+
+## Signup
+
+### `POST /api/v0/join`
+Submit an application to register a Scoutnet organisation. Mounted with auth's
+`AllowUnmapped` mode: the caller must be logged in through ScoutID, but the
+organisation does not need to be registered yet. The submitted `org_id` +
+`org_type` pair is cross-checked against the caller's `memberships` claim.
+
+**Body**
+```json
+{
+  "org_id": "111",
+  "org_type": "district",
+  "group_name": "Mälardalens distrikt",
+  "role_name": "Distriktsstyrelsen",
+  "role_key": "distriktsstyrelsen",
+  "team_name": "Distriktsstyrelsen",
+  "contact_email": "distrikt@example.com",
+  "group_size": "1200",
+  "interested_in_custom_domain": false
+}
+```
+
+`org_type` defaults to `group`. The handler emails the configured `ADMIN_EMAIL`
+with the application and a ready-to-run `init-group --org-type=... --org-id=...`
+command, and sends a confirmation to `contact_email`.
+
+**Response** `200` | `400` | `403`
 
 ## Error format
 

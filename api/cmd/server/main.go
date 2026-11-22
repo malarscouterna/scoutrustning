@@ -28,7 +28,7 @@ func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 
 	// Subcommand dispatch
-	if len(os.Args) > 1 && os.Args[1] == "init-group" {
+	if len(os.Args) > 1 && (os.Args[1] == "init-group" || os.Args[1] == "init-org") {
 		runInitGroup(os.Args[2:])
 		return
 	}

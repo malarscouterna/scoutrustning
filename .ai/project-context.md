@@ -79,7 +79,7 @@ ms-utrustning/
 
 ## Key identity decisions
 
-- `groups.id` is `text`, using the Scoutnet group number directly (e.g. `"766"` for Mälarscouterna)
+- `groups` is the tenant table and represents a Scoutnet organisation. `groups.id` is `text`: the Scoutnet group number directly for groups (e.g. `"766"`), or `<org_type>:<scoutnet_id>` for other types (e.g. `"district:111"`). `groups.org_type` + `groups.scoutnet_id` record the Scoutnet identity. ScoutID entity ID namespaces are separate, hence the prefix. See `docs/implementation/organisation-types.md`.
 - `users.id` is `text`, using the Scoutnet member number directly (e.g. `"3000924"`)
 - All other tables use `uuid` primary keys
 - Units are a managed table (`teams`), not free text - populated from OIDC claims or created by admins. The `teams` table has a `type` column (`troop` or `role`) to distinguish scout troops from functional roles. Each team has a configurable `access_level` (view, book, trusted, manager).
@@ -104,7 +104,7 @@ The frontend has a clean separation between "who is the user" and "where does th
 - `+layout.server.ts` provides `data.user` (the current user) to all pages. In production this comes from the OIDC session; in dev mode from the persona cookie. Pages never care about the source.
 - `hooks.server.ts` proxies all `/api/*` requests to the Go API and injects the auth header. In dev mode: reads the `dev-persona` cookie and sets `X-Dev-Role-Override`. In production: forwards the real Bearer token.
 - **No page or component should ever reference personas, cookies, or auth headers directly.** They consume `data.user` from the layout and call `createApiClient()` without auth options - the hooks layer handles identity injection.
-- OIDC token carries a structured `memberships` claim with `groups` (keyed by group ID, each with a `roles` array of `{key, name}`) and `troops` (keyed by troop ID, each with an optional `groupId` and `roles` array). The auth middleware parses this claim, finds the first group that exists in the DB, then builds `OIDCClaim` entries for that group's roles and all troop memberships. These are mapped to teams via `team_claim_mappings` in the database. Troops are only auto-created when their `groupId` matches the active group; troops with null `groupId` still resolve if already mapped. Teams are auto-created on first login or pre-created by managers in the settings UI. The `init-group` CLI bootstraps the first group and manager team.
+- OIDC token carries a structured `memberships` claim keyed by entity type: `groups` (with `name`, `is_primary`, `roles`), `districts`/`regions`/`organisations`/`corps`/`networks`/`projects` (roles only, no name), and `troops` (optional `groupId`). The auth middleware flattens all entity types, resolves each against a registered tenant via `TenantKey(type, id)`, picks the active organisation, then builds `OIDCClaim` entries for that organisation's roles and all troop memberships (group roles use claim scope `group`, meaning "role in the active tenant"). Higher-level entities have no name in the token, so their display name comes from `groups.name`. These are mapped to teams via `team_claim_mappings` in the database. Troops are only auto-created when their `groupId` matches the active group; troops with null `groupId` still resolve if already mapped. Teams are auto-created on first login or pre-created by managers in the settings UI. The `init-group` CLI bootstraps the first group and manager team.
 
 ## Scalability
 
