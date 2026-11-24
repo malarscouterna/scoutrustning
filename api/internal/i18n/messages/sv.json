@@ -545,6 +545,7 @@
 
   "error_generic": "Något gick fel. Försök igen.",
   "error_forbidden": "Du har inte behörighet att göra detta.",
+  "error_file_too_large": "Filen är för stor för att laddas upp.",
   "error_unauthorized": "Du är inte inloggad.",
   "error_not_found": "Hittades inte.",
   "error_article_not_found": "Artikeln hittades inte.",
