@@ -146,8 +146,6 @@ docker compose pull && docker compose up -d
 
 Migrations run automatically on startup.
 
-SvelteKit's Node adapter caps request bodies at 512 KB by default, which is smaller than the API's 25 MB image upload limit. The web image locks `BODY_SIZE_LIMIT=30M` in `web/Dockerfile`; keep it above the API cap if you change either. Cloudflare's proxied-request upload limit (100 MB on Free/Pro) is not a constraint at this size.
-
 ### Bootstrapping an organisation
 
 Every organisation (scoutkår, distrikt, etc.) that should have access needs to be bootstrapped with `init-group` (alias `init-org`). This creates the tenant record, default settings, and a manager team mapped to a Scoutnet role. The command is idempotent — safe to re-run to add more manager teams.
