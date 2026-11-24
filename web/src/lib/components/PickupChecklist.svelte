@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { createApiClient, type BookingItem, type Issue } from '$lib/api/client';
+	import { createApiClient, type ArticleLink, type BookingItem, type Issue } from '$lib/api/client';
+	import ArticleLinks from '$lib/components/ArticleLinks.svelte';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
 	import ReportIssueSheet from '$lib/components/ReportIssueSheet.svelte';
 	import * as m from '$lib/paraglide/messages.js';
@@ -81,6 +82,7 @@
 		locationId: string;
 		description: string;
 		instructions: string;
+		links: ArticleLink[];
 		items: BookingItem[];
 	}
 
@@ -118,6 +120,7 @@
 				locationId: item.location_id,
 				description: item.article_description ?? '',
 				instructions: item.article_instructions ?? '',
+				links: item.links ?? [],
 				items: [item]
 			});
 		}
@@ -130,8 +133,8 @@
 		expandedGroups = next;
 	}
 
-	function hasExpandable(imageIds: string[], desc: string, instr: string): boolean {
-		return imageIds.length > 0 || !!desc || !!instr;
+	function hasExpandable(imageIds: string[], desc: string, instr: string, links: ArticleLink[]): boolean {
+		return imageIds.length > 0 || !!desc || !!instr || links.length > 0;
 	}
 
 	let checkedCount = $derived(activeItems.filter((i) => i.pickup_status !== null).length);
@@ -286,7 +289,7 @@
 	}
 </script>
 
-{#snippet infoBlock(imageIds: string[], commercialName: string, locationId: string, description: string, instructions: string)}
+{#snippet infoBlock(imageIds: string[], commercialName: string, locationId: string, description: string, instructions: string, links: ArticleLink[])}
 	<div class="px-4 py-2 border-t space-y-2 text-xs text-neutral-600">
 		{#if imageIds.length > 0}
 			<ImageViewer {imageIds} alt={commercialName} {commercialName} {locationId} />
@@ -303,6 +306,7 @@
 				<p class="mt-0.5">{instructions}</p>
 			</div>
 		{/if}
+		<ArticleLinks {links} />
 	</div>
 {/snippet}
 
@@ -320,7 +324,7 @@
 		{@const anyPickedUp = groupHasAnyPickedUp(group)}
 		{@const rep = group.items[0]}
 		{@const qImageIds = rep?.image_ids ?? []}
-		{@const expandable = group.category === 'reported_usable' || hasExpandable(qImageIds, rep?.article_description ?? '', rep?.article_instructions ?? '')}
+		{@const expandable = group.category === 'reported_usable' || hasExpandable(qImageIds, rep?.article_description ?? '', rep?.article_instructions ?? '', rep?.links ?? [])}
 		{@const expanded = expandedGroups.has(group.key)}
 		{@const isUnusableGroup = group.category === 'reported_unusable'}
 		{@const isUsableGroup = group.category === 'reported_usable'}
@@ -442,7 +446,7 @@
 						{/if}
 					</div>
 				{:else}
-					{@render infoBlock(qImageIds, group.commercialName, rep?.location_id ?? '', rep?.article_description ?? '', rep?.article_instructions ?? '')}
+					{@render infoBlock(qImageIds, group.commercialName, rep?.location_id ?? '', rep?.article_description ?? '', rep?.article_instructions ?? '', rep?.links ?? [])}
 				{/if}
 			{/if}
 		</div>
@@ -451,7 +455,7 @@
 	<!-- Individually tracked items -->
 	{#each trackedGroups as tGroup}
 		{@const tKey = tGroup.commercialName}
-		{@const expandable = hasExpandable(tGroup.imageIds, tGroup.description, tGroup.instructions)}
+		{@const expandable = hasExpandable(tGroup.imageIds, tGroup.description, tGroup.instructions, tGroup.links)}
 		{@const expanded = expandedGroups.has(tKey)}
 		{#each tGroup.items as item}
 		{@const reported = isReported(item.article_status)}
@@ -501,7 +505,7 @@
 				</div>
 			</div>
 			{#if expanded && tGroup.items[0] === item}
-				{@render infoBlock(tGroup.imageIds, tGroup.commercialName, tGroup.locationId, tGroup.description, tGroup.instructions)}
+				{@render infoBlock(tGroup.imageIds, tGroup.commercialName, tGroup.locationId, tGroup.description, tGroup.instructions, tGroup.links)}
 			{/if}
 		</div>
 

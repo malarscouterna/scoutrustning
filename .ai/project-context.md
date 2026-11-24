@@ -95,6 +95,7 @@ ms-utrustning/
 - Article `status` represents **condition** (ok, reported_usable, incoming, reported_unusable, under_repair, lost, archived) - orthogonal to booking state (reserved, loaned out), which is computed from booking data.
 - `expected_available_date` (nullable) is used with `incoming` and `under_repair` statuses. Articles with these statuses become bookable for date ranges starting on or after this date.
 - Availability is always computed at query time from article condition + booking overlaps - never stored as a column.
+- Article links (user guides, repair manuals) live in `article_links`, scoped by `commercial_name` (or `common_name` when empty) rather than article id, so every copy shares one set just like description/instructions. Visibility is `public` or `trusted`; trusted links are filtered server-side by access level. A background checker runs daily and surfaces broken links in Kårinställningar. See `docs/implementation/article-links.md`.
 
 ## Identity & auth architecture
 

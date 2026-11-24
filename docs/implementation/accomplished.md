@@ -4,6 +4,12 @@ A living log of completed work — what was built, when, and why. Major features
 
 When finishing a backlog item or spec milestone, log it here and remove it from the backlog / mark it done in the spec.
 
+## 2026-11-24
+
+### Article links with health checking
+
+Articles can now carry links to user guides, repair manuals and similar resources. Links are scoped to the product type (same `commercial_name`, else `common_name`) like description/instructions, so every copy and location shares one set. Creating another copy adds links without wiping the set; renames only move them when the old type disappears and the new one has no links (merges keep the target's links); deleting the last copy removes them. Each link has a free-text short label, an http(s) URL and `public`/`trusted` visibility, and editing uses the group's configured `article_edit_role`. Article, availability and booking-item responses include only the links the caller may see, while editors fetch the full set to avoid deleting trusted links. A hardened background checker (daily; 10 minutes in dev, plus "Check now") never records canceled runs, reports checked/total/truncated, and Kårinställningar shows failing links so managers can mark an expected failure (e.g. bot-blocked 403) as working, with an undo — it becomes active again only if the failure changes. See [article-links.md](article-links.md).
+
 ## 2026-11-22
 
 ### Organisation types: districts as tenants

@@ -8,10 +8,13 @@ export const load: PageServerLoad = async ({ fetch, parent, params, url }) => {
 	if (!isManager(user)) throw redirect(302, '/browse');
 
 	const api = createApiClient({ fetch });
-	const [article, locations, categories] = await Promise.all([
+	const [article, locations, categories, links] = await Promise.all([
 		api.getArticle(params.id),
 		api.listLocations(),
-		api.listCategories()
+		api.listCategories(),
+		// The visible links on the article hide trusted links from lower access
+		// levels; the editor must see (and round-trip) all of them.
+		api.listArticleLinks(params.id)
 	]);
 
 	let groupCount: number | null = null;
@@ -29,5 +32,5 @@ export const load: PageServerLoad = async ({ fetch, parent, params, url }) => {
 		groupItems = siblings;
 	}
 
-	return { article, locations, categories, groupCount, groupItems };
+	return { article: { ...article, links }, locations, categories, groupCount, groupItems };
 };

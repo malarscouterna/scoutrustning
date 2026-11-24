@@ -329,7 +329,7 @@ func (h *BookingHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	WriteJSON(w, http.StatusOK, map[string]any{
 		"booking":          booking,
-		"items":            items,
+		"items":            attachVisibleLinks(r.Context(), h.Q, claims, items),
 		"auto_approves":    autoApproves,
 		"archive_deadline": archiveDeadline(r.Context(), h.Q, claims.GroupID, booking.Status, booking.CreatedAt, booking.UpdatedAt),
 		"blocked_items":    blockedItems,

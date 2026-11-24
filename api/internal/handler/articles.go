@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/malarscouterna/scoutrustning/api/internal/auth"
 	"github.com/malarscouterna/scoutrustning/api/internal/db"
@@ -21,6 +22,7 @@ import (
 
 type ArticleHandler struct {
 	Q     *db.Queries
+	Pool  *pgxpool.Pool
 	Perms *PermissionCache
 }
 
@@ -42,6 +44,10 @@ func (h *ArticleHandler) Routes() chi.Router {
 	r.With(editPerm).Put("/bulk", h.BulkUpdate)
 	r.With(editPerm).Post("/group-count", h.GroupCount)
 	r.With(editPerm).Post("/{id}/convert-tracking", h.ConvertTracking)
+	r.With(editPerm).Get("/{id}/links", h.ListLinks)
+	r.With(editPerm).Post("/{id}/links", h.CreateLink)
+	r.With(editPerm).Put("/{id}/links/{linkId}", h.UpdateLink)
+	r.With(editPerm).Delete("/{id}/links/{linkId}", h.DeleteLink)
 	return r
 }
 
@@ -64,7 +70,7 @@ func (h *ArticleHandler) List(w http.ResponseWriter, r *http.Request) {
 			WriteError(w, http.StatusInternalServerError, "failed to list articles")
 			return
 		}
-		WriteJSON(w, http.StatusOK, articles)
+		WriteJSON(w, http.StatusOK, attachVisibleLinks(r.Context(), h.Q, claims, articles))
 		return
 	}
 
@@ -122,7 +128,7 @@ func (h *ArticleHandler) List(w http.ResponseWriter, r *http.Request) {
 			WriteError(w, http.StatusInternalServerError, "failed to list articles")
 			return
 		}
-		WriteJSON(w, http.StatusOK, articles)
+		WriteJSON(w, http.StatusOK, attachVisibleLinks(r.Context(), h.Q, claims, articles))
 		return
 	}
 
@@ -137,7 +143,7 @@ func (h *ArticleHandler) List(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusInternalServerError, "failed to list articles")
 		return
 	}
-	WriteJSON(w, http.StatusOK, articles)
+	WriteJSON(w, http.StatusOK, attachVisibleLinks(r.Context(), h.Q, claims, articles))
 }
 
 func (h *ArticleHandler) Get(w http.ResponseWriter, r *http.Request) {
@@ -152,23 +158,24 @@ func (h *ArticleHandler) Get(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusNotFound, "article not found")
 		return
 	}
-	WriteJSON(w, http.StatusOK, article)
+	WriteJSON(w, http.StatusOK, attachVisibleLinks(r.Context(), h.Q, claims, article))
 }
 
 type articleRequest struct {
-	CommercialName      string  `json:"commercial_name"`
-	CommonName          string  `json:"common_name"`
-	CategoryID          string  `json:"category_id"`
-	LocationID          string  `json:"location_id"`
-	Status              string  `json:"status"`
-	IndividuallyTracked bool    `json:"individually_tracked"`
-	ApprovalLevel       string  `json:"approval_level"`
-	Description         string  `json:"description"`
-	Instructions        string  `json:"instructions"`
-	Place               string  `json:"place"`
-	PurchaseDate        *string `json:"purchase_date"`
-	PurchasePrice       *string `json:"purchase_price"`
-	ManagerNotes        string  `json:"manager_notes"`
+	CommercialName      string              `json:"commercial_name"`
+	CommonName          string              `json:"common_name"`
+	CategoryID          string              `json:"category_id"`
+	LocationID          string              `json:"location_id"`
+	Status              string              `json:"status"`
+	IndividuallyTracked bool                `json:"individually_tracked"`
+	ApprovalLevel       string              `json:"approval_level"`
+	Description         string              `json:"description"`
+	Instructions        string              `json:"instructions"`
+	Place               string              `json:"place"`
+	PurchaseDate        *string             `json:"purchase_date"`
+	PurchasePrice       *string             `json:"purchase_price"`
+	ManagerNotes        string              `json:"manager_notes"`
+	Links               *[]ArticleLinkInput `json:"links"`
 }
 
 func (h *ArticleHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -181,6 +188,15 @@ func (h *ArticleHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if req.CommonName == "" || req.CategoryID == "" || req.LocationID == "" {
 		WriteError(w, http.StatusBadRequest, "common_name, category_id, and location_id are required")
 		return
+	}
+	var linkInputs []ArticleLinkInput
+	if req.Links != nil {
+		var err error
+		linkInputs, err = normalizeArticleLinks(*req.Links)
+		if err != nil {
+			WriteError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 	}
 	catID, err := parseUUID(req.CategoryID)
 	if err != nil {
@@ -216,7 +232,16 @@ func (h *ArticleHandler) Create(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	article, err := h.Q.CreateArticle(r.Context(), db.CreateArticleParams{
+	tx, err := h.Pool.Begin(r.Context())
+	if err != nil {
+		slog.Error("failed to begin transaction", "error", err)
+		WriteError(w, http.StatusInternalServerError, "failed to create article")
+		return
+	}
+	defer tx.Rollback(r.Context())
+	q := h.Q.WithTx(tx)
+
+	article, err := q.CreateArticle(r.Context(), db.CreateArticleParams{
 		GroupID:             claims.GroupID,
 		CommercialName:      req.CommercialName,
 		CommonName:          req.CommonName,
@@ -237,7 +262,20 @@ func (h *ArticleHandler) Create(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusInternalServerError, "failed to create article")
 		return
 	}
-	WriteJSON(w, http.StatusCreated, article)
+	if req.Links != nil {
+		scope := linkScopeKey(article.CommercialName, article.CommonName)
+		if err := upsertArticleLinks(r.Context(), q, claims.GroupID, scope, claims.MemberID, linkInputs); err != nil {
+			slog.Error("failed to save article links", "error", err)
+			WriteError(w, http.StatusInternalServerError, "failed to create article")
+			return
+		}
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		slog.Error("failed to commit article creation", "error", err)
+		WriteError(w, http.StatusInternalServerError, "failed to create article")
+		return
+	}
+	WriteJSON(w, http.StatusCreated, attachVisibleLinks(r.Context(), h.Q, claims, article))
 }
 
 func (h *ArticleHandler) Update(w http.ResponseWriter, r *http.Request) {
@@ -251,6 +289,14 @@ func (h *ArticleHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
+	}
+	var linkInputs []ArticleLinkInput
+	if req.Links != nil {
+		linkInputs, err = normalizeArticleLinks(*req.Links)
+		if err != nil {
+			WriteError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 	}
 	catID, err := parseUUID(req.CategoryID)
 	if err != nil {
@@ -279,26 +325,37 @@ func (h *ArticleHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	tx, err := h.Pool.Begin(r.Context())
+	if err != nil {
+		slog.Error("failed to begin transaction", "error", err)
+		WriteError(w, http.StatusInternalServerError, "failed to update article")
+		return
+	}
+	defer tx.Rollback(r.Context())
+	q := h.Q.WithTx(tx)
+
+	existing, err := q.GetArticle(r.Context(), db.GetArticleParams{ID: id, GroupID: claims.GroupID})
+	if err != nil {
+		WriteError(w, http.StatusNotFound, "article not found")
+		return
+	}
+	oldScope := linkScopeKey(existing.CommercialName, existing.CommonName)
+
 	// group=true: apply shared fields to all articles in the quantity tracked group
 	if r.URL.Query().Get("group") == "true" {
-		existing, err := h.Q.GetArticle(r.Context(), db.GetArticleParams{ID: id, GroupID: claims.GroupID})
-		if err != nil {
-			WriteError(w, http.StatusNotFound, "article not found")
-			return
-		}
-		_, err = h.Q.UpdateArticleGroupFields(r.Context(), db.UpdateArticleGroupFieldsParams{
-			GroupID:            claims.GroupID,
-			OldCommercialName:  existing.CommercialName,
-			OldLocationID:      existing.LocationID,
-			NewCommercialName:  req.CommercialName,
-			NewCommonName:      req.CommonName,
-			CategoryID:         catID,
-			NewLocationID:      locID,
-			ApprovalLevel:      req.ApprovalLevel,
-			Description:        req.Description,
-			Instructions:       req.Instructions,
-			Place:              req.Place,
-			ManagerNotes:       req.ManagerNotes,
+		_, err = q.UpdateArticleGroupFields(r.Context(), db.UpdateArticleGroupFieldsParams{
+			GroupID:             claims.GroupID,
+			OldCommercialName:   existing.CommercialName,
+			OldLocationID:       existing.LocationID,
+			NewCommercialName:   req.CommercialName,
+			NewCommonName:       req.CommonName,
+			CategoryID:          catID,
+			NewLocationID:       locID,
+			ApprovalLevel:       req.ApprovalLevel,
+			Description:         req.Description,
+			Instructions:        req.Instructions,
+			Place:               req.Place,
+			ManagerNotes:        req.ManagerNotes,
 			IndividuallyTracked: req.IndividuallyTracked,
 		})
 		if err != nil {
@@ -306,16 +363,34 @@ func (h *ArticleHandler) Update(w http.ResponseWriter, r *http.Request) {
 			WriteError(w, http.StatusInternalServerError, "failed to update group")
 			return
 		}
-		updated, err := h.Q.GetArticle(r.Context(), db.GetArticleParams{ID: id, GroupID: claims.GroupID})
+		updated, err := q.GetArticle(r.Context(), db.GetArticleParams{ID: id, GroupID: claims.GroupID})
 		if err != nil {
 			WriteError(w, http.StatusInternalServerError, "failed to read updated article")
 			return
 		}
-		WriteJSON(w, http.StatusOK, updated)
+		newScope := linkScopeKey(updated.CommercialName, updated.CommonName)
+		if err := applyLinkScopeChange(r.Context(), q, claims.GroupID, updated.ID, oldScope, newScope); err != nil {
+			slog.Error("failed to move article links", "error", err)
+			WriteError(w, http.StatusInternalServerError, "failed to update group")
+			return
+		}
+		if req.Links != nil && newScope == oldScope {
+			if err := replaceArticleLinks(r.Context(), q, claims.GroupID, newScope, claims.MemberID, linkInputs); err != nil {
+				slog.Error("failed to save article links", "error", err)
+				WriteError(w, http.StatusInternalServerError, "failed to update group")
+				return
+			}
+		}
+		if err := tx.Commit(r.Context()); err != nil {
+			slog.Error("failed to commit article group update", "error", err)
+			WriteError(w, http.StatusInternalServerError, "failed to update group")
+			return
+		}
+		WriteJSON(w, http.StatusOK, attachVisibleLinks(r.Context(), h.Q, claims, updated))
 		return
 	}
 
-	article, err := h.Q.UpdateArticle(r.Context(), db.UpdateArticleParams{
+	article, err := q.UpdateArticle(r.Context(), db.UpdateArticleParams{
 		ID: id, GroupID: claims.GroupID,
 		CommercialName:      req.CommercialName,
 		CommonName:          req.CommonName,
@@ -338,7 +413,7 @@ func (h *ArticleHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	// Auto-propagate shared fields to siblings (same commercial_name across all locations)
 	if article.IndividuallyTracked && article.CommercialName != "" {
-		h.Q.PropagateSharedFields(r.Context(), db.PropagateSharedFieldsParams{
+		q.PropagateSharedFields(r.Context(), db.PropagateSharedFieldsParams{
 			GroupID:        claims.GroupID,
 			CommercialName: article.CommercialName,
 			ExcludeID:      article.ID,
@@ -349,7 +424,25 @@ func (h *ArticleHandler) Update(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	WriteJSON(w, http.StatusOK, article)
+	newScope := linkScopeKey(article.CommercialName, article.CommonName)
+	if err := applyLinkScopeChange(r.Context(), q, claims.GroupID, article.ID, oldScope, newScope); err != nil {
+		slog.Error("failed to move article links", "error", err)
+		WriteError(w, http.StatusInternalServerError, "failed to update article")
+		return
+	}
+	if req.Links != nil && newScope == oldScope {
+		if err := replaceArticleLinks(r.Context(), q, claims.GroupID, newScope, claims.MemberID, linkInputs); err != nil {
+			slog.Error("failed to save article links", "error", err)
+			WriteError(w, http.StatusInternalServerError, "failed to update article")
+			return
+		}
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		slog.Error("failed to commit article update", "error", err)
+		WriteError(w, http.StatusInternalServerError, "failed to update article")
+		return
+	}
+	WriteJSON(w, http.StatusOK, attachVisibleLinks(r.Context(), h.Q, claims, article))
 }
 
 // Availability returns available article counts grouped by commercial_name for a date range.
@@ -390,21 +483,23 @@ func (h *ArticleHandler) Availability(w http.ResponseWriter, r *http.Request) {
 
 	// Group by commercial_name + location
 	type availGroup struct {
-		CommercialName      string          `json:"commercial_name"`
-		AvailableCount      int             `json:"available_count"`
-		ReportedUsableCount int             `json:"reported_usable_count"`
-		IncomingCount       int             `json:"incoming_count"`
-		UnderRepairCount    int             `json:"under_repair_count"`
-		ApprovalLevel       string          `json:"approval_level"`
-		CategoryName        string          `json:"category_name"`
-		LocationName        string          `json:"location_name"`
-		ImageIds            json.RawMessage `json:"image_ids"`
-		LocationID          string          `json:"location_id"`
-		Description         string          `json:"description"`
-		Instructions        string          `json:"instructions"`
+		CommercialName      string            `json:"commercial_name"`
+		AvailableCount      int               `json:"available_count"`
+		ReportedUsableCount int               `json:"reported_usable_count"`
+		IncomingCount       int               `json:"incoming_count"`
+		UnderRepairCount    int               `json:"under_repair_count"`
+		ApprovalLevel       string            `json:"approval_level"`
+		CategoryName        string            `json:"category_name"`
+		LocationName        string            `json:"location_name"`
+		ImageIds            json.RawMessage   `json:"image_ids"`
+		LocationID          string            `json:"location_id"`
+		Description         string            `json:"description"`
+		Instructions        string            `json:"instructions"`
+		Links               []ArticleLinkView `json:"links"`
+		ScopeKey            string            `json:"-"`
 	}
 	type groupKey struct {
-		name     string
+		scope    string
 		location string
 	}
 	groups := map[groupKey]*availGroup{}
@@ -426,7 +521,7 @@ func (h *ArticleHandler) Availability(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 		}
-		key := groupKey{a.CommercialName, a.LocationName}
+		key := groupKey{linkScopeKey(a.CommercialName, a.CommonName), a.LocationName}
 		g, ok := groups[key]
 		if !ok {
 			g = &availGroup{
@@ -438,6 +533,7 @@ func (h *ArticleHandler) Availability(w http.ResponseWriter, r *http.Request) {
 				LocationID:     formatUUID(a.LocationID),
 				Description:    a.Description,
 				Instructions:   a.Instructions,
+				ScopeKey:       linkScopeKey(a.CommercialName, a.CommonName),
 			}
 			groups[key] = g
 		}
@@ -463,6 +559,22 @@ func (h *ArticleHandler) Availability(w http.ResponseWriter, r *http.Request) {
 		}
 		return result[i].LocationName < result[j].LocationName
 	})
+
+	scopes := make([]string, 0, len(result))
+	for _, g := range result {
+		if g.ScopeKey != "" {
+			scopes = append(scopes, g.ScopeKey)
+		}
+	}
+	linksByScope := fetchVisibleArticleLinks(r.Context(), h.Q, claims, scopes)
+	for i := range result {
+		links := linksByScope[result[i].ScopeKey]
+		if links == nil {
+			links = []ArticleLinkView{}
+		}
+		result[i].Links = links
+	}
+
 	WriteJSON(w, http.StatusOK, result)
 }
 
@@ -473,8 +585,33 @@ func (h *ArticleHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
-	if err := h.Q.DeleteArticle(r.Context(), db.DeleteArticleParams{ID: id, GroupID: claims.GroupID}); err != nil {
+	tx, err := h.Pool.Begin(r.Context())
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to delete article")
+		return
+	}
+	defer tx.Rollback(r.Context())
+	q := h.Q.WithTx(tx)
+
+	scope, err := q.GetArticleScopeKey(r.Context(), db.GetArticleScopeKeyParams{ID: id, GroupID: claims.GroupID})
+	if err != nil {
 		WriteError(w, http.StatusNotFound, "article not found")
+		return
+	}
+	if err := q.DeleteArticle(r.Context(), db.DeleteArticleParams{ID: id, GroupID: claims.GroupID}); err != nil {
+		WriteError(w, http.StatusNotFound, "article not found")
+		return
+	}
+	// Links belong to the product type, so they only go away with the last copy.
+	if err := q.DeleteOrphanedArticleLinks(r.Context(), db.DeleteOrphanedArticleLinksParams{
+		GroupID: claims.GroupID, ScopeKey: scope,
+	}); err != nil {
+		slog.Error("failed to clean up article links", "error", err)
+		WriteError(w, http.StatusInternalServerError, "failed to delete article")
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to delete article")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

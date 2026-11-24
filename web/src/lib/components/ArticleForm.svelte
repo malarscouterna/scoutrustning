@@ -27,6 +27,7 @@
 			purchase_price?: string | null;
 			manager_notes?: string;
 			image_ids?: string[];
+			links?: { id?: string; label: string; url: string; visibility: string }[];
 		};
 		submitLabel?: string;
 		onSubmit: (articles: Record<string, unknown>[]) => Promise<void>;
@@ -62,10 +63,16 @@
 	});
 
 	let imageIds = $state<string[]>([]);
+	let links = $state<{ label: string; url: string; visibility: 'public' | 'trusted' }[]>([]);
 
 	$effect(() => {
 		if (!initial) return;
 		imageIds = Array.isArray(initial.image_ids) ? initial.image_ids : [];
+		links = (initial.links ?? []).map(l => ({
+			label: l.label,
+			url: l.url,
+			visibility: l.visibility === 'trusted' ? 'trusted' : 'public'
+		}));
 		form.commercial_name = initial.commercial_name ?? '';
 		form.common_name = initial.common_name ?? '';
 		form.category_id = initial.category_id ?? '';
@@ -112,6 +119,16 @@
 		names = next;
 	}
 
+	function addLink() {
+		if (links.length < 20) {
+			links = [...links, { label: '', url: '', visibility: 'public' }];
+		}
+	}
+
+	function removeLink(index: number) {
+		links = links.filter((_, i) => i !== index);
+	}
+
 	function buildBase(): Record<string, unknown> {
 		const data: Record<string, unknown> = {
 			commercial_name: form.commercial_name,
@@ -122,7 +139,8 @@
 			approval_level: form.approval_level,
 			description: form.description,
 			instructions: form.instructions,
-			place: form.place
+			place: form.place,
+			links: links.map(l => ({ label: l.label, url: l.url, visibility: l.visibility }))
 		};
 		if (form.purchase_date) data.purchase_date = form.purchase_date;
 		if (form.purchase_price) data.purchase_price = form.purchase_price;
@@ -217,6 +235,8 @@
 				<span class="text-sm text-neutral-600 block mb-1">{m.lbl_instructions()}</span>
 				<textarea bind:value={form.instructions} rows="2" class="border rounded px-2 py-1.5 text-sm w-full"></textarea>
 			</label>
+
+			{@render linksEditor()}
 
 			{#if isManager}
 				<label class="block">
@@ -343,6 +363,8 @@
 				<textarea bind:value={form.instructions} rows="2" class="border rounded px-2 py-1.5 text-sm w-full"></textarea>
 			</label>
 
+			{@render linksEditor()}
+
 			{#if isManager}
 				<label class="block">
 					<span class="text-sm text-neutral-600 block mb-1">{m.article_form_internal_notes_label()}</span>
@@ -452,6 +474,8 @@
 			<textarea bind:value={form.instructions} rows="2" class="border rounded px-2 py-1.5 text-sm w-full"></textarea>
 		</label>
 
+		{@render linksEditor()}
+
 		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 			<label class="block">
 				<span class="text-sm text-neutral-600 block mb-1">{m.article_form_purchase_date()}</span>
@@ -480,3 +504,34 @@
 		{/if}
 	</div>
 </form>
+
+{#snippet linksEditor()}
+	<div class="border-t pt-4">
+		<div class="flex items-center justify-between mb-2">
+			<span class="text-sm font-medium text-neutral-700">{m.lbl_links()}</span>
+			<button type="button" class="text-xs text-blue-700 hover:underline disabled:text-neutral-400" onclick={addLink} disabled={links.length >= 20}>
+				{m.article_link_add()}
+			</button>
+		</div>
+		{#if links.length > 0}
+			<div class="space-y-2">
+				{#each links as link, i (i)}
+					<div class="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto_auto] gap-2 items-start">
+						<input type="text" class="border rounded px-2 py-1.5 text-sm w-full" placeholder={m.article_link_label_placeholder()} list="article-link-label-suggestions" bind:value={link.label} />
+						<input type="url" class="border rounded px-2 py-1.5 text-sm w-full" placeholder={m.article_link_url_placeholder()} bind:value={link.url} />
+						<select class="border rounded px-2 py-1.5 text-sm" bind:value={link.visibility}>
+							<option value="public">{m.article_link_visibility_public()}</option>
+							<option value="trusted">{m.article_link_visibility_trusted()}</option>
+						</select>
+						<button type="button" class="text-xs text-red-700 hover:underline px-1 py-1.5" onclick={() => removeLink(i)} aria-label={m.article_link_remove()}>✕</button>
+					</div>
+				{/each}
+			</div>
+		{/if}
+		<p class="text-xs text-neutral-500 mt-2">{m.article_link_limit({ count: '20' })}</p>
+		<datalist id="article-link-label-suggestions">
+			<option value={m.article_link_suggestion_user_guide()}></option>
+			<option value={m.article_link_suggestion_repair_manual()}></option>
+		</datalist>
+	</div>
+{/snippet}

@@ -32,6 +32,7 @@ export const load: PageServerLoad = async ({ fetch, parent, url }) => {
 				approval_level: match.approval_level,
 				description: match.description,
 				instructions: match.instructions,
+				links: match.links ?? [],
 				place: match.place
 			};
 		}

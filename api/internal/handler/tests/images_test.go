@@ -30,7 +30,7 @@ func TestImageUpload(t *testing.T) {
 	perms := handler.NewPermissionCache(env.Queries)
 
 	env.V1(func(r chi.Router) {
-		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries, Perms: perms}).Routes())
+		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries, Pool: env.Pool, Perms: perms}).Routes())
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
 		r.Mount("/group-settings", (&handler.GroupSettingsHandler{Q: env.Queries, Pool: env.Pool, Perms: perms}).Routes())
