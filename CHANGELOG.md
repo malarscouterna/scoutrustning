@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.14.0](https://github.com/malarscouterna/scoutrustning/compare/v0.13.0...v0.14.0) (2026-11-24)
+
+
+### Features
+
+* support districts and other organisation types ([da7e68a](https://github.com/malarscouterna/scoutrustning/commit/da7e68a51c3edc2c3b17ddbd7e917cab3ef983fe))
+
+
+### Bug Fixes
+
+* **web:** use the app logo for the tab icon and name tabs per environment ([1ca2433](https://github.com/malarscouterna/scoutrustning/commit/1ca2433716e90c6e5d13d6cc2363792d0926a785))
+
+
+### Miscellaneous
+
+* update dependencies ([e7dfe28](https://github.com/malarscouterna/scoutrustning/commit/e7dfe2866ba1984327b8d2487bc5082816c45d62))
+
 ## [0.13.0](https://github.com/malarscouterna/scoutrustning/compare/v0.12.3...v0.13.0) (2026-11-22)
 
 
