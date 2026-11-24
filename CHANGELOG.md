@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.15.0](https://github.com/malarscouterna/scoutrustning/compare/v0.14.0...v0.15.0) (2026-11-24)
+
+
+### Features
+
+* add article links with health checking ([#108](https://github.com/malarscouterna/scoutrustning/issues/108)) ([e3401e2](https://github.com/malarscouterna/scoutrustning/commit/e3401e2e846c4e1366ba70392f50b93b616910f5))
+
+
+### Bug Fixes
+
+* **web:** raise upload body limit and return 413 for oversized files ([8c02dda](https://github.com/malarscouterna/scoutrustning/commit/8c02dda1cee7ccf60f7522c27b853fae9787f1c0))
+
 ## [0.14.0](https://github.com/malarscouterna/scoutrustning/compare/v0.13.0...v0.14.0) (2026-11-24)
 
 
