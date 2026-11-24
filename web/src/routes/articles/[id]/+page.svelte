@@ -11,6 +11,7 @@
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
 	import ImageAttachInput from '$lib/components/ImageAttachInput.svelte';
+	import ArticleLinks from '$lib/components/ArticleLinks.svelte';
 	import * as m from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
@@ -248,6 +249,12 @@
 				<h2 class="text-sm font-medium text-neutral-600 mb-1">{m.lbl_instructions()}</h2>
 				<p class="text-sm">{article.instructions}</p>
 			</div>
+		{/if}
+
+		{#if article.links?.length}
+			<section class="mb-4">
+				<ArticleLinks links={article.links} />
+			</section>
 		{/if}
 
 		<div class="flex flex-wrap gap-x-6 gap-y-2 text-sm text-neutral-500 mb-4">

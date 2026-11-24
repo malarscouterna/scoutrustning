@@ -17,7 +17,7 @@ func TestAccess_ViewOnlyRestrictions(t *testing.T) {
 	env := testutil.SetupTestEnv(t)
 	env.V1(func(r chi.Router) {
 		perms := handler.NewPermissionCache(env.Queries)
-		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries, Perms: perms}).Routes())
+		r.Mount("/articles", (&handler.ArticleHandler{Q: env.Queries, Pool: env.Pool, Perms: perms}).Routes())
 		r.Mount("/locations", (&handler.LocationHandler{Q: env.Queries}).Routes())
 		r.Mount("/categories", (&handler.CategoryHandler{Q: env.Queries}).Routes())
 		r.Mount("/teams", (&handler.TeamHandler{Q: env.Queries}).Routes())

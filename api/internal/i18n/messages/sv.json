@@ -828,5 +828,36 @@
   "page_profile_group_defaults_gruppkanal_help": "Vilka kanaler som ingår i den gemensamma kanalen som standard för avdelningar och roller utan egna inställningar.",
 
   "page_profile_notif_force_defaults_confirm_v2": "Återställ alla användares notisinställningar och avdelningarnas/rollernas val för gemensam kanal? Individuella inställningar skrivs över och kårstandarden används istället.",
-  "page_profile_notif_force_defaults_done_v2": "{user_count} användare och {team_count} avdelningar och roller återställda."
+  "page_profile_notif_force_defaults_done_v2": "{user_count} användare och {team_count} avdelningar och roller återställda.",
+
+  "lbl_links": "Länkar",
+  "article_link_add": "Lägg till länk",
+  "article_link_label": "Kort beskrivning",
+  "article_link_label_placeholder": "T.ex. Användarinstruktion",
+  "article_link_url": "Adress",
+  "article_link_url_placeholder": "https://...",
+  "article_link_visibility": "Synlighet",
+  "article_link_visibility_public": "Alla medlemmar",
+  "article_link_visibility_trusted": "Endast betrodda",
+  "article_link_remove": "Ta bort länk",
+  "article_link_limit": "Max {count} länkar per produkttyp.",
+  "article_link_suggestion_user_guide": "Användarinstruktion",
+  "article_link_suggestion_repair_manual": "Reparationsmanual",
+
+  "page_profile_links_section": "Trasiga länkar",
+  "page_profile_links_help": "Länkar till artiklar kontrolleras automatiskt varje dag. Markera en länk som fungerande om felet är väntat (t.ex. om webbplatsen blockerar automatiska kontroller) – den visas igen om felet ändras.",
+  "page_profile_links_empty": "Inga trasiga länkar.",
+  "page_profile_links_check_now": "Kontrollera nu",
+  "page_profile_links_checking": "Kontrollerar…",
+  "page_profile_links_checked": "{checked} länkar kontrollerade, {broken} trasiga.",
+  "page_profile_links_checked_partial": "{checked} av {total} kontrollerade, {broken} trasiga.",
+  "page_profile_links_check_failed": "Kunde inte kontrollera länkarna.",
+  "page_profile_links_mark_working": "Markera som fungerande",
+  "page_profile_links_acknowledged": "Godkänd",
+  "page_profile_links_undo": "Ångra",
+  "page_profile_links_col_article": "Artikel",
+  "page_profile_links_col_link": "Länk",
+  "page_profile_links_col_error": "Fel",
+  "page_profile_links_col_checked": "Senast kontrollerad",
+  "page_profile_links_never": "Aldrig"
 }

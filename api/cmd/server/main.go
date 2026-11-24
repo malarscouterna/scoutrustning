@@ -21,6 +21,7 @@ import (
 	"github.com/malarscouterna/scoutrustning/api/internal/db"
 	"github.com/malarscouterna/scoutrustning/api/internal/handler"
 	"github.com/malarscouterna/scoutrustning/api/internal/images"
+	"github.com/malarscouterna/scoutrustning/api/internal/linkcheck"
 	"github.com/malarscouterna/scoutrustning/api/internal/notifications"
 )
 
@@ -65,6 +66,7 @@ func main() {
 	defer pool.Close()
 
 	queries := db.New(pool)
+	linkChecker := linkcheck.New()
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
@@ -105,13 +107,13 @@ func main() {
 		appBaseURL := getenv("APP_BASE_URL", "http://localhost:5173")
 		meHandler := &handler.MeHandler{Q: queries, Perms: permCache, NotifPrefs: notifPrefsHandler, Notifier: smtpNotifier, PersonaIDs: personaIDs, DemoMode: demoMode, BaseURL: appBaseURL}
 
-		articles := &handler.ArticleHandler{Q: queries, Perms: permCache}
+		articles := &handler.ArticleHandler{Q: queries, Pool: pool, Perms: permCache}
 		locations := &handler.LocationHandler{Q: queries}
 		categories := &handler.CategoryHandler{Q: queries}
 
 		bookings := &handler.BookingHandler{Q: queries, Pool: pool, Perms: permCache, Notifier: eventNotifier, GChatNotifier: eventGChatNotifier, BaseURL: appBaseURL}
 		teams := &handler.TeamHandler{Q: queries, DemoMode: demoMode}
-		groupSettings := &handler.GroupSettingsHandler{Q: queries, Pool: pool, Perms: permCache, DemoMode: demoMode}
+		groupSettings := &handler.GroupSettingsHandler{Q: queries, Pool: pool, Perms: permCache, DemoMode: demoMode, Links: linkChecker}
 		issueHandler := &handler.IssueHandler{Q: queries, Perms: permCache, Notifier: eventNotifier, GChatNotifier: eventGChatNotifier, BaseURL: appBaseURL}
 		imageHandler := &images.Handler{Q: queries, ImageDir: imageDir}
 		userHandler := &handler.UserHandler{Q: queries, Perms: permCache, DemoMode: demoMode, PersonaIDs: personaIDs}
@@ -213,6 +215,35 @@ func main() {
 				return
 			case <-ticker.C:
 				runBookingCleanupJobs()
+			}
+		}
+	}()
+
+	// Background: verify article links (user guides, repair manuals, ...).
+	// Daily in production; a short interval in dev so status changes are quick
+	// to verify. Links are checked immediately on startup when overdue.
+	go func() {
+		interval := 24 * time.Hour
+		if devMode && !demoMode {
+			interval = 10 * time.Minute
+		}
+		checkLinks := func() {
+			stats, err := linkcheck.RunDue(ctx, queries, linkChecker, interval, 200)
+			if err != nil {
+				slog.Error("article link check failed", "error", err)
+			} else if stats.Checked > 0 {
+				slog.Info("checked article links", "checked", stats.Checked, "broken", stats.Broken)
+			}
+		}
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		checkLinks()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				checkLinks()
 			}
 		}
 	}()

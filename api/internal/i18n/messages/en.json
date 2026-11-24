@@ -828,5 +828,36 @@
   "page_profile_group_defaults_gruppkanal_help": "Which channels are included in the shared channel by default for teams without their own settings.",
 
   "page_profile_notif_force_defaults_confirm_v2": "Reset all users' notification settings and teams' shared channel selections? Individual settings will be overwritten and the group standard will be used instead.",
-  "page_profile_notif_force_defaults_done_v2": "{user_count} users and {team_count} teams reset."
+  "page_profile_notif_force_defaults_done_v2": "{user_count} users and {team_count} teams reset.",
+
+  "lbl_links": "Links",
+  "article_link_add": "Add link",
+  "article_link_label": "Short description",
+  "article_link_label_placeholder": "E.g. user guide",
+  "article_link_url": "URL",
+  "article_link_url_placeholder": "https://...",
+  "article_link_visibility": "Visibility",
+  "article_link_visibility_public": "All members",
+  "article_link_visibility_trusted": "Trusted only",
+  "article_link_remove": "Remove link",
+  "article_link_limit": "Max {count} links per product type.",
+  "article_link_suggestion_user_guide": "User guide",
+  "article_link_suggestion_repair_manual": "Repair manual",
+
+  "page_profile_links_section": "Broken links",
+  "page_profile_links_help": "Article links are checked automatically every day. Mark a link as working when the failure is expected (for example when the site blocks automated checks) - it reappears if the failure changes.",
+  "page_profile_links_empty": "No broken links.",
+  "page_profile_links_check_now": "Check now",
+  "page_profile_links_checking": "Checking…",
+  "page_profile_links_checked": "{checked} links checked, {broken} broken.",
+  "page_profile_links_checked_partial": "{checked} of {total} checked, {broken} broken.",
+  "page_profile_links_check_failed": "Could not check the links.",
+  "page_profile_links_mark_working": "Mark as working",
+  "page_profile_links_acknowledged": "Approved",
+  "page_profile_links_undo": "Undo",
+  "page_profile_links_col_article": "Article",
+  "page_profile_links_col_link": "Link",
+  "page_profile_links_col_error": "Error",
+  "page_profile_links_col_checked": "Last checked",
+  "page_profile_links_never": "Never"
 }

@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { createApiClient, type BookingItem } from '$lib/api/client';
+	import { createApiClient, type ArticleLink, type BookingItem } from '$lib/api/client';
+	import ArticleLinks from '$lib/components/ArticleLinks.svelte';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
 	import * as m from '$lib/paraglide/messages.js';
 	import { msg } from '$lib/msg';
@@ -51,6 +52,7 @@
 		locationId: string;
 		description: string;
 		instructions: string;
+		links: ArticleLink[];
 		individuallyTracked: boolean;
 		items: BookingItem[];
 	}
@@ -86,6 +88,7 @@
 					locationId: item.location_id,
 					description: item.article_description ?? '',
 					instructions: item.article_instructions ?? '',
+					links: item.links ?? [],
 					individuallyTracked: item.individually_tracked,
 					items: [item]
 				});
@@ -137,7 +140,7 @@
 	}
 
 	function hasExpandableContent(g: ItemGroup): boolean {
-		return g.imageIds.length > 0 || !!g.description || !!g.instructions;
+		return g.imageIds.length > 0 || !!g.description || !!g.instructions || g.links.length > 0;
 	}
 </script>
 
@@ -214,6 +217,7 @@
 											<p class="mt-0.5">{group.instructions}</p>
 										</div>
 									{/if}
+									<ArticleLinks links={group.links} />
 								</div>
 							{/if}
 							{#if group.individuallyTracked}

@@ -11,6 +11,7 @@ import type { TeamMembership } from '$lib/user';
 	import ReportIssueSheet from '$lib/components/ReportIssueSheet.svelte';
 	import ArticleEventHistory from '$lib/components/ArticleEventHistory.svelte';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
+	import ArticleLinks from '$lib/components/ArticleLinks.svelte';
 
 	let { data }: { data: PageData } = $props();
 
@@ -674,7 +675,7 @@ import type { TeamMembership } from '$lib/user';
 				{#if expanded}
 					{@const rep = group.articles[0]}
 					{@const hasImage = rep.image_ids?.length > 0}
-					{@const hasTextInfo = !!(rep.description || rep.instructions || (isManager && rep.manager_notes))}
+					{@const hasTextInfo = !!(rep.description || rep.instructions || (rep.links?.length ?? 0) > 0 || (isManager && rep.manager_notes))}
 					<div class="border-t px-4 py-2 bg-neutral-50">
 						{#if !managerMode && hasImage}
 							<div class="mb-2">
@@ -839,6 +840,7 @@ import type { TeamMembership } from '$lib/user';
 				<p class="mt-0.5" class:line-clamp-2={!isExpanded}>{a.instructions}</p>
 			</button>
 		{/if}
+		<ArticleLinks links={a.links ?? []} />
 		{#if isManager && a.manager_notes}
 			<div class="bg-amber-50 border border-amber-200 rounded p-2">
 				<span class="font-medium text-amber-700">{m.page_browse_internal_note()}</span>
@@ -862,6 +864,7 @@ import type { TeamMembership } from '$lib/user';
 				<p class="mt-0.5">{a.instructions}</p>
 			</div>
 		{/if}
+		<ArticleLinks links={a.links ?? []} />
 		{#if isManager && a.manager_notes}
 			<div class="bg-amber-50 border border-amber-200 rounded p-2">
 				<span class="font-medium text-amber-700">{m.page_browse_internal_note()}</span>

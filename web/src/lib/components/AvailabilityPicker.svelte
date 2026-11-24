@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { createApiClient, type AvailabilityGroup, type BookingItem, type Category, type Location } from '$lib/api/client';
+	import ArticleLinks from '$lib/components/ArticleLinks.svelte';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
 	import * as m from '$lib/paraglide/messages.js';
 	import { translateError } from '$lib/errors';
@@ -136,7 +137,7 @@
 	}
 
 	function hasExpandableContent(g: AvailabilityGroup): boolean {
-		return (g.image_ids?.length ?? 0) > 0 || !!g.description || !!g.instructions;
+		return (g.image_ids?.length ?? 0) > 0 || !!g.description || !!g.instructions || (g.links?.length ?? 0) > 0;
 	}
 
 	function toggleInfo(key: string) {
@@ -259,6 +260,7 @@
 							<p class="mt-0.5">{group.instructions}</p>
 						</div>
 					{/if}
+					<ArticleLinks links={group.links ?? []} />
 				</div>
 			{/if}
 			{#if expandedDetails === key}

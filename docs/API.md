@@ -86,6 +86,79 @@ Update an article. Same body as create.
 
 **Response** `204` | `403` | `404`
 
+### Article links
+
+Links (user guides, repair manuals, videos, …) are stored per product type, not
+per physical copy: all articles with the same `commercial_name` (or `common_name`
+when the commercial name is empty) share one set, matching how `description` and
+`instructions` propagate. Renaming the product type moves the links with it, and
+deleting the last copy removes them.
+
+Every article in `GET /api/v0/articles` and `GET /api/v0/articles/{id}` includes a
+`links` array. Links with `visibility: "trusted"` are omitted unless the caller has
+`trusted` or `manager` access. The public shape is:
+
+```json
+{ "id": "uuid", "label": "Användarinstruktion", "url": "https://example.com/manual", "visibility": "public" }
+```
+
+The same array is included on the grouped `/api/v0/articles/availability`
+response and on booking items, so the booking flow shows the same links.
+
+Creating, updating and deleting links requires the group's configured
+`article_edit_role` (default `manager`). `POST`/`PUT` accept
+`{"label": "...", "url": "https://...", "visibility": "public"|"trusted"}`.
+URLs must be http(s), labels 1–120 characters, max 20 links per product type.
+`PUT` returns `409` if the new URL already exists on the product type.
+
+Article create/update also accept an optional `links` array (same objects).
+On **create** the links are added (upsert), so creating another copy of a product
+type never wipes its shared links. On **update** the array replaces the full set,
+except when the commercial name changes: links follow a rename only when no other
+copy still uses the old name and the new name has no links of its own; otherwise
+the old product (or the merge target) keeps its links.
+
+Rename/merge summary:
+- Other copies still use the old name → they keep the links; the renamed copy
+  shows the new product type's links (possibly none).
+- Renaming the last copy to a brand-new name → links move.
+- Renaming the last copy into an existing product → the target's links win and
+  the old product's links are removed.
+
+### 🔒 `GET /api/v0/articles/{id}/links`
+All links for the article's product type, including checker state
+(`last_status`, `last_http_status`, `last_error`, `failure_kind`,
+`last_checked_at`, `acknowledged`). Requires article edit permission.
+
+**Response** `200` | `403` | `404`
+
+### 🔒 `POST /api/v0/articles/{id}/links`
+Add a link (upsert by URL). **Response** `201` | `400` | `403` | `404`
+
+### 🔒 `PUT /api/v0/articles/{id}/links/{linkId}`
+Update label/URL/visibility. **Response** `200` | `400` | `403` | `404` | `409`
+
+### 🔒 `DELETE /api/v0/articles/{id}/links/{linkId}`
+**Response** `204` | `403` | `404`
+
+### 🔒 `GET /api/v0/group-settings/broken-links`
+Links whose latest check failed, active failures first, then acknowledged ones.
+Manager only. Includes `article_name` and `acknowledged` for display.
+
+### 🔒 `POST /api/v0/group-settings/broken-links/{id}/ack`
+Mark the current failure as expected ("working for members"). It becomes
+`acknowledged` in the list and is no longer treated as active. It becomes active
+again if a later check fails differently. **Response** `204` | `403` | `404`
+
+### 🔒 `DELETE /api/v0/group-settings/broken-links/{id}/ack`
+Undo an acknowledgement. **Response** `204` | `403` | `404`
+
+### 🔒 `POST /api/v0/group-settings/check-links`
+Run the checker now, oldest-checked links first (max 200).
+**Response** `200` `{"checked": 4, "broken": 1, "total": 4, "truncated": false}`
+`truncated` is true when the run hit its deadline or the group has more links
+than the per-run limit.
+
 ### 🔒 `POST /api/v0/articles/import`
 Import articles from CSV. Multipart form upload with field name `file`.
 

@@ -44,6 +44,7 @@ docker compose exec -T db psql -U utrustning -d utrustning -c "
   DELETE FROM booking_items;
   DELETE FROM bookings;
   DELETE FROM product_images;
+  DELETE FROM article_links;
   DELETE FROM articles;
   DELETE FROM team_claim_mappings;
   DELETE FROM teams;
@@ -447,6 +448,29 @@ for a in json.load(sys.stdin):
 }
 
 TEAM_ID=$(curl -s "$API/api/v0/teams" -H "$LEADER" | python3 -c "import json,sys; print([u['id'] for u in json.load(sys.stdin) if u['name']=='Yggdrasil'][0])")
+
+# ─── Article links (user guides, repair manuals) ───
+# Links are scoped to the product type, so one copy carries the set for the whole group.
+seed_link() {
+  local NAME=$1 LABEL=$2 URL=$3 VISIBILITY=$4 ARTICLE_ID
+  ARTICLE_ID=$(find_article "$NAME")
+  if [ -z "$ARTICLE_ID" ]; then
+    echo "  (article not found: $NAME)"
+    return 0
+  fi
+  curl -sf -X POST "$API/api/v0/articles/$ARTICLE_ID/links" \
+    -H "$HEADER" -H "Content-Type: application/json" \
+    -d "{\"label\":\"$LABEL\",\"url\":\"$URL\",\"visibility\":\"$VISIBILITY\"}" > /dev/null
+}
+
+echo ""
+echo "Adding article links..."
+seed_link "Stormkök 1" "Användarinstruktion" "https://example.com/" "public"
+seed_link "Stormkök 1" "Reparationsmanual" "https://example.org/" "trusted"
+seed_link "Sibley 1" "Användarinstruktion" "https://example.net/" "public"
+# Deliberately unreachable so the broken-links section in Kårinställningar has something to show.
+seed_link "Tältlampa LED" "Reparationsmanual" "https://example.invalid/taltlampa-reparation" "public"
+echo "Article links added."
 
 # ─── Booking 1: Active booking in picked_up state (checked out right now) ───
 echo ""

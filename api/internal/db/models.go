@@ -44,6 +44,26 @@ type ArticleEvent struct {
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
+type ArticleLink struct {
+	ID               pgtype.UUID        `json:"id"`
+	GroupID          string             `json:"group_id"`
+	ScopeKey         string             `json:"scope_key"`
+	Label            string             `json:"label"`
+	Url              string             `json:"url"`
+	Visibility       string             `json:"visibility"`
+	CreatedBy        string             `json:"created_by"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	LastCheckedAt    pgtype.Timestamptz `json:"last_checked_at"`
+	LastStatus       string             `json:"last_status"`
+	LastHttpStatus   pgtype.Int4        `json:"last_http_status"`
+	LastError        string             `json:"last_error"`
+	FailureKind      string             `json:"failure_kind"`
+	AcknowledgedKind string             `json:"acknowledged_kind"`
+	AcknowledgedAt   pgtype.Timestamptz `json:"acknowledged_at"`
+	AcknowledgedBy   string             `json:"acknowledged_by"`
+}
+
 type AuditLog struct {
 	ID         pgtype.UUID        `json:"id"`
 	GroupID    string             `json:"group_id"`

@@ -1,4 +1,4 @@
-import { createApiClient } from '$lib/api/client';
+import { createApiClient, type BrokenArticleLink } from '$lib/api/client';
 import { isManager } from '$lib/user';
 import type { PageServerLoad } from './$types';
 
@@ -17,11 +17,13 @@ export const load: PageServerLoad = async ({ fetch, parent }) => {
 	]);
 
 	let groupSettings = null;
+	let brokenLinks: BrokenArticleLink[] = [];
 	if (mgr) {
 		try {
 			groupSettings = await api.getGroupSettings();
 		} catch { /* defaults */ }
+		brokenLinks = await api.listBrokenArticleLinks().catch(() => []);
 	}
 
-	return { locations, categories, teams, groupSettings, notificationPrefs: notifResult?.prefs ?? null };
+	return { locations, categories, teams, groupSettings, brokenLinks, notificationPrefs: notifResult?.prefs ?? null };
 };

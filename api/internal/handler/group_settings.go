@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"slices"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -15,6 +16,7 @@ import (
 	"github.com/malarscouterna/scoutrustning/api/internal/auth"
 	"github.com/malarscouterna/scoutrustning/api/internal/crypto"
 	"github.com/malarscouterna/scoutrustning/api/internal/db"
+	"github.com/malarscouterna/scoutrustning/api/internal/linkcheck"
 	"github.com/malarscouterna/scoutrustning/api/internal/notifications"
 )
 
@@ -23,6 +25,7 @@ type GroupSettingsHandler struct {
 	Pool     *pgxpool.Pool
 	Perms    *PermissionCache
 	DemoMode bool
+	Links    *linkcheck.Checker
 	// ListSpacesFn is called to validate a service account key and list spaces.
 	// Defaults to notifications.ListGChatSpaces when nil.
 	ListSpacesFn func(ctx context.Context, saJSON []byte, adminEmail string) ([]notifications.GChatSpace, error)
@@ -37,6 +40,10 @@ func (h *GroupSettingsHandler) Routes() chi.Router {
 		r.Put("/", h.Update)
 		r.Post("/gchat-key", h.UploadGChatKey)
 		r.Delete("/gchat-key", h.DeleteGChatKey)
+		r.Get("/broken-links", h.BrokenLinks)
+		r.Post("/broken-links/{id}/ack", h.AcknowledgeBrokenLink)
+		r.Delete("/broken-links/{id}/ack", h.UnacknowledgeBrokenLink)
+		r.Post("/check-links", h.CheckLinks)
 	})
 	return r
 }
@@ -166,11 +173,17 @@ func (h *GroupSettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	// Validate access defaults
 	defaultAccessUnknown := req.DefaultAccessUnknown
-	if defaultAccessUnknown == "" { defaultAccessUnknown = "view" }
+	if defaultAccessUnknown == "" {
+		defaultAccessUnknown = "view"
+	}
 	defaultAccessTroop := req.DefaultAccessTroop
-	if defaultAccessTroop == "" { defaultAccessTroop = "book" }
+	if defaultAccessTroop == "" {
+		defaultAccessTroop = "book"
+	}
 	defaultAccessRole := req.DefaultAccessRole
-	if defaultAccessRole == "" { defaultAccessRole = "book" }
+	if defaultAccessRole == "" {
+		defaultAccessRole = "book"
+	}
 	if !validAccessLevel(defaultAccessUnknown) || !validAccessLevel(defaultAccessTroop) || !validAccessLevel(defaultAccessRole) {
 		WriteError(w, http.StatusBadRequest, "invalid default_access level")
 		return
@@ -389,9 +402,9 @@ func (h *GroupSettingsHandler) UploadGChatKey(w http.ResponseWriter, r *http.Req
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"gchat_configured": true,
+		"gchat_configured":  true,
 		"gchat_admin_email": adminEmail,
-		"spaces":           spaces,
+		"spaces":            spaces,
 	})
 }
 
@@ -501,4 +514,105 @@ func settingsToResponse(s db.GroupSetting) groupSettingsResponse {
 	}
 	resp.SmtpKeyMasked = s.SmtpKeyMasked
 	return resp
+}
+
+// BrokenLinks lists links that currently fail, excluding links a manager has
+// approved for their current failure kind.
+func (h *GroupSettingsHandler) BrokenLinks(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	rows, err := h.Q.ListBrokenArticleLinks(r.Context(), claims.GroupID)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to list broken links")
+		return
+	}
+	views := make([]brokenArticleLinkView, 0, len(rows))
+	for _, row := range rows {
+		view := brokenArticleLinkView{
+			ID:           formatUUID(row.ID),
+			Label:        row.Label,
+			URL:          row.Url,
+			Visibility:   row.Visibility,
+			ArticleName:  row.ArticleName,
+			LastError:    row.LastError,
+			FailureKind:  row.FailureKind,
+			Acknowledged: row.Acknowledged.Valid && row.Acknowledged.Bool,
+		}
+		if row.LastHttpStatus.Valid {
+			code := row.LastHttpStatus.Int32
+			view.LastHTTPStatus = &code
+		}
+		if row.LastCheckedAt.Valid {
+			view.LastCheckedAt = row.LastCheckedAt.Time
+		}
+		views = append(views, view)
+	}
+	WriteJSON(w, http.StatusOK, views)
+}
+
+// AcknowledgeBrokenLink marks the current failure as expected ("working for
+// members"). It re-appears automatically if the link later fails differently.
+func (h *GroupSettingsHandler) AcknowledgeBrokenLink(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	affected, err := h.Q.AcknowledgeArticleLink(r.Context(), db.AcknowledgeArticleLinkParams{
+		UserID: claims.MemberID, ID: id, GroupID: claims.GroupID,
+	})
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to update link")
+		return
+	}
+	if affected == 0 {
+		WriteError(w, http.StatusNotFound, "link not found")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// CheckLinks runs the checker now for every link in the group.
+func (h *GroupSettingsHandler) CheckLinks(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	if h.Links == nil {
+		WriteError(w, http.StatusServiceUnavailable, "link checking not configured")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
+	defer cancel()
+	stats, err := linkcheck.RunGroup(ctx, h.Q, h.Links, claims.GroupID, 200)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to check links")
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{
+		"checked":   stats.Checked,
+		"broken":    stats.Broken,
+		"total":     stats.Total,
+		"truncated": stats.Truncated,
+	})
+}
+
+// UnacknowledgeBrokenLink undoes "mark as working" so the failure is shown as
+// active again.
+func (h *GroupSettingsHandler) UnacknowledgeBrokenLink(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	affected, err := h.Q.UnacknowledgeArticleLink(r.Context(), db.UnacknowledgeArticleLinkParams{
+		ID: id, GroupID: claims.GroupID,
+	})
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to update link")
+		return
+	}
+	if affected == 0 {
+		WriteError(w, http.StatusNotFound, "link not found")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

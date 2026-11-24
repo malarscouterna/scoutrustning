@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { createApiClient, type Location, type Category, type GroupSettings, type Team, type TeamNotifSettings, type NotificationPrefs, type PerEventPrefs } from '$lib/api/client';
+	import { createApiClient, type Location, type Category, type GroupSettings, type Team, type TeamNotifSettings, type NotificationPrefs, type PerEventPrefs, type BrokenArticleLink } from '$lib/api/client';
 	import { browser } from '$app/environment';
 	import CrudList from '$lib/components/CrudList.svelte';
 	import type { PageData } from './$types';
@@ -238,6 +238,48 @@
 
 	let settingsMessage = $state('');
 	let settingsError = $state('');
+
+	// Broken article links (manager only)
+	// svelte-ignore state_referenced_locally
+	let brokenLinks = $state<BrokenArticleLink[]>(data.brokenLinks ?? []);
+	let checkingLinks = $state(false);
+	let linkCheckMessage = $state('');
+	let linkCheckError = $state('');
+	let hasActiveFailures = $derived(brokenLinks.some(l => !l.acknowledged));
+
+	async function checkArticleLinks() {
+		checkingLinks = true;
+		linkCheckMessage = '';
+		linkCheckError = '';
+		try {
+			const result = await api.checkArticleLinks();
+			brokenLinks = await api.listBrokenArticleLinks();
+			linkCheckMessage = result.truncated
+				? m.page_profile_links_checked_partial({ checked: String(result.checked), total: String(result.total), broken: String(result.broken) })
+				: m.page_profile_links_checked({ checked: String(result.checked), broken: String(result.broken) });
+		} catch {
+			linkCheckError = m.page_profile_links_check_failed();
+		}
+		checkingLinks = false;
+	}
+
+	async function markLinkWorking(id: string) {
+		try {
+			await api.acknowledgeBrokenArticleLink(id);
+			brokenLinks = brokenLinks.map(l => l.id === id ? { ...l, acknowledged: true } : l);
+		} catch {
+			linkCheckError = m.page_profile_links_check_failed();
+		}
+	}
+
+	async function undoLinkWorking(id: string) {
+		try {
+			await api.unacknowledgeBrokenArticleLink(id);
+			brokenLinks = brokenLinks.map(l => l.id === id ? { ...l, acknowledged: false } : l);
+		} catch {
+			linkCheckError = m.page_profile_links_check_failed();
+		}
+	}
 
 	// Permission settings
 	let permissionConfig = $derived([
@@ -1597,6 +1639,11 @@ async function linkGchatTeamSpace(teamId: string) {
 	<!-- Group settings tab (manager only) -->
 	{:else if tab === 'group'}
 
+		<!-- Broken article links: shown at the top only when there are active failures -->
+		{#if hasActiveFailures}
+			{@render brokenLinksSection()}
+		{/if}
+
 		<!-- Teams -->
 		<section class="mb-6 border rounded-lg p-4">
 			<h3 class="font-medium mb-1">{m.page_profile_teams_heading()}</h3>
@@ -2360,6 +2407,71 @@ async function linkGchatTeamSpace(teamId: string) {
 					<span class="text-xs text-neutral-400">{m.page_profile_notif_force_defaults_help()}</span>
 				</div>
 			</section>
+
+		<!-- Broken article links: keep visible at the bottom when there are no active failures -->
+		{#if !hasActiveFailures}
+			{@render brokenLinksSection()}
+		{/if}
 	{/if}
 </div>
 {/if}
+
+{#snippet brokenLinksSection()}
+	<section class="mb-6 border rounded-lg p-4">
+		<div class="flex items-center justify-between mb-1">
+			<h3 class="font-medium">{m.page_profile_links_section()}</h3>
+			<button type="button" onclick={checkArticleLinks} disabled={checkingLinks} class="text-sm bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50">
+				{checkingLinks ? m.page_profile_links_checking() : m.page_profile_links_check_now()}
+			</button>
+		</div>
+		<p class="text-xs text-neutral-500 mb-3">{m.page_profile_links_help()}</p>
+		{#if linkCheckMessage}
+			<p class="text-sm text-green-600 mb-2">{linkCheckMessage}</p>
+		{/if}
+		{#if linkCheckError}
+			<p class="text-sm text-red-600 mb-2">{linkCheckError}</p>
+		{/if}
+		{#if brokenLinks.length === 0}
+			<p class="text-sm text-neutral-500">{m.page_profile_links_empty()}</p>
+		{:else}
+			<table class="w-full text-sm border-collapse">
+				<thead>
+					<tr class="border-b border-neutral-200">
+						<th class="text-left py-1.5 pr-3 font-normal text-xs text-neutral-400">{m.page_profile_links_col_article()}</th>
+						<th class="text-left py-1.5 pr-3 font-normal text-xs text-neutral-400">{m.page_profile_links_col_link()}</th>
+						<th class="text-left py-1.5 pr-3 font-normal text-xs text-neutral-400">{m.page_profile_links_col_error()}</th>
+						<th class="text-left py-1.5 pr-3 font-normal text-xs text-neutral-400 whitespace-nowrap">{m.page_profile_links_col_checked()}</th>
+						<th class="py-1.5 font-normal text-xs text-neutral-400"></th>
+					</tr>
+				</thead>
+				<tbody>
+					{#each brokenLinks as link (link.id)}
+						<tr class="border-t border-neutral-100 align-top {link.acknowledged ? 'text-neutral-400' : ''}">
+							<td class="py-1.5 pr-3">{link.article_name}</td>
+							<td class="py-1.5 pr-3">
+								<a href={link.url} target="_blank" rel="noopener noreferrer" class="text-blue-700 hover:underline break-all">{link.label}</a>
+							</td>
+							<td class="py-1.5 pr-3 text-neutral-600">
+								{link.last_error}
+								{#if link.last_http_status !== null}
+									<span class="text-neutral-400"> ({link.last_http_status})</span>
+								{/if}
+							</td>
+							<td class="py-1.5 pr-3 text-neutral-500 whitespace-nowrap">
+								{link.last_checked_at ? new Date(link.last_checked_at).toLocaleString() : m.page_profile_links_never()}
+							</td>
+							<td class="py-1.5 whitespace-nowrap">
+								{#if link.acknowledged}
+									<span class="text-xs text-neutral-400 mr-2">{m.page_profile_links_acknowledged()}</span>
+									<button type="button" onclick={() => undoLinkWorking(link.id)} class="text-xs text-blue-700 hover:underline">{m.page_profile_links_undo()}</button>
+								{:else}
+									<button type="button" onclick={() => markLinkWorking(link.id)} class="text-xs text-blue-700 hover:underline">{m.page_profile_links_mark_working()}</button>
+								{/if}
+							</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		{/if}
+	</section>
+{/snippet}

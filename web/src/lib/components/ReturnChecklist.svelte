@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { createApiClient, type BookingItem } from '$lib/api/client';
+	import { createApiClient, type ArticleLink, type BookingItem } from '$lib/api/client';
+	import ArticleLinks from '$lib/components/ArticleLinks.svelte';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
 	import ReportIssueSheet from '$lib/components/ReportIssueSheet.svelte';
 	import UserBadge from '$lib/components/UserBadge.svelte';
@@ -68,6 +69,7 @@
 		locationId: string;
 		description: string;
 		instructions: string;
+		links: ArticleLink[];
 		items: BookingItem[];
 	}
 	let trackedImageGroups = $derived.by(() => {
@@ -83,6 +85,7 @@
 					locationId: item.location_id,
 					description: item.article_description ?? '',
 					instructions: item.article_instructions ?? '',
+					links: item.links ?? [],
 					items: [item]
 				});
 			}
@@ -109,8 +112,8 @@
 		expandedGroups = next;
 	}
 
-	function hasExpandable(imageIds: string[], desc: string, instr: string): boolean {
-		return imageIds.length > 0 || !!desc || !!instr;
+	function hasExpandable(imageIds: string[], desc: string, instr: string, links: ArticleLink[]): boolean {
+		return imageIds.length > 0 || !!desc || !!instr || links.length > 0;
 	}
 
 	function groupRows(g: QGroup): QRow[] {
@@ -231,7 +234,7 @@
 	}
 </script>
 
-{#snippet infoBlock(imageIds: string[], commercialName: string, locationId: string, description: string, instructions: string)}
+{#snippet infoBlock(imageIds: string[], commercialName: string, locationId: string, description: string, instructions: string, links: ArticleLink[])}
 	<div class="px-4 py-2 border-t space-y-2 text-xs text-neutral-600">
 		{#if imageIds.length > 0}
 			<ImageViewer {imageIds} alt={commercialName} {commercialName} {locationId} />
@@ -248,6 +251,7 @@
 				<p class="mt-0.5">{instructions}</p>
 			</div>
 		{/if}
+		<ArticleLinks {links} />
 	</div>
 {/snippet}
 
@@ -258,7 +262,7 @@
 	{#each groups as g}
 		{@const rep = g.picked[0] ?? items.find(i => !i.individually_tracked && i.commercial_name === g.name)}
 		{@const gImageIds = rep?.image_ids ?? []}
-		{@const expandable = hasExpandable(gImageIds, rep?.article_description ?? '', rep?.article_instructions ?? '')}
+		{@const expandable = hasExpandable(gImageIds, rep?.article_description ?? '', rep?.article_instructions ?? '', rep?.links ?? [])}
 		{@const expanded = expandedGroups.has(g.key)}
 		{#if g.picked.length === 0}
 			<div class="border rounded">
@@ -270,7 +274,7 @@
 					<span class="text-xs text-neutral-400">{m.return_not_picked_up()} ({g.notPicked} st)</span>
 				</div>
 				{#if expanded}
-					{@render infoBlock(gImageIds, g.name, rep?.location_id ?? '', rep?.article_description ?? '', rep?.article_instructions ?? '')}
+					{@render infoBlock(gImageIds, g.name, rep?.location_id ?? '', rep?.article_description ?? '', rep?.article_instructions ?? '', rep?.links ?? [])}
 				{/if}
 			</div>
 		{:else}
@@ -336,7 +340,7 @@
 			{/if}
 			{#if expanded}
 				<div class="border rounded">
-					{@render infoBlock(gImageIds, g.name, rep?.location_id ?? '', rep?.article_description ?? '', rep?.article_instructions ?? '')}
+					{@render infoBlock(gImageIds, g.name, rep?.location_id ?? '', rep?.article_description ?? '', rep?.article_instructions ?? '', rep?.links ?? [])}
 				</div>
 			{/if}
 		{/if}
@@ -344,7 +348,7 @@
 
 	{#each trackedImageGroups as tGroup}
 		{@const tKey = tGroup.commercialName}
-		{@const expandable = hasExpandable(tGroup.imageIds, tGroup.description, tGroup.instructions)}
+		{@const expandable = hasExpandable(tGroup.imageIds, tGroup.description, tGroup.instructions, tGroup.links)}
 		{@const expanded = expandedGroups.has(tKey)}
 		{#each tGroup.items as item}
 		{@const notPicked = !item.pickup_status || item.pickup_status === 'not_picked_up'}
@@ -369,7 +373,7 @@
 				{/if}
 			</div>
 			{#if expanded && tGroup.items[0] === item}
-				{@render infoBlock(tGroup.imageIds, tGroup.commercialName, tGroup.locationId, tGroup.description, tGroup.instructions)}
+				{@render infoBlock(tGroup.imageIds, tGroup.commercialName, tGroup.locationId, tGroup.description, tGroup.instructions, tGroup.links)}
 			{/if}
 		</div>
 		{#if activeItemId === item.id}

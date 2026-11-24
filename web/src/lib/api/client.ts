@@ -1,5 +1,34 @@
 const API_BASE = '/api/v0';
 
+export interface ArticleLink {
+	id: string;
+	label: string;
+	url: string;
+	visibility: 'public' | 'trusted';
+}
+
+/** Editor view of a link, including checker state (article edit permission only). */export interface ArticleLinkEdit extends ArticleLink {
+	last_status: 'unchecked' | 'ok' | 'broken';
+	last_http_status: number | null;
+	last_error: string;
+	failure_kind: string;
+	last_checked_at: string | null;
+	acknowledged: boolean;
+}
+
+export interface BrokenArticleLink {
+	id: string;
+	label: string;
+	url: string;
+	visibility: 'public' | 'trusted';
+	article_name: string;
+	last_http_status: number | null;
+	last_error: string;
+	failure_kind: string;
+	last_checked_at: string | null;
+	acknowledged: boolean;
+}
+
 export interface Article {
 	id: string;
 	commercial_name: string;
@@ -13,6 +42,7 @@ export interface Article {
 	approval_level: string;
 	description: string;
 	instructions: string;
+	links: ArticleLink[];
 	place: string;
 	purchase_date: string | null;
 	purchase_price: string | null;
@@ -94,6 +124,7 @@ export interface BookingItem {
 	place: string;
 	article_description: string;
 	article_instructions: string;
+	links: ArticleLink[];
 	article_status: string;
 	article_expected_available_date: string | null;
 	approval_level: string;
@@ -157,6 +188,7 @@ export interface AvailabilityGroup {
 	location_id: string;
 	description: string;
 	instructions: string;
+	links: ArticleLink[];
 }
 
 export interface GroupSettings {
@@ -516,6 +548,20 @@ updateLanguage: (language: string | null) =>
 			requestMut<void>(`/teams/${id}/notification-settings`, 'PUT', data, opts),
 		updateTeamName: (id: string, name: string) =>
 			requestMut<Team>(`/teams/${id}/name`, 'PUT', { name }, opts),
+
+		// Article links. The plain list/get responses only include links the
+		// caller may see; listArticleLinks returns all of them and requires the
+		// group's article edit permission.
+		listArticleLinks: (articleId: string) =>
+			request<ArticleLinkEdit[]>(`/articles/${articleId}/links`, opts),
+		listBrokenArticleLinks: () =>
+			request<BrokenArticleLink[]>('/group-settings/broken-links', opts),
+		acknowledgeBrokenArticleLink: (id: string) =>
+			requestMut<void>(`/group-settings/broken-links/${id}/ack`, 'POST', undefined, opts),
+		unacknowledgeBrokenArticleLink: (id: string) =>
+			requestMut<void>(`/group-settings/broken-links/${id}/ack`, 'DELETE', undefined, opts),
+		checkArticleLinks: () =>
+			requestMut<{ checked: number; broken: number; total: number; truncated: boolean }>('/group-settings/check-links', 'POST', undefined, opts),
 
 		// Article CRUD
 		getArticle: (id: string) => request<Article>(`/articles/${id}`, opts),
