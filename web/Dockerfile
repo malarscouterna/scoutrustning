@@ -28,4 +28,7 @@ COPY --from=build /app/package.json /app/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 EXPOSE 3000
 ENV NODE_ENV=production
+# adapter-node's default request body cap is 512K, far below the API's 25MB
+# image upload limit. Locked at 30M; keep it above the API cap if either changes.
+ENV BODY_SIZE_LIMIT=30M
 CMD ["node", "build"]

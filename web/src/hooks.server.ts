@@ -15,6 +15,26 @@ const PERSONA_COOKIE = 'dev-persona';
 const DEFAULT_PERSONA = 'leader-yggdrasil';
 const ACTIVE_GROUP_COOKIE = 'active-group-id';
 
+// adapter-node enforces BODY_SIZE_LIMIT (locked at 30M in web/Dockerfile) by
+// erroring the request body stream while it is being proxied. Without this the
+// failure surfaces as a generic 500; return a clean 413 the client can translate.
+function payloadTooLargeResponse(): Response {
+	return new Response(JSON.stringify({ error: 'file_too_large' }), {
+		status: 413,
+		headers: { 'content-type': 'application/json' }
+	});
+}
+
+function isPayloadTooLarge(err: unknown): boolean {
+	const e = err as
+		| { status?: number; cause?: { status?: number; message?: string }; message?: string }
+		| null;
+	if (!e) return false;
+	if (e.status === 413 || e.cause?.status === 413) return true;
+	const message = `${e.message ?? ''} ${e.cause?.message ?? ''}`;
+	return message.includes('BODY_SIZE_LIMIT') || message.includes('Payload Too Large');
+}
+
 function isPublicPath(pathname: string): boolean {
 	return pathname.startsWith('/auth/') || pathname === '/welcome' || pathname === '/guide' || pathname === '/gdpr';
 }
@@ -179,15 +199,23 @@ const appHandle: Handle = async ({ event, resolve }) => {
 			headers.set('X-Active-Group-Id', activeGroupId);
 		}
 
-		const res = await fetch(target, {
-			method: event.request.method,
-			headers,
-			body: event.request.method !== 'GET' && event.request.method !== 'HEAD'
-				? event.request.body
-				: undefined,
-			// @ts-expect-error duplex needed for streaming body
-			duplex: 'half'
-		});
+		let res: Response;
+		try {
+			res = await fetch(target, {
+				method: event.request.method,
+				headers,
+				body: event.request.method !== 'GET' && event.request.method !== 'HEAD'
+					? event.request.body
+					: undefined,
+				// @ts-expect-error duplex needed for streaming body
+				duplex: 'half'
+			});
+		} catch (err) {
+			if (isPayloadTooLarge(err)) {
+				return payloadTooLargeResponse();
+			}
+			throw err;
+		}
 
 		// If the API says the group doesn't exist, the 403 response passes through.
 		// The layout redirects unmapped users to / so page load functions won't hit this.

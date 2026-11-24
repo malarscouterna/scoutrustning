@@ -545,6 +545,7 @@
 
   "error_generic": "Something went wrong. Please try again.",
   "error_forbidden": "You do not have permission to do this.",
+  "error_file_too_large": "The file is too large to upload.",
   "error_unauthorized": "You are not logged in.",
   "error_not_found": "Not found.",
   "error_article_not_found": "Article not found.",
