@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.1](https://github.com/malarscouterna/scoutrustning/compare/v0.15.0...v0.15.1) (2026-11-25)
+
+
+### Bug Fixes
+
+* dependency updates ([#109](https://github.com/malarscouterna/scoutrustning/issues/109)) ([6a3d4e8](https://github.com/malarscouterna/scoutrustning/commit/6a3d4e847268c33d440de5a1ae8d578ef7bd50f4))
+
 ## [0.15.0](https://github.com/malarscouterna/scoutrustning/compare/v0.14.0...v0.15.0) (2026-11-24)
 
 
