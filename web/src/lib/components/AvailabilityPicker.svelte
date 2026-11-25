@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { createApiClient, type AvailabilityGroup, type BookingItem, type Category, type Location } from '$lib/api/client';
-	import ArticleLinks from '$lib/components/ArticleLinks.svelte';
-	import ImageViewer from '$lib/components/ImageViewer.svelte';
-	import * as m from '$lib/paraglide/messages.js';
-	import { translateError } from '$lib/errors';
-	import { msg } from '$lib/msg';
+	import { createApiClient, type AvailabilityGroup, type BookingItem, type Category, type Location } from '#lib/api/client.ts';
+	import ArticleLinks from '#lib/components/ArticleLinks.svelte';
+	import ImageViewer from '#lib/components/ImageViewer.svelte';
+	import * as m from '#lib/paraglide/messages.js';
+	import { translateError } from '#lib/errors.ts';
+	import { msg } from '#lib/msg.ts';
 
 	interface Props {
 		bookingId: string;

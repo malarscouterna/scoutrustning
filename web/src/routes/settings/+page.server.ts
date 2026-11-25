@@ -1,5 +1,5 @@
-import { createApiClient, type BrokenArticleLink } from '$lib/api/client';
-import { isManager } from '$lib/user';
+import { createApiClient, type BrokenArticleLink } from '#lib/api/client.ts';
+import { isManager } from '#lib/user.ts';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ fetch, parent }) => {

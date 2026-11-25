@@ -1,3 +1,5 @@
+import adapter from '@sveltejs/adapter-node';
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { paraglideVitePlugin } from '@inlang/paraglide-js';
@@ -17,7 +19,7 @@ export default defineConfig({
 			cookieName: 'paraglide_lang'
 		}),
 		tailwindcss(),
-		sveltekit(),
+		sveltekit({ preprocess: vitePreprocess(), adapter: adapter() }),
 		{
 			name: 'copy-scout-components',
 			buildStart() {

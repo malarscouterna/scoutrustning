@@ -1,20 +1,31 @@
 <script lang="ts">
-	import { createApiClient, type Location, type Category, type GroupSettings, type Team, type TeamNotifSettings, type NotificationPrefs, type PerEventPrefs, type BrokenArticleLink } from '$lib/api/client';
-	import { browser } from '$app/environment';
-	import CrudList from '$lib/components/CrudList.svelte';
+	import {
+		createApiClient,
+		type Location,
+		type Category,
+		type GroupSettings,
+		type Team,
+		type TeamNotifSettings,
+		type NotificationPrefs,
+		type PerEventPrefs,
+		type BrokenArticleLink
+	} from '#lib/api/client.ts';
+
+	import { browser } from '$app/env';
+	import CrudList from '#lib/components/CrudList.svelte';
 	import type { PageData } from './$types';
-	import { msg } from '$lib/msg';
-	import * as m from '$lib/paraglide/messages.js';
-	import { translateError } from '$lib/errors';
-	import { switchGroup } from '$lib/activeGroup';
-	import { orgTypeLabel } from '$lib/org';
+	import { msg } from '#lib/msg.ts';
+	import * as m from '#lib/paraglide/messages.js';
+	import { translateError } from '#lib/errors.ts';
+	import { switchGroup } from '#lib/activeGroup.ts';
+	import { orgTypeLabel } from '#lib/org.ts';
 
 	let { data }: { data: PageData } = $props();
 	let user = $derived(data.user);
 	const api = createApiClient();
 	let mgr = $derived(user?.max_access === 'manager');
 
-	import type { TeamMembership } from '$lib/user';
+	import type { TeamMembership } from '#lib/user.ts';
 
 	let teamsByAccess = $derived(
 		(user?.teams ?? []).reduce((acc: Record<string, TeamMembership[]>, t) => {
@@ -40,20 +51,21 @@
 	let newTeam = $state({ name: '', type: 'troop', access_level: 'book', claim_scope: 'troop', claim_id: '' });
 
 	function teamsByLevel(level: string) {
-		return allTeams
-			.filter(t => t.access_level === level)
-			.sort((a, b) => {
-				if (a.type !== b.type) return a.type === 'troop' ? -1 : 1;
-				return a.name.localeCompare(b.name);
-			});
+		return allTeams.filter((t) => t.access_level === level).sort((a, b) => {
+			if (a.type !== b.type) return a.type === 'troop' ? -1 : 1;
+			return a.name.localeCompare(b.name);
+		});
 	}
 
 	async function changeTeamLevel(teamId: string, newLevel: string) {
 		teamError = '';
 		try {
 			const updated = await api.updateTeam(teamId, { access_level: newLevel });
-			allTeams = allTeams.map(t => t.id === teamId ? { ...t, ...updated } : t);
-		} catch (e) { teamError = translateError(e); }
+
+			allTeams = allTeams.map((t) => t.id === teamId ? { ...t, ...updated } : t);
+		} catch(e) {
+			teamError = translateError(e);
+		}
 	}
 
 	async function renameTeam(teamId: string) {
@@ -61,7 +73,7 @@
 		teamError = '';
 		try {
 			const updated = await api.updateTeam(teamId, { name: editingTeamName.trim() });
-			allTeams = allTeams.map(t => t.id === teamId ? { ...t, ...updated } : t);
+			allTeams = allTeams.map((t) => t.id === teamId ? { ...t, ...updated } : t);
 			editingTeamId = null;
 		} catch (e) { teamError = translateError(e); }
 	}
@@ -88,8 +100,10 @@
 		teamError = '';
 		try {
 			await api.deleteTeam(teamId);
-			allTeams = allTeams.filter(t => t.id !== teamId);
-		} catch (e) { teamError = translateError(e); }
+			allTeams = allTeams.filter((t) => t.id !== teamId);
+		} catch(e) {
+			teamError = translateError(e);
+		}
 	}
 
 	let editingMyImage = $state<typeof myImages[0] | null>(null);
@@ -120,7 +134,16 @@
 				shared: editMyShared,
 				attribution: editMyAttribution,
 			});
-			myImages = myImages.map(i => i.id === editingMyImage!.id ? { ...i, title: editMyTitle, description: editMyDescription, shared: editMyShared } : i);
+
+			myImages = myImages.map((i) => i.id === editingMyImage!.id
+				? {
+					...i,
+					title: editMyTitle,
+					description: editMyDescription,
+					shared: editMyShared
+				}
+				: i);
+
 			editingMyImage = null;
 		} catch (e: any) {
 			editMyError = translateError(e);
@@ -158,7 +181,7 @@
 			square:    { w: 2048, h: 2048 },
 		};
 		const d = dims[img.format] ?? { w: 1920, h: 1440 };
-		import('photoswipe').then(pswpModule => {
+		import('photoswipe').then((pswpModule) => {
 			import('photoswipe/style.css');
 			const pswp = new pswpModule.default({
 				dataSource: [{ src: `/api/v0/images/${img.file_id}.webp`, width: d.w, height: d.h }],
@@ -181,7 +204,7 @@
 		if (!confirm(confirmMsg)) return;
 		try {
 			await api.deleteMyImage(img.id);
-			myImages = myImages.filter(i => i.id !== img.id);
+			myImages = myImages.filter((i) => i.id !== img.id);
 			if (expandedImageId === img.id) expandedImageId = null;
 		} catch (e: any) {
 			alert(translateError(e));
@@ -215,7 +238,7 @@
 			settingsForm.smtp_port = gs.smtp_port ?? 587;
 			settingsForm.smtp_tls = gs.smtp_tls ?? 'starttls';
 			settingsForm.smtp_user = gs.smtp_user ?? '';
-			useGroupSmtp = !!(gs.smtp_host);
+			useGroupSmtp = !!gs.smtp_host;
 		}
 	});
 
@@ -245,7 +268,7 @@
 	let checkingLinks = $state(false);
 	let linkCheckMessage = $state('');
 	let linkCheckError = $state('');
-	let hasActiveFailures = $derived(brokenLinks.some(l => !l.acknowledged));
+	let hasActiveFailures = $derived(brokenLinks.some((l) => !l.acknowledged));
 
 	async function checkArticleLinks() {
 		checkingLinks = true;
@@ -266,7 +289,7 @@
 	async function markLinkWorking(id: string) {
 		try {
 			await api.acknowledgeBrokenArticleLink(id);
-			brokenLinks = brokenLinks.map(l => l.id === id ? { ...l, acknowledged: true } : l);
+			brokenLinks = brokenLinks.map((l) => l.id === id ? { ...l, acknowledged: true } : l);
 		} catch {
 			linkCheckError = m.page_profile_links_check_failed();
 		}
@@ -275,7 +298,7 @@
 	async function undoLinkWorking(id: string) {
 		try {
 			await api.unacknowledgeBrokenArticleLink(id);
-			brokenLinks = brokenLinks.map(l => l.id === id ? { ...l, acknowledged: false } : l);
+			brokenLinks = brokenLinks.map((l) => l.id === id ? { ...l, acknowledged: false } : l);
 		} catch {
 			linkCheckError = m.page_profile_links_check_failed();
 		}
@@ -320,8 +343,8 @@
 				draft_archive_days: draftArchiveDays,
 				rejected_archive_days: rejectedArchiveDays,
 			});
-			flash(v => archiveMessage = v, m.common_saved());
-		} catch (e: any) {
+			flash((v) => archiveMessage = v, m.common_saved());
+		} catch(e: any) {
 			archiveError = true;
 			archiveMessage = m.page_profile_error_prefix() + translateError(e);
 		}
@@ -659,7 +682,7 @@
 	let memberEmailPending = $state('');
 	let memberEmailSaving = $state(false);
 
-	let memberGchatSpaces = $state<import('$lib/api/client').GChatSpace[]>([]);
+	let memberGchatSpaces = $state<import('#lib/api/client.ts').GChatSpace[]>([]);
 	let memberGchatLoaded = $state(false);
 	let memberGchatConfigured = $state(false);
 	let memberGchatEditing = $state(false);
@@ -732,7 +755,7 @@
 	let gchatAdminEmail = $state('');
 	let gchatConnecting = $state(false);
 	let gchatError = $state('');
-	let gchatSpaces = $state<import('$lib/api/client').GChatSpace[]>([]);
+	let gchatSpaces = $state<import('#lib/api/client.ts').GChatSpace[]>([]);
 	let gchatTeamMapperOpen = $state(false);
 	let gchatTeams = $state<{ id: string; name: string; gchat_space_id: string }[]>([]);
 	let gchatTeamSaving = $state<Record<string, boolean>>({});
@@ -776,7 +799,7 @@
 	async function loadGchatTeams() {
 		try {
 			const teams = await api.listTeams();
-			gchatTeams = teams.map(t => ({
+			gchatTeams = teams.map((t) => ({
 				id: t.id,
 				name: t.name,
 				gchat_space_id: t.gchat_space_id ?? ''
@@ -784,8 +807,8 @@
 		} catch (e) { console.error('loadGchatTeams failed', e); }
 	}
 
-async function linkGchatTeamSpace(teamId: string) {
-		const spaceId = gchatTeamPending[teamId] ?? gchatTeams.find(t => t.id === teamId)?.gchat_space_id ?? '';
+	async function linkGchatTeamSpace(teamId: string) {
+		const spaceId = gchatTeamPending[teamId] ?? gchatTeams.find((t) => t.id === teamId)?.gchat_space_id ?? '';
 		gchatTeamSaving = { ...gchatTeamSaving, [teamId]: true };
 		gchatTeamStatus = { ...gchatTeamStatus, [teamId]: undefined as any };
 		gchatTeamError = { ...gchatTeamError, [teamId]: '' };
@@ -882,8 +905,8 @@ async function linkGchatTeamSpace(teamId: string) {
 	async function saveGroupLanguage() {
 		try {
 			groupSettings = await api.updateGroupSettings({ default_language: groupLanguage });
-			flash(v => groupLanguageMessage = v, m.common_saved());
-		} catch (e: any) {
+			flash((v) => groupLanguageMessage = v, m.common_saved());
+		} catch(e: any) {
 			groupLanguageMessage = m.page_profile_error_prefix() + translateError(e);
 		}
 	}
@@ -906,8 +929,8 @@ async function linkGchatTeamSpace(teamId: string) {
 			}
 			groupSettings = await api.updateGroupSettings(payload);
 			settingsForm.smtp_key = '';
-			flash(v => settingsMessage = v, m.page_profile_settings_saved());
-		} catch (e: any) {
+			flash((v) => settingsMessage = v, m.page_profile_settings_saved());
+		} catch(e: any) {
 			settingsError = translateError(e);
 		}
 	}
@@ -942,8 +965,8 @@ async function linkGchatTeamSpace(teamId: string) {
 			groupNotifDefaults = payload.defaults;
 			groupDefaultGruppkanalChannels = payload.default_gruppkanal_channels;
 			groupNotifDefaultsError = false;
-			flash(v => groupNotifDefaultsMessage = v, m.common_saved());
-		} catch (e: any) {
+			flash((v) => groupNotifDefaultsMessage = v, m.common_saved());
+		} catch(e: any) {
 			groupNotifDefaultsError = true;
 			groupNotifDefaultsMessage = m.page_profile_error_prefix() + translateError(e);
 		}
@@ -955,7 +978,12 @@ async function linkGchatTeamSpace(teamId: string) {
 		forceDefaultsRunning = true;
 		try {
 			const result = await api.forceGroupNotificationDefaults();
-			flash(v => groupNotifDefaultsMessage = v, m.page_profile_notif_force_defaults_done_v2({ user_count: String(result.reset_user_count), team_count: String(result.reset_team_count) }));
+
+			flash((v) => groupNotifDefaultsMessage = v, m.page_profile_notif_force_defaults_done_v2({
+				user_count: String(result.reset_user_count),
+				team_count: String(result.reset_team_count)
+			}));
+
 			groupNotifDefaultsError = false;
 		} catch (e: any) {
 			groupNotifDefaultsError = true;
@@ -974,7 +1002,10 @@ async function linkGchatTeamSpace(teamId: string) {
 	$effect(() => {
 		if (selectedTeamId && mgr) {
 			teamNotifSettings = null;
-			api.getTeamNotificationSettings(selectedTeamId).then(s => { teamNotifSettings = s; }).catch(() => {});
+
+			api.getTeamNotificationSettings(selectedTeamId).then((s) => {
+				teamNotifSettings = s;
+			}).catch(() => {});
 		} else {
 			teamNotifSettings = null;
 		}
@@ -987,8 +1018,8 @@ async function linkGchatTeamSpace(teamId: string) {
 			await api.updateTeamNotificationSettings(selectedTeamId, patch);
 			teamNotifSettings = { ...teamNotifSettings!, ...patch };
 			teamNotifError = false;
-			flash(v => teamNotifMessage = v, m.common_saved());
-		} catch (e: any) {
+			flash((v) => teamNotifMessage = v, m.common_saved());
+		} catch(e: any) {
 			teamNotifError = true;
 			teamNotifMessage = m.page_profile_error_prefix() + translateError(e);
 		} finally {
@@ -1000,7 +1031,10 @@ async function linkGchatTeamSpace(teamId: string) {
 		if (!teamNotifSettings) return;
 		const updated = {
 			...teamNotifSettings.notification_prefs,
-			[key]: { ...(teamNotifSettings.notification_prefs[key] ?? {}), [ch]: value }
+			[key]: {
+				...teamNotifSettings.notification_prefs[key] ?? {},
+				[ch]: value
+			}
 		};
 		await saveTeamNotifSettings({ notification_prefs: updated });
 	}
@@ -1011,971 +1045,993 @@ async function linkGchatTeamSpace(teamId: string) {
 		<p class="text-neutral-500">{m.btn_loading()}</p>
 	</div>
 {:else}
-<div class="max-w-5xl mx-auto px-4 py-8">
-	<h1 class="text-xl font-bold mb-1">{user.name}</h1>
-	<p class="text-sm text-neutral-500 mb-4">{user.email}</p>
+	<div class="max-w-5xl mx-auto px-4 py-8">
+		<h1 class="text-xl font-bold mb-1">{user.name}</h1>
+		<p class="text-sm text-neutral-500 mb-4">{user.email}</p>
 
-	<!-- Tabs -->
-	<div class="flex gap-2 mb-6 border-b">
-		<button
-			onclick={() => tab = 'profile'}
+		<!-- Tabs -->
+		<div class="flex gap-2 mb-6 border-b">
+			<button
+				onclick={() => tab = 'profile'}
 			class="px-3 py-2 text-sm -mb-px {tab === 'profile' ? 'border-b-2 border-blue-700 font-medium text-blue-700' : 'text-neutral-500'}"
-		>{m.page_profile_tab_profile()}</button>
-		{#if user && user.teams?.length > 0}
-			<button
-				onclick={() => switchToTeamsTab()}
+			>{m.page_profile_tab_profile()}</button>
+			{#if user && user.teams?.length > 0}
+				<button
+					onclick={() => switchToTeamsTab()}
 				class="px-3 py-2 text-sm -mb-px {tab === 'teams' ? 'border-b-2 border-blue-700 font-medium text-blue-700' : 'text-neutral-500'}"
-			>{m.page_profile_tab_teams()}</button>
-		{/if}
-		{#if mgr}
-			<button
-				onclick={() => tab = 'group'}
-				class="px-3 py-2 text-sm -mb-px {tab === 'group' ? 'border-b-2 border-blue-700 font-medium text-blue-700' : 'text-neutral-500'}"
-			>{m.page_profile_tab_group()}</button>
-		{/if}
-	</div>
-
-	<!-- Profile tab -->
-	{#if tab === 'profile'}
-		<section class="mb-6 border rounded-lg p-4">
-			<h2 class="font-medium mb-3">{m.page_profile_permissions_heading()}</h2>
-
-			{#if user.teams?.length === 0}
-				<p class="text-sm text-neutral-500">{m.page_profile_no_teams()}</p>
-			{:else}
-				<div class="space-y-3">
-					{#each Object.entries(teamsByAccess) as [level, teams]}
-						<div class="bg-neutral-50 rounded-lg px-4 py-3">
-							<div class="font-medium text-sm">{msg(`team_access_${level}`) ?? level}</div>
-							<div class="text-xs text-neutral-500 mb-2">{msg(`team_access_${level}_description`) ?? ''}</div>
-							<div class="flex flex-wrap gap-2">
-								{#each teams as team}
-									<span class="text-xs bg-white text-neutral-700 px-2 py-1 rounded shadow-sm">
-										{team.team_name}
-										<span class="text-neutral-400">{team.team_type === 'troop' ? m.team_type_troop() : m.team_type_role()}</span>
-									</span>
-								{/each}
-							</div>
-						</div>
-					{/each}
-				</div>
+				>{m.page_profile_tab_teams()}</button>
 			{/if}
-		</section>
+			{#if mgr}
+				<button
+					onclick={() => tab = 'group'}
+				class="px-3 py-2 text-sm -mb-px {tab === 'group' ? 'border-b-2 border-blue-700 font-medium text-blue-700' : 'text-neutral-500'}"
+				>{m.page_profile_tab_group()}</button>
+			{/if}
+		</div>
 
-		{#if (user?.groups?.length ?? 0) > 1}
+		<!-- Profile tab -->
+		{#if tab === 'profile'}
 			<section class="mb-6 border rounded-lg p-4">
-				<h2 class="font-medium mb-3">{m.user_info_card_groups_heading()}</h2>
-				<ul class="space-y-1">
-					{#each user!.groups as group}
-						<li>
-							<button
-								type="button"
-								disabled={group.id === user!.group_id}
-								onclick={() => switchGroup(group.id)}
-								class="w-full flex items-center justify-between gap-2 rounded px-2 py-1 text-sm text-left {group.id === user!.group_id ? 'bg-blue-50 font-medium' : 'hover:bg-neutral-50'}"
-							>
-								<span>{group.name} <span class="text-neutral-400 text-xs">{orgTypeLabel(group.type)}</span></span>
-								{#if group.id === user!.group_id}
-									<span class="text-neutral-500 text-xs">{m.user_info_card_current_group_badge()}</span>
-								{/if}
-							</button>
-						</li>
-					{/each}
-				</ul>
-			</section>
-		{/if}
+				<h2 class="font-medium mb-3">{m.page_profile_permissions_heading()}</h2>
 
-		<section class="mb-6 border rounded-lg p-4">
-			<h2 class="font-medium mb-3">{m.page_profile_settings_heading()}</h2>
-			<div class="flex items-center gap-3">
+				{#if user.teams?.length === 0}
+					<p class="text-sm text-neutral-500">{m.page_profile_no_teams()}</p>
+				{:else}
+					<div class="space-y-3">
+						{#each Object.entries(teamsByAccess) as [level, teams]}
+							<div class="bg-neutral-50 rounded-lg px-4 py-3">
+								<div class="font-medium text-sm">{msg(`team_access_${level}`) ?? level}</div>
+								<div class="text-xs text-neutral-500 mb-2">{msg(`team_access_${level}_description`) ?? ''}</div>
+								<div class="flex flex-wrap gap-2">
+									{#each teams as team}
+									<span class="text-xs bg-white text-neutral-700 px-2 py-1 rounded shadow-sm">
+											{team.team_name}
+
+											<span class="text-neutral-400">
+												{team.team_type === 'troop' ? m.team_type_troop() : m.team_type_role()}
+											</span>
+										</span>
+									{/each}
+								</div>
+							</div>
+						{/each}
+					</div>
+				{/if}
+			</section>
+
+			{#if (user?.groups?.length ?? 0) > 1}
+				<section class="mb-6 border rounded-lg p-4">
+					<h2 class="font-medium mb-3">{m.user_info_card_groups_heading()}</h2>
+					<ul class="space-y-1">
+						{#each user!.groups as group}
+							<li>
+								<button
+									type="button"
+									disabled={group.id === user!.group_id}
+									onclick={() => switchGroup(group.id)}
+									class="w-full flex items-center justify-between gap-2 rounded px-2 py-1 text-sm text-left {group.id === user!.group_id ? 'bg-blue-50 font-medium' : 'hover:bg-neutral-50'}"
+								>
+								<span>{group.name} <span class="text-neutral-400 text-xs">{orgTypeLabel(group.type)}</span></span>
+									{#if group.id === user!.group_id}
+										<span class="text-neutral-500 text-xs">{m.user_info_card_current_group_badge()}</span>
+									{/if}
+								</button>
+							</li>
+						{/each}
+					</ul>
+				</section>
+			{/if}
+
+			<section class="mb-6 border rounded-lg p-4">
+				<h2 class="font-medium mb-3">{m.page_profile_settings_heading()}</h2>
+				<div class="flex items-center gap-3">
 				<label class="text-sm text-neutral-700" for="user-language">{m.page_profile_language_label()}</label>
 				<select id="user-language" bind:value={userLanguage} class="border rounded px-2 py-1 text-sm">
 					<option value="sv">Svenska{groupLanguage !== 'sv' ? '' : ` ${m.page_profile_language_group_default()}`}</option>
 					<option value="en">English{groupLanguage !== 'en' ? '' : ` ${m.page_profile_language_group_default()}`}</option>
-				</select>
+					</select>
 				<button onclick={saveLanguage} disabled={languageSaving} class="text-sm bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50">
 					{languageSaving ? m.btn_saving() : m.btn_save()}
 				</button>
 				{#if languageMessage}<span class="text-sm text-green-600">{languageMessage}</span>{/if}
-			</div>
-			<p class="text-xs text-neutral-400 mt-2">{m.page_profile_language_hint()}</p>
-		</section>
+				</div>
+				<p class="text-xs text-neutral-400 mt-2">{m.page_profile_language_hint()}</p>
+			</section>
 
-		<!-- Notification preferences -->
-		{#if notifPrefs}
-		<section class="mb-6 border rounded-lg p-4">
-			<h2 class="font-medium mb-4">{m.page_profile_notifs_heading()}</h2>
+			<!-- Notification preferences -->
+			{#if notifPrefs}
+				<section class="mb-6 border rounded-lg p-4">
+					<h2 class="font-medium mb-4">{m.page_profile_notifs_heading()}</h2>
 
-			<!-- Notification email override -->
-			<div class="mb-5 pb-5 border-b border-neutral-100">
-				<p class="text-sm text-neutral-600 mb-1">
-					<span class="font-medium">{m.page_profile_notifs_email_label()}:</span>
-					<span class="ml-1 text-neutral-500">{data.user?.email}</span>
-				</p>
+					<!-- Notification email override -->
+					<div class="mb-5 pb-5 border-b border-neutral-100">
+						<p class="text-sm text-neutral-600 mb-1">
+							<span class="font-medium">{m.page_profile_notifs_email_label()}:</span>
+							<span class="ml-1 text-neutral-500">{data.user?.email}</span>
+						</p>
 				<label class="flex items-center gap-2 text-sm text-neutral-700 mb-2 cursor-pointer">
 					<input type="checkbox" bind:checked={notifEmailOverride} onchange={() => { notifEmailMessage = null; if (!notifEmailOverride) notifEmailInput = ''; }} class="h-4 w-4 accent-blue-700" />
-					{m.page_profile_notifs_email_override_checkbox()}
-				</label>
-				{#if notifEmailOverride}
-				<div class="flex items-center gap-2 mt-1">
-					<input
-						type="email"
-						bind:value={notifEmailInput}
-						class="border rounded px-2 py-1 text-sm w-64"
-						placeholder="din@epost.se"
-					/>
+							{m.page_profile_notifs_email_override_checkbox()}
+						</label>
+						{#if notifEmailOverride}
+							<div class="flex items-center gap-2 mt-1">
+								<input
+									type="email"
+									bind:value={notifEmailInput}
+									class="border rounded px-2 py-1 text-sm w-64"
+									placeholder="din@epost.se"
+								/>
 					<button onclick={saveNotifEmail} disabled={notifEmailSaving || !notifEmailInput.trim()} class="text-sm bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50">
 						{notifEmailSaving ? m.page_profile_notifs_email_saving() : m.page_profile_notifs_email_save_btn()}
-					</button>
-				</div>
-				{:else if notifEmailOverride === false && notifEmailMessage === null}
-					<!-- nothing when unchecked and no message -->
-				{/if}
-				{#if !notifEmailOverride && data.user?.notification_email}
+								</button>
+							</div>
+						{:else if notifEmailOverride === false && notifEmailMessage === null}
+							<!-- nothing when unchecked and no message -->
+						{/if}
+						{#if !notifEmailOverride && data.user?.notification_email}
 				<button onclick={saveNotifEmail} disabled={notifEmailSaving} class="text-xs text-neutral-500 hover:underline mt-1">
 					{notifEmailSaving ? m.page_profile_notifs_email_saving() : '↩ ' + m.page_profile_notifs_email_cleared()}
-				</button>
-				{/if}
-				{#if notifEmailMessage === 'sent'}
-					<p class="text-sm text-green-700 mt-1">{m.page_profile_notifs_email_sent()}</p>
-				{:else if notifEmailMessage === 'cleared'}
-					<p class="text-sm text-green-700 mt-1">{m.page_profile_notifs_email_cleared()}</p>
-				{:else if notifEmailMessage === 'error'}
-					<p class="text-sm text-red-600 mt-1">{m.page_profile_notifs_email_error()}</p>
-				{/if}
-			</div>
+							</button>
+						{/if}
+						{#if notifEmailMessage === 'sent'}
+							<p class="text-sm text-green-700 mt-1">{m.page_profile_notifs_email_sent()}</p>
+						{:else if notifEmailMessage === 'cleared'}
+							<p class="text-sm text-green-700 mt-1">{m.page_profile_notifs_email_cleared()}</p>
+						{:else if notifEmailMessage === 'error'}
+							<p class="text-sm text-red-600 mt-1">{m.page_profile_notifs_email_error()}</p>
+						{/if}
+					</div>
 
-			<!-- Personal events: simple on/off -->
+					<!-- Personal events: simple on/off -->
 			<h3 class="text-sm font-semibold text-neutral-600 mb-2">{m.page_profile_notifs_personal_heading()}</h3>
-			<p class="text-xs text-neutral-500 mb-3">{m.page_profile_notifs_personal_help()}</p>
-			<table class="w-full text-sm border-collapse mb-6">
-				<thead>
-					<tr>
+					<p class="text-xs text-neutral-500 mb-3">{m.page_profile_notifs_personal_help()}</p>
+					<table class="w-full text-sm border-collapse mb-6">
+						<thead>
+							<tr>
 						<th class="text-left pb-1 pr-3 font-normal text-xs text-neutral-400 w-full"></th>
 						<th class="pb-1 px-3 font-normal text-xs text-neutral-400 whitespace-nowrap text-center">{m.page_profile_notifs_channel_email()}</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each personalEvents as row}
-					{#if row.key !== 'issue_assigned_to_me' || canBeAssignedIssue}
-					<tr class="border-t border-neutral-100">
-						<td class="py-1.5 pr-3 w-full">
-							<span>{row.label()}</span>
-							{#if row.locked}
+							</tr>
+						</thead>
+						<tbody>
+							{#each personalEvents as row}
+								{#if row.key !== 'issue_assigned_to_me' || canBeAssignedIssue}
+									<tr class="border-t border-neutral-100">
+										<td class="py-1.5 pr-3 w-full">
+											<span>{row.label()}</span>
+											{#if row.locked}
 								<span class="text-xs text-neutral-400 ml-1" title={m.page_profile_notifs_assigned_locked()}>🔒</span>
-							{/if}
-						</td>
-						<td class="py-1.5 px-3 text-center">
-							{#if row.locked}
+											{/if}
+										</td>
+										<td class="py-1.5 px-3 text-center">
+											{#if row.locked}
 								<input type="checkbox" checked disabled class="h-4 w-4 accent-blue-700 opacity-50 cursor-not-allowed" />
-							{:else}
-								<input
-									type="checkbox"
-									checked={notifEnabled(row.key, 'email')}
-									onchange={(e) => toggleNotif(row.key, 'email', e.currentTarget.checked)}
-									class="h-4 w-4 accent-blue-700"
-								/>
-							{/if}
-						</td>
-					</tr>
-					{/if}
-					{/each}
-				</tbody>
-			</table>
-
-			<!-- Team/role events: three-column radio -->
-			<div class="flex items-center justify-between mb-2">
-				<h3 class="text-sm font-semibold text-neutral-600">{m.page_profile_notifs_team_heading()}</h3>
-				{#if user && user.teams?.length > 0}
-					<button
-						onclick={() => switchToTeamsTab()}
-						class="text-xs text-blue-700 underline"
-					>{m.page_profile_notifs_manage_teams_link()}</button>
-				{/if}
-			</div>
-			<p class="text-xs text-neutral-500 mb-3">{m.page_profile_notifs_team_help()}</p>
-			<div class="space-y-0">
-				{#each teamEvents as row}
-					{#if !managerOnlyKeys.has(row.key) || mgr}
-					<div class="border-t border-neutral-100 py-2 flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-0">
-						<span class="text-sm flex-1 pr-3">{row.label()}</span>
-						<div class="flex gap-1">
-							{#each [
-								['always', m.page_profile_notifs_always_short()],
-								['follow', m.page_profile_notifs_follow_short()],
-								['never', m.page_profile_notifs_no_email_short()],
-							] as [val, label]}
-								<button
-									onclick={() => setTeamEventRadio(row.key, val as 'always' | 'follow' | 'never')}
-									class="px-2 py-0.5 text-xs rounded border whitespace-nowrap {teamEventRadio(row.key) === val ? 'bg-blue-700 text-white border-blue-700' : 'bg-white text-neutral-600 border-neutral-300 hover:border-blue-400'}"
-								>{label}</button>
+											{:else}
+												<input
+													type="checkbox"
+													checked={notifEnabled(row.key, 'email')}
+													onchange={(e) => toggleNotif(row.key, 'email', e.currentTarget.checked)}
+													class="h-4 w-4 accent-blue-700"
+												/>
+											{/if}
+										</td>
+									</tr>
+								{/if}
 							{/each}
-						</div>
-					</div>
-					{/if}
-				{/each}
-			</div>
+						</tbody>
+					</table>
 
-			<div class="mt-3">
+					<!-- Team/role events: three-column radio -->
+					<div class="flex items-center justify-between mb-2">
+						<h3 class="text-sm font-semibold text-neutral-600">{m.page_profile_notifs_team_heading()}</h3>
+						{#if user && user.teams?.length > 0}
+							<button
+								onclick={() => switchToTeamsTab()}
+								class="text-xs text-blue-700 underline"
+							>{m.page_profile_notifs_manage_teams_link()}</button>
+						{/if}
+					</div>
+					<p class="text-xs text-neutral-500 mb-3">{m.page_profile_notifs_team_help()}</p>
+					<div class="space-y-0">
+						{#each teamEvents as row}
+							{#if !managerOnlyKeys.has(row.key) || mgr}
+					<div class="border-t border-neutral-100 py-2 flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-0">
+									<span class="text-sm flex-1 pr-3">{row.label()}</span>
+									<div class="flex gap-1">
+										{#each [
+											['always', m.page_profile_notifs_always_short()],
+											['follow', m.page_profile_notifs_follow_short()],
+								['never', m.page_profile_notifs_no_email_short()],
+										] as [val, label]}
+											<button
+												onclick={() => setTeamEventRadio(row.key, val as 'always' | 'follow' | 'never')}
+									class="px-2 py-0.5 text-xs rounded border whitespace-nowrap {teamEventRadio(row.key) === val ? 'bg-blue-700 text-white border-blue-700' : 'bg-white text-neutral-600 border-neutral-300 hover:border-blue-400'}"
+											>{label}</button>
+										{/each}
+									</div>
+								</div>
+							{/if}
+						{/each}
+					</div>
+
+					<div class="mt-3">
 				<button onclick={restoreNotifDefaults} disabled={notifRestoring} class="text-sm text-neutral-500 underline disabled:opacity-50">
 					{m.page_profile_notifs_restore()}
 				</button>
-			</div>
-		</section>
-		{/if}
-
-		<section class="mb-6 border rounded-lg p-4">
-			<h2 class="font-medium mb-3">{m.page_profile_images_heading()}</h2>
-
-		{#if !myImagesLoaded}
-			<p class="text-sm text-neutral-400">{m.btn_loading()}</p>
-		{:else if myImages.length === 0}
-			<p class="text-sm text-neutral-500">{m.page_profile_images_empty()}</p>
-		{:else}
-			<p class="text-xs text-neutral-400 mb-2">{myImages.length} {myImages.length === 1 ? m.page_profile_image_singular() : m.page_profile_image_plural()}</p>
-			{#if editingMyImage}
-				<div class="border rounded-lg p-4 bg-white space-y-3 mb-4">
-					<div class="flex items-start gap-4">
-						<img src="/api/v0/images/{editingMyImage.file_id}_thumb.webp" alt={editingMyImage.title} class="h-32 rounded object-contain shrink-0" />
-						<div class="flex-1 space-y-3 min-w-0">
-							<label class="block">
-								<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_image_title_label()}</span>
-								<input type="text" bind:value={editMyTitle} class="border rounded px-2 py-1.5 text-sm w-full" />
-							</label>
-							<label class="block">
-								<span class="text-sm text-neutral-600 block mb-1">{m.lbl_description()}</span>
-								<textarea bind:value={editMyDescription} rows={2} class="border rounded px-2 py-1.5 text-sm w-full"></textarea>
-							</label>
-							<label class="block">
-								<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_image_photographer_label()}</span>
-								<input type="text" bind:value={editMyAttribution} class="border rounded px-2 py-1.5 text-sm w-full" />
-							</label>
-							<label class="flex items-center gap-2 text-sm">
-								<input type="checkbox" bind:checked={editMyShared} />
-								{m.page_profile_image_share_label()}
-							</label>
-						</div>
 					</div>
-					{#if editMyError}
-						<p class="text-xs text-red-600">{editMyError}</p>
-					{/if}
-					<div class="flex gap-2">
+				</section>
+			{/if}
+
+			<section class="mb-6 border rounded-lg p-4">
+				<h2 class="font-medium mb-3">{m.page_profile_images_heading()}</h2>
+
+				{#if !myImagesLoaded}
+					<p class="text-sm text-neutral-400">{m.btn_loading()}</p>
+				{:else if myImages.length === 0}
+					<p class="text-sm text-neutral-500">{m.page_profile_images_empty()}</p>
+				{:else}
+			<p class="text-xs text-neutral-400 mb-2">{myImages.length} {myImages.length === 1 ? m.page_profile_image_singular() : m.page_profile_image_plural()}</p>
+					{#if editingMyImage}
+				<div class="border rounded-lg p-4 bg-white space-y-3 mb-4">
+							<div class="flex items-start gap-4">
+						<img src="/api/v0/images/{editingMyImage.file_id}_thumb.webp" alt={editingMyImage.title} class="h-32 rounded object-contain shrink-0" />
+								<div class="flex-1 space-y-3 min-w-0">
+									<label class="block">
+										<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_image_title_label()}</span>
+								<input type="text" bind:value={editMyTitle} class="border rounded px-2 py-1.5 text-sm w-full" />
+									</label>
+									<label class="block">
+										<span class="text-sm text-neutral-600 block mb-1">{m.lbl_description()}</span>
+								<textarea bind:value={editMyDescription} rows={2} class="border rounded px-2 py-1.5 text-sm w-full"></textarea>
+									</label>
+									<label class="block">
+										<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_image_photographer_label()}</span>
+								<input type="text" bind:value={editMyAttribution} class="border rounded px-2 py-1.5 text-sm w-full" />
+									</label>
+									<label class="flex items-center gap-2 text-sm">
+										<input type="checkbox" bind:checked={editMyShared} />
+										{m.page_profile_image_share_label()}
+									</label>
+								</div>
+							</div>
+							{#if editMyError}
+								<p class="text-xs text-red-600">{editMyError}</p>
+							{/if}
+							<div class="flex gap-2">
 						<button type="button" onclick={saveEditMyImage} disabled={editMySaving} class="text-sm bg-blue-700 text-white px-4 py-2 rounded disabled:opacity-50">{editMySaving ? m.btn_saving() : m.btn_save()}</button>
 						<button type="button" onclick={() => editingMyImage = null} class="text-sm text-neutral-500 underline">{m.btn_cancel()}</button>
-					</div>
-				</div>
-			{/if}
-			<div class="flex flex-wrap gap-3">
-				{#each myImages as img}
-					<div class="border rounded overflow-hidden w-[calc(33.333%-0.5rem)]">
-						<button type="button" onclick={() => openFullscreen(img)} class="w-full cursor-zoom-in">
-							<img
-								src="/api/v0/images/{img.file_id}_thumb.webp"
-								alt={img.title || m.page_profile_image_no_title()}
-								class="w-full h-[160px] rounded-t object-contain bg-neutral-50"
-								loading="lazy"
-							/>
-						</button>
-						<div class="px-2 py-1.5">
-							<p class="text-xs font-medium truncate">{img.title || m.page_profile_image_no_title()}</p>
-							{#if img.shared}
-								<span class="text-[10px] bg-blue-100 text-blue-700 px-1 rounded">{m.page_profile_image_shared_badge()}</span>
-							{/if}
-							<div class="flex gap-1.5 mt-1">
-								<button type="button" onclick={() => toggleImageDetail(img)} class="text-[11px] text-blue-700 border border-blue-200 bg-blue-50 rounded px-1.5 py-0.5 hover:bg-blue-100">
-									{expandedImageId === img.id ? m.page_profile_btn_hide() : m.page_profile_btn_details()}
-								</button>
-								<button type="button" onclick={() => startEditMyImage(img)} class="text-[11px] text-blue-700 border border-blue-200 bg-blue-50 rounded px-1.5 py-0.5 hover:bg-blue-100">{m.btn_edit()}</button>
 							</div>
 						</div>
+					{/if}
+					<div class="flex flex-wrap gap-3">
+						{#each myImages as img}
+					<div class="border rounded overflow-hidden w-[calc(33.333%-0.5rem)]">
+						<button type="button" onclick={() => openFullscreen(img)} class="w-full cursor-zoom-in">
+									<img
+										src="/api/v0/images/{img.file_id}_thumb.webp"
+										alt={img.title || m.page_profile_image_no_title()}
+										class="w-full h-[160px] rounded-t object-contain bg-neutral-50"
+										loading="lazy"
+									/>
+								</button>
+								<div class="px-2 py-1.5">
+									<p class="text-xs font-medium truncate">{img.title || m.page_profile_image_no_title()}</p>
+									{#if img.shared}
+								<span class="text-[10px] bg-blue-100 text-blue-700 px-1 rounded">{m.page_profile_image_shared_badge()}</span>
+									{/if}
+									<div class="flex gap-1.5 mt-1">
+								<button type="button" onclick={() => toggleImageDetail(img)} class="text-[11px] text-blue-700 border border-blue-200 bg-blue-50 rounded px-1.5 py-0.5 hover:bg-blue-100">
+									{expandedImageId === img.id ? m.page_profile_btn_hide() : m.page_profile_btn_details()}
+										</button>
+								<button type="button" onclick={() => startEditMyImage(img)} class="text-[11px] text-blue-700 border border-blue-200 bg-blue-50 rounded px-1.5 py-0.5 hover:bg-blue-100">{m.btn_edit()}</button>
+									</div>
+								</div>
 
-						{#if expandedImageId === img.id}
-							<div class="border-t px-2 py-2 space-y-2 bg-neutral-50">
+								{#if expandedImageId === img.id}
+									<div class="border-t px-2 py-2 space-y-2 bg-neutral-50">
 
-								{#if img.description}
-									<p class="text-xs text-neutral-600">{img.description}</p>
-								{/if}
+										{#if img.description}
+											<p class="text-xs text-neutral-600">{img.description}</p>
+										{/if}
 
-								<p class="text-[10px] text-neutral-400">
+										<p class="text-[10px] text-neutral-400">
 									{img.format === 'landscape' ? m.page_profile_image_orientation_landscape() : img.format === 'portrait' ? m.page_profile_image_orientation_portrait() : m.page_profile_image_orientation_square()}
 									· {new Date(img.created_at).toLocaleDateString('sv')}
-								</p>
+										</p>
 
-								{#if expandedArticles.length > 0}
-									<div>
-										<span class="text-[10px] font-medium text-neutral-500">{m.page_profile_image_used_on()}</span>
-										{#each expandedArticles as a}
+										{#if expandedArticles.length > 0}
+											<div>
+												<span class="text-[10px] font-medium text-neutral-500">{m.page_profile_image_used_on()}</span>
+												{#each expandedArticles as a}
 											<a href="/articles/{a.article_id}" class="block text-[10px] text-blue-700 hover:underline">{a.commercial_name} — {a.location_name}</a>
-										{/each}
-									</div>
-								{:else}
-									<p class="text-[10px] text-neutral-400">{m.page_profile_image_not_linked()}</p>
-								{/if}
+												{/each}
+											</div>
+										{:else}
+											<p class="text-[10px] text-neutral-400">{m.page_profile_image_not_linked()}</p>
+										{/if}
 
-								{#if img.other_group_count > 0}
+										{#if img.other_group_count > 0}
 									<p class="text-[10px] text-neutral-400">{m.page_profile_image_other_groups({ count: String(img.other_group_count) })}</p>
-								{/if}
+										{/if}
 
 								<button type="button" onclick={() => deleteMyImage(img)} class="text-[10px] text-red-600 hover:underline">{m.page_profile_btn_delete_image()}</button>
+									</div>
+								{/if}
 							</div>
-						{/if}
+						{/each}
 					</div>
-				{/each}
-			</div>
-		{/if}
-		</section>
+				{/if}
+			</section>
 
-		<form method="POST" action="/auth/signout" class="mt-4">
+			<form method="POST" action="/auth/signout" class="mt-4">
 			<button type="submit" class="text-sm text-red-600 hover:underline">{m.page_profile_btn_logout()}</button>
-		</form>
+			</form>
 
 		<form method="POST" action="/auth/signout" bind:this={signoutForm} class="hidden"></form>
 
-		<section class="mt-8 border border-red-200 rounded-lg p-4">
-			<h2 class="font-medium mb-1 text-red-700">{m.page_profile_danger_zone_heading()}</h2>
+			<section class="mt-8 border border-red-200 rounded-lg p-4">
+				<h2 class="font-medium mb-1 text-red-700">{m.page_profile_danger_zone_heading()}</h2>
 			<p class="text-sm text-neutral-600 mb-3">
 				{m.page_profile_danger_zone_description()}
 			</p>
 			{#if removeError}<p class="text-sm text-red-600 mb-2">{removeError}</p>{/if}
-			{#if !removeConfirming}
-				<button type="button" onclick={() => (removeConfirming = true)} class="text-sm text-red-600 hover:underline">
-					{m.page_profile_btn_remove_account()}
-				</button>
-			{:else}
-				<div class="flex items-center gap-3">
+				{#if !removeConfirming}
 					<button
 						type="button"
-						onclick={removeAccount}
-						disabled={removing}
-						class="text-sm bg-red-600 text-white px-3 py-1 rounded disabled:opacity-50"
-					>
-						{m.page_profile_btn_remove_confirm()}
-					</button>
-					<button type="button" onclick={() => (removeConfirming = false)} class="text-sm text-neutral-500 hover:underline">
-						{m.btn_cancel()}
-					</button>
-				</div>
-			{/if}
-		</section>
-
-	<!-- Teams tab -->
-	{:else if tab === 'teams'}
-		{#if !user || user.teams?.length === 0}
-			<p class="text-sm text-neutral-500">{m.page_profile_teams_no_teams()}</p>
-		{:else}
-			<!-- Team picker -->
-			<div class="flex flex-wrap gap-2 mb-6">
-				{#each user.teams as membership}
-					<button
-						onclick={() => selectUserTeam(membership.team_id, membership.team_name)}
-						class="px-3 py-1.5 text-sm rounded-full border {selectedUserTeamId === membership.team_id ? 'bg-blue-700 text-white border-blue-700' : 'bg-white text-neutral-700 border-neutral-300 hover:border-blue-400'}"
-					>
-						{membership.team_name}
-						<span class="ml-1 opacity-60 text-xs">{membership.team_type === 'troop' ? m.team_type_troop() : m.team_type_role()}</span>
-					</button>
-				{/each}
-			</div>
-
-			{#if selectedUserTeamId}
-				{@const selectedMembership = user.teams.find(t => t.team_id === selectedUserTeamId)}
-				<div class="border rounded-lg divide-y">
-
-					<!-- Team name -->
-					<div class="p-4">
-						<label class="block" for="user-team-name">
-							<span class="text-sm font-medium text-neutral-700 block mb-1">{m.page_profile_team_name_label()}</span>
-						</label>
-						<div class="flex gap-2 items-center">
-							<input
-								id="user-team-name"
-								type="text"
-								bind:value={userTeamNameEdit}
-								class="border rounded px-2 py-1 text-sm w-full max-w-xs"
-							/>
-							<button
-								onclick={saveUserTeamName}
-								disabled={userTeamNameSaving}
-								class="text-sm bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50"
-							>{userTeamNameSaving ? m.btn_saving() : m.btn_save()}</button>
-							{#if userTeamNameMessage}
-								<span class="text-sm text-green-600">{userTeamNameMessage}</span>
-							{/if}
-						</div>
+						onclick={() => removeConfirming = true}
+						class="text-sm text-red-600 hover:underline"
+					>{m.page_profile_btn_remove_account()}</button>
+				{:else}
+					<div class="flex items-center gap-3">
+						<button
+							type="button"
+							onclick={removeAccount}
+							disabled={removing}
+							class="text-sm bg-red-600 text-white px-3 py-1 rounded disabled:opacity-50"
+						>{m.page_profile_btn_remove_confirm()}</button>
+						<button
+							type="button"
+							onclick={() => removeConfirming = false}
+							class="text-sm text-neutral-500 hover:underline"
+						>{m.btn_cancel()}</button>
 					</div>
+				{/if}
+			</section>
 
-					<!-- Notification settings -->
-					<div class="p-4">
-						<div class="flex items-center justify-between mb-3">
-							<h3 class="text-sm font-semibold text-neutral-700">{m.page_profile_teams_notif_heading()}</h3>
-							<button
-								onclick={() => saveUserTeamNotifSettings({ notification_prefs: {}, gruppkanal_channels: null })}
-								class="text-xs text-neutral-400 hover:text-red-600"
-							>{m.page_profile_teams_notif_reset()}</button>
-						</div>
+			<!-- Teams tab -->
+		{:else if tab === 'teams'}
+			{#if !user || user.teams?.length === 0}
+				<p class="text-sm text-neutral-500">{m.page_profile_teams_no_teams()}</p>
+			{:else}
+				<!-- Team picker -->
+				<div class="flex flex-wrap gap-2 mb-6">
+					{#each user.teams as membership}
+						<button
+							onclick={() => selectUserTeam(membership.team_id, membership.team_name)}
+						class="px-3 py-1.5 text-sm rounded-full border {selectedUserTeamId === membership.team_id ? 'bg-blue-700 text-white border-blue-700' : 'bg-white text-neutral-700 border-neutral-300 hover:border-blue-400'}"
+						>
+							{membership.team_name}
+						<span class="ml-1 opacity-60 text-xs">{membership.team_type === 'troop' ? m.team_type_troop() : m.team_type_role()}</span>
+						</button>
+					{/each}
+				</div>
 
-						{#if userTeamSettingsLoading}
-							<p class="text-sm text-neutral-400">{m.btn_loading()}</p>
-						{:else if userTeamSettingsError}
-							<p class="text-sm text-red-600">{userTeamSettingsError}</p>
-						{:else if userTeamSettings}
-							{@const effectiveGruppkanal = userTeamSettings.gruppkanal_channels ?? userTeamSettings.default_gruppkanal_channels}
-							{@const hasGroupEmail = !!userTeamSettings.notification_email}
-							{@const hasGChat = !!userTeamSettings.gchat_space_id}
-							{@const availableChannels = [
-								...(hasGroupEmail ? ['email'] : []),
-								...(hasGChat ? ['gchat'] : []),
-							]}
+				{#if selectedUserTeamId}
+					{@const selectedMembership = user.teams.find((t) => t.team_id === selectedUserTeamId)}
 
-							<!-- Gruppkanal composition -->
-							<div class="mb-5">
-								<h4 class="text-sm font-medium text-neutral-700 mb-1">{m.page_profile_teams_gruppkanal_heading()}</h4>
-								<p class="text-xs text-neutral-400 mb-3">{m.page_profile_teams_gruppkanal_help()}</p>
-
-								{#if availableChannels.length === 0}
-									<p class="text-sm text-neutral-400 italic">{m.page_profile_teams_gruppkanal_no_channels()}</p>
-								{:else}
-									{#each availableChannels as ch}
-										{@const checked = effectiveGruppkanal.includes(ch)}
-										<label class="flex items-center gap-2 mb-1 cursor-pointer">
-											<input
-												type="checkbox"
-												{checked}
-												onchange={(e) => {
-													const current = userTeamSettings!.gruppkanal_channels ?? [...userTeamSettings!.default_gruppkanal_channels];
-													const updated = e.currentTarget.checked
-														? [...current, ch]
-														: current.filter(c => c !== ch);
-													saveUserTeamNotifSettings({ gruppkanal_channels: updated });
-												}}
-												class="h-4 w-4 accent-blue-700"
-											/>
-											<span class="text-sm text-neutral-700">
-												{ch === 'email' ? m.page_profile_teams_gruppkanal_channel_email() : m.page_profile_teams_gruppkanal_channel_gchat()}
-												{#if ch === 'email' && userTeamSettings.notification_email}
-													<span class="text-neutral-400 text-xs ml-1">({userTeamSettings.notification_email})</span>
-												{/if}
-											</span>
-										</label>
-									{/each}
+					<div class="border rounded-lg divide-y">
+						<!-- Team name -->
+						<div class="p-4">
+							<label class="block" for="user-team-name">
+							<span class="text-sm font-medium text-neutral-700 block mb-1">{m.page_profile_team_name_label()}</span>
+							</label>
+							<div class="flex gap-2 items-center">
+								<input
+									id="user-team-name"
+									type="text"
+									bind:value={userTeamNameEdit}
+									class="border rounded px-2 py-1 text-sm w-full max-w-xs"
+								/>
+								<button
+									onclick={saveUserTeamName}
+									disabled={userTeamNameSaving}
+									class="text-sm bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50"
+							>{userTeamNameSaving ? m.btn_saving() : m.btn_save()}</button>
+								{#if userTeamNameMessage}
+									<span class="text-sm text-green-600">{userTeamNameMessage}</span>
 								{/if}
 							</div>
+						</div>
 
-							<!-- Per-event table: context-aware personal email toggle + Gruppkanal checkbox -->
-							{@const tabEvents = teamTabEvents(selectedMembership?.access_level ?? 'book')}
-							{@const showGruppkanalCol = effectiveGruppkanal.some(ch => availableChannels.includes(ch))}
-							<div class="mb-3">
-								<h4 class="text-sm font-medium text-neutral-700 mb-1">{m.page_profile_teams_notif_col_personal()}</h4>
-								<p class="text-xs text-neutral-400">{showGruppkanalCol ? m.page_profile_teams_notif_per_event_desc_with_channel() : m.page_profile_teams_notif_per_event_desc_no_channel()}</p>
+						<!-- Notification settings -->
+						<div class="p-4">
+							<div class="flex items-center justify-between mb-3">
+								<h3 class="text-sm font-semibold text-neutral-700">{m.page_profile_teams_notif_heading()}</h3>
+								<button
+									onclick={() => saveUserTeamNotifSettings({ notification_prefs: {}, gruppkanal_channels: null })}
+									class="text-xs text-neutral-400 hover:text-red-600"
+								>{m.page_profile_teams_notif_reset()}</button>
 							</div>
-							<table class="w-full text-sm border-collapse">
-								<thead>
-									<tr>
+
+							{#if userTeamSettingsLoading}
+								<p class="text-sm text-neutral-400">{m.btn_loading()}</p>
+							{:else if userTeamSettingsError}
+								<p class="text-sm text-red-600">{userTeamSettingsError}</p>
+							{:else if userTeamSettings}
+								{@const effectiveGruppkanal = userTeamSettings.gruppkanal_channels ?? userTeamSettings.default_gruppkanal_channels}
+								{@const hasGroupEmail = !!userTeamSettings.notification_email}
+								{@const hasGChat = !!userTeamSettings.gchat_space_id}
+								{@const availableChannels = [
+									...hasGroupEmail ? ['email'] : [],
+									...hasGChat ? ['gchat'] : []
+								]}
+
+								<!-- Gruppkanal composition -->
+								<div class="mb-5">
+									<h4 class="text-sm font-medium text-neutral-700 mb-1">{m.page_profile_teams_gruppkanal_heading()}</h4>
+									<p class="text-xs text-neutral-400 mb-3">{m.page_profile_teams_gruppkanal_help()}</p>
+
+									{#if availableChannels.length === 0}
+										<p class="text-sm text-neutral-400 italic">{m.page_profile_teams_gruppkanal_no_channels()}</p>
+									{:else}
+										{#each availableChannels as ch}
+											{@const checked = effectiveGruppkanal.includes(ch)}
+										<label class="flex items-center gap-2 mb-1 cursor-pointer">
+												<input
+													type="checkbox"
+													checked={checked}
+													onchange={(e) => {
+														const current = userTeamSettings!.gruppkanal_channels ?? [...userTeamSettings!.default_gruppkanal_channels];
+														const updated = e.currentTarget.checked ? [...current, ch] : current.filter((c) => c !== ch);
+
+														saveUserTeamNotifSettings({ gruppkanal_channels: updated });
+													}}
+													class="h-4 w-4 accent-blue-700"
+												/>
+												<span class="text-sm text-neutral-700">
+												{ch === 'email' ? m.page_profile_teams_gruppkanal_channel_email() : m.page_profile_teams_gruppkanal_channel_gchat()}
+													{#if ch === 'email' && userTeamSettings.notification_email}
+														<span class="text-neutral-400 text-xs ml-1">({userTeamSettings.notification_email})</span>
+													{/if}
+												</span>
+											</label>
+										{/each}
+									{/if}
+								</div>
+
+								<!-- Per-event table: context-aware personal email toggle + Gruppkanal checkbox -->
+								{@const tabEvents = teamTabEvents(selectedMembership?.access_level ?? 'book')}
+								{@const showGruppkanalCol = effectiveGruppkanal.some((ch) => availableChannels.includes(ch))}
+								<div class="mb-3">
+									<h4 class="text-sm font-medium text-neutral-700 mb-1">{m.page_profile_teams_notif_col_personal()}</h4>
+								<p class="text-xs text-neutral-400">{showGruppkanalCol ? m.page_profile_teams_notif_per_event_desc_with_channel() : m.page_profile_teams_notif_per_event_desc_no_channel()}</p>
+								</div>
+								<table class="w-full text-sm border-collapse">
+									<thead>
+										<tr>
 										<th class="text-left py-1 pr-3 font-normal text-neutral-500 w-full"></th>
 										<th class="text-center py-1 px-2 font-normal text-neutral-500 whitespace-nowrap">{m.page_profile_teams_notif_col_personal()}</th>
-										{#if showGruppkanalCol}
+											{#if showGruppkanalCol}
 											<th class="text-center py-1 px-3 font-normal text-neutral-500 whitespace-nowrap">{m.page_profile_teams_notif_col_gruppkanal()}</th>
-										{/if}
-									</tr>
-								</thead>
-								<tbody>
-									{#each tabEvents as row}
-									{@const ep = userTeamSettings.notification_prefs?.[row.key]}
-									{@const policy = ep?.personal_email_policy ?? ''}
-									{@const grEnabled = ep?.gruppkanal ?? null}
-									<tr class="border-t border-neutral-100">
-										<td class="py-2 pr-3">{row.label()}</td>
-										<!-- Personal email: off → "never"; on without Gruppkanal → omit (default sends); on with Gruppkanal → "always" -->
-										<td class="py-2 px-2 text-center">
-											<input
-												type="checkbox"
-												checked={showGruppkanalCol ? policy === 'always' : policy !== 'never'}
-												onchange={(e) => {
-													const prefs = { ...userTeamSettings!.notification_prefs };
-													if (e.currentTarget.checked) {
-														if (showGruppkanalCol) {
-															prefs[row.key] = { ...(prefs[row.key] ?? {}), personal_email_policy: 'always' };
-														} else {
-															const { personal_email_policy: _, ...rest } = prefs[row.key] ?? {};
-															prefs[row.key] = Object.keys(rest).length ? rest : undefined as any;
-														}
-													} else {
-														if (showGruppkanalCol) {
-															const { personal_email_policy: _, ...rest } = prefs[row.key] ?? {};
-															prefs[row.key] = Object.keys(rest).length ? rest : undefined as any;
-														} else {
-															prefs[row.key] = { ...(prefs[row.key] ?? {}), personal_email_policy: 'never' };
-														}
-													}
-													saveUserTeamNotifSettings({ notification_prefs: prefs });
-												}}
-												class="h-4 w-4 accent-blue-700"
-											/>
-										</td>
-										<!-- Gruppkanal checkbox: only when channels available -->
-										{#if showGruppkanalCol}
-										<td class="py-2 px-3 text-center">
-											<input
-												type="checkbox"
-												checked={grEnabled ?? true}
-												onchange={(e) => {
-													const prefs = { ...userTeamSettings!.notification_prefs };
-													prefs[row.key] = { ...(prefs[row.key] ?? {}), gruppkanal: e.currentTarget.checked };
-													saveUserTeamNotifSettings({ notification_prefs: prefs });
-												}}
-												class="h-4 w-4 accent-blue-700"
-											/>
-										</td>
-										{/if}
-									</tr>
-									{/each}
-								</tbody>
-							</table>
-						{/if}
-					</div>
-
-					<!-- Integrations -->
-					<div class="p-4">
-						<h3 class="text-sm font-semibold text-neutral-700 mb-2">{m.page_profile_teams_integrations_heading()}</h3>
-						{#if userTeamSettings}
-							<div class="text-sm text-neutral-600 space-y-2">
-								<div>
-									<span class="text-neutral-400 block mb-1">{m.page_profile_teams_notif_email_edit_label()}:</span>
-									{#if memberEmailEditing}
-										<div class="flex gap-2 items-center">
-											<input
-												type="email"
-												bind:value={memberEmailPending}
-												placeholder="avdelning@example.com"
-												class="border rounded px-2 py-1 text-sm flex-1 max-w-xs"
-											/>
-											<button
-												onclick={async () => {
-													memberEmailSaving = true;
-													await saveUserTeamNotifSettings({ notification_email: memberEmailPending });
-													memberEmailEditing = false;
-													memberEmailSaving = false;
-												}}
-												disabled={memberEmailSaving}
-												class="text-sm bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50"
-											>{m.btn_save()}</button>
-											<button onclick={() => memberEmailEditing = false} class="text-xs text-neutral-500 hover:underline">{m.btn_cancel()}</button>
-										</div>
-									{:else}
-										<span>{userTeamSettings.notification_email || '–'}</span>
-										<button
-											onclick={() => { memberEmailPending = userTeamSettings?.notification_email ?? ''; memberEmailEditing = true; }}
-											disabled={data.demo}
-											class="text-xs text-blue-700 ml-2 hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
-										>{m.btn_edit()}</button>
-									{/if}
-								</div>
-								<div>
-									<span class="text-neutral-400 block mb-1">{m.page_profile_teams_gchat_space_label()}:</span>
-									{#if !memberGchatEditing}
-										<!-- Read-only view — immediate, no loading -->
-										{#if userTeamSettings.gchat_space_id}
-											{@const spaceId = userTeamSettings.gchat_space_id}
-											{@const linkedSpace = memberGchatSpaces.find(s => s.name === spaceId)}
-											{@const spaceRawId = spaceId.replace(/^spaces\//, '')}
-											{#if linkedSpace}
-												<a href="https://mail.google.com/mail/u/0/#chat/space/{spaceRawId}" target="_blank" rel="noopener noreferrer" class="text-sm font-medium text-blue-700 hover:underline">{linkedSpace.displayName}</a>
-												<p class="text-xs text-neutral-400">{spaceId}</p>
-											{:else}
-												<p class="text-sm font-medium">{spaceId}</p>
 											{/if}
-											<button onclick={() => openMemberGchatEditor(spaceId)} disabled={data.demo} class="text-xs text-blue-700 mt-1 hover:underline disabled:opacity-40 disabled:cursor-not-allowed">{m.page_profile_gchat_change_space()}</button>
-										{:else}
-											<p class="text-sm text-neutral-500">{m.page_profile_teams_gchat_space_none()}</p>
-											<button onclick={() => openMemberGchatEditor()} disabled={data.demo} class="text-xs text-blue-700 mt-1 hover:underline disabled:opacity-40 disabled:cursor-not-allowed">{m.page_profile_gchat_link_btn()}</button>
-										{/if}
-									{:else}
-										<!-- Editor — loads spaces lazily -->
-										{#if !memberGchatLoaded}
-											<p class="text-xs text-neutral-400">{m.btn_loading()}</p>
-										{:else if !memberGchatConfigured}
-											<p class="text-xs text-neutral-400 mt-1">{m.page_profile_teams_gchat_space_self_help()}</p>
-											<button onclick={() => memberGchatEditing = false} class="text-xs text-neutral-500 mt-1 hover:underline">{m.btn_cancel()}</button>
-										{:else}
-											{@const connectedSpace = memberGchatSpaces.find(s => s.name === userTeamSettings?.gchat_space_id)}
-											{#if connectedSpace && memberGchatPending === userTeamSettings?.gchat_space_id}
-												<!-- Show friendly name once spaces loaded -->
-											{/if}
-											<div class="flex items-center gap-2">
-												<select bind:value={memberGchatPending} disabled={memberGchatSaving} class="border rounded px-2 py-1 text-sm flex-1 max-w-xs disabled:opacity-50">
-													<option value="">{m.page_profile_gchat_space_none_option()}</option>
-													{#if memberGchatSpaces.some(s => s.bot_is_member)}
-														<optgroup label={m.page_profile_gchat_space_group_bot_member()}>
-															{#each memberGchatSpaces.filter(s => s.bot_is_member) as space}
-																<option value={space.name}>{space.displayName}</option>
-															{/each}
-														</optgroup>
-													{/if}
-													{#if memberGchatSpaces.some(s => s.can_auto_add && !s.bot_is_member)}
-														<optgroup label={m.page_profile_gchat_space_group_auto_add()}>
-															{#each memberGchatSpaces.filter(s => s.can_auto_add && !s.bot_is_member) as space}
-																<option value={space.name}>{space.displayName}</option>
-															{/each}
-														</optgroup>
-													{/if}
-												</select>
-												<button onclick={linkMemberGchatSpace} disabled={memberGchatSaving || (memberGchatPending === (userTeamSettings?.gchat_space_id ?? ''))} class="text-sm bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50">{m.page_profile_gchat_link_btn()}</button>
-												<button onclick={() => { memberGchatEditing = false; memberGchatPending = ''; }} class="text-xs text-neutral-500 hover:underline">{m.btn_cancel()}</button>
-											</div>
-											<p class="text-xs text-neutral-400 mt-2">{m.page_profile_teams_gchat_space_self_help()}</p>
-										{/if}
-										{#if memberGchatStatus === 'error'}
-											<p class="text-xs text-red-600 mt-1">{memberGchatError || m.page_profile_gchat_link_error()}</p>
-										{/if}
-									{/if}
-								</div>
-							</div>
-						{/if}
-					</div>
-
-				</div>
-			{/if}
-		{/if}
-
-	<!-- Group settings tab (manager only) -->
-	{:else if tab === 'group'}
-
-		<!-- Broken article links: shown at the top only when there are active failures -->
-		{#if hasActiveFailures}
-			{@render brokenLinksSection()}
-		{/if}
-
-		<!-- Teams -->
-		<section class="mb-6 border rounded-lg p-4">
-			<h3 class="font-medium mb-1">{m.page_profile_teams_heading()}</h3>
-			<p class="text-xs text-neutral-500 mb-3">{m.page_profile_teams_help()}</p>
-			{#if teamError}
-				<div class="bg-red-50 border border-red-200 rounded p-2 mb-2 text-red-800 text-sm">{teamError}</div>
-			{/if}
-			<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
-				{#each accessLevels as level}
-					{@const teams = teamsByLevel(level)}
-					<div class="border rounded-lg">
-						<div class="px-3 py-1.5 bg-neutral-50 rounded-t-lg border-b">
-							<span class="text-sm font-medium">{msg(`team_access_${level}`) ?? level}</span>
-							<span class="text-xs text-neutral-400 ml-1">({teams.length})</span>
-						</div>
-						<div class="p-1.5 space-y-0.5 min-h-[48px]">
-							{#each teams as team, i (team.id)}
-								{#if i > 0 && team.type !== teams[i - 1].type}
-									<div class="border-t my-1"></div>
-								{/if}
-								<button
-									onclick={() => selectedTeamId = selectedTeamId === team.id ? null : team.id}
-									class="w-full text-left px-2 py-1 rounded text-sm flex items-center gap-1.5 hover:bg-neutral-50"
-									class:bg-blue-50={selectedTeamId === team.id}
-									class:ring-1={selectedTeamId === team.id}
-									class:ring-blue-300={selectedTeamId === team.id}
-								>
-									<span class="truncate flex-1">{team.name}</span>
-									<span class="text-[10px] text-neutral-400 shrink-0">{msg(`team_type_${team.type}`) ?? team.type}</span>
-								</button>
-							{/each}
-							{#if teams.length === 0}
-								<p class="text-xs text-neutral-400 italic px-2 py-1">{m.page_profile_teams_empty()}</p>
-							{/if}
-						</div>
-					</div>
-				{/each}
-			</div>
-
-			<!-- Selected team controls -->
-			{#if selectedTeamId}
-				{@const team = allTeams.find(t => t.id === selectedTeamId)}
-				{#if team}
-					<div class="border rounded-lg p-3 mb-3 bg-blue-50/50 space-y-2">
-						<div class="flex flex-wrap items-center gap-2">
-							{#if editingTeamId === team.id}
-								<input
-									type="text"
-									bind:value={editingTeamName}
-									onkeydown={(e) => { if (e.key === 'Enter') renameTeam(team.id); if (e.key === 'Escape') editingTeamId = null; }}
-									class="border rounded px-2 py-1 text-sm flex-1 min-w-[150px]"
-								/>
-								<button onclick={() => renameTeam(team.id)} class="text-sm text-blue-700 underline">{m.btn_save()}</button>
-								<button onclick={() => editingTeamId = null} class="text-sm text-neutral-500 underline">{m.btn_cancel()}</button>
-							{:else}
-								<span class="font-medium text-sm">{team.name}</span>
-								<span class="text-xs text-neutral-400">{msg(`team_type_${team.type}`) ?? team.type}</span>
-								{#if team.claim_mappings?.length > 0}
-									<span class="text-xs text-neutral-400">— {team.claim_mappings[0].claim_scope}:{team.claim_mappings[0].claim_id}</span>
-								{/if}
-							{/if}
-						</div>
-						{#if editingTeamId !== team.id}
-							<div class="flex flex-wrap items-center gap-2">
-								<label class="flex items-center gap-1.5 text-sm">
-									<span class="text-neutral-600">{m.page_profile_access_level_label()}</span>
-									<select
-										value={team.access_level}
-										onchange={(e) => changeTeamLevel(team.id, e.currentTarget.value)}
-										class="border rounded px-2 py-1 text-sm"
-										aria-label={m.page_profile_change_access_aria()}
-									>
-										{#each accessLevels as l}
-											<option value={l}>{msg(`team_access_${l}`) ?? l}</option>
+										</tr>
+									</thead>
+									<tbody>
+										{#each tabEvents as row}
+											{@const ep = userTeamSettings.notification_prefs?.[row.key]}
+											{@const policy = ep?.personal_email_policy ?? ''}
+											{@const grEnabled = ep?.gruppkanal ?? null}
+											<tr class="border-t border-neutral-100">
+												<td class="py-2 pr-3">{row.label()}</td>
+												<!-- Personal email: off → "never"; on without Gruppkanal → omit (default sends); on with Gruppkanal → "always" -->
+												<td class="py-2 px-2 text-center">
+													<input
+														type="checkbox"
+														checked={showGruppkanalCol ? policy === 'always' : policy !== 'never'}
+														onchange={(e) => {
+															const prefs = { ...userTeamSettings!.notification_prefs };
+															if (e.currentTarget.checked) {
+																if (showGruppkanalCol) {
+																	prefs[row.key] = { ...prefs[row.key] ?? {}, personal_email_policy: 'always' };
+																} else {
+																	const { personal_email_policy: _, ...rest } = prefs[row.key] ?? {};
+																	prefs[row.key] = Object.keys(rest).length ? rest : undefined as any;
+																}
+															} else {
+																if (showGruppkanalCol) {
+																	const { personal_email_policy: _, ...rest } = prefs[row.key] ?? {};
+																	prefs[row.key] = Object.keys(rest).length ? rest : undefined as any;
+																} else {
+																	prefs[row.key] = { ...prefs[row.key] ?? {}, personal_email_policy: 'never' };
+																}
+															}
+															saveUserTeamNotifSettings({ notification_prefs: prefs });
+														}}
+														class="h-4 w-4 accent-blue-700"
+													/>
+												</td>
+												<!-- Gruppkanal checkbox: only when channels available -->
+												{#if showGruppkanalCol}
+													<td class="py-2 px-3 text-center">
+														<input
+															type="checkbox"
+															checked={grEnabled ?? true}
+															onchange={(e) => {
+																const prefs = { ...userTeamSettings!.notification_prefs };
+																prefs[row.key] = { ...prefs[row.key] ?? {}, gruppkanal: e.currentTarget.checked };
+																saveUserTeamNotifSettings({ notification_prefs: prefs });
+															}}
+															class="h-4 w-4 accent-blue-700"
+														/>
+													</td>
+												{/if}
+											</tr>
 										{/each}
-									</select>
-								</label>
-								<button onclick={() => { editingTeamId = team.id; editingTeamName = team.name; }} class="text-sm text-blue-700 underline">{m.page_profile_btn_rename()}</button>
-								<button onclick={() => deleteTeam(team.id, team.name)} class="text-sm text-red-600 underline">{m.btn_delete()}</button>
-							</div>
-						{/if}
+									</tbody>
+								</table>
+							{/if}
+						</div>
 
-						<!-- Team notification settings -->
-						{#if editingTeamId !== team.id}
-							<div class="border-t pt-3 mt-1">
-								<h4 class="text-sm font-medium mb-2">{m.page_profile_team_notif_heading()}</h4>
-								{#if teamNotifSettings}
-									{#if teamNotifMessage}
-										<p class="text-sm mb-2 {teamNotifError ? 'text-red-600' : 'text-green-600'}">{teamNotifMessage}</p>
-									{/if}
-									<div class="space-y-3">
-										<label class="flex flex-col gap-0.5">
-											<span class="text-xs text-neutral-500">{m.page_profile_team_notif_broadcast_email()}</span>
-											<div class="flex gap-2">
+						<!-- Integrations -->
+						<div class="p-4">
+						<h3 class="text-sm font-semibold text-neutral-700 mb-2">{m.page_profile_teams_integrations_heading()}</h3>
+							{#if userTeamSettings}
+								<div class="text-sm text-neutral-600 space-y-2">
+									<div>
+										<span class="text-neutral-400 block mb-1">{m.page_profile_teams_notif_email_edit_label()}:</span>
+										{#if memberEmailEditing}
+											<div class="flex gap-2 items-center">
 												<input
 													type="email"
-													value={teamNotifSettings.notification_email}
-													oninput={(e) => { teamNotifSettings = { ...teamNotifSettings!, notification_email: e.currentTarget.value }; }}
-													placeholder="team@example.com"
-													class="border rounded px-2 py-1 text-sm w-full max-w-sm"
+													bind:value={memberEmailPending}
+													placeholder="avdelning@example.com"
+													class="border rounded px-2 py-1 text-sm flex-1 max-w-xs"
 												/>
 												<button
-													onclick={() => saveTeamNotifSettings({ notification_email: teamNotifSettings!.notification_email })}
-													disabled={teamNotifSaving}
+													onclick={async () => {
+														memberEmailSaving = true;
+														await saveUserTeamNotifSettings({ notification_email: memberEmailPending });
+														memberEmailEditing = false;
+														memberEmailSaving = false;
+													}}
+													disabled={memberEmailSaving}
 													class="text-sm bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50"
 												>{m.btn_save()}</button>
+											<button onclick={() => memberEmailEditing = false} class="text-xs text-neutral-500 hover:underline">{m.btn_cancel()}</button>
 											</div>
-											<span class="text-xs text-neutral-400">{m.page_profile_team_notif_broadcast_email_help()}</span>
-										</label>
-
-										<div>
-											<p class="text-xs text-neutral-500 mb-1.5">{m.page_profile_team_notif_prefs_help()}</p>
-											<table class="w-full text-sm border-collapse">
-												<thead>
-													<tr>
-														<th class="text-left py-1 pr-3 font-normal text-neutral-500 w-full"></th>
-														<th class="text-center py-1 px-2 font-normal text-neutral-500 whitespace-nowrap text-xs">{m.page_profile_teams_notif_col_gruppkanal()}</th>
-													</tr>
-												</thead>
-												<tbody>
-													<tr>
-														<td colspan="2" class="py-1 text-xs font-semibold text-neutral-400 uppercase tracking-wide">{m.page_profile_notifs_bookings_group()}</td>
-													</tr>
-													{#each allBookingEvents as row}
-														<tr class="border-t border-neutral-100">
-															<td class="py-1.5 pr-3 text-sm">{row.label()}</td>
-															<td class="py-1.5 px-2 text-center">
-																<input
-																	type="checkbox"
-																	checked={teamNotifSettings.notification_prefs[row.key]?.gruppkanal ?? true}
-																	onchange={(e) => {
-																		const prefs = { ...teamNotifSettings!.notification_prefs };
-																		prefs[row.key] = { ...(prefs[row.key] ?? {}), gruppkanal: e.currentTarget.checked };
-																		saveTeamNotifSettings({ notification_prefs: prefs });
-																	}}
-																	class="h-4 w-4 accent-blue-700"
-																/>
-															</td>
-														</tr>
-													{/each}
-													<tr>
-														<td colspan="2" class="pt-2 pb-1 text-xs font-semibold text-neutral-400 uppercase tracking-wide">{m.page_profile_notifs_issues_group()}</td>
-													</tr>
-													{#each allIssueEvents as row}
-														<tr class="border-t border-neutral-100">
-															<td class="py-1.5 pr-3 text-sm">{row.label()}</td>
-															<td class="py-1.5 px-2 text-center">
-																<input
-																	type="checkbox"
-																	checked={teamNotifSettings.notification_prefs[row.key]?.gruppkanal ?? true}
-																	onchange={(e) => {
-																		const prefs = { ...teamNotifSettings!.notification_prefs };
-																		prefs[row.key] = { ...(prefs[row.key] ?? {}), gruppkanal: e.currentTarget.checked };
-																		saveTeamNotifSettings({ notification_prefs: prefs });
-																	}}
-																	class="h-4 w-4 accent-blue-700"
-																/>
-															</td>
-														</tr>
-													{/each}
-												</tbody>
-											</table>
-										</div>
+										{:else}
+											<span>{userTeamSettings.notification_email || '–'}</span>
+											<button
+											onclick={() => { memberEmailPending = userTeamSettings?.notification_email ?? ''; memberEmailEditing = true; }}
+												disabled={data.demo}
+												class="text-xs text-blue-700 ml-2 hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
+											>{m.btn_edit()}</button>
+										{/if}
 									</div>
-								{:else}
-									<p class="text-xs text-neutral-400">{m.btn_loading()}</p>
-								{/if}
-							</div>
-						{/if}
+									<div>
+										<span class="text-neutral-400 block mb-1">{m.page_profile_teams_gchat_space_label()}:</span>
+										{#if !memberGchatEditing}
+											<!-- Read-only view — immediate, no loading -->
+											{#if userTeamSettings.gchat_space_id}
+												{@const spaceId = userTeamSettings.gchat_space_id}
+												{@const linkedSpace = memberGchatSpaces.find((s) => s.name === spaceId)}
+												{@const spaceRawId = spaceId.replace(/^spaces\//, '')}
+												{#if linkedSpace}
+												<a href="https://mail.google.com/mail/u/0/#chat/space/{spaceRawId}" target="_blank" rel="noopener noreferrer" class="text-sm font-medium text-blue-700 hover:underline">{linkedSpace.displayName}</a>
+													<p class="text-xs text-neutral-400">{spaceId}</p>
+												{:else}
+													<p class="text-sm font-medium">{spaceId}</p>
+												{/if}
+											<button onclick={() => openMemberGchatEditor(spaceId)} disabled={data.demo} class="text-xs text-blue-700 mt-1 hover:underline disabled:opacity-40 disabled:cursor-not-allowed">{m.page_profile_gchat_change_space()}</button>
+											{:else}
+												<p class="text-sm text-neutral-500">{m.page_profile_teams_gchat_space_none()}</p>
+											<button onclick={() => openMemberGchatEditor()} disabled={data.demo} class="text-xs text-blue-700 mt-1 hover:underline disabled:opacity-40 disabled:cursor-not-allowed">{m.page_profile_gchat_link_btn()}</button>
+											{/if}
+										{:else}
+											<!-- Editor — loads spaces lazily -->
+											{#if !memberGchatLoaded}
+												<p class="text-xs text-neutral-400">{m.btn_loading()}</p>
+											{:else if !memberGchatConfigured}
+												<p class="text-xs text-neutral-400 mt-1">{m.page_profile_teams_gchat_space_self_help()}</p>
+											<button onclick={() => memberGchatEditing = false} class="text-xs text-neutral-500 mt-1 hover:underline">{m.btn_cancel()}</button>
+											{:else}
+												{@const connectedSpace = memberGchatSpaces.find((s) => s.name === userTeamSettings?.gchat_space_id)}
+												{#if connectedSpace && memberGchatPending === userTeamSettings?.gchat_space_id}
+													<!-- Show friendly name once spaces loaded -->
+												{/if}
+												<div class="flex items-center gap-2">
+												<select bind:value={memberGchatPending} disabled={memberGchatSaving} class="border rounded px-2 py-1 text-sm flex-1 max-w-xs disabled:opacity-50">
+														<option value="">{m.page_profile_gchat_space_none_option()}</option>
+
+														{#if memberGchatSpaces.some((s) => s.bot_is_member)}
+															<optgroup
+																label={m.page_profile_gchat_space_group_bot_member()}
+															>
+																{#each memberGchatSpaces.filter((s) => s.bot_is_member) as space}
+																	<option value={space.name}>{space.displayName}</option>
+																{/each}
+															</optgroup>
+														{/if}
+
+														{#if memberGchatSpaces.some((s) => s.can_auto_add && !s.bot_is_member)}
+															<optgroup
+																label={m.page_profile_gchat_space_group_auto_add()}
+															>
+																{#each memberGchatSpaces.filter((s) => s.can_auto_add && !s.bot_is_member) as space}
+																	<option value={space.name}>{space.displayName}</option>
+																{/each}
+															</optgroup>
+														{/if}
+													</select>
+
+													<button
+														onclick={linkMemberGchatSpace}
+														disabled={memberGchatSaving || memberGchatPending === (userTeamSettings?.gchat_space_id ?? '')}
+														class="text-sm bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50"
+													>{m.page_profile_gchat_link_btn()}</button>
+
+													<button
+														onclick={() => {
+															memberGchatEditing = false;
+															memberGchatPending = '';
+														}}
+														class="text-xs text-neutral-500 hover:underline"
+													>{m.btn_cancel()}</button>
+												</div>
+												<p class="text-xs text-neutral-400 mt-2">{m.page_profile_teams_gchat_space_self_help()}</p>
+											{/if}
+											{#if memberGchatStatus === 'error'}
+											<p class="text-xs text-red-600 mt-1">{memberGchatError || m.page_profile_gchat_link_error()}</p>
+											{/if}
+										{/if}
+									</div>
+								</div>
+							{/if}
+						</div>
+
 					</div>
 				{/if}
 			{/if}
 
-			{#if showAddTeam}
-				<div class="border rounded-lg p-3 space-y-2 mb-2">
-					<div class="flex flex-wrap gap-2">
-						<label class="flex flex-col gap-0.5 flex-1 min-w-[150px]">
-							<span class="text-xs text-neutral-500">{m.page_profile_team_name_label()}</span>
+			<!-- Group settings tab (manager only) -->
+		{:else if tab === 'group'}
+
+			<!-- Broken article links: shown at the top only when there are active failures -->
+			{#if hasActiveFailures}
+				{@render brokenLinksSection()}
+			{/if}
+
+			<!-- Teams -->
+			<section class="mb-6 border rounded-lg p-4">
+				<h3 class="font-medium mb-1">{m.page_profile_teams_heading()}</h3>
+				<p class="text-xs text-neutral-500 mb-3">{m.page_profile_teams_help()}</p>
+				{#if teamError}
+				<div class="bg-red-50 border border-red-200 rounded p-2 mb-2 text-red-800 text-sm">{teamError}</div>
+				{/if}
+				<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+					{#each accessLevels as level}
+						{@const teams = teamsByLevel(level)}
+						<div class="border rounded-lg">
+						<div class="px-3 py-1.5 bg-neutral-50 rounded-t-lg border-b">
+								<span class="text-sm font-medium">{msg(`team_access_${level}`) ?? level}</span>
+								<span class="text-xs text-neutral-400 ml-1">({teams.length})</span>
+							</div>
+							<div class="p-1.5 space-y-0.5 min-h-[48px]">
+								{#each teams as team, i (team.id)}
+									{#if i > 0 && team.type !== teams[i - 1].type}
+										<div class="border-t my-1"></div>
+									{/if}
+									<button
+										onclick={() => selectedTeamId = selectedTeamId === team.id ? null : team.id}
+										class="w-full text-left px-2 py-1 rounded text-sm flex items-center gap-1.5 hover:bg-neutral-50"
+										class:bg-blue-50={selectedTeamId === team.id}
+										class:ring-1={selectedTeamId === team.id}
+										class:ring-blue-300={selectedTeamId === team.id}
+									>
+										<span class="truncate flex-1">{team.name}</span>
+										<span class="text-[10px] text-neutral-400 shrink-0">{msg(`team_type_${team.type}`) ?? team.type}</span>
+									</button>
+								{/each}
+								{#if teams.length === 0}
+									<p class="text-xs text-neutral-400 italic px-2 py-1">{m.page_profile_teams_empty()}</p>
+								{/if}
+							</div>
+						</div>
+					{/each}
+				</div>
+
+				<!-- Selected team controls -->
+				{#if selectedTeamId}
+					{@const team = allTeams.find((t) => t.id === selectedTeamId)}
+					{#if team}
+					<div class="border rounded-lg p-3 mb-3 bg-blue-50/50 space-y-2">
+							<div class="flex flex-wrap items-center gap-2">
+								{#if editingTeamId === team.id}
+									<input
+										type="text"
+										bind:value={editingTeamName}
+									onkeydown={(e) => { if (e.key === 'Enter') renameTeam(team.id); if (e.key === 'Escape') editingTeamId = null; }}
+										class="border rounded px-2 py-1 text-sm flex-1 min-w-[150px]"
+									/>
+								<button onclick={() => renameTeam(team.id)} class="text-sm text-blue-700 underline">{m.btn_save()}</button>
+								<button onclick={() => editingTeamId = null} class="text-sm text-neutral-500 underline">{m.btn_cancel()}</button>
+								{:else}
+									<span class="font-medium text-sm">{team.name}</span>
+									<span class="text-xs text-neutral-400">{msg(`team_type_${team.type}`) ?? team.type}</span>
+									{#if team.claim_mappings?.length > 0}
+									<span class="text-xs text-neutral-400">— {team.claim_mappings[0].claim_scope}:{team.claim_mappings[0].claim_id}</span>
+									{/if}
+								{/if}
+							</div>
+							{#if editingTeamId !== team.id}
+								<div class="flex flex-wrap items-center gap-2">
+									<label class="flex items-center gap-1.5 text-sm">
+										<span class="text-neutral-600">{m.page_profile_access_level_label()}</span>
+										<select
+											value={team.access_level}
+											onchange={(e) => changeTeamLevel(team.id, e.currentTarget.value)}
+											class="border rounded px-2 py-1 text-sm"
+											aria-label={m.page_profile_change_access_aria()}
+										>
+											{#each accessLevels as l}
+												<option value={l}>{msg(`team_access_${l}`) ?? l}</option>
+											{/each}
+										</select>
+									</label>
+								<button onclick={() => { editingTeamId = team.id; editingTeamName = team.name; }} class="text-sm text-blue-700 underline">{m.page_profile_btn_rename()}</button>
+								<button onclick={() => deleteTeam(team.id, team.name)} class="text-sm text-red-600 underline">{m.btn_delete()}</button>
+								</div>
+							{/if}
+
+							<!-- Team notification settings -->
+							{#if editingTeamId !== team.id}
+								<div class="border-t pt-3 mt-1">
+									<h4 class="text-sm font-medium mb-2">{m.page_profile_team_notif_heading()}</h4>
+									{#if teamNotifSettings}
+										{#if teamNotifMessage}
+										<p class="text-sm mb-2 {teamNotifError ? 'text-red-600' : 'text-green-600'}">{teamNotifMessage}</p>
+										{/if}
+										<div class="space-y-3">
+											<label class="flex flex-col gap-0.5">
+												<span class="text-xs text-neutral-500">{m.page_profile_team_notif_broadcast_email()}</span>
+												<div class="flex gap-2">
+													<input
+														type="email"
+														value={teamNotifSettings.notification_email}
+													oninput={(e) => { teamNotifSettings = { ...teamNotifSettings!, notification_email: e.currentTarget.value }; }}
+														placeholder="team@example.com"
+														class="border rounded px-2 py-1 text-sm w-full max-w-sm"
+													/>
+													<button
+														onclick={() => saveTeamNotifSettings({ notification_email: teamNotifSettings!.notification_email })}
+														disabled={teamNotifSaving}
+														class="text-sm bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50"
+													>{m.btn_save()}</button>
+												</div>
+												<span class="text-xs text-neutral-400">{m.page_profile_team_notif_broadcast_email_help()}</span>
+											</label>
+
+											<div>
+												<p class="text-xs text-neutral-500 mb-1.5">{m.page_profile_team_notif_prefs_help()}</p>
+												<table class="w-full text-sm border-collapse">
+													<thead>
+														<tr>
+														<th class="text-left py-1 pr-3 font-normal text-neutral-500 w-full"></th>
+														<th class="text-center py-1 px-2 font-normal text-neutral-500 whitespace-nowrap text-xs">{m.page_profile_teams_notif_col_gruppkanal()}</th>
+														</tr>
+													</thead>
+													<tbody>
+														<tr>
+														<td colspan="2" class="py-1 text-xs font-semibold text-neutral-400 uppercase tracking-wide">{m.page_profile_notifs_bookings_group()}</td>
+														</tr>
+														{#each allBookingEvents as row}
+															<tr class="border-t border-neutral-100">
+																<td class="py-1.5 pr-3 text-sm">{row.label()}</td>
+																<td class="py-1.5 px-2 text-center">
+																	<input
+																		type="checkbox"
+																		checked={teamNotifSettings.notification_prefs[row.key]?.gruppkanal ?? true}
+																		onchange={(e) => {
+																			const prefs = { ...teamNotifSettings!.notification_prefs };
+																			prefs[row.key] = { ...prefs[row.key] ?? {}, gruppkanal: e.currentTarget.checked };
+																			saveTeamNotifSettings({ notification_prefs: prefs });
+																		}}
+																		class="h-4 w-4 accent-blue-700"
+																	/>
+																</td>
+															</tr>
+														{/each}
+														<tr>
+														<td colspan="2" class="pt-2 pb-1 text-xs font-semibold text-neutral-400 uppercase tracking-wide">{m.page_profile_notifs_issues_group()}</td>
+														</tr>
+														{#each allIssueEvents as row}
+															<tr class="border-t border-neutral-100">
+																<td class="py-1.5 pr-3 text-sm">{row.label()}</td>
+																<td class="py-1.5 px-2 text-center">
+																	<input
+																		type="checkbox"
+																		checked={teamNotifSettings.notification_prefs[row.key]?.gruppkanal ?? true}
+																		onchange={(e) => {
+																			const prefs = { ...teamNotifSettings!.notification_prefs };
+																			prefs[row.key] = { ...prefs[row.key] ?? {}, gruppkanal: e.currentTarget.checked };
+																			saveTeamNotifSettings({ notification_prefs: prefs });
+																		}}
+																		class="h-4 w-4 accent-blue-700"
+																	/>
+																</td>
+															</tr>
+														{/each}
+													</tbody>
+												</table>
+											</div>
+										</div>
+									{:else}
+										<p class="text-xs text-neutral-400">{m.btn_loading()}</p>
+									{/if}
+								</div>
+							{/if}
+						</div>
+					{/if}
+				{/if}
+
+				{#if showAddTeam}
+					<div class="border rounded-lg p-3 space-y-2 mb-2">
+						<div class="flex flex-wrap gap-2">
+							<label class="flex flex-col gap-0.5 flex-1 min-w-[150px]">
+								<span class="text-xs text-neutral-500">{m.page_profile_team_name_label()}</span>
 							<input type="text" bind:value={newTeam.name} placeholder={m.page_profile_team_name_placeholder()} class="border rounded px-2 py-1 text-sm" />
-						</label>
-						<label class="flex flex-col gap-0.5">
-							<span class="text-xs text-neutral-500">{m.page_profile_team_type_label()}</span>
+							</label>
+							<label class="flex flex-col gap-0.5">
+								<span class="text-xs text-neutral-500">{m.page_profile_team_type_label()}</span>
 							<select bind:value={newTeam.type} class="border rounded px-2 py-1 text-sm">
-								<option value="troop">{m.page_profile_team_type_troop()}</option>
-								<option value="role">{m.page_profile_team_type_role()}</option>
-							</select>
-						</label>
-						<label class="flex flex-col gap-0.5">
-							<span class="text-xs text-neutral-500">Åtkomstnivå</span>
+									<option value="troop">{m.page_profile_team_type_troop()}</option>
+									<option value="role">{m.page_profile_team_type_role()}</option>
+								</select>
+							</label>
+							<label class="flex flex-col gap-0.5">
+								<span class="text-xs text-neutral-500">Åtkomstnivå</span>
 							<select bind:value={newTeam.access_level} class="border rounded px-2 py-1 text-sm">
-								{#each accessLevels as l}
+									{#each accessLevels as l}
+										<option value={l}>{msg(`team_access_${l}`) ?? l}</option>
+									{/each}
+								</select>
+							</label>
+						</div>
+						<div class="flex flex-wrap gap-2">
+							<label class="flex flex-col gap-0.5">
+								<span class="text-xs text-neutral-500">{m.page_profile_scoutnet_id()}</span>
+							<select bind:value={newTeam.claim_scope} class="border rounded px-2 py-1 text-sm">
+									<option value="troop">{m.page_profile_team_type_troop()}</option>
+									<option value="group">{m.page_profile_team_type_group_role()}</option>
+								</select>
+							</label>
+							<label class="flex flex-col gap-0.5 flex-1 min-w-[100px]">
+							<span class="text-xs text-neutral-500">{newTeam.claim_scope === 'troop' ? m.page_profile_troop_id() : m.page_profile_role_name()} <span class="text-neutral-400">{m.page_profile_from_scoutnet()}</span></span>
+							<input type="text" bind:value={newTeam.claim_id} required placeholder={newTeam.claim_scope === 'troop' ? 'T.ex. 17443' : 'T.ex. it_manager'} class="border rounded px-2 py-1 text-sm" />
+							</label>
+						</div>
+						<p class="text-xs text-neutral-400">{m.page_profile_scoutnet_id_help()}</p>
+						<div class="flex gap-2">
+						<button onclick={addTeam} class="text-sm bg-blue-700 text-white px-3 py-1 rounded">{m.btn_add()}</button>
+						<button onclick={() => showAddTeam = false} class="text-sm text-neutral-500 underline">{m.btn_cancel()}</button>
+						</div>
+					</div>
+				{:else}
+				<button onclick={() => showAddTeam = true} class="text-sm text-blue-700 underline">{m.page_profile_btn_add_team()}</button>
+				{/if}
+			</section>
+
+			<!-- Permissions -->
+			<section class="mb-6 border rounded-lg p-4">
+				<h3 class="font-medium mb-1">{m.page_profile_access_section()}</h3>
+				<p class="text-xs text-neutral-500 mb-3">{m.page_profile_access_help()}</p>
+			<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 mb-3">
+					{#each permissionConfig as perm}
+					<label class="flex items-center justify-between gap-2 text-sm">
+							<span>{perm.label}</span>
+						<select bind:value={permForm[perm.key]} class="border rounded px-2 py-1 text-sm w-32">
+								{#each allowedLevels(perm.min) as l}
 									<option value={l}>{msg(`team_access_${l}`) ?? l}</option>
 								{/each}
 							</select>
 						</label>
-					</div>
-					<div class="flex flex-wrap gap-2">
-						<label class="flex flex-col gap-0.5">
-							<span class="text-xs text-neutral-500">{m.page_profile_scoutnet_id()}</span>
-							<select bind:value={newTeam.claim_scope} class="border rounded px-2 py-1 text-sm">
-								<option value="troop">{m.page_profile_team_type_troop()}</option>
-								<option value="group">{m.page_profile_team_type_group_role()}</option>
+					{/each}
+				</div>
+
+				<h4 class="text-sm font-medium mt-4 mb-2">{m.page_profile_default_levels_heading()}</h4>
+				<p class="text-xs text-neutral-500 mb-2">{m.page_profile_default_levels_help()}</p>
+			<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 mb-3">
+					{#each defaultAccessConfig as cfg}
+					<label class="flex items-center justify-between gap-2 text-sm">
+							<span>{cfg.label}</span>
+						<select bind:value={permForm[cfg.key]} class="border rounded px-2 py-1 text-sm w-32">
+								{#each ['view', 'book', 'trusted', 'manager'] as l}
+									<option value={l}>{msg(`team_access_${l}`) ?? l}</option>
+								{/each}
 							</select>
 						</label>
-						<label class="flex flex-col gap-0.5 flex-1 min-w-[100px]">
-							<span class="text-xs text-neutral-500">{newTeam.claim_scope === 'troop' ? m.page_profile_troop_id() : m.page_profile_role_name()} <span class="text-neutral-400">{m.page_profile_from_scoutnet()}</span></span>
-							<input type="text" bind:value={newTeam.claim_id} required placeholder={newTeam.claim_scope === 'troop' ? 'T.ex. 17443' : 'T.ex. it_manager'} class="border rounded px-2 py-1 text-sm" />
-						</label>
-					</div>
-					<p class="text-xs text-neutral-400">{m.page_profile_scoutnet_id_help()}</p>
-					<div class="flex gap-2">
-						<button onclick={addTeam} class="text-sm bg-blue-700 text-white px-3 py-1 rounded">{m.btn_add()}</button>
-						<button onclick={() => showAddTeam = false} class="text-sm text-neutral-500 underline">{m.btn_cancel()}</button>
-					</div>
-				</div>
-			{:else}
-				<button onclick={() => showAddTeam = true} class="text-sm text-blue-700 underline">{m.page_profile_btn_add_team()}</button>
-			{/if}
-		</section>
-
-		<!-- Permissions -->
-		<section class="mb-6 border rounded-lg p-4">
-			<h3 class="font-medium mb-1">{m.page_profile_access_section()}</h3>
-			<p class="text-xs text-neutral-500 mb-3">{m.page_profile_access_help()}</p>
-			<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 mb-3">
-				{#each permissionConfig as perm}
-					<label class="flex items-center justify-between gap-2 text-sm">
-						<span>{perm.label}</span>
-						<select bind:value={permForm[perm.key]} class="border rounded px-2 py-1 text-sm w-32">
-							{#each allowedLevels(perm.min) as l}
-								<option value={l}>{msg(`team_access_${l}`) ?? l}</option>
-							{/each}
-						</select>
-					</label>
-				{/each}
-			</div>
-
-			<h4 class="text-sm font-medium mt-4 mb-2">{m.page_profile_default_levels_heading()}</h4>
-			<p class="text-xs text-neutral-500 mb-2">{m.page_profile_default_levels_help()}</p>
-			<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 mb-3">
-				{#each defaultAccessConfig as cfg}
-					<label class="flex items-center justify-between gap-2 text-sm">
-						<span>{cfg.label}</span>
-						<select bind:value={permForm[cfg.key]} class="border rounded px-2 py-1 text-sm w-32">
-							{#each ['view', 'book', 'trusted', 'manager'] as l}
-								<option value={l}>{msg(`team_access_${l}`) ?? l}</option>
-							{/each}
-						</select>
-					</label>
-				{/each}
+					{/each}
 				<label class="flex items-center justify-between gap-2 text-sm">
-					<span>{m.page_profile_default_approval()}</span>
+						<span>{m.page_profile_default_approval()}</span>
 					<select bind:value={permForm['default_approval_level']} class="border rounded px-2 py-1 text-sm w-32">
-						<option value="none">{m.article_approval_none()}</option>
-						<option value="low">{m.article_approval_low()}</option>
-						<option value="high">{m.article_approval_high()}</option>
-					</select>
-				</label>
-			</div>
+							<option value="none">{m.article_approval_none()}</option>
+							<option value="low">{m.article_approval_low()}</option>
+							<option value="high">{m.article_approval_high()}</option>
+						</select>
+					</label>
+				</div>
 
-			<div class="flex items-center gap-3">
+				<div class="flex items-center gap-3">
 				<button onclick={savePermissions} disabled={permSaving} class="text-sm bg-blue-700 text-white px-4 py-2 rounded disabled:opacity-50">
 					{permSaving ? m.btn_saving() : m.page_profile_btn_save_permissions()}
-				</button>
-				{#if permMessage}
+					</button>
+					{#if permMessage}
 					<span class="text-sm {permError ? 'text-red-600' : 'text-green-600'}">{permMessage}</span>
-				{/if}
-			</div>
-		</section>
+					{/if}
+				</div>
+			</section>
 
-		<!-- Auto-archive timeouts -->
-		<section class="mb-6 border rounded-lg p-4">
-			<h3 class="font-medium mb-1">{m.page_profile_archive_section()}</h3>
-			<p class="text-xs text-neutral-500 mb-3">{m.page_profile_archive_help()}</p>
+			<!-- Auto-archive timeouts -->
+			<section class="mb-6 border rounded-lg p-4">
+				<h3 class="font-medium mb-1">{m.page_profile_archive_section()}</h3>
+				<p class="text-xs text-neutral-500 mb-3">{m.page_profile_archive_help()}</p>
 			<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 mb-3">
 				<label class="flex items-center justify-between gap-2 text-sm">
-					<span>{m.page_profile_archive_draft_days()}</span>
+						<span>{m.page_profile_archive_draft_days()}</span>
 					<input type="number" min="0" bind:value={draftArchiveDays} class="border rounded px-2 py-1 text-sm w-20" />
-				</label>
+					</label>
 				<label class="flex items-center justify-between gap-2 text-sm">
-					<span>{m.page_profile_archive_rejected_days()}</span>
+						<span>{m.page_profile_archive_rejected_days()}</span>
 					<input type="number" min="0" bind:value={rejectedArchiveDays} class="border rounded px-2 py-1 text-sm w-20" />
-				</label>
-			</div>
-			<p class="text-xs text-neutral-500 mb-3">{m.page_profile_archive_zero_hint()}</p>
-			<div class="flex items-center gap-3">
+					</label>
+				</div>
+				<p class="text-xs text-neutral-500 mb-3">{m.page_profile_archive_zero_hint()}</p>
+				<div class="flex items-center gap-3">
 				<button onclick={saveArchiveSettings} disabled={archiveSaving} class="text-sm bg-blue-700 text-white px-4 py-2 rounded disabled:opacity-50">
 					{archiveSaving ? m.btn_saving() : m.btn_save()}
 				</button>
-				{#if archiveMessage}
+					{#if archiveMessage}
 					<span class="text-sm {archiveError ? 'text-red-600' : 'text-green-600'}">{archiveMessage}</span>
-				{/if}
-			</div>
-		</section>
+					{/if}
+				</div>
+			</section>
 
-		<!-- Locations -->
-		<section class="mb-6 border rounded-lg p-4">
-			<h3 class="font-medium mb-2">{m.page_profile_locations_heading()}</h3>
-			<CrudList
-				bind:items={locations}
-				label={m.page_profile_location_label()}
-				placeholder={m.page_profile_location_placeholder()}
-				onCreate={(name) => api.createLocation({ name, sort_order: locations.length + 1 })}
-				onUpdate={(id, name) => api.updateLocation(id, { name })}
-				onDelete={(id) => api.deleteLocation(id)}
-			/>
-		</section>
+			<!-- Locations -->
+			<section class="mb-6 border rounded-lg p-4">
+				<h3 class="font-medium mb-2">{m.page_profile_locations_heading()}</h3>
+				<CrudList
+					bind:items={locations}
+					label={m.page_profile_location_label()}
+					placeholder={m.page_profile_location_placeholder()}
+					onCreate={(name) => api.createLocation({ name, sort_order: locations.length + 1 })}
+					onUpdate={(id, name) => api.updateLocation(id, { name })}
+					onDelete={(id) => api.deleteLocation(id)}
+				/>
+			</section>
 
-		<!-- Categories -->
-		<section class="mb-6 border rounded-lg p-4">
-			<h3 class="font-medium mb-2">{m.page_profile_categories_heading()}</h3>
-			<CrudList
-				bind:items={categories}
-				label={m.page_profile_category_label()}
-				placeholder={m.page_profile_category_placeholder()}
-				onCreate={(name) => api.createCategory({ name, sort_order: categories.length + 1 })}
-				onUpdate={(id, name) => api.updateCategory(id, { name })}
-				onDelete={(id) => api.deleteCategory(id)}
-			/>
-		</section>
+			<!-- Categories -->
+			<section class="mb-6 border rounded-lg p-4">
+				<h3 class="font-medium mb-2">{m.page_profile_categories_heading()}</h3>
+				<CrudList
+					bind:items={categories}
+					label={m.page_profile_category_label()}
+					placeholder={m.page_profile_category_placeholder()}
+					onCreate={(name) => api.createCategory({ name, sort_order: categories.length + 1 })}
+					onUpdate={(id, name) => api.updateCategory(id, { name })}
+					onDelete={(id) => api.deleteCategory(id)}
+				/>
+			</section>
 
-		<!-- CSV Import -->
-		<section class="mb-6 border rounded-lg p-4">
-			<h3 class="font-medium mb-2">{m.page_profile_import_heading()}</h3>
-			<details class="mb-3 text-sm">
-				<summary class="cursor-pointer text-neutral-600">{m.page_profile_import_help_toggle()}</summary>
-				<div class="mt-2 space-y-3 text-neutral-700">
-					<p>{m.page_profile_import_help_intro()}</p>
-					<div>
-						<p class="font-medium mb-1">{m.page_profile_import_help_columns_heading()}</p>
-						<table class="w-full text-xs border-collapse">
-							<tbody>
+			<!-- CSV Import -->
+			<section class="mb-6 border rounded-lg p-4">
+				<h3 class="font-medium mb-2">{m.page_profile_import_heading()}</h3>
+				<details class="mb-3 text-sm">
+					<summary class="cursor-pointer text-neutral-600">{m.page_profile_import_help_toggle()}</summary>
+					<div class="mt-2 space-y-3 text-neutral-700">
+						<p>{m.page_profile_import_help_intro()}</p>
+						<div>
+							<p class="font-medium mb-1">{m.page_profile_import_help_columns_heading()}</p>
+							<table class="w-full text-xs border-collapse">
+								<tbody>
 								<tr class="border-t"><td class="py-1 pr-2 align-top font-mono whitespace-nowrap">commercial_name</td><td class="py-1">{m.page_profile_import_col_commercial_name()}</td></tr>
 								<tr class="border-t"><td class="py-1 pr-2 align-top font-mono whitespace-nowrap">common_name</td><td class="py-1">{m.page_profile_import_col_common_name()}</td></tr>
 								<tr class="border-t"><td class="py-1 pr-2 align-top font-mono whitespace-nowrap">count</td><td class="py-1">{m.page_profile_import_col_count()}</td></tr>
@@ -1986,124 +2042,124 @@ async function linkGchatTeamSpace(teamId: string) {
 								<tr class="border-t"><td class="py-1 pr-2 align-top font-mono whitespace-nowrap">place</td><td class="py-1">{m.page_profile_import_col_place()}</td></tr>
 								<tr class="border-t"><td class="py-1 pr-2 align-top font-mono whitespace-nowrap">tags</td><td class="py-1">{m.page_profile_import_col_tags()}</td></tr>
 								<tr class="border-t"><td class="py-1 pr-2 align-top font-mono whitespace-nowrap">requires_approval</td><td class="py-1">{m.page_profile_import_col_requires_approval()}</td></tr>
-							</tbody>
-						</table>
-					</div>
-					<p>
-						{m.page_profile_import_help_example()}
+								</tbody>
+							</table>
+						</div>
+						<p>
+							{m.page_profile_import_help_example()}
 						<a href="https://github.com/malarscouterna/scoutrustning/blob/main/docs/import-example.csv" target="_blank" rel="noopener noreferrer" class="text-blue-700 underline">{m.page_profile_import_help_example_link()}</a>
-					</p>
-				</div>
-			</details>
-			<div class="flex flex-wrap items-center gap-2 mb-2">
+						</p>
+					</div>
+				</details>
+				<div class="flex flex-wrap items-center gap-2 mb-2">
 				<input type="file" accept=".csv" onchange={handleFileSelect} class="text-sm file:mr-2 file:px-3 file:py-1 file:rounded file:border file:border-neutral-300 file:bg-white file:text-sm file:text-neutral-700 file:cursor-pointer hover:file:bg-neutral-50" />
 				<button onclick={runImport} disabled={!importFile || importLoading} class="text-sm bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50">
 					{importLoading ? m.page_profile_importing() : m.page_profile_btn_import()}
-				</button>
-			</div>
-			{#if importError}
+					</button>
+				</div>
+				{#if importError}
 				<div class="bg-red-50 border border-red-200 rounded p-2 text-red-800 text-sm">{importError}</div>
-			{/if}
-			{#if importResult}
+				{/if}
+				{#if importResult}
 				<div class="bg-green-50 border border-green-200 rounded p-3 text-sm space-y-1">
 					<p class="text-green-800 font-medium">{m.page_profile_import_result({ count: String(importResult.imported) })}</p>
-					{#if importResult.skipped > 0}
+						{#if importResult.skipped > 0}
 						<p class="text-orange-700">{m.page_profile_import_skipped({ skipped: String(importResult.skipped) })}</p>
-					{/if}
-					{#if importResult.errors?.length > 0}
-						<details class="text-red-700">
+						{/if}
+						{#if importResult.errors?.length > 0}
+							<details class="text-red-700">
 							<summary class="cursor-pointer">{m.page_profile_import_errors({ errors: String(importResult.errors.length) })}</summary>
-							<ul class="mt-1 space-y-0.5 text-xs">
-								{#each importResult.errors as err}
-									<li>{err}</li>
-								{/each}
-							</ul>
-						</details>
-					{/if}
-				</div>
-			{/if}
-		</section>
-
-		<!-- Logo -->
-		<section class="mb-6 border rounded-lg p-4">
-			<h3 class="font-medium mb-1">{m.page_profile_logo_heading()}</h3>
-			<p class="text-xs text-neutral-500 mb-3">{m.page_profile_logo_help()}</p>
-			<div class="flex items-center gap-4">
-				{#if groupSettings?.logo_url}
-					<img src={groupSettings.logo_url} alt={m.page_profile_logo_heading()} class="h-16 max-w-[16rem] object-contain border rounded bg-white px-2" />
-				{:else}
-					<div class="h-16 w-40 border rounded bg-neutral-50 flex items-center justify-center text-neutral-300 text-xs">{m.page_profile_logo_none()}</div>
-				{/if}
-				<div class="flex flex-col gap-2">
-					<div class="flex items-center gap-2">
-						<input type="file" accept="image/*" onchange={handleLogoSelect} disabled={logoUploading} class="text-sm file:mr-2 file:px-3 file:py-1 file:rounded file:border file:border-neutral-300 file:bg-white file:text-sm file:text-neutral-700 file:cursor-pointer hover:file:bg-neutral-50" />
-						{#if logoUploading}
-							<span class="text-sm text-neutral-400">{m.page_profile_logo_uploading()}</span>
+								<ul class="mt-1 space-y-0.5 text-xs">
+									{#each importResult.errors as err}
+										<li>{err}</li>
+									{/each}
+								</ul>
+							</details>
 						{/if}
 					</div>
-					{#if groupSettings?.logo_url}
-						<button onclick={removeLogo} disabled={logoUploading} class="text-sm text-red-600 hover:underline text-left disabled:opacity-50">
-							{m.page_profile_logo_btn_remove()}
-						</button>
-					{/if}
-				</div>
-			</div>
-			{#if logoError}
-				<p class="text-xs text-red-600 mt-2">{logoError}</p>
-			{/if}
+				{/if}
+			</section>
 
-			<div class="border-t mt-4 pt-4">
-				<h4 class="text-sm font-medium mb-1">{m.page_profile_logo_square_heading()}</h4>
-				<p class="text-xs text-neutral-500 mb-3">{m.page_profile_logo_square_help()}</p>
+			<!-- Logo -->
+			<section class="mb-6 border rounded-lg p-4">
+				<h3 class="font-medium mb-1">{m.page_profile_logo_heading()}</h3>
+				<p class="text-xs text-neutral-500 mb-3">{m.page_profile_logo_help()}</p>
 				<div class="flex items-center gap-4">
-					{#if groupSettings?.logo_square_url}
-						<img src={groupSettings.logo_square_url} alt={m.page_profile_logo_square_heading()} class="h-16 max-w-[8rem] object-contain border rounded bg-white px-2" />
+					{#if groupSettings?.logo_url}
+					<img src={groupSettings.logo_url} alt={m.page_profile_logo_heading()} class="h-16 max-w-[16rem] object-contain border rounded bg-white px-2" />
 					{:else}
-						<div class="h-16 w-24 border rounded bg-neutral-50 flex items-center justify-center text-neutral-300 text-xs">{m.page_profile_logo_none()}</div>
+					<div class="h-16 w-40 border rounded bg-neutral-50 flex items-center justify-center text-neutral-300 text-xs">{m.page_profile_logo_none()}</div>
 					{/if}
 					<div class="flex flex-col gap-2">
 						<div class="flex items-center gap-2">
-							<input type="file" accept="image/*" onchange={handleLogoSquareSelect} disabled={logoSquareUploading} class="text-sm file:mr-2 file:px-3 file:py-1 file:rounded file:border file:border-neutral-300 file:bg-white file:text-sm file:text-neutral-700 file:cursor-pointer hover:file:bg-neutral-50" />
-							{#if logoSquareUploading}
+						<input type="file" accept="image/*" onchange={handleLogoSelect} disabled={logoUploading} class="text-sm file:mr-2 file:px-3 file:py-1 file:rounded file:border file:border-neutral-300 file:bg-white file:text-sm file:text-neutral-700 file:cursor-pointer hover:file:bg-neutral-50" />
+							{#if logoUploading}
 								<span class="text-sm text-neutral-400">{m.page_profile_logo_uploading()}</span>
 							{/if}
 						</div>
-						{#if groupSettings?.logo_square_url}
-							<button onclick={removeLogoSquare} disabled={logoSquareUploading} class="text-sm text-red-600 hover:underline text-left disabled:opacity-50">
-								{m.page_profile_logo_btn_remove()}
-							</button>
+						{#if groupSettings?.logo_url}
+						<button onclick={removeLogo} disabled={logoUploading} class="text-sm text-red-600 hover:underline text-left disabled:opacity-50">
+							{m.page_profile_logo_btn_remove()}
+						</button>
 						{/if}
 					</div>
 				</div>
-				{#if logoSquareError}
-					<p class="text-xs text-red-600 mt-2">{logoSquareError}</p>
+				{#if logoError}
+					<p class="text-xs text-red-600 mt-2">{logoError}</p>
 				{/if}
-			</div>
-		</section>
 
-		<!-- Group language -->
-		<section class="mb-6 border rounded-lg p-4">
-			<h3 class="font-medium mb-2">{m.page_profile_language_label()}</h3>
-			<div class="flex items-center gap-3">
+				<div class="border-t mt-4 pt-4">
+					<h4 class="text-sm font-medium mb-1">{m.page_profile_logo_square_heading()}</h4>
+					<p class="text-xs text-neutral-500 mb-3">{m.page_profile_logo_square_help()}</p>
+					<div class="flex items-center gap-4">
+						{#if groupSettings?.logo_square_url}
+						<img src={groupSettings.logo_square_url} alt={m.page_profile_logo_square_heading()} class="h-16 max-w-[8rem] object-contain border rounded bg-white px-2" />
+						{:else}
+						<div class="h-16 w-24 border rounded bg-neutral-50 flex items-center justify-center text-neutral-300 text-xs">{m.page_profile_logo_none()}</div>
+						{/if}
+						<div class="flex flex-col gap-2">
+							<div class="flex items-center gap-2">
+							<input type="file" accept="image/*" onchange={handleLogoSquareSelect} disabled={logoSquareUploading} class="text-sm file:mr-2 file:px-3 file:py-1 file:rounded file:border file:border-neutral-300 file:bg-white file:text-sm file:text-neutral-700 file:cursor-pointer hover:file:bg-neutral-50" />
+								{#if logoSquareUploading}
+									<span class="text-sm text-neutral-400">{m.page_profile_logo_uploading()}</span>
+								{/if}
+							</div>
+							{#if groupSettings?.logo_square_url}
+							<button onclick={removeLogoSquare} disabled={logoSquareUploading} class="text-sm text-red-600 hover:underline text-left disabled:opacity-50">
+								{m.page_profile_logo_btn_remove()}
+							</button>
+							{/if}
+						</div>
+					</div>
+					{#if logoSquareError}
+						<p class="text-xs text-red-600 mt-2">{logoSquareError}</p>
+					{/if}
+				</div>
+			</section>
+
+			<!-- Group language -->
+			<section class="mb-6 border rounded-lg p-4">
+				<h3 class="font-medium mb-2">{m.page_profile_language_label()}</h3>
+				<div class="flex items-center gap-3">
 				<label class="text-sm text-neutral-700" for="group-language">{m.page_profile_group_language_label()}</label>
 				<select id="group-language" bind:value={groupLanguage} class="border rounded px-2 py-1 text-sm">
-					<option value="sv">Svenska</option>
-					<option value="en">English</option>
-				</select>
+						<option value="sv">Svenska</option>
+						<option value="en">English</option>
+					</select>
 				<button onclick={saveGroupLanguage} class="text-sm bg-blue-700 text-white px-3 py-1 rounded">{m.btn_save()}</button>
 				{#if groupLanguageMessage}<span class="text-sm text-green-600">{groupLanguageMessage}</span>{/if}
-			</div>
-		</section>
+				</div>
+			</section>
 
-		<!-- SMTP settings -->
-		<section class="mb-6 border rounded-lg p-4">
-			<h3 class="font-medium mb-2">{m.page_profile_notifications_heading()}</h3>
-			{#if settingsMessage}
+			<!-- SMTP settings -->
+			<section class="mb-6 border rounded-lg p-4">
+				<h3 class="font-medium mb-2">{m.page_profile_notifications_heading()}</h3>
+				{#if settingsMessage}
 				<div class="bg-green-50 border border-green-200 rounded p-2 mb-2 text-green-800 text-sm">{settingsMessage}</div>
-			{/if}
-			{#if settingsError}
+				{/if}
+				{#if settingsError}
 				<div class="bg-red-50 border border-red-200 rounded p-2 mb-2 text-red-800 text-sm">{settingsError}</div>
-			{/if}
+				{/if}
 				<div class="space-y-3">
 					<label class="flex items-center gap-2 text-sm cursor-pointer">
 						<input type="checkbox" bind:checked={useGroupSmtp} class="h-4 w-4 accent-blue-700" />
@@ -2119,53 +2175,53 @@ async function linkGchatTeamSpace(teamId: string) {
 						{/if}
 					{/if}
 					{#if useGroupSmtp}
-					<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-						<label class="block sm:col-span-2">
-							<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_email_from()}</span>
+						<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+							<label class="block sm:col-span-2">
+								<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_email_from()}</span>
 							<input type="email" bind:value={settingsForm.notification_email_from} placeholder="utrustning@example.com" class="border rounded px-2 py-1 text-sm w-full max-w-sm" />
-						</label>
-						<label class="block">
-							<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_smtp_host()}</span>
+							</label>
+							<label class="block">
+								<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_smtp_host()}</span>
 							<input type="text" bind:value={settingsForm.smtp_host} placeholder="smtp.example.com" class="border rounded px-2 py-1 text-sm w-full" />
-						</label>
-						<label class="block">
-							<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_smtp_user()}</span>
+							</label>
+							<label class="block">
+								<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_smtp_user()}</span>
 							<input type="text" bind:value={settingsForm.smtp_user} placeholder="apikey" class="border rounded px-2 py-1 text-sm w-full" />
-						</label>
-						<label class="block">
-							<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_smtp_port()}</span>
+							</label>
+							<label class="block">
+								<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_smtp_port()}</span>
 							<input type="number" bind:value={settingsForm.smtp_port} min="1" max="65535" class="border rounded px-2 py-1 text-sm w-full" />
-						</label>
-						<label class="block">
-							<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_smtp_tls()}</span>
+							</label>
+							<label class="block">
+								<span class="text-sm text-neutral-600 block mb-1">{m.page_profile_smtp_tls()}</span>
 							<select bind:value={settingsForm.smtp_tls} class="border rounded px-2 py-1 text-sm w-full">
-								<option value="starttls">{m.page_profile_smtp_tls_starttls()}</option>
-								<option value="tls">{m.page_profile_smtp_tls_tls()}</option>
-							</select>
-						</label>
-					</div>
-					<label class="block">
-						<span class="text-sm text-neutral-600 block mb-1">
-							{m.page_profile_smtp_key()}
-							{#if groupSettings?.smtp_key_set}
-								<span class="text-neutral-400 ml-1">({groupSettings.smtp_key_masked})</span>
-							{/if}
-						</span>
+									<option value="starttls">{m.page_profile_smtp_tls_starttls()}</option>
+									<option value="tls">{m.page_profile_smtp_tls_tls()}</option>
+								</select>
+							</label>
+						</div>
+						<label class="block">
+							<span class="text-sm text-neutral-600 block mb-1">
+								{m.page_profile_smtp_key()}
+								{#if groupSettings?.smtp_key_set}
+									<span class="text-neutral-400 ml-1">({groupSettings.smtp_key_masked})</span>
+								{/if}
+							</span>
 						<input type="password" bind:value={settingsForm.smtp_key} placeholder={groupSettings?.smtp_key_set ? m.page_profile_leave_blank() : m.page_profile_smtp_enter()} class="border rounded px-2 py-1 text-sm w-full max-w-sm" />
-					</label>
+						</label>
 					{/if}
 				<button onclick={saveSettings} class="text-sm bg-blue-700 text-white px-4 py-2 rounded">{m.btn_save()}</button>
 				<div class="pt-2 border-t flex flex-wrap items-center gap-3">
 					<button onclick={sendTestEmail} disabled={testEmailSending} class="text-sm text-blue-700 border border-blue-200 bg-blue-50 rounded px-3 py-1 hover:bg-blue-100 disabled:opacity-50">
 						{testEmailSending ? m.page_profile_notifs_send_test_sending() : m.page_profile_notifs_send_test()}
-					</button>
-					<span class="text-xs text-neutral-400">{user.email}</span>
-					{#if testEmailMessage}
+						</button>
+						<span class="text-xs text-neutral-400">{user.email}</span>
+						{#if testEmailMessage}
 						<span class="text-sm {testEmailError ? 'text-red-600' : 'text-green-600'}">{testEmailMessage}</span>
-					{/if}
+						{/if}
+					</div>
 				</div>
-			</div>
-		</section>
+			</section>
 
 			<!-- Google Chat integration -->
 			<section class="mb-6 border rounded-lg p-4">
@@ -2204,46 +2260,52 @@ async function linkGchatTeamSpace(teamId: string) {
 										</thead>
 										<tbody>
 											{#each gchatTeams as gt}
-											{@const pending = gchatTeamPending[gt.id] ?? gt.gchat_space_id}
-											<tr class="border-t border-neutral-100">
-												<td class="py-1.5 pr-3">{gt.name}</td>
-												<td class="py-1.5 pr-2">
-													<select
-														value={pending}
+												{@const pending = gchatTeamPending[gt.id] ?? gt.gchat_space_id}
+												<tr class="border-t border-neutral-100">
+													<td class="py-1.5 pr-3">{gt.name}</td>
+													<td class="py-1.5 pr-2">
+														<select
+															value={pending}
 														onchange={(e) => { gchatTeamPending = { ...gchatTeamPending, [gt.id]: e.currentTarget.value }; gchatTeamStatus = { ...gchatTeamStatus, [gt.id]: undefined as any }; }}
-														disabled={gchatTeamSaving[gt.id]}
-														class="border rounded px-2 py-1 text-sm w-full max-w-xs disabled:opacity-50"
-													>
-														<option value="">{m.page_profile_gchat_space_none_option()}</option>
-														{#if gchatSpaces.some(s => s.bot_is_member)}
-															<optgroup label={m.page_profile_gchat_space_group_bot_member()}>
-																{#each gchatSpaces.filter(s => s.bot_is_member) as space}
-																	<option value={space.name}>{space.displayName}</option>
-																{/each}
-															</optgroup>
-														{/if}
-														{#if gchatSpaces.some(s => s.can_auto_add && !s.bot_is_member)}
-															<optgroup label={m.page_profile_gchat_space_group_auto_add()}>
-																{#each gchatSpaces.filter(s => s.can_auto_add && !s.bot_is_member) as space}
-																	<option value={space.name}>{space.displayName}</option>
-																{/each}
-															</optgroup>
-														{/if}
-													</select>
-												</td>
-												<td class="py-1.5 whitespace-nowrap">
-													<button
-														onclick={() => linkGchatTeamSpace(gt.id)}
-														disabled={gchatTeamSaving[gt.id]}
-														class="text-sm bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50"
-													>{m.page_profile_gchat_link_btn()}</button>
-													{#if gchatTeamStatus[gt.id] === 'success'}
-														<span class="ml-2 text-sm text-green-700">{m.page_profile_gchat_link_success()}</span>
-													{:else if gchatTeamStatus[gt.id] === 'error'}
+															disabled={gchatTeamSaving[gt.id]}
+															class="border rounded px-2 py-1 text-sm w-full max-w-xs disabled:opacity-50"
+														>
+															<option value="">{m.page_profile_gchat_space_none_option()}</option>
+
+															{#if gchatSpaces.some((s) => s.bot_is_member)}
+																<optgroup
+																	label={m.page_profile_gchat_space_group_bot_member()}
+																>
+																	{#each gchatSpaces.filter((s) => s.bot_is_member) as space}
+																		<option value={space.name}>{space.displayName}</option>
+																	{/each}
+																</optgroup>
+															{/if}
+
+															{#if gchatSpaces.some((s) => s.can_auto_add && !s.bot_is_member)}
+																<optgroup
+																	label={m.page_profile_gchat_space_group_auto_add()}
+																>
+																	{#each gchatSpaces.filter((s) => s.can_auto_add && !s.bot_is_member) as space}
+																		<option value={space.name}>{space.displayName}</option>
+																	{/each}
+																</optgroup>
+															{/if}
+														</select>
+													</td>
+													<td class="py-1.5 whitespace-nowrap">
+														<button
+															onclick={() => linkGchatTeamSpace(gt.id)}
+															disabled={gchatTeamSaving[gt.id]}
+															class="text-sm bg-blue-700 text-white px-3 py-1 rounded disabled:opacity-50"
+														>{m.page_profile_gchat_link_btn()}</button>
+														{#if gchatTeamStatus[gt.id] === 'success'}
+															<span class="ml-2 text-sm text-green-700">{m.page_profile_gchat_link_success()}</span>
+														{:else if gchatTeamStatus[gt.id] === 'error'}
 														<span class="ml-2 text-sm text-red-600">{gchatTeamError[gt.id] || m.page_profile_gchat_link_error()}</span>
-													{/if}
-																			</td>
-											</tr>
+														{/if}
+													</td>
+												</tr>
 											{/each}
 										</tbody>
 									</table>
@@ -2308,7 +2370,7 @@ async function linkGchatTeamSpace(teamId: string) {
 								onchange={(e) => {
 									const updated = e.currentTarget.checked
 										? [...groupDefaultGruppkanalChannels, ch]
-										: groupDefaultGruppkanalChannels.filter(c => c !== ch);
+										: groupDefaultGruppkanalChannels.filter((c) => c !== ch);
 									saveGroupDefaults({ default_gruppkanal_channels: updated });
 								}}
 								class="h-4 w-4 accent-blue-700"
@@ -2326,77 +2388,117 @@ async function linkGchatTeamSpace(teamId: string) {
 					<p class="text-xs text-neutral-400">{m.page_profile_teams_notif_per_event_desc_with_channel()}</p>
 				</div>
 				<div class="overflow-x-auto">
-				<table class="w-full text-sm border-collapse">
-					<thead>
-						<tr>
+					<table class="w-full text-sm border-collapse">
+						<thead>
+							<tr>
 							<th class="text-left py-1 pr-3 font-normal text-neutral-500 w-full"></th>
 							<th class="text-center py-1 px-2 font-normal text-neutral-500 whitespace-nowrap">{m.page_profile_teams_notif_col_personal()}</th>
 							<th class="text-center py-1 px-3 font-normal text-neutral-500 whitespace-nowrap">{m.page_profile_teams_notif_col_gruppkanal()}</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
 							<td colspan="3" class="py-1.5 text-xs font-semibold text-neutral-500 uppercase tracking-wide">{m.page_profile_notifs_bookings_group()}</td>
-						</tr>
-						{#each allBookingEvents.filter(r => !managerOnlyKeys.has(r.key)) as row}
-						{@const ep = groupNotifDefaults[row.key]}
-						{@const sysEp = groupSysDefaults[row.key]}
-						{@const policy = ep?.personal_email_policy ?? ''}
-						{@const grEnabled = ep?.gruppkanal}
-						<tr class="border-t border-neutral-100">
-							<td class="py-1.5 pr-3">{row.label()}</td>
-							<td class="py-1.5 px-2">
-								<div class="flex gap-1 justify-center">
+							</tr>
+							{#each allBookingEvents.filter((r) => !managerOnlyKeys.has(r.key)) as row}
+								{@const ep = groupNotifDefaults[row.key]}
+								{@const sysEp = groupSysDefaults[row.key]}
+								{@const policy = ep?.personal_email_policy ?? ''}
+								{@const grEnabled = ep?.gruppkanal}
+								<tr class="border-t border-neutral-100">
+									<td class="py-1.5 pr-3">{row.label()}</td>
+									<td class="py-1.5 px-2">
+										<div class="flex gap-1 justify-center">
 									{#each [['always', m.page_profile_teams_notif_personal_always()], ['if_no_broadcast', m.page_profile_group_defaults_notif_personal_prefer_broadcast()], ['never', m.page_profile_teams_notif_personal_never()]] as [val, label]}
-										<button
-											onclick={() => saveGroupDefaults({ defaults: { ...groupNotifDefaults, [row.key]: { ...(groupNotifDefaults[row.key] ?? {}), personal_email_policy: val as 'always' | 'if_no_broadcast' | 'never' } } })}
-											class="px-2 py-0.5 text-xs rounded border {(policy || sysEp?.personal_email_policy || 'if_no_broadcast') === val ? 'bg-blue-700 text-white border-blue-700' : 'bg-white text-neutral-600 border-neutral-300 hover:border-blue-400'}"
-										>{label}</button>
-									{/each}
-								</div>
-							</td>
-							<td class="py-1.5 px-3 text-center">
-								<input
-									type="checkbox"
-									checked={grEnabled ?? sysEp?.gruppkanal ?? true}
-									onchange={(e) => saveGroupDefaults({ defaults: { ...groupNotifDefaults, [row.key]: { ...(groupNotifDefaults[row.key] ?? {}), gruppkanal: e.currentTarget.checked } } })}
-									class="h-4 w-4 accent-blue-700"
-								/>
-							</td>
-						</tr>
-						{/each}
-						<tr>
+												<button
+													onclick={() => saveGroupDefaults({
+														defaults: {
+															...groupNotifDefaults,
+															[row.key]: {
+																...groupNotifDefaults[row.key] ?? {},
+																personal_email_policy: val as 'always' | 'if_no_broadcast' | 'never'
+															}
+														}
+													})}
+													class="px-2 py-0.5 text-xs rounded border {(policy || sysEp?.personal_email_policy || 'if_no_broadcast') === val
+														? 'bg-blue-700 text-white border-blue-700'
+														: 'bg-white text-neutral-600 border-neutral-300 hover:border-blue-400'}"
+												>{label}</button>
+											{/each}
+										</div>
+									</td>
+									<td class="py-1.5 px-3 text-center">
+										<input
+											type="checkbox"
+											checked={grEnabled ?? sysEp?.gruppkanal ?? true}
+											onchange={(e) => saveGroupDefaults({
+												defaults: {
+													...groupNotifDefaults,
+													[row.key]: {
+														...groupNotifDefaults[row.key] ?? {},
+														gruppkanal: e.currentTarget.checked
+													}
+												}
+											})}
+											class="h-4 w-4 accent-blue-700"
+										/>
+									</td>
+								</tr>
+							{/each}
+							<tr>
 							<td colspan="3" class="pt-3 pb-1.5 text-xs font-semibold text-neutral-500 uppercase tracking-wide">{m.page_profile_notif_defaults_section_manager()}</td>
-						</tr>
-						{#each [...allBookingEvents.filter(r => managerOnlyKeys.has(r.key)), ...allIssueEvents] as row}
-						{@const ep = groupNotifDefaults[row.key]}
-						{@const sysEp = groupSysDefaults[row.key]}
-						{@const policy = ep?.personal_email_policy ?? ''}
-						{@const grEnabled = ep?.gruppkanal}
-						<tr class="border-t border-neutral-100">
-							<td class="py-1.5 pr-3">{row.label()}</td>
-							<td class="py-1.5 px-2">
-								<div class="flex gap-1 justify-center">
+							</tr>
+
+							{#each [
+								...allBookingEvents.filter((r) => managerOnlyKeys.has(r.key)),
+								...allIssueEvents
+							] as row}
+								{@const ep = groupNotifDefaults[row.key]}
+								{@const sysEp = groupSysDefaults[row.key]}
+								{@const policy = ep?.personal_email_policy ?? ''}
+								{@const grEnabled = ep?.gruppkanal}
+								<tr class="border-t border-neutral-100">
+									<td class="py-1.5 pr-3">{row.label()}</td>
+									<td class="py-1.5 px-2">
+										<div class="flex gap-1 justify-center">
 									{#each [['always', m.page_profile_teams_notif_personal_always()], ['if_no_broadcast', m.page_profile_group_defaults_notif_personal_prefer_broadcast()], ['never', m.page_profile_teams_notif_personal_never()]] as [val, label]}
-										<button
-											onclick={() => saveGroupDefaults({ defaults: { ...groupNotifDefaults, [row.key]: { ...(groupNotifDefaults[row.key] ?? {}), personal_email_policy: val as 'always' | 'if_no_broadcast' | 'never' } } })}
-											class="px-2 py-0.5 text-xs rounded border {(policy || sysEp?.personal_email_policy || 'if_no_broadcast') === val ? 'bg-blue-700 text-white border-blue-700' : 'bg-white text-neutral-600 border-neutral-300 hover:border-blue-400'}"
-										>{label}</button>
-									{/each}
-								</div>
-							</td>
-							<td class="py-1.5 px-3 text-center">
-								<input
-									type="checkbox"
-									checked={grEnabled ?? sysEp?.gruppkanal ?? true}
-									onchange={(e) => saveGroupDefaults({ defaults: { ...groupNotifDefaults, [row.key]: { ...(groupNotifDefaults[row.key] ?? {}), gruppkanal: e.currentTarget.checked } } })}
-									class="h-4 w-4 accent-blue-700"
-								/>
-							</td>
-						</tr>
-						{/each}
-					</tbody>
-				</table>
+												<button
+													onclick={() => saveGroupDefaults({
+														defaults: {
+															...groupNotifDefaults,
+															[row.key]: {
+																...groupNotifDefaults[row.key] ?? {},
+																personal_email_policy: val as 'always' | 'if_no_broadcast' | 'never'
+															}
+														}
+													})}
+													class="px-2 py-0.5 text-xs rounded border {(policy || sysEp?.personal_email_policy || 'if_no_broadcast') === val
+														? 'bg-blue-700 text-white border-blue-700'
+														: 'bg-white text-neutral-600 border-neutral-300 hover:border-blue-400'}"
+												>{label}</button>
+											{/each}
+										</div>
+									</td>
+									<td class="py-1.5 px-3 text-center">
+										<input
+											type="checkbox"
+											checked={grEnabled ?? sysEp?.gruppkanal ?? true}
+											onchange={(e) => saveGroupDefaults({
+												defaults: {
+													...groupNotifDefaults,
+													[row.key]: {
+														...groupNotifDefaults[row.key] ?? {},
+														gruppkanal: e.currentTarget.checked
+													}
+												}
+											})}
+											class="h-4 w-4 accent-blue-700"
+										/>
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
 				</div>
 				<div class="mt-4 pt-3 border-t flex flex-wrap items-center gap-3">
 					<button
@@ -2408,12 +2510,12 @@ async function linkGchatTeamSpace(teamId: string) {
 				</div>
 			</section>
 
-		<!-- Broken article links: keep visible at the bottom when there are no active failures -->
-		{#if !hasActiveFailures}
-			{@render brokenLinksSection()}
+			<!-- Broken article links: keep visible at the bottom when there are no active failures -->
+			{#if !hasActiveFailures}
+				{@render brokenLinksSection()}
+			{/if}
 		{/if}
-	{/if}
-</div>
+	</div>
 {/if}
 
 {#snippet brokenLinksSection()}

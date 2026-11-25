@@ -1,7 +1,7 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
-	import { createApiClient } from '$lib/api/client';
-	import { orgTypeLabel } from '$lib/org';
+	import * as m from '#lib/paraglide/messages.js';
+	import { createApiClient } from '#lib/api/client.ts';
+	import { orgTypeLabel } from '#lib/org.ts';
 
 	let { data } = $props();
 

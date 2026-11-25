@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { ApiError } from '$lib/api/client';
-	import { translateError } from '$lib/errors';
-	import * as m from '$lib/paraglide/messages.js';
+	import { ApiError } from '#lib/api/client.ts';
+	import { translateError } from '#lib/errors.ts';
+	import * as m from '#lib/paraglide/messages.js';
 
 	interface Item {
 		id: string;

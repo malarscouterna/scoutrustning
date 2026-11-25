@@ -1,25 +1,25 @@
 <script lang="ts">
-	import { createApiClient, type ArticleEvent } from '$lib/api/client';
-	import { msg } from '$lib/msg';
-	import { articleStatusColors, articleEventTypeColors } from '$lib/styles';
-	import { hasRole, canBook } from '$lib/user';
-	import { page } from '$app/stores';
-	import { cart } from '$lib/stores/cart.svelte';
-	import ReportIssueSheet from '$lib/components/ReportIssueSheet.svelte';
-	import IssueCard from '$lib/components/IssueCard.svelte';
-	import ArticleEventHistory from '$lib/components/ArticleEventHistory.svelte';
-	import ImageViewer from '$lib/components/ImageViewer.svelte';
-	import ImageUpload from '$lib/components/ImageUpload.svelte';
-	import ImageAttachInput from '$lib/components/ImageAttachInput.svelte';
-	import ArticleLinks from '$lib/components/ArticleLinks.svelte';
-	import * as m from '$lib/paraglide/messages.js';
+	import { createApiClient, type ArticleEvent } from '#lib/api/client.ts';
+	import { msg } from '#lib/msg.ts';
+	import { articleStatusColors, articleEventTypeColors } from '#lib/styles.ts';
+	import { hasRole, canBook } from '#lib/user.ts';
+	import { page } from '$app/state';
+	import { cart } from '#lib/stores/cart.svelte.ts';
+	import ReportIssueSheet from '#lib/components/ReportIssueSheet.svelte';
+	import IssueCard from '#lib/components/IssueCard.svelte';
+	import ArticleEventHistory from '#lib/components/ArticleEventHistory.svelte';
+	import ImageViewer from '#lib/components/ImageViewer.svelte';
+	import ImageUpload from '#lib/components/ImageUpload.svelte';
+	import ImageAttachInput from '#lib/components/ImageAttachInput.svelte';
+	import ArticleLinks from '#lib/components/ArticleLinks.svelte';
+	import * as m from '#lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 	const api = createApiClient();
 
-	let isManager = $derived(hasRole($page.data.user, 'equipment_manager'));
-	let user = $derived($page.data.user);
+	let isManager = $derived(hasRole(page.data.user, 'equipment_manager'));
+	let user = $derived(page.data.user);
 	let article = $derived(data.article);
 	let groupArticles = $derived(data.groupArticles);
 	let isQuantityTracked = $derived(!article.individually_tracked && groupArticles !== null);
@@ -34,7 +34,7 @@
 	let reporting = $state(false);
 	let message = $state('');
 	let addingToCart = $state(false);
-	let canBookArticles = $derived(canBook($page.data.user));
+	let canBookArticles = $derived(canBook(page.data.user));
 
 	async function addToCart() {
 		if (!cart.id) return;
@@ -57,17 +57,25 @@
 		for (const a of groupArticles) {
 			counts.set(a.status, (counts.get(a.status) ?? 0) + 1);
 		}
-		const order = ['ok', 'reported_usable', 'incoming', 'reported_unusable', 'under_repair', 'lost', 'archived'];
-		return order
-			.filter(s => counts.has(s))
-			.map(s => ({ status: s, count: counts.get(s)! }));
+
+		const order = [
+			'ok',
+			'reported_usable',
+			'incoming',
+			'reported_unusable',
+			'under_repair',
+			'lost',
+			'archived'
+		];
+
+		return order.filter((s) => counts.has(s)).map((s) => ({ status: s, count: counts.get(s)! }));
 	});
 
 	// Aggregated purchase info for quantity tracked
 	let purchaseOverview = $derived.by(() => {
 		if (!groupArticles) return null;
-		const dates = groupArticles.filter(a => a.purchase_date).map(a => a.purchase_date!);
-		const prices = groupArticles.filter(a => a.purchase_price).map(a => a.purchase_price!);
+		const dates = groupArticles.filter((a) => a.purchase_date).map((a) => a.purchase_date!);
+		const prices = groupArticles.filter((a) => a.purchase_price).map((a) => a.purchase_price!);
 		if (dates.length === 0 && prices.length === 0) return null;
 		const uniqueDates = [...new Set(dates)].sort();
 		const uniquePrices = [...new Set(prices)].sort();
@@ -188,14 +196,22 @@
 	<div class="mt-4 mb-6">
 		{#if imageIds.length > 0}
 			<div class="mb-4">
-				<ImageViewer imageIds={imageIds} alt={article.commercial_name || article.common_name} commercialName={article.commercial_name} locationId={article.location_id} showMeta userId={user?.member_id ?? ''} {isManager} />
+				<ImageViewer
+					imageIds={imageIds}
+					alt={article.commercial_name || article.common_name}
+					commercialName={article.commercial_name}
+					locationId={article.location_id}
+					showMeta
+					userId={user?.member_id ?? ''}
+					isManager={isManager}
+				/>
 			</div>
 		{/if}
 		{#if article.commercial_name && article.location_id}
 			<ImageUpload
 				commercialName={article.commercial_name}
 				locationId={article.location_id}
-				{imageIds}
+				imageIds={imageIds}
 				userName={user?.name ?? ''}
 				userGroup={user?.group_name ?? ''}
 				onUpdate={(ids) => imageIds = ids}
@@ -301,7 +317,7 @@
 			articleName={article.common_name || article.commercial_name}
 			open={reporting}
 			isQuantityTracked={isQuantityTracked}
-			groupTotal={groupArticles?.filter(a => a.status !== 'archived').length ?? 0}
+			groupTotal={groupArticles?.filter((a) => a.status !== 'archived').length ?? 0}
 			onReported={handleIssueReported}
 			onClose={() => reporting = false}
 		/>
@@ -328,7 +344,7 @@
 			<h2 class="font-medium mb-2">{m.page_article_active_issues()}</h2>
 			<div class="space-y-2">
 				{#each data.activeIssues as issue}
-					<IssueCard {issue} />
+					<IssueCard issue={issue} />
 				{/each}
 			</div>
 		</div>

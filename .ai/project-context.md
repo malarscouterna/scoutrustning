@@ -57,7 +57,8 @@ ms-utrustning/
 │   │   └── app.html
 │   ├── static/
 │   ├── package.json
-│   ├── svelte.config.js
+│   ├── vite.config.ts
+│   ├── patches/            # pnpm patches for dependencies
 │   └── Dockerfile
 ├── docs/
 │   ├── SPEC.md             # Full specification (living document)

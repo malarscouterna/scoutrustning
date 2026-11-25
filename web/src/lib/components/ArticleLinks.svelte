@@ -1,6 +1,6 @@
 <script lang="ts">
-	import type { ArticleLink } from '$lib/api/client';
-	import * as m from '$lib/paraglide/messages.js';
+	import type { ArticleLink } from '#lib/api/client.ts';
+	import * as m from '#lib/paraglide/messages.js';
 
 	let { links = [] }: { links?: ArticleLink[] } = $props();
 </script>

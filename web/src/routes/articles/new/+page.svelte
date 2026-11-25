@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { createApiClient } from '$lib/api/client';
-	import ArticleForm from '$lib/components/ArticleForm.svelte';
-	import * as m from '$lib/paraglide/messages.js';
-	import { translateError } from '$lib/errors';
+	import { createApiClient } from '#lib/api/client.ts';
+	import ArticleForm from '#lib/components/ArticleForm.svelte';
+	import * as m from '#lib/paraglide/messages.js';
+	import { translateError } from '#lib/errors.ts';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();

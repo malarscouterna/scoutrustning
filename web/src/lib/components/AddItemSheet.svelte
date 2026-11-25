@@ -1,8 +1,8 @@
 
 <script lang="ts">
-	import { createApiClient, type AvailabilityGroup, type Category } from '$lib/api/client';
-	import * as m from '$lib/paraglide/messages.js';
-	import { translateError } from '$lib/errors';
+	import { createApiClient, type AvailabilityGroup, type Category } from '#lib/api/client.ts';
+	import * as m from '#lib/paraglide/messages.js';
+	import { translateError } from '#lib/errors.ts';
 
 	interface Props {
 		bookingId: string;

@@ -1,7 +1,7 @@
 <script lang="ts">
-	import type { User } from '$lib/user';
-	import { cart } from '$lib/stores/cart.svelte';
-	import { msg } from '$lib/msg';
+	import type { User } from '#lib/user.ts';
+	import { cart } from '#lib/stores/cart.svelte.ts';
+	import { msg } from '#lib/msg.ts';
 
 	let {
 		personas,

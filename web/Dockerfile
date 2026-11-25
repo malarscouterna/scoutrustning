@@ -5,6 +5,7 @@ FROM node:26.13-alpine AS dev
 RUN npm install -g pnpm@10.34.9
 WORKDIR /app
 COPY package.json pnpm-lock.yaml ./
+COPY patches ./patches
 RUN pnpm install --frozen-lockfile --ignore-scripts
 EXPOSE 3000
 CMD ["pnpm", "dev", "--host", "--port", "3000"]
@@ -17,6 +18,7 @@ FROM node:26.13-alpine AS build
 RUN npm install -g pnpm@10.34.9
 WORKDIR /app
 COPY web/package.json web/pnpm-lock.yaml ./
+COPY web/patches ./patches
 RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY web/ .
 COPY api/internal/i18n/messages/ ../api/internal/i18n/messages/
@@ -28,6 +30,7 @@ RUN npm install -g pnpm@10.34.9
 WORKDIR /app
 COPY --from=build /app/build ./build
 COPY --from=build /app/package.json /app/pnpm-lock.yaml ./
+COPY --from=build /app/patches ./patches
 RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 EXPOSE 3000
 ENV NODE_ENV=production

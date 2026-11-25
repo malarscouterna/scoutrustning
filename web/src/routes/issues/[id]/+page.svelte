@@ -1,20 +1,20 @@
 <script lang="ts">
-	import { createApiClient, type IssueDetail, type GroupMember } from '$lib/api/client';
-	import { hasRole } from '$lib/user';
-	import { page } from '$app/stores';
-	import { browser } from '$app/environment';
+	import { createApiClient, type IssueDetail, type GroupMember } from '#lib/api/client.ts';
+	import { hasRole } from '#lib/user.ts';
+	import { page } from '$app/state';
+	import { browser } from '$app/env';
 	import { onMount, untrack } from 'svelte';
-	import ImageAttachInput from '$lib/components/ImageAttachInput.svelte';
-	import * as m from '$lib/paraglide/messages.js';
-	import { translateError } from '$lib/errors';
+	import ImageAttachInput from '#lib/components/ImageAttachInput.svelte';
+	import * as m from '#lib/paraglide/messages.js';
+	import { translateError } from '#lib/errors.ts';
 	import type { PageData } from './$types';
-	import { msg } from '$lib/msg';
-	import { issueStatusColors, issueSeverityColors } from '$lib/styles';
+	import { msg } from '#lib/msg.ts';
+	import { issueStatusColors, issueSeverityColors } from '#lib/styles.ts';
 
 	let { data }: { data: PageData } = $props();
 	const api = createApiClient();
 
-	let isManager = $derived(hasRole($page.data.user, 'equipment_manager'));
+	let isManager = $derived(hasRole(page.data.user, 'equipment_manager'));
 	// untrack: intentionally capture initial value only; issue is updated manually via API responses
 	let issue = $state<IssueDetail>(untrack(() => data.issue));
 
@@ -117,7 +117,7 @@
 	});
 
 	$effect(() => {
-		if (browser && eventsEl && issue.events.some(e => Array.isArray(e.metadata?.image_ids) && e.metadata.image_ids.length > 0)) {
+		if (browser && eventsEl && issue.events.some((e) => Array.isArray(e.metadata?.image_ids) && e.metadata.image_ids.length > 0)) {
 			setTimeout(() => initLightbox(), 0);
 		}
 	});
@@ -142,7 +142,7 @@
 		try {
 			issue = await api.addIssueComment(issue.id, {
 				description: commentText.trim(),
-				...(commentImageIds.length ? { image_ids: commentImageIds } : {})
+				...commentImageIds.length ? { image_ids: commentImageIds } : {}
 			});
 			commentText = '';
 			commentImageIds = [];
@@ -159,7 +159,7 @@
 		try {
 			issue = await api.updateIssue(issue.id, {
 				status: newStatus,
-				...(statusComment.trim() ? { comment: statusComment.trim() } : {})
+				...statusComment.trim() ? { comment: statusComment.trim() } : {}
 			});
 			statusComment = '';
 		} catch (e: any) {
@@ -276,12 +276,18 @@
 				</div>
 			</fieldset>
 			<div class="flex gap-2">
-				<button type="submit" disabled={savingEdit} class="text-sm bg-blue-700 text-white px-4 py-1.5 rounded disabled:opacity-50">
-					{m.btn_save()}
-				</button>
-				<button type="button" onclick={() => (editing = false)} disabled={savingEdit} class="text-sm border border-neutral-300 text-neutral-600 px-4 py-1.5 rounded hover:bg-neutral-50 disabled:opacity-50">
-					{m.btn_cancel()}
-				</button>
+				<button
+					type="submit"
+					disabled={savingEdit}
+					class="text-sm bg-blue-700 text-white px-4 py-1.5 rounded disabled:opacity-50"
+				>{m.btn_save()}</button>
+
+				<button
+					type="button"
+					onclick={() => editing = false}
+					disabled={savingEdit}
+					class="text-sm border border-neutral-300 text-neutral-600 px-4 py-1.5 rounded hover:bg-neutral-50 disabled:opacity-50"
+				>{m.btn_cancel()}</button>
 			</div>
 		</form>
 	{:else}
@@ -412,7 +418,7 @@
 								</div>
 								<div class="p-2 border-t border-neutral-100">
 									<button
-										onclick={() => (assignPickerOpen = false)}
+										onclick={() => assignPickerOpen = false}
 										class="text-xs text-neutral-400 hover:text-neutral-600 w-full text-right"
 									>Stäng</button>
 								</div>

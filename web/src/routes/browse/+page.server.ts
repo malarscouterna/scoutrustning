@@ -1,4 +1,4 @@
-import { createApiClient } from '$lib/api/client';
+import { createApiClient } from '#lib/api/client.ts';
 import type { PageServerLoad } from './$types';
 
 const DEFAULT_STATUSES = 'ok,reported_usable,reported_unusable,under_repair,incoming';

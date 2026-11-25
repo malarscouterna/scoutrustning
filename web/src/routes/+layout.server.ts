@@ -2,8 +2,8 @@ import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 import { redirect } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
-import type { User } from '$lib/user';
-import { decodeJwtPayload } from '$lib/jwt';
+import type { User } from '#lib/user.ts';
+import { decodeJwtPayload } from '#lib/jwt.ts';
 
 const DEV_MODE = process.env.DEV_MODE === 'true';
 const DEMO_MODE = process.env.DEMO_MODE === 'true';

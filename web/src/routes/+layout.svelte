@@ -1,12 +1,12 @@
 <script lang="ts">
 	import '../app.css';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
-	import * as m from '$lib/paraglide/messages.js';
-	import DevPersonaSwitcher from '$lib/components/DevPersonaSwitcher.svelte';
-	import FloatingCart from '$lib/components/FloatingCart.svelte';
-	import UserAvatar from '$lib/components/UserAvatar.svelte';
-	import UserInfoCard from '$lib/components/UserInfoCard.svelte';
+	import * as m from '#lib/paraglide/messages.js';
+	import DevPersonaSwitcher from '#lib/components/DevPersonaSwitcher.svelte';
+	import FloatingCart from '#lib/components/FloatingCart.svelte';
+	import UserAvatar from '#lib/components/UserAvatar.svelte';
+	import UserInfoCard from '#lib/components/UserInfoCard.svelte';
 
 
 	let { children, data } = $props();
@@ -14,7 +14,7 @@
 	interface Section { label: string; href: string }
 
 	let section = $derived.by((): Section | null => {
-		const path = $page.url.pathname;
+		const path = page.url.pathname;
 		if (path.startsWith('/bookings') || path.startsWith('/book')) return { label: 'Bokningar', href: '/bookings' };
 		if (path.startsWith('/issues')) return { label: 'Ärenden', href: '/issues' };
 		if (path.startsWith('/browse') || path.startsWith('/articles')) return { label: 'Utrustning', href: '/browse' };
@@ -22,17 +22,17 @@
 	});
 
 	// True when we're on the section's own index page (the breadcrumb leaf, not a sub-page)
-	let onSectionRoot = $derived(section !== null && $page.url.pathname === section.href);
+	let onSectionRoot = $derived(section !== null && page.url.pathname === section.href);
 
 	// /welcome and /join have their own handling of the "logged in, unmapped group" state
 	// (join CTA, demo link, the join form itself) - this layout's generic contact-your-manager
 	// box must not intercept them, or those pages' own content never renders.
-	let isPublicUnmappedPage = $derived($page.url.pathname === '/welcome' || $page.url.pathname === '/join');
+	let isPublicUnmappedPage = $derived(page.url.pathname === '/welcome' || page.url.pathname === '/join');
 
 	let profileCardOpen = $state(false);
 
 	$effect(() => {
-		if (!data.user && data.oidcName && $page.url.pathname !== '/welcome' && $page.url.pathname !== '/join') {
+		if (!data.user && data.oidcName && page.url.pathname !== '/welcome' && page.url.pathname !== '/join') {
 			goto('/welcome');
 		}
 	});
@@ -66,8 +66,15 @@
 					<img src="/PNG Utrustningsgruppen - Logotyp.png" alt="Hem" class="w-10 h-10 object-contain" />
 				</a>
 				<div class="flex items-center gap-3">
-					<div class="flex items-center gap-1 text-sm text-neutral-500" aria-label="Brödsmulor">
-						<a href="/" class="hover:text-neutral-900 {$page.url.pathname === '/' ? 'font-medium text-neutral-900' : ''}">Hem</a>
+					<div
+						class="flex items-center gap-1 text-sm text-neutral-500"
+						aria-label="Brödsmulor"
+					>
+						<a
+							href="/"
+							class="hover:text-neutral-900 {page.url.pathname === '/' ? 'font-medium text-neutral-900' : ''}"
+						>Hem</a>
+
 						{#if section}
 							<span class="select-none">/</span>
 							{#if onSectionRoot}
@@ -84,7 +91,7 @@
 						<button
 							type="button"
 							aria-label={data.user.name}
-							onclick={() => (profileCardOpen = true)}
+							onclick={() => profileCardOpen = true}
 						>
 							<UserAvatar name={data.user.name} picture={data.user.picture} size={32} />
 						</button>
@@ -102,7 +109,7 @@
 {/if}
 
 <div>
-	{#if data.user || isPublicUnmappedPage || (!data.oidcName && !data.dev)}
+	{#if data.user || isPublicUnmappedPage || !data.oidcName && !data.dev}
 		{@render children()}
 	{/if}
 </div>

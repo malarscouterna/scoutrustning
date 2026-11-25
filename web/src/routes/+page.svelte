@@ -1,15 +1,15 @@
 <script lang="ts">
-	import { canBook, isManager as checkManager } from '$lib/user';
-	import { cart } from '$lib/stores/cart.svelte';
-	import BookingCard from '$lib/components/BookingCard.svelte';
-	import IssueCard from '$lib/components/IssueCard.svelte';
-	import CopyBookingModal from '$lib/components/CopyBookingModal.svelte';
-	import type { Booking } from '$lib/api/client';
+	import { canBook, isManager as checkManager } from '#lib/user.ts';
+	import { cart } from '#lib/stores/cart.svelte.ts';
+	import BookingCard from '#lib/components/BookingCard.svelte';
+	import IssueCard from '#lib/components/IssueCard.svelte';
+	import CopyBookingModal from '#lib/components/CopyBookingModal.svelte';
+	import type { Booking } from '#lib/api/client.ts';
 	import type { PageData } from './$types';
 	import { goto } from '$app/navigation';
-	import * as m from '$lib/paraglide/messages.js';
-	import { switchGroup } from '$lib/activeGroup';
-	import { orgTypeLabel } from '$lib/org';
+	import * as m from '#lib/paraglide/messages.js';
+	import { switchGroup } from '#lib/activeGroup.ts';
+	import { orgTypeLabel } from '#lib/org.ts';
 
 	let { data }: { data: PageData } = $props();
 

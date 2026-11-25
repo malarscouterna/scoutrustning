@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { browser } from '$app/environment';
-	import { createApiClient, type ArticleEvent } from '$lib/api/client';
-	import * as m from '$lib/paraglide/messages.js';
-	import { msg } from '$lib/msg';
-	import { articleEventTypeColors } from '$lib/styles';
+	import { browser } from '$app/env';
+	import { createApiClient, type ArticleEvent } from '#lib/api/client.ts';
+	import * as m from '#lib/paraglide/messages.js';
+	import { msg } from '#lib/msg.ts';
+	import { articleEventTypeColors } from '#lib/styles.ts';
 
 	interface Props {
 		articleId: string;
@@ -35,7 +35,7 @@
 	}
 
 	function hasImages(): boolean {
-		return events.some(e => {
+		return events.some((e) => {
 			const ids = e.metadata?.image_ids;
 			return Array.isArray(ids) && ids.length > 0;
 		});

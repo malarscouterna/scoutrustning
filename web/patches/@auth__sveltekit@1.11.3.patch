@@ -1,0 +1,65 @@
+diff --git a/dist/client.js b/dist/client.js
+index 011c78aaa83e47befdbac5feb7487958ff0cfe38..7f24153c041cb6d544eaf5b1293cd35121fc1fe0 100644
+--- a/dist/client.js
++++ b/dist/client.js
+@@ -1,8 +1,7 @@
+-import { base } from "$app/paths";
+ export async function signIn(provider, options, authorizationParams) {
+     const { callbackUrl, ...rest } = options ?? {};
+     const { redirect = true, redirectTo = callbackUrl ?? window.location.href, ...signInParams } = rest;
+-    const baseUrl = base ?? "";
++    const baseUrl = "";
+     const signInUrl = `${baseUrl}/auth/${provider === "credentials" ? "callback" : "signin"}/${provider}`;
+     const res = await fetch(`${signInUrl}?${new URLSearchParams(authorizationParams)}`, {
+         method: "post",
+@@ -36,7 +35,7 @@ export async function signIn(provider, options, authorizationParams) {
+ }
+ export async function signOut(options) {
+     const { redirect = true, redirectTo = options?.callbackUrl ?? window.location.href, } = options ?? {};
+-    const baseUrl = base ?? "";
++    const baseUrl = "";
+     const res = await fetch(`${baseUrl}/auth/signout`, {
+         method: "post",
+         headers: {
+diff --git a/dist/env.js b/dist/env.js
+index a1a26c80305ed6c96cb4352a2cdea717362f47db..b9ec4790e514726fbaa01d465ddc0341580ac9fd 100644
+--- a/dist/env.js
++++ b/dist/env.js
+@@ -1,9 +1,8 @@
+ import { setEnvDefaults as coreSetEnvDefaults, skipCSRFCheck } from "@auth/core";
+ import { dev, building } from "$app/environment";
+-import { base } from "$app/paths";
+ export function setEnvDefaults(envObject, config) {
+     config.trustHost ??= dev;
+-    config.basePath = `${base}/auth`;
++    config.basePath = "/auth";
+     config.skipCSRFCheck = skipCSRFCheck;
+     if (building)
+         return;
+diff --git a/dist/webauthn.js b/dist/webauthn.js
+index 651aa3d6d9d60182927f1cf753b55bba88bfe3d0..5d0ae17aacff750ef4ab7ec9ec864a21b153ef14 100644
+--- a/dist/webauthn.js
++++ b/dist/webauthn.js
+@@ -1,4 +1,3 @@
+-import { base } from "$app/paths";
+ import { startAuthentication, startRegistration } from "@simplewebauthn/browser";
+ const logger = {
+     debug: console.debug,
+@@ -10,7 +9,7 @@ const logger = {
+  * Returns either the completed WebAuthn response or an error request.
+  */
+ async function webAuthnOptions(providerID, options) {
+-    const baseUrl = base ?? "";
++    const baseUrl = "";
+     // @ts-expect-error
+     const params = new URLSearchParams(options);
+     const optionsResp = await fetch(`${baseUrl}/webauthn-options/${providerID}?${params}`);
+@@ -30,7 +29,7 @@ async function webAuthnOptions(providerID, options) {
+ export async function signIn(provider, options, authorizationParams) {
+     const { callbackUrl, ...rest } = options ?? {};
+     const { redirectTo = callbackUrl ?? window.location.href, redirect = true, ...signInParams } = rest;
+-    const baseUrl = base ?? "";
++    const baseUrl = "";
+     if (!provider || provider !== "webauthn") {
+         // TODO: Add docs link with explanation
+         throw new TypeError([

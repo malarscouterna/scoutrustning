@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { isManager as checkManager } from '$lib/user';
+	import { isManager as checkManager } from '#lib/user.ts';
 	import type { PageData } from './$types';
-	import BookingCard from '$lib/components/BookingCard.svelte';
-	import CopyBookingModal from '$lib/components/CopyBookingModal.svelte';
-	import type { Booking } from '$lib/api/client';
+	import BookingCard from '#lib/components/BookingCard.svelte';
+	import CopyBookingModal from '#lib/components/CopyBookingModal.svelte';
+	import type { Booking } from '#lib/api/client.ts';
 	import { goto } from '$app/navigation';
-	import * as m from '$lib/paraglide/messages.js';
+	import * as m from '#lib/paraglide/messages.js';
 
 	let { data }: { data: PageData } = $props();
 

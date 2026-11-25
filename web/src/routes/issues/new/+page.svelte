@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { createApiClient, type Article } from '$lib/api/client';
+	import { createApiClient, type Article } from '#lib/api/client.ts';
 	import { goto } from '$app/navigation';
 	import { untrack } from 'svelte';
-	import ImageAttachInput from '$lib/components/ImageAttachInput.svelte';
-	import * as m from '$lib/paraglide/messages.js';
-	import { translateError } from '$lib/errors';
+	import ImageAttachInput from '#lib/components/ImageAttachInput.svelte';
+	import * as m from '#lib/paraglide/messages.js';
+	import { translateError } from '#lib/errors.ts';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();

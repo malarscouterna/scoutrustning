@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { page } from '$app/stores';
-	import * as m from '$lib/paraglide/messages.js';
+	import { page } from '$app/state';
+	import * as m from '#lib/paraglide/messages.js';
 
 	let { data } = $props();
-	const callbackUrl = $derived($page.url.searchParams.get('callbackUrl') || '/');
+	const callbackUrl = $derived(page.url.searchParams.get('callbackUrl') || '/');
 </script>
 
 <div class="min-h-screen bg-white text-neutral-900 flex flex-col">
@@ -25,10 +25,11 @@
 				type="button"
 				disabled
 				class="flex items-center justify-center gap-3 w-full max-w-xs bg-neutral-100 border-2 border-neutral-200 rounded-xl px-6 py-4 text-base font-semibold text-neutral-400 cursor-not-allowed"
+			>{m.page_welcome_go_to_dashboard()}</button>
+
+			<div
+				class="mt-4 max-w-sm w-full text-sm text-neutral-600 text-center"
 			>
-				{m.page_welcome_go_to_dashboard()}
-			</button>
-			<div class="mt-4 max-w-sm w-full text-sm text-neutral-600 text-center">
 				{#if data.demo}
 					<p class="font-medium mb-1 text-neutral-800">{m.page_welcome_no_group_demo_heading()}</p>
 					<p>{m.page_welcome_no_group_demo_desc()}</p>

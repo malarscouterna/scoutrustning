@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { createApiClient, type Booking, type Team } from '$lib/api/client';
-	import { page } from '$app/stores';
-	import { hasRole, canBookPersonal } from '$lib/user';
-	import { msg } from '$lib/msg';
-	import * as m from '$lib/paraglide/messages.js';
-	import { translateError } from '$lib/errors';
+	import { createApiClient, type Booking, type Team } from '#lib/api/client.ts';
+	import { page } from '$app/state';
+	import { hasRole, canBookPersonal } from '#lib/user.ts';
+	import { msg } from '#lib/msg.ts';
+	import * as m from '#lib/paraglide/messages.js';
+	import { translateError } from '#lib/errors.ts';
 
 	interface Props {
 		source: Booking;
@@ -27,14 +27,14 @@
 	let error = $state('');
 	let copiedBookingId = $state<string | null>(null);
 
-	let isManager = $derived(hasRole($page.data.user, 'equipment_manager'));
-	let canPersonal = $derived(canBookPersonal($page.data.user));
-	let myTeamSet = $derived(new Set(($page.data.user?.teams ?? []).map((t: { team_name: string }) => t.team_name)));
+	let isManager = $derived(hasRole(page.data.user, 'equipment_manager'));
+	let canPersonal = $derived(canBookPersonal(page.data.user));
+	let myTeamSet = $derived(new Set((page.data.user?.teams ?? []).map((t: { team_name: string }) => t.team_name)));
 	let myTeams = $derived(teams.filter((u) => myTeamSet.has(u.name)));
 	let otherTeams = $derived(teams.filter((u) => !myTeamSet.has(u.name)));
 
 	$effect(() => {
-		api.listTeams().then((t) => (teams = t));
+		api.listTeams().then((t) => teams = t);
 	});
 
 	async function submit() {
@@ -121,7 +121,12 @@
 		</div>
 
 		<div class="flex justify-end gap-2 pt-2">
-			<button type="button" onclick={onClose} class="border rounded px-4 py-2 text-sm">{m.btn_cancel()}</button>
+			<button
+				type="button"
+				onclick={onClose}
+				class="border rounded px-4 py-2 text-sm"
+			>{m.btn_cancel()}</button>
+
 			<button
 				type="button"
 				onclick={submit}

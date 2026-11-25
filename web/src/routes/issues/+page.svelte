@@ -1,7 +1,7 @@
 <script lang="ts">
-	import IssueCard from '$lib/components/IssueCard.svelte';
+	import IssueCard from '#lib/components/IssueCard.svelte';
 	import type { PageData } from './$types';
-	import * as m from '$lib/paraglide/messages.js';
+	import * as m from '#lib/paraglide/messages.js';
 
 	let { data }: { data: PageData } = $props();
 
