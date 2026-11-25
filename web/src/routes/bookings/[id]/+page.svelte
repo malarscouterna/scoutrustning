@@ -1,23 +1,23 @@
 <script lang="ts">
-	import { createApiClient, type Booking, type BookingItem } from '$lib/api/client';
-	import BookingItemsList from '$lib/components/BookingItemsList.svelte';
-	import PickupChecklist from '$lib/components/PickupChecklist.svelte';
-	import ReturnChecklist from '$lib/components/ReturnChecklist.svelte';
-	import AddItemSheet from '$lib/components/AddItemSheet.svelte';
-	import UserBadge from '$lib/components/UserBadge.svelte';
-	import BookingCommentThread from '$lib/components/BookingCommentThread.svelte';
-	import CopyBookingModal from '$lib/components/CopyBookingModal.svelte';
-	import { isManager as checkManager, canBook } from '$lib/user';
-	import { cart } from '$lib/stores/cart.svelte';
+	import { createApiClient, type Booking, type BookingItem } from '#lib/api/client.ts';
+	import BookingItemsList from '#lib/components/BookingItemsList.svelte';
+	import PickupChecklist from '#lib/components/PickupChecklist.svelte';
+	import ReturnChecklist from '#lib/components/ReturnChecklist.svelte';
+	import AddItemSheet from '#lib/components/AddItemSheet.svelte';
+	import UserBadge from '#lib/components/UserBadge.svelte';
+	import BookingCommentThread from '#lib/components/BookingCommentThread.svelte';
+	import CopyBookingModal from '#lib/components/CopyBookingModal.svelte';
+	import { isManager as checkManager, canBook } from '#lib/user.ts';
+	import { cart } from '#lib/stores/cart.svelte.ts';
 	import type { PageData } from './$types';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { onDestroy } from 'svelte';
-	import { msg } from '$lib/msg';
-	import { bookingStatusColors } from '$lib/styles';
-	import { displayBookingStatus } from '$lib/bookings';
-	import * as m from '$lib/paraglide/messages.js';
-	import { translateError } from '$lib/errors';
+	import { msg } from '#lib/msg.ts';
+	import { bookingStatusColors } from '#lib/styles.ts';
+	import { displayBookingStatus } from '#lib/bookings.ts';
+	import * as m from '#lib/paraglide/messages.js';
+	import { translateError } from '#lib/errors.ts';
 
 	let { data }: { data: PageData } = $props();
 
@@ -56,7 +56,7 @@
 	function formatCountdown(msLeft: number): string {
 		const totalMinutes = Math.max(0, Math.floor(msLeft / 60_000));
 		const days = Math.floor(totalMinutes / (24 * 60));
-		const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+		const hours = Math.floor(totalMinutes % (24 * 60) / 60);
 		const minutes = totalMinutes % 60;
 		if (days > 0) {
 			return m.page_booking_archive_countdown_days({ days: String(days), hours: String(hours) });
@@ -65,10 +65,10 @@
 	}
 
 	$effect(() => {
-		const urlMsg = $page.url.searchParams.get('msg');
+		const urlMsg = page.url.searchParams.get('msg');
 		if (urlMsg) {
 			message = urlMsg;
-			history.replaceState({}, '', $page.url.pathname);
+			history.replaceState({}, '', page.url.pathname);
 			setTimeout(() => message = '', 4000);
 		}
 	});
@@ -94,18 +94,22 @@
 	function startPolling() {
 		stopPolling();
 		pollTimer = setInterval(async () => {
-			if (reloading) return;
-			try {
-				const result = await api.getBooking(booking.id);
-				items = result.items;
-				autoApproves = result.auto_approves;
-				archiveDeadline = result.archive_deadline;
-				blockedItems = result.blocked_items;
-				if (result.booking.status !== booking.status) {
-					booking = result.booking;
+				if (reloading) return;
+				try {
+					const result = await api.getBooking(booking.id);
+					items = result.items;
+					autoApproves = result.auto_approves;
+					archiveDeadline = result.archive_deadline;
+					blockedItems = result.blocked_items;
+					if (result.booking.status !== booking.status) {
+						booking = result.booking;
+					}
+				} catch {
+					/* ignore poll errors */
 				}
-			} catch { /* ignore poll errors */ }
-		}, 10_000);
+			},
+			10_000
+		);
 	}
 
 	function stopPolling() {
@@ -410,24 +414,29 @@
 					</button>
 				{/if}
 				{#if canBook(data.user)}
-					<button onclick={() => (showCopyModal = true)} class="text-sm text-blue-700 underline">
-						{m.copy_booking_btn()}
-					</button>
+					<button
+						onclick={() => showCopyModal = true}
+						class="text-sm text-blue-700 underline"
+					>{m.copy_booking_btn()}</button>
 				{/if}
 			</div>
 		</div>
 
 		<h2 class="font-medium mb-2">{m.page_booking_items_heading({ count: String(items.length) })}</h2>
 		{#if booking.status === 'returned'}
-			<BookingItemsList {items} />
-			<button onclick={reopenBooking} class="mt-4 text-sm text-blue-700 underline">{m.page_booking_btn_reopen()}</button>
+			<BookingItemsList items={items} />
+
+			<button
+				onclick={reopenBooking}
+				class="mt-4 text-sm text-blue-700 underline"
+			>{m.page_booking_btn_reopen()}</button>
 		{:else}
-			<BookingItemsList {items} />
+			<BookingItemsList items={items} />
 		{/if}
 	{:else if pickupMode}
 		<PickupChecklist
 			bookingId={booking.id}
-			{items}
+			items={items}
 			startDate={booking.start_date}
 			endDate={booking.end_date}
 			onUpdate={reload}
@@ -435,7 +444,7 @@
 	{:else if returnMode}
 		<ReturnChecklist
 			bookingId={booking.id}
-			{items}
+			items={items}
 			onUpdate={reload}
 			onBookingReturned={handleBookingReturned}
 		/>
@@ -475,5 +484,9 @@
 {/if}
 
 {#if showCopyModal}
-	<CopyBookingModal source={booking} onClose={() => (showCopyModal = false)} onCopied={handleCopied} />
+	<CopyBookingModal
+		source={booking}
+		onClose={() => showCopyModal = false}
+		onCopied={handleCopied}
+	/>
 {/if}

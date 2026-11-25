@@ -1,4 +1,4 @@
-import * as m from '$lib/paraglide/messages.js';
+import * as m from '#lib/paraglide/messages.js';
 
 const messages = m as unknown as Record<string, (() => string) | undefined>;
 

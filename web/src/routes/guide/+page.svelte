@@ -1,14 +1,16 @@
 <script lang="ts">
 	import type { PageData } from './$types';
-	import { page } from '$app/stores';
-	import MarkdownArticle from '$lib/components/MarkdownArticle.svelte';
+	import { page } from '$app/state';
+	import MarkdownArticle from '#lib/components/MarkdownArticle.svelte';
 
 	let { data }: { data: PageData } = $props();
 </script>
 
 <div class="max-w-3xl mx-auto p-4 pb-16">
-	{#if $page.data.dev}
-		<div class="bg-adventurerorange-50 border border-adventurerorange-200 rounded-lg p-4 mb-6">
+	{#if page.data.dev}
+		<div
+			class="bg-adventurerorange-50 border border-adventurerorange-200 rounded-lg p-4 mb-6"
+		>
 			<h2 class="font-bold text-adventurerorange-900 mb-2">Demo-läge</h2>
 			<p class="text-sm text-adventurerorange-800 mb-3">
 				Detta är en demomiljö. Använd personaväljaren (övre högra hörnet på mobil, nedre högra på dator) för att byta mellan olika roller och se systemet från olika perspektiv. Data kan återställas när som helst.

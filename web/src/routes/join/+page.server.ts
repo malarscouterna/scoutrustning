@@ -1,6 +1,6 @@
 import { redirect } from '@sveltejs/kit';
-import { decodeJwtPayload } from '$lib/jwt';
-import { SIGNUP_ORG_TYPES } from '$lib/org';
+import { decodeJwtPayload } from '#lib/jwt.ts';
+import { SIGNUP_ORG_TYPES } from '#lib/org.ts';
 import type { PageServerLoad } from './$types';
 
 const DEV_MODE = process.env.DEV_MODE === 'true';

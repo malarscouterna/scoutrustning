@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { page } from '$app/stores';
-	import { createApiClient, type UserInfo } from '$lib/api/client';
-	import UserAvatar from '$lib/components/UserAvatar.svelte';
-	import * as m from '$lib/paraglide/messages.js';
-	import { msg } from '$lib/msg';
-	import { switchGroup } from '$lib/activeGroup';
-	import { orgTypeLabel } from '$lib/org';
+	import { page } from '$app/state';
+	import { createApiClient, type UserInfo } from '#lib/api/client.ts';
+	import UserAvatar from '#lib/components/UserAvatar.svelte';
+	import * as m from '#lib/paraglide/messages.js';
+	import { msg } from '#lib/msg.ts';
+	import { switchGroup } from '#lib/activeGroup.ts';
+	import { orgTypeLabel } from '#lib/org.ts';
 
 	interface Props {
 		userId: string;
@@ -17,10 +17,10 @@
 
 	const api = createApiClient();
 
-	const viewingOwnProfile = $derived($page.data.user?.member_id === userId);
-	const groups = $derived($page.data.user?.groups ?? []);
-	const activeGroupId = $derived($page.data.user?.group_id);
-	const activeGroupName = $derived($page.data.user?.group_name);
+	const viewingOwnProfile = $derived(page.data.user?.member_id === userId);
+	const groups = $derived(page.data.user?.groups ?? []);
+	const activeGroupId = $derived(page.data.user?.group_id);
+	const activeGroupName = $derived(page.data.user?.group_name);
 	let groupMenuOpen = $state(false);
 
 	let info = $state<UserInfo | null>(null);
@@ -115,15 +115,23 @@
 						<div class="relative inline-block">
 							<button
 								type="button"
-								onclick={() => (groupMenuOpen = !groupMenuOpen)}
+								onclick={() => groupMenuOpen = !groupMenuOpen}
 								class="text-sm text-neutral-500 hover:text-neutral-900 flex items-center gap-1"
 							>
 								{activeGroupName}
 								<span class="text-xs">▾</span>
 							</button>
 							{#if groupMenuOpen}
-								<button type="button" class="fixed inset-0 z-10" aria-label={m.btn_close()} onclick={() => (groupMenuOpen = false)}></button>
-								<ul class="absolute z-20 mt-1 bg-white border rounded-lg shadow-lg min-w-48 py-1">
+								<button
+									type="button"
+									class="fixed inset-0 z-10"
+									aria-label={m.btn_close()}
+									onclick={() => groupMenuOpen = false}
+								></button>
+
+								<ul
+									class="absolute z-20 mt-1 bg-white border rounded-lg shadow-lg min-w-48 py-1"
+								>
 									{#each groups as group}
 										<li>
 											<button

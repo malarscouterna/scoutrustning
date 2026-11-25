@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import ImageCropDialog from './ImageCropDialog.svelte';
-	import { createApiClient } from '$lib/api/client';
-	import { translateError } from '$lib/errors';
+	import { createApiClient } from '#lib/api/client.ts';
+	import { translateError } from '#lib/errors.ts';
 
 	interface Props {
 		commercialName: string;

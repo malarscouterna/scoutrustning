@@ -1,5 +1,5 @@
-import { isManager } from '$lib/user';
-import { createApiClient, type Article } from '$lib/api/client';
+import { isManager } from '#lib/user.ts';
+import { createApiClient, type Article } from '#lib/api/client.ts';
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 

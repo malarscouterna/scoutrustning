@@ -1,5 +1,5 @@
-import { ApiError } from '$lib/api/client';
-import * as m from '$lib/paraglide/messages.js';
+import { ApiError } from '#lib/api/client.ts';
+import * as m from '#lib/paraglide/messages.js';
 
 type MsgFn = ((params?: Record<string, string>) => string) | undefined;
 const messages = m as unknown as Record<string, MsgFn>;

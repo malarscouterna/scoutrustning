@@ -1,9 +1,9 @@
 <script lang="ts">
-	import type { Booking } from '$lib/api/client';
-	import { msg } from '$lib/msg';
-	import * as m from '$lib/paraglide/messages.js';
-	import { bookingStatusColors, bookingStatusLeftBorder } from '$lib/styles';
-	import { displayBookingStatus } from '$lib/bookings';
+	import type { Booking } from '#lib/api/client.ts';
+	import { msg } from '#lib/msg.ts';
+	import * as m from '#lib/paraglide/messages.js';
+	import { bookingStatusColors, bookingStatusLeftBorder } from '#lib/styles.ts';
+	import { displayBookingStatus } from '#lib/bookings.ts';
 
 	interface Props {
 		booking: Booking;

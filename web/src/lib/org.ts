@@ -1,4 +1,4 @@
-import * as m from '$lib/paraglide/messages.js';
+import * as m from '#lib/paraglide/messages.js';
 
 // ScoutID organisation types. Scoutrustning currently registers groups and
 // districts, but the type list mirrors the full memberships claim.

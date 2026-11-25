@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { browser } from '$app/environment';
-	import { createApiClient, type SharedImage } from '$lib/api/client';
-	import { translateError } from '$lib/errors';
+	import { browser } from '$app/env';
+	import { createApiClient, type SharedImage } from '#lib/api/client.ts';
+	import { translateError } from '#lib/errors.ts';
 
 	interface Props {
 		commercialName: string;
@@ -65,9 +65,9 @@
 
 	let sortedImages = $derived(
 		[...images].sort((a, b) => {
-			const am = isMatch(a) ? 0 : 1;
-			const bm = isMatch(b) ? 0 : 1;
-			return am - bm;
+		const am = isMatch(a) ? 0 : 1;
+		const bm = isMatch(b) ? 0 : 1;
+		return am - bm;
 		})
 	);
 
@@ -94,7 +94,7 @@
 
 	function openFullscreen(img: SharedImage) {
 		if (!browser) return;
-		import('photoswipe').then(pswpModule => {
+		import('photoswipe').then((pswpModule) => {
 			import('photoswipe/style.css');
 			const dims = formatDimensions[img.format] ?? { w: 1920, h: 1440 };
 			const pswp = new pswpModule.default({
@@ -114,7 +114,7 @@
 
 	async function initLightbox() {
 		// Wait for galleryEl to be available
-		await new Promise(r => setTimeout(r, 50));
+		await new Promise((r) => setTimeout(r, 50));
 		if (!galleryEl) return;
 		const { default: PhotoSwipeLightbox } = await import('photoswipe/lightbox');
 		await import('photoswipe/style.css');

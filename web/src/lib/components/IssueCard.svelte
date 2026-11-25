@@ -1,7 +1,7 @@
 <script lang="ts">
-	import type { Issue } from '$lib/api/client';
-	import { msg } from '$lib/msg';
-	import { issueStatusColors, issueSeverityColors } from '$lib/styles';
+	import type { Issue } from '#lib/api/client.ts';
+	import { msg } from '#lib/msg.ts';
+	import { issueStatusColors, issueSeverityColors } from '#lib/styles.ts';
 
 	interface Props {
 		issue: Issue;

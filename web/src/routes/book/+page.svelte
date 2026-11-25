@@ -1,25 +1,28 @@
 <script lang="ts">
-	import { createApiClient, type BookingItem, ApiError } from '$lib/api/client';
-	import { hasRole, canBookPersonal } from '$lib/user';
-	import { page } from '$app/stores';
+	import { createApiClient, type BookingItem, ApiError } from '#lib/api/client.ts';
+	import { hasRole, canBookPersonal } from '#lib/user.ts';
+	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
-	import { cart } from '$lib/stores/cart.svelte';
-	import BookingItemsList from '$lib/components/BookingItemsList.svelte';
-	import BookingCommentThread from '$lib/components/BookingCommentThread.svelte';
+	import { cart } from '#lib/stores/cart.svelte.ts';
+	import BookingItemsList from '#lib/components/BookingItemsList.svelte';
+	import BookingCommentThread from '#lib/components/BookingCommentThread.svelte';
 	import type { PageData } from './$types';
-	import { msg } from '$lib/msg';
-	import * as m from '$lib/paraglide/messages.js';
-	import { translateError } from '$lib/errors';
+	import { msg } from '#lib/msg.ts';
+	import * as m from '#lib/paraglide/messages.js';
+	import { translateError } from '#lib/errors.ts';
 
 	let { data }: { data: PageData } = $props();
 
 	const api = createApiClient();
 
-	let isManager = $derived(hasRole($page.data.user, 'equipment_manager'));
-	let canPersonal = $derived(canBookPersonal($page.data.user));
-	let myTeamSet = $derived(new Set(($page.data.user?.teams ?? []).map((t: { team_name: string }) => t.team_name)));
+	let isManager = $derived(hasRole(page.data.user, 'equipment_manager'));
+	let canPersonal = $derived(canBookPersonal(page.data.user));
+	let myTeamSet = $derived(new Set((page.data.user?.teams ?? []).map((t: { team_name: string }) => t.team_name)));
 	let userTeams = $derived.by(() => {
-		const all = isManager ? data.teams : data.teams.filter(u => myTeamSet.has(u.name));
+		const all = isManager
+			? data.teams
+			: data.teams.filter((u) => myTeamSet.has(u.name));
+
 		return [...all].sort((a, b) => {
 			const aIsMine = myTeamSet.has(a.name) ? 0 : 2;
 			const bIsMine = myTeamSet.has(b.name) ? 0 : 2;
@@ -37,10 +40,10 @@
 	let newEndDate = $state('');
 	let newTitle = $state('');
 	let defaultUnit = $derived.by(() => {
-		const myTeams = data.teams.filter(u => myTeamSet.has(u.name));
-		const troop = myTeams.find(u => u.type === 'troop');
+		const myTeams = data.teams.filter((u) => myTeamSet.has(u.name));
+		const troop = myTeams.find((u) => u.type === 'troop');
 		if (troop) return troop.id;
-		const role = myTeams.find(u => u.type === 'role');
+		const role = myTeams.find((u) => u.type === 'role');
 		if (role) return role.id;
 		return '';
 	});
@@ -120,7 +123,7 @@
 	function formatCountdown(msLeft: number): string {
 		const totalMinutes = Math.max(0, Math.floor(msLeft / 60_000));
 		const days = Math.floor(totalMinutes / (24 * 60));
-		const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+		const hours = Math.floor(totalMinutes % (24 * 60) / 60);
 		const minutes = totalMinutes % 60;
 		if (days > 0) {
 			return m.page_booking_archive_countdown_days({ days: String(days), hours: String(hours) });
@@ -206,12 +209,10 @@
 			// items to add - the default (true) would flag every held item
 			// as unavailable since it excludes them from the result set.
 			const available = await api.listAvailableArticles(startDate, endDate, { exclude_booking_id: bookingId, exclude_own_items: false });
-			const availableIds = new Set(available.map(a => a.id));
-			const conflicts = new Set(
-				cartItems
-					.filter(item => !availableIds.has(item.article_id))
-					.map(item => item.article_id)
-			);
+
+			const availableIds = new Set(available.map((a) => a.id));
+			const conflicts = new Set(cartItems.filter((item) => !availableIds.has(item.article_id)).map((item) => item.article_id));
+
 			conflictingIds = conflicts;
 			if (conflicts.size === 0) {
 				showMessage(m.page_book_changes_saved());
@@ -239,7 +240,7 @@
 	async function removeFromCart(itemId: string) {
 		if (!bookingId) return;
 		error = '';
-		const articleId = cartItems.find(i => i.id === itemId)?.article_id;
+		const articleId = cartItems.find((i) => i.id === itemId)?.article_id;
 		try {
 			await api.removeBookingItem(bookingId, itemId);
 			const result = await api.getBooking(bookingId);
@@ -256,7 +257,7 @@
 
 	async function removeOneFromCart(commercialName: string, locationName: string) {
 		if (!bookingId) return;
-		const matching = cartItems.filter(i => i.commercial_name === commercialName && i.location_name === locationName);
+		const matching = cartItems.filter((i) => i.commercial_name === commercialName && i.location_name === locationName);
 		if (matching.length === 0) return;
 		// Sort by status to remove low-priority items first
 		const statusPriority: Record<string, number> = {
@@ -341,15 +342,21 @@
 			</label>
 			<label class="flex flex-col gap-1 col-span-2">
 				<span class="text-sm">{m.page_book_booked_for()}</span>
-				<select bind:value={newUnit} class="border rounded px-3 py-2">
-					{#each userTeams.filter(u => myTeamSet.has(u.name)) as unit}
-						<option value={unit.id}>{unit.name} ({msg(`team_access_${unit.access_level}`) ?? unit.access_level})</option>
+
+				<select
+					bind:value={newUnit}
+					class="border rounded px-3 py-2"
+				>
+					{#each userTeams.filter((u) => myTeamSet.has(u.name)) as unit}
+						<option value={unit.id}>
+							{unit.name} ({msg(`team_access_${unit.access_level}`) ?? unit.access_level})
+						</option>
 					{/each}
 					{#if canPersonal}
 						<option value="">{m.page_book_personal()}</option>
 					{/if}
 					{#if isManager}
-						{@const otherTeams = userTeams.filter(u => !myTeamSet.has(u.name))}
+						{@const otherTeams = userTeams.filter((u) => !myTeamSet.has(u.name))}
 						{#if otherTeams.length > 0}
 							<option disabled>───</option>
 							{#each otherTeams as unit}
@@ -431,15 +438,21 @@
 			</label>
 			<label class="flex flex-col gap-1 col-span-2">
 				<span class="text-sm">{m.page_book_booked_for()}</span>
-				<select bind:value={selectedUnit} class="border rounded px-3 py-2">
-					{#each userTeams.filter(u => myTeamSet.has(u.name)) as unit}
-						<option value={unit.id}>{unit.name} ({msg(`team_access_${unit.access_level}`) ?? unit.access_level})</option>
+
+				<select
+					bind:value={selectedUnit}
+					class="border rounded px-3 py-2"
+				>
+					{#each userTeams.filter((u) => myTeamSet.has(u.name)) as unit}
+						<option value={unit.id}>
+							{unit.name} ({msg(`team_access_${unit.access_level}`) ?? unit.access_level})
+						</option>
 					{/each}
 					{#if canPersonal}
 						<option value="">{m.page_book_personal()}</option>
 					{/if}
 					{#if isManager}
-						{@const otherTeams = userTeams.filter(u => !myTeamSet.has(u.name))}
+						{@const otherTeams = userTeams.filter((u) => !myTeamSet.has(u.name))}
 						{#if otherTeams.length > 0}
 							<option disabled>───</option>
 							{#each otherTeams as unit}
@@ -472,7 +485,7 @@
 		{/if}
 
 		{#if bookingId}
-			<BookingCommentThread {bookingId} />
+			<BookingCommentThread bookingId={bookingId} />
 		{/if}
 
 		<!-- Primary actions -->

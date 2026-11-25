@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { browser } from '$app/environment';
-	import { createApiClient } from '$lib/api/client';
-	import { translateError } from '$lib/errors';
+	import { browser } from '$app/env';
+	import { createApiClient } from '#lib/api/client.ts';
+	import { translateError } from '#lib/errors.ts';
 
 	interface ImageMeta {
 		id: string;
@@ -134,7 +134,7 @@
 		deleting = imgId;
 		try {
 			await api.deleteProductImage(meta.id, commercialName, locationId);
-			const newIds = imageIds.filter(id => id !== imgId);
+			const newIds = imageIds.filter((id) => id !== imgId);
 			onDelete?.(imgId, newIds);
 		} catch {
 			// ignore
@@ -258,7 +258,13 @@
 						data-pswp-height={dims.h}
 						class="pswp-link block cursor-zoom-in {thumbClass}"
 					>
-						<img {alt} src="/api/v0/images/{imgId}_thumb.webp" class="h-full rounded object-contain" loading="lazy" onerror={() => handleImgError(imgId)} />
+						<img
+							alt={alt}
+							src="/api/v0/images/{imgId}_thumb.webp"
+							class="h-full rounded object-contain"
+							loading="lazy"
+							onerror={() => handleImgError(imgId)}
+						/>
 					</a>
 				{/if}
 				{#if meta?.description}

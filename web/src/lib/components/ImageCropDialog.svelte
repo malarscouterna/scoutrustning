@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Cropper from 'svelte-easy-crop';
 	import type { CropArea } from 'svelte-easy-crop';
-	import { cropImage } from '$lib/images/crop';
+	import { cropImage } from '#lib/images/crop.ts';
 
 	interface Props {
 		imageSrc: string;

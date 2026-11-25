@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { cart } from '$lib/stores/cart.svelte';
-	import { createApiClient, type Booking, type BookingItem } from '$lib/api/client';
+	import { cart } from '#lib/stores/cart.svelte.ts';
+	import { createApiClient, type Booking, type BookingItem } from '#lib/api/client.ts';
 	import { goto } from '$app/navigation';
-	import * as m from '$lib/paraglide/messages.js';
-	import { translateError } from '$lib/errors';
+	import * as m from '#lib/paraglide/messages.js';
+	import { translateError } from '#lib/errors.ts';
 
 	const api = createApiClient();
 

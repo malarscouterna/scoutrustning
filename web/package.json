@@ -9,6 +9,7 @@
     "build": "pnpm compile-emails && vite build",
     "preview": "vite preview",
     "check": "svelte-check",
+    "prepare": "svelte-kit sync || echo ''",
     "compile-emails": "tsx --tsconfig tsconfig.scripts.json scripts/compile-emails.ts"
   },
   "dependencies": {
@@ -23,8 +24,8 @@
     "svelte-easy-crop": "^5.0.1"
   },
   "devDependencies": {
-    "@sveltejs/adapter-node": "^5.5.8",
-    "@sveltejs/kit": "^2.70.4",
+    "@sveltejs/adapter-node": "^6.0.5",
+    "@sveltejs/kit": "^3.1.1",
     "@sveltejs/vite-plugin-svelte": "^7.3.2",
     "@tailwindcss/vite": "^4.3.5",
     "@types/mjml": "^5.4.2",
@@ -41,6 +42,13 @@
     "onlyBuiltDependencies": [
       "esbuild",
       "svelte-preprocess"
-    ]
+    ],
+    "patchedDependencies": {
+      "@auth/sveltekit@1.11.3": "patches/@auth__sveltekit@1.11.3.patch"
+    }
+  },
+  "imports": {
+    "#lib": "./src/lib/index.js",
+    "#lib/*": "./src/lib/*"
   }
 }

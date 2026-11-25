@@ -1,4 +1,4 @@
-import { createApiClient } from '$lib/api/client';
+import { createApiClient } from '#lib/api/client.ts';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ fetch, url }) => {

@@ -1,6 +1,6 @@
 <script lang="ts">
-	import type { Location, Category } from '$lib/api/client';
-	import * as m from '$lib/paraglide/messages.js';
+	import type { Location, Category } from '#lib/api/client.ts';
+	import * as m from '#lib/paraglide/messages.js';
 
 	interface Props {
 		locations: Location[];

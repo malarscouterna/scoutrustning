@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { createApiClient, type IssueDetail } from '$lib/api/client';
-	import ImageAttachInput from '$lib/components/ImageAttachInput.svelte';
-	import * as m from '$lib/paraglide/messages.js';
-	import { translateError } from '$lib/errors';
+	import { createApiClient, type IssueDetail } from '#lib/api/client.ts';
+	import ImageAttachInput from '#lib/components/ImageAttachInput.svelte';
+	import * as m from '#lib/paraglide/messages.js';
+	import { translateError } from '#lib/errors.ts';
 
 	interface Props {
 		articleId: string;

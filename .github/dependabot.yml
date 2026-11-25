@@ -32,6 +32,12 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # Stay on PostgreSQL 17 (supported until November 2029) for now.
+    # 17.x patch updates still come through; the 18 major is intentional later work.
+    ignore:
+      - dependency-name: postgres
+        update-types:
+          - version-update:semver-major
 
   - package-ecosystem: github-actions
     directory: /

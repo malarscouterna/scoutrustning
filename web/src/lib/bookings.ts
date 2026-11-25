@@ -1,4 +1,4 @@
-import type { Booking } from '$lib/api/client';
+import type { Booking } from '#lib/api/client.ts';
 
 /**
  * UI status for a booking. A picked_up booking whose items are not all

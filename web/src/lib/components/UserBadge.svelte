@@ -1,6 +1,6 @@
 <script lang="ts">
-	import UserAvatar from '$lib/components/UserAvatar.svelte';
-	import UserInfoCard from '$lib/components/UserInfoCard.svelte';
+	import UserAvatar from '#lib/components/UserAvatar.svelte';
+	import UserInfoCard from '#lib/components/UserInfoCard.svelte';
 
 	interface Props {
 		userId: string;

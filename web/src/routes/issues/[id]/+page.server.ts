@@ -1,4 +1,4 @@
-import { createApiClient } from '$lib/api/client';
+import { createApiClient } from '#lib/api/client.ts';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 

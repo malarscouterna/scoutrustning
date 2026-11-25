@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { createApiClient, type BookingEvent } from '$lib/api/client';
-	import UserBadge from '$lib/components/UserBadge.svelte';
-	import * as m from '$lib/paraglide/messages.js';
-	import { translateError } from '$lib/errors';
+	import { createApiClient, type BookingEvent } from '#lib/api/client.ts';
+	import UserBadge from '#lib/components/UserBadge.svelte';
+	import * as m from '#lib/paraglide/messages.js';
+	import { translateError } from '#lib/errors.ts';
 
 	interface Props {
 		bookingId: string;

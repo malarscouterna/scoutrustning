@@ -1,21 +1,21 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { page } from '$app/stores';
-	import { createApiClient } from '$lib/api/client';
-	import { msg } from '$lib/msg';
-	import { articleStatusColors } from '$lib/styles';
-	import ArticleForm from '$lib/components/ArticleForm.svelte';
-	import ImageViewer from '$lib/components/ImageViewer.svelte';
-	import ImageUpload from '$lib/components/ImageUpload.svelte';
-	import * as m from '$lib/paraglide/messages.js';
-	import { translateError } from '$lib/errors';
+	import { page } from '$app/state';
+	import { createApiClient } from '#lib/api/client.ts';
+	import { msg } from '#lib/msg.ts';
+	import { articleStatusColors } from '#lib/styles.ts';
+	import ArticleForm from '#lib/components/ArticleForm.svelte';
+	import ImageViewer from '#lib/components/ImageViewer.svelte';
+	import ImageUpload from '#lib/components/ImageUpload.svelte';
+	import * as m from '#lib/paraglide/messages.js';
+	import { translateError } from '#lib/errors.ts';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 	const api = createApiClient();
 	let user = $derived(data.user);
 
-	let isGroupEdit = $derived($page.url.searchParams.get('group') === 'true');
+	let isGroupEdit = $derived(page.url.searchParams.get('group') === 'true');
 	let error = $state('');
 	let saving = $state(false);
 	let showItems = $state(false);
@@ -91,16 +91,34 @@
 	{#if data.article.commercial_name && data.article.location_id}
 		<div class="mb-4">
 			{#if imageIds.length > 0}
-				<ImageViewer {imageIds} alt={data.article.commercial_name || data.article.common_name} commercialName={data.article.commercial_name} locationId={data.article.location_id} showMeta userId={user?.member_id ?? ''} isManager={true} editMode
-					onDelete={(_, newIds) => { imageIds = newIds; }}
-					onReorder={async (newIds) => { try { const result = await api.reorderProductImages(data.article.commercial_name, data.article.location_id, newIds); imageIds = result.image_ids; } catch { /* ignore */ } }}
+				<ImageViewer
+					imageIds={imageIds}
+					alt={data.article.commercial_name || data.article.common_name}
+					commercialName={data.article.commercial_name}
+					locationId={data.article.location_id}
+					showMeta
+					userId={user?.member_id ?? ''}
+					isManager={true}
+					editMode
+					onDelete={(_, newIds) => {
+						imageIds = newIds;
+					}}
+					onReorder={async (newIds) => {
+						try {
+							const result = await api.reorderProductImages(data.article.commercial_name, data.article.location_id, newIds);
+
+							imageIds = result.image_ids;
+						} catch {
+							/* ignore */
+						}
+					}}
 				/>
 			{/if}
 			<div class:mt-2={imageIds.length > 0}>
 				<ImageUpload
 					commercialName={data.article.commercial_name}
 					locationId={data.article.location_id}
-					{imageIds}
+					imageIds={imageIds}
 					userName={user?.name ?? ''}
 					userGroup={user?.group_name ?? ''}
 					onUpdate={(ids) => imageIds = ids}
@@ -123,8 +141,8 @@
 		submitLabel={m.btn_save()}
 		onSubmit={handleSubmit}
 		onCancel={() => goto('/browse')}
-		{error}
-		{saving}
+		error={error}
+		saving={saving}
 	/>
 
 	{#if data.article.status === 'archived' && !isGroupEdit}
@@ -164,7 +182,11 @@
 				disabled={converting}
 				class="text-sm text-neutral-500 underline disabled:opacity-50"
 			>
-				{converting ? m.btn_saving() : (data.article.individually_tracked ? m.article_form_convert_to_quantity() : m.article_form_convert_to_individual())}
+				{converting
+					? m.btn_saving()
+					: data.article.individually_tracked
+						? m.article_form_convert_to_quantity()
+						: m.article_form_convert_to_individual()}
 			</button>
 		</div>
 	{/if}

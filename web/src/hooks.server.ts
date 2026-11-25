@@ -1,9 +1,8 @@
-import type { Handle } from '@sveltejs/kit';
 import { redirect } from '@sveltejs/kit';
-import { sequence } from '@sveltejs/kit/hooks';
+import { sequence, type Handle } from '@sveltejs/kit/hooks';
 import { authHandle } from './auth';
-import { paraglideMiddleware } from '$lib/paraglide/server';
-import { getTextDirection } from '$lib/paraglide/runtime';
+import { paraglideMiddleware } from '#lib/paraglide/server.js';
+import { getTextDirection } from '#lib/paraglide/runtime.js';
 
 const API_URL = process.env.API_URL || 'http://localhost:8080';
 const DEV_MODE = process.env.DEV_MODE === 'true';
@@ -232,13 +231,12 @@ const appHandle: Handle = async ({ event, resolve }) => {
 const hasOIDC = !!(process.env.AUTH_KEYCLOAK_ID && process.env.AUTH_KEYCLOAK_SECRET && process.env.AUTH_KEYCLOAK_ISSUER);
 
 const paraglideHandle: Handle = ({ event, resolve }) =>
-	paraglideMiddleware(event.request, ({ request: localizedRequest, locale }) => {
-		event.request = localizedRequest;
-		return resolve(event, {
+	paraglideMiddleware(event.request, ({ request: localizedRequest, locale }) =>
+		resolve({ ...event, request: localizedRequest }, {
 			transformPageChunk: ({ html }) =>
 				html.replace('%lang%', locale).replace('%dir%', getTextDirection(locale))
-		});
-	});
+		})
+	);
 
 const innerHandle: Handle = hasOIDC
 	? sequence(authHandle, paraglideHandle, appHandle)

@@ -1,33 +1,36 @@
 <script lang="ts">
 	import type { PageData } from './$types';
-	import { createApiClient, type Article, type AvailabilityGroup } from '$lib/api/client';
-import type { TeamMembership } from '$lib/user';
-	import { msg } from '$lib/msg';
-	import * as m from '$lib/paraglide/messages.js';
-	import { translateError } from '$lib/errors';
-	import { hasRole, accessAtLeast, canBook } from '$lib/user';
-	import { page } from '$app/stores';
-	import { cart } from '$lib/stores/cart.svelte';
-	import ReportIssueSheet from '$lib/components/ReportIssueSheet.svelte';
-	import ArticleEventHistory from '$lib/components/ArticleEventHistory.svelte';
-	import ImageViewer from '$lib/components/ImageViewer.svelte';
-	import ArticleLinks from '$lib/components/ArticleLinks.svelte';
+	import { createApiClient, type Article, type AvailabilityGroup } from '#lib/api/client.ts';
+import type { TeamMembership } from '#lib/user.ts';
+	import { msg } from '#lib/msg.ts';
+	import * as m from '#lib/paraglide/messages.js';
+	import { translateError } from '#lib/errors.ts';
+	import { hasRole, accessAtLeast, canBook } from '#lib/user.ts';
+	import { page } from '$app/state';
+	import { cart } from '#lib/stores/cart.svelte.ts';
+	import ReportIssueSheet from '#lib/components/ReportIssueSheet.svelte';
+	import ArticleEventHistory from '#lib/components/ArticleEventHistory.svelte';
+	import ImageViewer from '#lib/components/ImageViewer.svelte';
+	import ArticleLinks from '#lib/components/ArticleLinks.svelte';
 
 	let { data }: { data: PageData } = $props();
 
-	let isManager = $derived(hasRole($page.data.user, 'equipment_manager'));
-	let showBook = $derived(canBook($page.data.user));
+	let isManager = $derived(hasRole(page.data.user, 'equipment_manager'));
+	let showBook = $derived(canBook(page.data.user));
 
 	// Access level for approval badge: use the active cart's team level when known,
 	// otherwise fall back to the user's max_access.
 	let cartTeamAccess = $derived.by((): string | null => {
 		if (!cart.active || !cartBookingDates?.teamName) return null;
-		const team = $page.data.user?.teams.find((t: TeamMembership) => t.team_name === cartBookingDates!.teamName);
+		const team = page.data.user?.teams.find((t: TeamMembership) => t.team_name === cartBookingDates!.teamName);
 		return team?.access_level ?? null;
 	});
-	let isTrusted = $derived(accessAtLeast(cartTeamAccess ?? $page.data.user?.max_access, 'trusted'));
 
-	function approvalBadge(level: string): { label: string; variant: 'low-pre' | 'low' | 'high' } | null {
+	let isTrusted = $derived(accessAtLeast(cartTeamAccess ?? page.data.user?.max_access, 'trusted'));
+
+	function approvalBadge(level: string): 
+		{ label: string; variant: 'low-pre' | 'low' | 'high' } |
+		null {
 		if (level === 'none') return null;
 		if (level === 'low') return isTrusted
 			? { label: 'Förgodkänd', variant: 'low-pre' }
@@ -47,10 +50,11 @@ import type { TeamMembership } from '$lib/user';
 	let bulkConflicts = $state<Array<{ article_id: string; article_name: string; booking_id: string; booking_dates: string; booking_team: string }>>([]);
 
 	let selectedCount = $derived(selectedArticles.size);
-	let hasQuantityGroupSelected = $derived(
-		[...selectedGroups].some(key => {
-			const g = groups.find(gr => gr.key === key);
-			return g && !g.individuallyTracked;
+
+	let hasQuantityGroupSelected = $derived([...selectedGroups].some((key) => {
+		const g = groups.find((gr) => gr.key === key);
+
+		return g && !g.individuallyTracked;
 		})
 	);
 
@@ -61,8 +65,8 @@ import type { TeamMembership } from '$lib/user';
 	}
 
 	function toggleSelectGroup(group: ArticleGroup) {
-		const ids = group.articles.map(a => a.id);
-		const allSelected = ids.every(id => selectedArticles.has(id));
+		const ids = group.articles.map((a) => a.id);
+		const allSelected = ids.every((id) => selectedArticles.has(id));
 		const next = new Set(selectedArticles);
 		const nextGroups = new Set(selectedGroups);
 		for (const id of ids) {
@@ -74,7 +78,7 @@ import type { TeamMembership } from '$lib/user';
 	}
 
 	function isGroupSelected(group: ArticleGroup): boolean {
-		return group.articles.length > 0 && group.articles.every(a => selectedArticles.has(a.id));
+		return group.articles.length > 0 && group.articles.every((a) => selectedArticles.has(a.id));
 	}
 
 	async function executeBulkAction() {
@@ -217,9 +221,9 @@ import type { TeamMembership } from '$lib/user';
 		try {
 			// Get current booking to find items to remove
 			const { items } = await api.getBooking(cart.id);
-			const itemsInGroup = items.filter(
-				item => item.commercial_name === commercialName && item.location_name === locationName
-			);
+
+			const itemsInGroup = items.filter((item) => item.commercial_name === commercialName && item.location_name === locationName);
+
 			if (itemsInGroup.length > 0) {
 				// Sort by status to remove low-priority items first (reported_usable > under_repair > incoming > ok)
 				const statusPriority: Record<string, number> = {
@@ -338,18 +342,19 @@ import type { TeamMembership } from '$lib/user';
 	}
 
 	async function fetchLatestComments(groupKey: string) {
-		const group = groups.find(g => g.key === groupKey);
+		const group = groups.find((g) => g.key === groupKey);
 		if (!group) return;
-		const needsFetch = group.articles.filter(a => a.status !== 'ok' && !latestComments.has(a.id));
-		const results = await Promise.all(
-			needsFetch.map(async (a) => {
-				try {
-					const { events } = await api.listArticleEvents(a.id);
-					const issueEvent = events.find(e => e.event_type === 'issue_reported' || e.event_type === 'status_change');
-					return [a.id, issueEvent?.description ?? ''] as const;
-				} catch {
-					return [a.id, ''] as const;
-				}
+
+		const needsFetch = group.articles.filter((a) => a.status !== 'ok' && !latestComments.has(a.id));
+
+		const results = await Promise.all(needsFetch.map(async (a) => {
+			try {
+				const { events } = await api.listArticleEvents(a.id);
+				const issueEvent = events.find((e) => e.event_type === 'issue_reported' || e.event_type === 'status_change');
+				return [a.id, issueEvent?.description ?? ''] as const;
+			} catch {
+				return [a.id, ''] as const;
+			}
 			})
 		);
 		const next = new Map(latestComments);
@@ -675,7 +680,7 @@ import type { TeamMembership } from '$lib/user';
 				{#if expanded}
 					{@const rep = group.articles[0]}
 					{@const hasImage = rep.image_ids?.length > 0}
-					{@const hasTextInfo = !!(rep.description || rep.instructions || (rep.links?.length ?? 0) > 0 || (isManager && rep.manager_notes))}
+					{@const hasTextInfo = !!(rep.description || rep.instructions || (rep.links?.length ?? 0) > 0 || isManager && rep.manager_notes)}
 					<div class="border-t px-4 py-2 bg-neutral-50">
 						{#if !managerMode && hasImage}
 							<div class="mb-2">
@@ -755,7 +760,7 @@ import type { TeamMembership } from '$lib/user';
 							{@const rows = groupByState(group.articles)}
 							<div class="space-y-1 py-1 text-sm">
 								{#each rows as row}
-									{@const comment = row.articleIds.map(id => latestComments.get(id)).find(c => c)}
+									{@const comment = row.articleIds.map((id) => latestComments.get(id)).find((c) => c)}
 									{@const representativeId = row.articleIds[0]}
 									<div class="flex items-start gap-2">
 										{#if row.status !== 'ok'}

@@ -1,5 +1,5 @@
 # --- Dev stage: hot reload with air ---
-FROM golang:1.26.11-alpine AS dev
+FROM golang:1.27.4-alpine AS dev
 RUN apk add --no-cache gcc musl-dev vips-dev
 RUN go install github.com/air-verse/air@latest
 WORKDIR /src
@@ -10,7 +10,7 @@ EXPOSE 8080
 CMD ["air"]
 
 # --- Production build ---
-FROM golang:1.26.11-alpine AS build
+FROM golang:1.27.4-alpine AS build
 RUN apk add --no-cache gcc musl-dev vips-dev
 WORKDIR /src
 COPY go.mod go.sum ./
@@ -18,7 +18,7 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=1 go build -o /bin/server ./cmd/server
 
-FROM alpine:3.23.8 AS production
+FROM alpine:3.24.4 AS production
 RUN apk add --no-cache ca-certificates tzdata vips
 COPY --from=build /bin/server /bin/server
 COPY --from=build /src/migrations /migrations
