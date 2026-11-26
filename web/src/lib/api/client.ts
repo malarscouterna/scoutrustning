@@ -241,6 +241,7 @@ export interface IssueArticle {
 	id: string;
 	commercial_name: string;
 	common_name: string;
+	location_id: string;
 	location_name: string;
 	individually_tracked: boolean;
 }
@@ -318,6 +319,7 @@ export interface Issue {
 	created_at: string;
 	updated_at: string;
 	articles: IssueArticle[];
+	assignees: IssueAssignee[];
 }
 
 // Issue as returned by GET /issues/:id, POST /issues, etc. (detail)
@@ -723,11 +725,13 @@ updateLanguage: (language: string | null) =>
 			requestMut<void>(`/categories/${id}`, 'DELETE', undefined, opts),
 
 		// Issues
-		listIssues: (params?: { status?: string; mine?: boolean; article_id?: string }) => {
+		listIssues: (params?: { status?: string; mine?: boolean; article_id?: string; severity?: string; location_ids?: string[] }) => {
 			const query = new URLSearchParams();
 			if (params?.status) query.set('status', params.status);
 			if (params?.mine) query.set('mine', 'true');
 			if (params?.article_id) query.set('article_id', params.article_id);
+			if (params?.severity) query.set('severity', params.severity);
+			if (params?.location_ids?.length) query.set('location_ids', params.location_ids.join(','));
 			const qs = query.toString();
 			return request<Issue[]>(`/issues${qs ? '?' + qs : ''}`, opts);
 		},

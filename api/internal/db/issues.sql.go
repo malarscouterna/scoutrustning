@@ -346,12 +346,14 @@ SELECT
     a.id,
     a.commercial_name,
     a.common_name,
+    a.location_id,
     l.name AS location_name,
     a.individually_tracked
 FROM issue_articles ia
 JOIN articles a ON ia.article_id = a.id
 JOIN locations l ON a.location_id = l.id
 WHERE ia.issue_id = $1 AND ia.group_id = $2
+ORDER BY l.sort_order, l.name, a.commercial_name, a.common_name, a.id
 `
 
 type ListIssueArticlesParams struct {
@@ -363,6 +365,7 @@ type ListIssueArticlesRow struct {
 	ID                  pgtype.UUID `json:"id"`
 	CommercialName      string      `json:"commercial_name"`
 	CommonName          string      `json:"common_name"`
+	LocationID          pgtype.UUID `json:"location_id"`
 	LocationName        string      `json:"location_name"`
 	IndividuallyTracked bool        `json:"individually_tracked"`
 }
@@ -380,6 +383,7 @@ func (q *Queries) ListIssueArticles(ctx context.Context, arg ListIssueArticlesPa
 			&i.ID,
 			&i.CommercialName,
 			&i.CommonName,
+			&i.LocationID,
 			&i.LocationName,
 			&i.IndividuallyTracked,
 		); err != nil {
@@ -401,6 +405,7 @@ SELECT
 FROM issue_assignees ia
 JOIN users u ON ia.user_id = u.id
 WHERE ia.issue_id = $1 AND ia.group_id = $2
+ORDER BY u.name, ia.user_id
 `
 
 type ListIssueAssigneesParams struct {
@@ -499,27 +504,36 @@ FROM issue_reports ir
 JOIN users u ON ir.reporter_id = u.id
 WHERE ir.group_id = $1
     AND (COALESCE(array_length($2::text[], 1), 0) = 0 OR ir.status = ANY($2::text[]))
-    AND (NOT $3::bool OR (
-        ir.reporter_id = $4
+    AND (COALESCE(array_length($3::text[], 1), 0) = 0 OR ir.severity = ANY($3::text[]))
+    AND (NOT $4::bool OR (
+        ir.reporter_id = $5
         OR ir.id IN (
-            SELECT issue_id FROM issue_assignees WHERE user_id = $4 AND group_id = $1
+            SELECT issue_id FROM issue_assignees WHERE user_id = $5 AND group_id = $1
         )
         OR ir.id IN (
-            SELECT issue_id FROM issue_events WHERE actor_id = $4 AND group_id = $1
+            SELECT issue_id FROM issue_events WHERE actor_id = $5 AND group_id = $1
         )
     ))
-    AND ($5::uuid IS NULL OR ir.id IN (
-        SELECT issue_id FROM issue_articles WHERE article_id = $5 AND group_id = $1
+    AND ($6::uuid IS NULL OR ir.id IN (
+        SELECT issue_id FROM issue_articles WHERE article_id = $6 AND group_id = $1
+    ))
+    AND (COALESCE(array_length($7::uuid[], 1), 0) = 0 OR ir.id IN (
+        SELECT ia.issue_id
+        FROM issue_articles ia
+        JOIN articles a ON ia.article_id = a.id
+        WHERE ia.group_id = $1 AND a.location_id = ANY($7::uuid[])
     ))
 ORDER BY ir.updated_at DESC, ir.created_at DESC
 `
 
 type ListIssuesParams struct {
-	GroupID   string      `json:"group_id"`
-	Statuses  []string    `json:"statuses"`
-	Mine      bool        `json:"mine"`
-	UserID    string      `json:"user_id"`
-	ArticleID pgtype.UUID `json:"article_id"`
+	GroupID     string        `json:"group_id"`
+	Statuses    []string      `json:"statuses"`
+	Severities  []string      `json:"severities"`
+	Mine        bool          `json:"mine"`
+	UserID      string        `json:"user_id"`
+	ArticleID   pgtype.UUID   `json:"article_id"`
+	LocationIds []pgtype.UUID `json:"location_ids"`
 }
 
 type ListIssuesRow struct {
@@ -536,15 +550,18 @@ type ListIssuesRow struct {
 	ReporterName string             `json:"reporter_name"`
 }
 
-// Filters: status (comma-separated via array), mine (reporter_id = user_id OR assigned),
-// article_id (linked articles).
+// Filters: status (comma-separated via array), severity (comma-separated via array),
+// mine (reporter_id = user_id OR assigned), article_id (linked articles),
+// location_ids (issues with a linked article at any of the selected locations).
 func (q *Queries) ListIssues(ctx context.Context, arg ListIssuesParams) ([]ListIssuesRow, error) {
 	rows, err := q.db.Query(ctx, listIssues,
 		arg.GroupID,
 		arg.Statuses,
+		arg.Severities,
 		arg.Mine,
 		arg.UserID,
 		arg.ArticleID,
+		arg.LocationIds,
 	)
 	if err != nil {
 		return nil, err

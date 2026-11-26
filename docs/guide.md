@@ -193,7 +193,7 @@ Du kan också skriva kommentarer i bokningens konversationstråd utan att godkä
 
 ### Hantera ärenden
 
-Under **Ärenden** ser du alla artiklar som har en rapporterad status. Du kan filtrera på statustyp och se bara dina egna ärenden.
+Under **Ärenden** ser du alla artiklar som har en rapporterad status. Du kan filtrera på plats, status och allvarlighetsgrad, och se bara dina egna ärenden.
 
 Klicka på en artikel för att se historiken och ändra status:
 
@@ -212,6 +212,16 @@ Har du skrivit fel, eller visade sig problemet vara större eller mindre än du 
 - Det går bara medan ärendet är öppet eller pågår. Ett löst eller arkiverat ärende är låst.
 - Ändrar du allvarlighetsgraden ändras artikelns skick direkt: sätter du **Ej användbar** kan artikeln inte längre bokas, och går du tillbaka till **Användbar** blir den bokbar igen.
 - Ändringen syns i ärendets händelser som **Uppgifter ändrade**, med vad som ändrades.
+
+#### Skriva ut ärendelistan
+
+Tryck **Kompakt** för att visa en kompakt lista anpassad för papper. Där ser du varje ärendes rubrik, status, allvarlighetsgrad, plats, tilldelad person, rapportör och hela felbeskrivningen.
+
+- Filtrera på en eller flera platser, status och allvarlighetsgrad innan du skriver ut. Filtren finns även i den vanliga ärendelistan och sparas i adressen, så de kan bokmärkas eller delas.
+- Välj gruppering: **Plats**, **Allvarlighetsgrad**, **Status** eller **Tilldelad person**. Välj också sortering inom grupperna.
+- Tryck **Skriv ut** i kompakt läge. Det går också bra att trycka Ctrl+P / Cmd+P direkt i den vanliga vyn – då skrivs den kompakta listan ut med de filter som är valda.
+- **Standardvy** tar dig tillbaka till den vanliga ärendelistan.
+- Navigation, filter och knappar tas bort automatiskt i utskriften.
 
 ### Artikelstatus
 

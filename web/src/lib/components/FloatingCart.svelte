@@ -210,10 +210,10 @@
 {#if cart.active}
 	<!-- Mobile backdrop only -->
 	{#if open}
-		<button class="fixed inset-0 z-40 bg-black/20 md:hidden" onclick={close} aria-label={m.cart_close_aria()}></button>
+		<button class="fixed inset-0 z-40 bg-black/20 md:hidden print:hidden" onclick={close} aria-label={m.cart_close_aria()}></button>
 	{/if}
 
-	<div class="fixed bottom-4 right-4 z-50">
+	<div class="fixed bottom-4 right-4 z-50 print:hidden">
 		{#if open}
 			<div class="bg-white border rounded-lg shadow-xl w-80 sm:w-96 mb-2 max-h-[60vh] flex flex-col">
 				{#if loading}

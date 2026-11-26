@@ -4,3 +4,19 @@
 html, body {
 	overflow-x: clip;
 }
+
+@page {
+	size: A4;
+	margin: 12mm;
+}
+
+@media print {
+	body {
+		background: white;
+	}
+
+	a {
+		color: inherit;
+		text-decoration: none;
+	}
+}

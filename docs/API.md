@@ -576,9 +576,9 @@ Issue reports are first-class entities. Each issue has a URL, lifecycle, assigne
 ### `GET /api/v0/issues`
 List issues for the group. Any authenticated user.
 
-**Query params**: `status` (comma-separated: `open,in_progress,resolved,archived`), `mine=true` (issues the user reported or is assigned to), `article_id` (UUID).
+**Query params**: `status` (comma-separated: `open,in_progress,resolved,archived`), `severity` (comma-separated: `usable,unusable,missing`), `mine=true` (issues the user reported or is assigned to), `article_id` (UUID), `location_ids` (comma-separated location UUIDs; matches issues with at least one linked article at any of the locations).
 
-**Response** `200` - array of issue objects with nested `articles` array.
+**Response** `200` - array of issue objects with nested `articles` and `assignees` arrays.
 
 ### `POST /api/v0/issues`
 Create an issue. Any authenticated user.
@@ -611,7 +611,7 @@ Get full issue detail including events, assignees, and linked articles. Any auth
   "status": "open|in_progress|resolved|archived",
   "reporter": {"id": "string", "name": "string"},
   "booking_id": "uuid|null",
-  "articles": [{"id": "uuid", "commercial_name": "string", "common_name": "string", "location_name": "string", "individually_tracked": true}],
+  "articles": [{"id": "uuid", "commercial_name": "string", "common_name": "string", "location_id": "uuid", "location_name": "string", "individually_tracked": true}],
   "assignees": [{"user_id": "string", "user_name": "string", "assigned_at": "timestamptz"}],
   "events": [{"id": "uuid", "actor_name": "string", "event_type": "comment|status_change|assignment|article_added|article_removed|details_changed", "description": "string", "metadata": {}, "created_at": "timestamptz"}],
   "can_edit": true,
