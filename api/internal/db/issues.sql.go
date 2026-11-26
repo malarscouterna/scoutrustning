@@ -397,6 +397,65 @@ func (q *Queries) ListIssueArticles(ctx context.Context, arg ListIssueArticlesPa
 	return items, nil
 }
 
+const listIssueArticlesForIssues = `-- name: ListIssueArticlesForIssues :many
+SELECT
+    ia.issue_id,
+    a.id,
+    a.commercial_name,
+    a.common_name,
+    a.location_id,
+    l.name AS location_name,
+    a.individually_tracked
+FROM issue_articles ia
+JOIN articles a ON ia.article_id = a.id
+JOIN locations l ON a.location_id = l.id
+WHERE ia.issue_id = ANY($1::uuid[]) AND ia.group_id = $2
+ORDER BY ia.issue_id, l.sort_order, l.name, a.commercial_name, a.common_name, a.id
+`
+
+type ListIssueArticlesForIssuesParams struct {
+	IssueIds []pgtype.UUID `json:"issue_ids"`
+	GroupID  string        `json:"group_id"`
+}
+
+type ListIssueArticlesForIssuesRow struct {
+	IssueID             pgtype.UUID `json:"issue_id"`
+	ID                  pgtype.UUID `json:"id"`
+	CommercialName      string      `json:"commercial_name"`
+	CommonName          string      `json:"common_name"`
+	LocationID          pgtype.UUID `json:"location_id"`
+	LocationName        string      `json:"location_name"`
+	IndividuallyTracked bool        `json:"individually_tracked"`
+}
+
+func (q *Queries) ListIssueArticlesForIssues(ctx context.Context, arg ListIssueArticlesForIssuesParams) ([]ListIssueArticlesForIssuesRow, error) {
+	rows, err := q.db.Query(ctx, listIssueArticlesForIssues, arg.IssueIds, arg.GroupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListIssueArticlesForIssuesRow{}
+	for rows.Next() {
+		var i ListIssueArticlesForIssuesRow
+		if err := rows.Scan(
+			&i.IssueID,
+			&i.ID,
+			&i.CommercialName,
+			&i.CommonName,
+			&i.LocationID,
+			&i.LocationName,
+			&i.IndividuallyTracked,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listIssueAssignees = `-- name: ListIssueAssignees :many
 SELECT
     ia.user_id,
@@ -429,6 +488,55 @@ func (q *Queries) ListIssueAssignees(ctx context.Context, arg ListIssueAssignees
 	for rows.Next() {
 		var i ListIssueAssigneesRow
 		if err := rows.Scan(&i.UserID, &i.AssignedAt, &i.UserName); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listIssueAssigneesForIssues = `-- name: ListIssueAssigneesForIssues :many
+SELECT
+    ia.issue_id,
+    ia.user_id,
+    ia.assigned_at,
+    u.name AS user_name
+FROM issue_assignees ia
+JOIN users u ON ia.user_id = u.id
+WHERE ia.issue_id = ANY($1::uuid[]) AND ia.group_id = $2
+ORDER BY ia.issue_id, u.name, ia.user_id
+`
+
+type ListIssueAssigneesForIssuesParams struct {
+	IssueIds []pgtype.UUID `json:"issue_ids"`
+	GroupID  string        `json:"group_id"`
+}
+
+type ListIssueAssigneesForIssuesRow struct {
+	IssueID    pgtype.UUID        `json:"issue_id"`
+	UserID     string             `json:"user_id"`
+	AssignedAt pgtype.Timestamptz `json:"assigned_at"`
+	UserName   string             `json:"user_name"`
+}
+
+func (q *Queries) ListIssueAssigneesForIssues(ctx context.Context, arg ListIssueAssigneesForIssuesParams) ([]ListIssueAssigneesForIssuesRow, error) {
+	rows, err := q.db.Query(ctx, listIssueAssigneesForIssues, arg.IssueIds, arg.GroupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListIssueAssigneesForIssuesRow{}
+	for rows.Next() {
+		var i ListIssueAssigneesForIssuesRow
+		if err := rows.Scan(
+			&i.IssueID,
+			&i.UserID,
+			&i.AssignedAt,
+			&i.UserName,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

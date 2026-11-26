@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Issue, Location } from '#lib/api/client.ts';
 	import type { IssueFilterState, IssueGrouping, IssueSort } from '#lib/issues.ts';
-	import { ISSUE_GROUPINGS, ISSUE_SORTS } from '#lib/issues.ts';
+	import { ISSUE_GROUPINGS, ISSUE_SORTS, sortIssues } from '#lib/issues.ts';
 	import { msg } from '#lib/msg.ts';
 	import { issueSeverityColors, issueStatusColors } from '#lib/styles.ts';
 	import { goto } from '$app/navigation';
@@ -42,22 +42,6 @@
 		void goto(url, { reset: false });
 	}
 
-	function timestamp(value: string): number {
-		return new Date(value).getTime();
-	}
-
-	function sortIssues(list: Issue[]): Issue[] {
-		const copy = [...list];
-		if (sort === 'newest') {
-			copy.sort((a, b) => timestamp(b.created_at) - timestamp(a.created_at));
-		} else if (sort === 'updated') {
-			copy.sort((a, b) => timestamp(b.updated_at) - timestamp(a.updated_at));
-		} else {
-			copy.sort((a, b) => timestamp(a.created_at) - timestamp(b.created_at));
-		}
-		return copy;
-	}
-
 	function addToGroup(groups: Map<string, IssueGroup>, key: string, label: string, issue: Issue) {
 		let group = groups.get(key);
 		if (!group) {
@@ -68,7 +52,7 @@
 	}
 
 	let groups = $derived.by((): IssueGroup[] => {
-		const sorted = sortIssues(issues);
+		const sorted = sortIssues(issues, sort);
 
 		if (grouping === 'severity') {
 			const map = new Map<string, IssueGroup>();
@@ -124,11 +108,19 @@
 		const locationOrder = new Map(locations.map((location, index) => [location.id, index]));
 		const map = new Map<string, IssueGroup>();
 		for (const issue of sorted) {
-			const firstArticle = issue.articles[0];
-			const key = firstArticle?.location_id ?? UNKNOWN_LOCATION;
-			const label = firstArticle
-				? (locations.find((location) => location.id === firstArticle.location_id)?.name ??
-					firstArticle.location_name ??
+			// When a location filter is active, group under the first matching article
+			// so the issue appears under a location the user is filtering for; otherwise
+			// (or when no article matches) fall back to the first article.
+			const groupingArticle =
+				(filters.locationIds.length > 0
+					? issue.articles.find((article) =>
+							filters.locationIds.includes(article.location_id)
+						)
+					: undefined) ?? issue.articles[0];
+			const key = groupingArticle?.location_id ?? UNKNOWN_LOCATION;
+			const label = groupingArticle
+				? (locations.find((location) => location.id === groupingArticle.location_id)?.name ??
+					groupingArticle.location_name ??
 					m.page_issues_print_unknown_location())
 				: m.page_issues_print_unknown_location();
 			addToGroup(map, key, label, issue);

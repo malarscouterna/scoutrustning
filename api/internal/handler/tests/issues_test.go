@@ -782,6 +782,17 @@ func TestIssueList_FiltersAndAssignees(t *testing.T) {
 		}
 	})
 
+	t.Run("invalid severity is rejected", func(t *testing.T) {
+		resp, err := leader.Get("/api/v0/issues?severity=bogus")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("expected 400, got %d", resp.StatusCode)
+		}
+	})
+
 	t.Run("invalid location_ids is rejected", func(t *testing.T) {
 		resp, err := leader.Get("/api/v0/issues?location_ids=not-a-uuid")
 		if err != nil {
@@ -790,6 +801,20 @@ func TestIssueList_FiltersAndAssignees(t *testing.T) {
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusBadRequest {
 			t.Errorf("expected 400, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("list response includes linked articles", func(t *testing.T) {
+		issues := listIssues("?location_ids=" + hajkID)
+		if len(issues) != 1 {
+			t.Fatalf("expected 1 issue, got %d", len(issues))
+		}
+		articles, ok := issues[0]["articles"].([]any)
+		if !ok {
+			t.Fatalf("expected articles array, got %T", issues[0]["articles"])
+		}
+		if len(articles) != 1 {
+			t.Fatalf("expected 1 linked article, got %d", len(articles))
 		}
 	})
 

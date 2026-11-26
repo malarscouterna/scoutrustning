@@ -39,6 +39,12 @@ export const load: PageServerLoad = async ({ fetch, url, parent }) => {
 		dateStyle: 'long',
 		timeZone: 'Europe/Stockholm'
 	}).format(new Date());
+	const dateStamp = new Intl.DateTimeFormat('sv-SE', {
+		year: 'numeric',
+		month: '2-digit',
+		day: '2-digit',
+		timeZone: 'Europe/Stockholm'
+	}).format(new Date());
 
 	return {
 		myIssues,
@@ -50,6 +56,7 @@ export const load: PageServerLoad = async ({ fetch, url, parent }) => {
 		grouping,
 		sort,
 		today,
+		dateStamp,
 		dateLocale,
 		isManager: isManager(user)
 	};

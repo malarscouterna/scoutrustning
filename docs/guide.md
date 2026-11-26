@@ -213,13 +213,15 @@ Har du skrivit fel, eller visade sig problemet vara större eller mindre än du 
 - Ändrar du allvarlighetsgraden ändras artikelns skick direkt: sätter du **Ej användbar** kan artikeln inte längre bokas, och går du tillbaka till **Användbar** blir den bokbar igen.
 - Ändringen syns i ärendets händelser som **Uppgifter ändrade**, med vad som ändrades.
 
-#### Skriva ut ärendelistan
+#### Skriva ut eller exportera ärendelistan
 
-Tryck **Kompakt** för att visa en kompakt lista anpassad för papper. Där ser du varje ärendes rubrik, status, allvarlighetsgrad, plats, tilldelad person, rapportör och hela felbeskrivningen.
+Tryck **Kompakt vy** för att visa en kompakt lista anpassad för papper. Där ser du varje ärendes rubrik, status, allvarlighetsgrad, plats, tilldelad person, rapportör och hela felbeskrivningen.
 
-- Filtrera på en eller flera platser, status och allvarlighetsgrad innan du skriver ut. Filtren finns även i den vanliga ärendelistan och sparas i adressen, så de kan bokmärkas eller delas.
+- Filtrera på en eller flera platser, status och allvarlighetsgrad innan du skriver ut eller exporterar. Filtren finns även i den vanliga ärendelistan och sparas i adressen, så de kan bokmärkas eller delas.
 - Välj gruppering: **Plats**, **Allvarlighetsgrad**, **Status** eller **Tilldelad person**. Välj också sortering inom grupperna.
-- Tryck **Skriv ut** i kompakt läge. Det går också bra att trycka Ctrl+P / Cmd+P direkt i den vanliga vyn – då skrivs den kompakta listan ut med de filter som är valda.
+- **Skriv ut** skriver ut listan. Välj **Spara som PDF** i skrivardialogen för att spara den som PDF med samma layout.
+- **Exportera CSV** laddar ner den filtrerade listan som en CSV-fil som kan öppnas i Excel, Google Kalkylark, LibreOffice och liknande.
+- Filerna får automatiskt ett namn med kår, plats och datum.
 - **Standardvy** tar dig tillbaka till den vanliga ärendelistan.
 - Navigation, filter och knappar tas bort automatiskt i utskriften.
 

@@ -3,11 +3,87 @@
 	import IssueFilters from '#lib/components/IssueFilters.svelte';
 	import IssuePrintList from '#lib/components/IssuePrintList.svelte';
 	import type { PageData } from './$types';
+	import { browser } from '$app/env';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
+	import { downloadTextFile, sanitizeFileName, toCsv } from '#lib/download.ts';
+	import { sortIssues } from '#lib/issues.ts';
+	import { msg } from '#lib/msg.ts';
+	import type { Issue } from '#lib/api/client.ts';
 	import * as m from '#lib/paraglide/messages.js';
 
 	let { data }: { data: PageData } = $props();
+
+	let exportFileBase = $derived.by(() => {
+		const selectedLocations = data.filters.locationIds
+			.map((id) => data.locations.find((location) => location.id === id)?.name)
+			.filter((name): name is string => Boolean(name));
+		const locationPart =
+			selectedLocations.length > 0
+				? selectedLocations.join(', ')
+				: m.page_issues_filter_all_locations();
+		return sanitizeFileName(
+			[page.data.user?.group_name, m.page_issues_print_title(), locationPart, data.dateStamp]
+				.filter((part): part is string => Boolean(part))
+				.join(' - ')
+		);
+	});
+
+	$effect(() => {
+		if (!browser) return;
+		const previous = document.title;
+		document.title = exportFileBase;
+		return () => {
+			document.title = previous;
+		};
+	});
+
+	function formatExportDate(value: string) {
+		return new Intl.DateTimeFormat(data.dateLocale, {
+			dateStyle: 'short',
+			timeStyle: 'short',
+			timeZone: 'Europe/Stockholm'
+		}).format(new Date(value));
+	}
+
+	function issueLocationNames(issue: Issue): string {
+		const names = issue.articles.map((article) => article.location_name).filter(Boolean);
+		return names.filter((name, index) => names.indexOf(name) === index).join(', ');
+	}
+
+	function issueAssigneeNames(issue: Issue): string {
+		if (issue.assignees.length === 0) return m.page_issue_not_assigned();
+		return issue.assignees.map((assignee) => assignee.user_name).join(', ');
+	}
+
+	function exportCsv() {
+		const issues = sortIssues(data.printIssues, data.sort);
+		const rows = [
+			[
+				m.page_issues_csv_title(),
+				m.page_issues_filter_status(),
+				m.page_issues_filter_severity(),
+				m.page_issues_csv_locations(),
+				m.page_issues_print_assigned(),
+				m.page_issues_print_reporter(),
+				m.page_issues_csv_created(),
+				m.page_issues_csv_updated(),
+				m.page_issue_description_heading()
+			],
+			...issues.map((issue) => [
+				issue.title,
+				msg(`issue_status_${issue.status}`) ?? issue.status,
+				msg(`issue_severity_${issue.severity}`) ?? issue.severity,
+				issueLocationNames(issue),
+				issueAssigneeNames(issue),
+				issue.reporter_name,
+				formatExportDate(issue.created_at),
+				formatExportDate(issue.updated_at),
+				issue.description
+			])
+		];
+		downloadTextFile(`${exportFileBase}.csv`, toCsv(rows), 'text/csv;charset=utf-8');
+	}
 
 	function togglePrintMode() {
 		const url = new URL(page.url.href);
@@ -34,15 +110,6 @@
 					? m.page_issues_btn_close_print_mode()
 					: m.page_issues_btn_print_mode()}
 			</button>
-			{#if data.printMode}
-				<button
-					type="button"
-					onclick={() => window.print()}
-					class="rounded bg-blue-700 px-4 py-2 text-sm text-white print:hidden"
-				>
-					{m.page_issues_btn_print()}
-				</button>
-			{/if}
 			<a
 				href="/issues/new"
 				class="rounded bg-blue-700 px-4 py-2 text-sm text-white"
@@ -93,5 +160,22 @@
 			today={data.today}
 			dateLocale={data.dateLocale}
 		/>
+	</div>
+
+	<div class="mt-6 flex flex-wrap gap-2 border-t border-neutral-200 pt-4 print:hidden">
+		<button
+			type="button"
+			onclick={() => window.print()}
+			class="rounded border border-neutral-300 px-3 py-2 text-sm text-neutral-600 hover:bg-neutral-50"
+		>
+			{m.page_issues_btn_print()}
+		</button>
+		<button
+			type="button"
+			onclick={exportCsv}
+			class="rounded border border-neutral-300 px-3 py-2 text-sm text-neutral-600 hover:bg-neutral-50"
+		>
+			{m.page_issues_btn_export_csv()}
+		</button>
 	</div>
 </div>

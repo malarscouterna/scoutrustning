@@ -115,6 +115,32 @@ JOIN users u ON ia.user_id = u.id
 WHERE ia.issue_id = @issue_id AND ia.group_id = @group_id
 ORDER BY u.name, ia.user_id;
 
+-- name: ListIssueArticlesForIssues :many
+SELECT
+    ia.issue_id,
+    a.id,
+    a.commercial_name,
+    a.common_name,
+    a.location_id,
+    l.name AS location_name,
+    a.individually_tracked
+FROM issue_articles ia
+JOIN articles a ON ia.article_id = a.id
+JOIN locations l ON a.location_id = l.id
+WHERE ia.issue_id = ANY(@issue_ids::uuid[]) AND ia.group_id = @group_id
+ORDER BY ia.issue_id, l.sort_order, l.name, a.commercial_name, a.common_name, a.id;
+
+-- name: ListIssueAssigneesForIssues :many
+SELECT
+    ia.issue_id,
+    ia.user_id,
+    ia.assigned_at,
+    u.name AS user_name
+FROM issue_assignees ia
+JOIN users u ON ia.user_id = u.id
+WHERE ia.issue_id = ANY(@issue_ids::uuid[]) AND ia.group_id = @group_id
+ORDER BY ia.issue_id, u.name, ia.user_id;
+
 -- name: ReplaceIssueAssignees :exec
 -- Caller should do delete + insert in a transaction; this deletes all first.
 DELETE FROM issue_assignees WHERE issue_id = @issue_id AND group_id = @group_id;

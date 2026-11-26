@@ -1,3 +1,5 @@
+import type { Issue } from '#lib/api/client.ts';
+
 export const ISSUE_STATUSES = ['open', 'in_progress', 'resolved', 'archived'] as const;
 export const ISSUE_SEVERITIES = ['missing', 'unusable', 'usable'] as const;
 export const DEFAULT_ISSUE_STATUSES: IssueStatus[] = ['open', 'in_progress'];
@@ -59,4 +61,17 @@ export function parseIssueGrouping(value: string | null): IssueGrouping {
 
 export function parseIssueSort(value: string | null): IssueSort {
 	return isOneOf(ISSUE_SORTS, value ?? '') ? (value as IssueSort) : 'oldest';
+}
+
+export function sortIssues(issues: Issue[], sort: IssueSort): Issue[] {
+	const timestamp = (value: string) => new Date(value).getTime();
+	const copy = [...issues];
+	if (sort === 'newest') {
+		copy.sort((a, b) => timestamp(b.created_at) - timestamp(a.created_at));
+	} else if (sort === 'updated') {
+		copy.sort((a, b) => timestamp(b.updated_at) - timestamp(a.updated_at));
+	} else {
+		copy.sort((a, b) => timestamp(a.created_at) - timestamp(b.created_at));
+	}
+	return copy;
 }
