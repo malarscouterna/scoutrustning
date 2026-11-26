@@ -26,6 +26,11 @@ func mountIssueRoutes(env *testutil.TestEnv) {
 
 func createTestArticle(t *testing.T, client *testutil.TestClient, name string) string {
 	t.Helper()
+	return createTestArticleAt(t, client, name, "")
+}
+
+func createTestArticleAt(t *testing.T, client *testutil.TestClient, name, locationID string) string {
+	t.Helper()
 	resp, _ := client.Get("/api/v0/locations")
 	var locations []map[string]any
 	json.NewDecoder(resp.Body).Decode(&locations)
@@ -36,11 +41,15 @@ func createTestArticle(t *testing.T, client *testutil.TestClient, name string) s
 	json.NewDecoder(resp.Body).Decode(&categories)
 	resp.Body.Close()
 
+	if locationID == "" {
+		locationID = locations[0]["id"].(string)
+	}
+
 	b, _ := json.Marshal(map[string]any{
 		"commercial_name":      name,
 		"common_name":          name + " 1",
 		"category_id":          categories[0]["id"],
-		"location_id":          locations[0]["id"],
+		"location_id":          locationID,
 		"individually_tracked": true,
 	})
 	resp, _ = client.Post("/api/v0/articles", bytes.NewReader(b))
@@ -657,6 +666,148 @@ func TestIssueFlow_FilterByArticle(t *testing.T) {
 		json.NewDecoder(resp.Body).Decode(&issues)
 		if len(issues) != 1 {
 			t.Errorf("expected 1 issue for article1, got %d", len(issues))
+		}
+	})
+}
+
+func TestIssueList_FiltersAndAssignees(t *testing.T) {
+	env := testutil.SetupTestEnv(t)
+	mountIssueRoutes(env)
+
+	manager := env.ClientAs("manager-equipment")
+	leader := env.ClientAs("leader-yggdrasil")
+
+	resp, _ := manager.Get("/api/v0/locations")
+	var locations []map[string]any
+	json.NewDecoder(resp.Body).Decode(&locations)
+	resp.Body.Close()
+
+	locationIDs := map[string]string{}
+	for _, l := range locations {
+		locationIDs[l["name"].(string)] = l["id"].(string)
+	}
+	hajkID := locationIDs["Hajkförrådet"]
+	kammareID := locationIDs["Kammaren"]
+	if hajkID == "" || kammareID == "" {
+		t.Fatal("expected seeded locations Hajkförrådet and Kammaren")
+	}
+
+	hajkArticle := createTestArticleAt(t, manager, "FilterHajk", hajkID)
+	kammareArticle := createTestArticleAt(t, manager, "FilterKammare", kammareID)
+
+	newIssue := func(articleID, severity, description string) string {
+		t.Helper()
+		b, _ := json.Marshal(map[string]any{
+			"article_id":  articleID,
+			"severity":    severity,
+			"description": description,
+		})
+		resp, err := leader.Post("/api/v0/issues", bytes.NewReader(b))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusCreated {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("expected 201, got %d: %s", resp.StatusCode, body)
+		}
+		var issue map[string]any
+		json.NewDecoder(resp.Body).Decode(&issue)
+		return issue["id"].(string)
+	}
+
+	hajkIssueID := newIssue(hajkArticle, "unusable", "Hajk issue")
+	newIssue(kammareArticle, "missing", "Kammaren issue")
+
+	// Assign the leader so the list response's assignees can be verified.
+	b, _ := json.Marshal(map[string]string{"user_id": "3000005"})
+	resp, err := manager.Post("/api/v0/issues/"+hajkIssueID+"/assignees", bytes.NewReader(b))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("expected 201 assigning issue, got %d: %s", resp.StatusCode, body)
+	}
+	resp.Body.Close()
+
+	listIssues := func(query string) []map[string]any {
+		t.Helper()
+		resp, err := leader.Get("/api/v0/issues" + query)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("expected 200, got %d: %s", resp.StatusCode, body)
+		}
+		var issues []map[string]any
+		json.NewDecoder(resp.Body).Decode(&issues)
+		return issues
+	}
+
+	t.Run("location filter returns issues at that location", func(t *testing.T) {
+		issues := listIssues("?location_ids=" + hajkID)
+		if len(issues) != 1 {
+			t.Fatalf("expected 1 issue at Hajkförrådet, got %d", len(issues))
+		}
+		if issues[0]["severity"] != "unusable" {
+			t.Errorf("expected the Hajk issue, got severity %v", issues[0]["severity"])
+		}
+	})
+
+	t.Run("location filter accepts multiple locations", func(t *testing.T) {
+		issues := listIssues("?location_ids=" + hajkID + "," + kammareID)
+		if len(issues) != 2 {
+			t.Errorf("expected 2 issues across both locations, got %d", len(issues))
+		}
+	})
+
+	t.Run("severity filter returns only matching issues", func(t *testing.T) {
+		issues := listIssues("?severity=missing")
+		if len(issues) != 1 {
+			t.Fatalf("expected 1 missing issue, got %d", len(issues))
+		}
+		if issues[0]["severity"] != "missing" {
+			t.Errorf("expected missing severity, got %v", issues[0]["severity"])
+		}
+	})
+
+	t.Run("location and severity filters combine", func(t *testing.T) {
+		issues := listIssues("?location_ids=" + hajkID + "&severity=missing")
+		if len(issues) != 0 {
+			t.Errorf("expected no missing issues at Hajkförrådet, got %d", len(issues))
+		}
+	})
+
+	t.Run("invalid location_ids is rejected", func(t *testing.T) {
+		resp, err := leader.Get("/api/v0/issues?location_ids=not-a-uuid")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("expected 400, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("list response includes assignees", func(t *testing.T) {
+		issues := listIssues("?location_ids=" + hajkID)
+		if len(issues) != 1 {
+			t.Fatalf("expected 1 issue, got %d", len(issues))
+		}
+		assignees, ok := issues[0]["assignees"].([]any)
+		if !ok {
+			t.Fatalf("expected assignees array, got %T", issues[0]["assignees"])
+		}
+		if len(assignees) != 1 {
+			t.Fatalf("expected 1 assignee, got %d", len(assignees))
+		}
+		assignee := assignees[0].(map[string]any)
+		if assignee["user_name"] != "Hanna Yggdrasil" {
+			t.Errorf("expected Hanna Yggdrasil, got %v", assignee["user_name"])
 		}
 	})
 }

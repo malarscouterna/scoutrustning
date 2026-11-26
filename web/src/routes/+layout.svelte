@@ -44,7 +44,7 @@
 </svelte:head>
 
 {#if data.demo}
-	<a href="/guide" class="block bg-adventurerorange-100 border-b border-adventurerorange-300 text-adventurerorange-900 text-center text-sm py-2 px-4 font-medium hover:bg-adventurerorange-200">
+	<a href="/guide" class="block bg-adventurerorange-100 border-b border-adventurerorange-300 text-adventurerorange-900 text-center text-sm py-2 px-4 font-medium hover:bg-adventurerorange-200 print:hidden">
 		🏕️ Demo — detta är en testmiljö. Bokningar och data kan återställas när som helst.
 	</a>
 {/if}
@@ -60,7 +60,7 @@
 	</div>
 {:else}
 	{#if data.user}
-		<nav class="sticky top-0 z-10 bg-white border-b">
+		<nav class="sticky top-0 z-10 bg-white border-b print:hidden">
 			<div class="max-w-4xl mx-auto px-4 py-2 flex items-center justify-between">
 				<a href="/">
 					<img src="/PNG Utrustningsgruppen - Logotyp.png" alt="Hem" class="w-10 h-10 object-contain" />

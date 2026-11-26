@@ -12,8 +12,9 @@ JOIN users u ON ir.reporter_id = u.id
 WHERE ir.id = @id AND ir.group_id = @group_id;
 
 -- name: ListIssues :many
--- Filters: status (comma-separated via array), mine (reporter_id = user_id OR assigned),
--- article_id (linked articles).
+-- Filters: status (comma-separated via array), severity (comma-separated via array),
+-- mine (reporter_id = user_id OR assigned), article_id (linked articles),
+-- location_ids (issues with a linked article at any of the selected locations).
 SELECT
     ir.*,
     u.name AS reporter_name
@@ -21,6 +22,7 @@ FROM issue_reports ir
 JOIN users u ON ir.reporter_id = u.id
 WHERE ir.group_id = @group_id
     AND (COALESCE(array_length(@statuses::text[], 1), 0) = 0 OR ir.status = ANY(@statuses::text[]))
+    AND (COALESCE(array_length(@severities::text[], 1), 0) = 0 OR ir.severity = ANY(@severities::text[]))
     AND (NOT @mine::bool OR (
         ir.reporter_id = @user_id
         OR ir.id IN (
@@ -32,6 +34,12 @@ WHERE ir.group_id = @group_id
     ))
     AND (sqlc.narg('article_id')::uuid IS NULL OR ir.id IN (
         SELECT issue_id FROM issue_articles WHERE article_id = sqlc.narg('article_id') AND group_id = @group_id
+    ))
+    AND (COALESCE(array_length(@location_ids::uuid[], 1), 0) = 0 OR ir.id IN (
+        SELECT ia.issue_id
+        FROM issue_articles ia
+        JOIN articles a ON ia.article_id = a.id
+        WHERE ia.group_id = @group_id AND a.location_id = ANY(@location_ids::uuid[])
     ))
 ORDER BY ir.updated_at DESC, ir.created_at DESC;
 
@@ -88,12 +96,14 @@ SELECT
     a.id,
     a.commercial_name,
     a.common_name,
+    a.location_id,
     l.name AS location_name,
     a.individually_tracked
 FROM issue_articles ia
 JOIN articles a ON ia.article_id = a.id
 JOIN locations l ON a.location_id = l.id
-WHERE ia.issue_id = @issue_id AND ia.group_id = @group_id;
+WHERE ia.issue_id = @issue_id AND ia.group_id = @group_id
+ORDER BY l.sort_order, l.name, a.commercial_name, a.common_name, a.id;
 
 -- name: ListIssueAssignees :many
 SELECT
@@ -102,7 +112,8 @@ SELECT
     u.name AS user_name
 FROM issue_assignees ia
 JOIN users u ON ia.user_id = u.id
-WHERE ia.issue_id = @issue_id AND ia.group_id = @group_id;
+WHERE ia.issue_id = @issue_id AND ia.group_id = @group_id
+ORDER BY u.name, ia.user_id;
 
 -- name: ReplaceIssueAssignees :exec
 -- Caller should do delete + insert in a transaction; this deletes all first.

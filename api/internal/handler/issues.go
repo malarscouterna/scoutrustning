@@ -47,6 +47,25 @@ func (h *IssueHandler) List(w http.ResponseWriter, r *http.Request) {
 	if v := r.URL.Query().Get("status"); v != "" {
 		statuses = strings.Split(v, ",")
 	}
+	var severities []string
+	if v := r.URL.Query().Get("severity"); v != "" {
+		severities = strings.Split(v, ",")
+	}
+	var locationIDs []pgtype.UUID
+	if v := r.URL.Query().Get("location_ids"); v != "" {
+		for _, raw := range strings.Split(v, ",") {
+			raw = strings.TrimSpace(raw)
+			if raw == "" {
+				continue
+			}
+			id, err := parseUUID(raw)
+			if err != nil {
+				WriteError(w, http.StatusBadRequest, "invalid location_ids")
+				return
+			}
+			locationIDs = append(locationIDs, id)
+		}
+	}
 	mine := r.URL.Query().Get("mine") == "true"
 	var articleID pgtype.UUID
 	if v := r.URL.Query().Get("article_id"); v != "" {
@@ -59,11 +78,13 @@ func (h *IssueHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	issues, err := h.Q.ListIssues(r.Context(), db.ListIssuesParams{
-		GroupID:   claims.GroupID,
-		Statuses:  statuses,
-		Mine:      mine,
-		UserID:    claims.MemberID,
-		ArticleID: articleID,
+		GroupID:     claims.GroupID,
+		Statuses:    statuses,
+		Severities:  severities,
+		Mine:        mine,
+		UserID:      claims.MemberID,
+		ArticleID:   articleID,
+		LocationIds: locationIDs,
 	})
 	if err != nil {
 		slog.Error("failed to list issues", "error", err)
@@ -73,7 +94,8 @@ func (h *IssueHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	type issueWithArticles struct {
 		db.ListIssuesRow
-		Articles []db.ListIssueArticlesRow `json:"articles"`
+		Articles  []db.ListIssueArticlesRow  `json:"articles"`
+		Assignees []db.ListIssueAssigneesRow `json:"assignees"`
 	}
 
 	result := make([]issueWithArticles, 0, len(issues))
@@ -84,7 +106,17 @@ func (h *IssueHandler) List(w http.ResponseWriter, r *http.Request) {
 		if articles == nil {
 			articles = []db.ListIssueArticlesRow{}
 		}
-		result = append(result, issueWithArticles{issue, articles})
+		assignees, _ := h.Q.ListIssueAssignees(r.Context(), db.ListIssueAssigneesParams{
+			IssueID: issue.ID, GroupID: claims.GroupID,
+		})
+		if assignees == nil {
+			assignees = []db.ListIssueAssigneesRow{}
+		}
+		result = append(result, issueWithArticles{
+			ListIssuesRow: issue,
+			Articles:      articles,
+			Assignees:     assignees,
+		})
 	}
 
 	WriteJSON(w, http.StatusOK, result)
