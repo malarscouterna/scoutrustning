@@ -172,11 +172,8 @@
 								type="checkbox"
 								class="h-3 w-3 accent-blue-700"
 								checked={filters.statuses.includes(status)}
-								onclick={(event) => {
-									if (filters.statuses.length <= 1 && filters.statuses.includes(status)) {
-										event.preventDefault();
-									}
-								}}
+								disabled={filters.statuses.length <= 1 && filters.statuses.includes(status)}
+								title={m.page_issues_filter_status_required()}
 								onchange={() => toggleStatus(status)}
 							/>
 							<span>{msg(`issue_status_${status}`) ?? status}</span>

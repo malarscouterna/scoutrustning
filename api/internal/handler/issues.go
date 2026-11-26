@@ -49,7 +49,17 @@ func (h *IssueHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	var severities []string
 	if v := r.URL.Query().Get("severity"); v != "" {
-		severities = strings.Split(v, ",")
+		for _, raw := range strings.Split(v, ",") {
+			raw = strings.TrimSpace(raw)
+			if raw == "" {
+				continue
+			}
+			if !validIssueSeverities[raw] {
+				WriteError(w, http.StatusBadRequest, "invalid severity")
+				return
+			}
+			severities = append(severities, raw)
+		}
 	}
 	var locationIDs []pgtype.UUID
 	if v := r.URL.Query().Get("location_ids"); v != "" {
@@ -98,17 +108,62 @@ func (h *IssueHandler) List(w http.ResponseWriter, r *http.Request) {
 		Assignees []db.ListIssueAssigneesRow `json:"assignees"`
 	}
 
+	issueIDs := make([]pgtype.UUID, 0, len(issues))
+	for _, issue := range issues {
+		issueIDs = append(issueIDs, issue.ID)
+	}
+
+	articlesByIssue := map[string][]db.ListIssueArticlesRow{}
+	assigneesByIssue := map[string][]db.ListIssueAssigneesRow{}
+	if len(issueIDs) > 0 {
+		articles, err := h.Q.ListIssueArticlesForIssues(r.Context(), db.ListIssueArticlesForIssuesParams{
+			IssueIds: issueIDs,
+			GroupID:  claims.GroupID,
+		})
+		if err != nil {
+			slog.Error("failed to list issue articles", "error", err)
+			WriteError(w, http.StatusInternalServerError, "failed to list issues")
+			return
+		}
+		for _, article := range articles {
+			key := formatUUID(article.IssueID)
+			articlesByIssue[key] = append(articlesByIssue[key], db.ListIssueArticlesRow{
+				ID:                  article.ID,
+				CommercialName:      article.CommercialName,
+				CommonName:          article.CommonName,
+				LocationID:          article.LocationID,
+				LocationName:        article.LocationName,
+				IndividuallyTracked: article.IndividuallyTracked,
+			})
+		}
+
+		assignees, err := h.Q.ListIssueAssigneesForIssues(r.Context(), db.ListIssueAssigneesForIssuesParams{
+			IssueIds: issueIDs,
+			GroupID:  claims.GroupID,
+		})
+		if err != nil {
+			slog.Error("failed to list issue assignees", "error", err)
+			WriteError(w, http.StatusInternalServerError, "failed to list issues")
+			return
+		}
+		for _, assignee := range assignees {
+			key := formatUUID(assignee.IssueID)
+			assigneesByIssue[key] = append(assigneesByIssue[key], db.ListIssueAssigneesRow{
+				UserID:     assignee.UserID,
+				AssignedAt: assignee.AssignedAt,
+				UserName:   assignee.UserName,
+			})
+		}
+	}
+
 	result := make([]issueWithArticles, 0, len(issues))
 	for _, issue := range issues {
-		articles, _ := h.Q.ListIssueArticles(r.Context(), db.ListIssueArticlesParams{
-			IssueID: issue.ID, GroupID: claims.GroupID,
-		})
+		key := formatUUID(issue.ID)
+		articles := articlesByIssue[key]
 		if articles == nil {
 			articles = []db.ListIssueArticlesRow{}
 		}
-		assignees, _ := h.Q.ListIssueAssignees(r.Context(), db.ListIssueAssigneesParams{
-			IssueID: issue.ID, GroupID: claims.GroupID,
-		})
+		assignees := assigneesByIssue[key]
 		if assignees == nil {
 			assignees = []db.ListIssueAssigneesRow{}
 		}
