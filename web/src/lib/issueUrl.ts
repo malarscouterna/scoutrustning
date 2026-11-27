@@ -8,6 +8,7 @@ import { page } from '$app/state';
 // change from the latest intended URL instead, so overlapping changes are not
 // silently dropped.
 let pendingUrl: URL | null = null;
+let pendingRequiresLoad = false;
 let queue: Promise<void> = Promise.resolve();
 let generation = 0;
 
@@ -29,6 +30,9 @@ export function updateIssueUrl(
 	const next = new URL(base.href);
 	mutate(next.searchParams);
 	if (next.href === base.href) return Promise.resolve();
+	// A shallow update may supersede a queued data update. The newer URL includes
+	// the data params, so the final navigation must still load data.
+	pendingRequiresLoad = !options.shallow || (pendingUrl !== null && pendingRequiresLoad);
 	pendingUrl = next;
 	const runGeneration = generation;
 
@@ -41,13 +45,21 @@ export function updateIssueUrl(
 			if (pendingUrl !== next) return;
 
 			try {
-				await goto(next, { reset: false, replace: options.replace, shallow: options.shallow });
+				await goto(next, {
+					reset: false,
+					replace: options.replace,
+					// Never let a shallow change suppress a pending data load.
+					shallow: options.shallow && !pendingRequiresLoad
+				});
 			} catch (error) {
 				if (!isAbort(error)) {
 					console.error('Issue page navigation failed', error);
 				}
 			} finally {
-				if (pendingUrl === next) pendingUrl = null;
+				if (pendingUrl === next) {
+					pendingUrl = null;
+					pendingRequiresLoad = false;
+				}
 			}
 		});
 
@@ -60,5 +72,6 @@ export function updateIssueUrl(
 export function resetIssueUrlQueue(): void {
 	generation += 1;
 	pendingUrl = null;
+	pendingRequiresLoad = false;
 	queue = Promise.resolve();
 }

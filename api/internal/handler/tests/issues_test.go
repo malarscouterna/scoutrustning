@@ -1010,7 +1010,44 @@ func TestIssueList_FiltersAndAssignees(t *testing.T) {
 	t.Run("include_mine flags the requesting user's issues", func(t *testing.T) {
 		untouchedID := newIssue(hajkArticle, "usable", "Untouched by manager")
 
-		resp, err := manager.Get("/api/v0/issues?include_mine=true")
+		// Reported by the manager, no assignment.
+		b, _ := json.Marshal(map[string]any{
+			"article_id":  hajkArticle,
+			"severity":    "usable",
+			"description": "Reported by manager",
+		})
+		resp, err := manager.Post("/api/v0/issues", bytes.NewReader(b))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resp.StatusCode != http.StatusCreated {
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			t.Fatalf("expected 201 creating manager issue, got %d: %s", resp.StatusCode, body)
+		}
+		var reported map[string]any
+		if err := json.NewDecoder(resp.Body).Decode(&reported); err != nil {
+			resp.Body.Close()
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		reportedID := reported["id"].(string)
+
+		// Only acted on by the manager (comment), no assignment.
+		actedID := newIssue(kammareArticle, "usable", "Manager only commented")
+		b, _ = json.Marshal(map[string]string{"description": "Manager comment"})
+		resp, err = manager.Post("/api/v0/issues/"+actedID+"/comments", bytes.NewReader(b))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resp.StatusCode != http.StatusCreated {
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			t.Fatalf("expected 201 commenting, got %d: %s", resp.StatusCode, body)
+		}
+		resp.Body.Close()
+
+		resp, err = manager.Get("/api/v0/issues?include_mine=true")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1032,6 +1069,12 @@ func TestIssueList_FiltersAndAssignees(t *testing.T) {
 		}
 		if !isMine[kammareIssueID] {
 			t.Error("expected the Kammaren issue to be mine (manager is assigned)")
+		}
+		if !isMine[reportedID] {
+			t.Error("expected the manager-reported issue to be mine")
+		}
+		if !isMine[actedID] {
+			t.Error("expected the manager-acted-on issue to be mine")
 		}
 		if isMine[untouchedID] {
 			t.Error("expected the untouched issue not to be mine")
