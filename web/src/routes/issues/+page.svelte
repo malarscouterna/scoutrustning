@@ -4,15 +4,29 @@
 	import IssuePrintList from '#lib/components/IssuePrintList.svelte';
 	import type { PageData } from './$types';
 	import { browser } from '$app/env';
-	import { goto } from '$app/navigation';
+	import { beforeNavigate } from '$app/navigation';
 	import { page } from '$app/state';
+	import { onMount } from 'svelte';
 	import { downloadTextFile, sanitizeFileName, toCsv } from '#lib/download.ts';
+	import { resetIssueUrlQueue, updateIssueUrl } from '#lib/issueUrl.ts';
 	import { sortIssues } from '#lib/issues.ts';
 	import { msg } from '#lib/msg.ts';
 	import type { Issue } from '#lib/api/client.ts';
 	import * as m from '#lib/paraglide/messages.js';
 
 	let { data }: { data: PageData } = $props();
+
+	onMount(() => {
+		// Drop any queued URL updates left over from an earlier visit.
+		resetIssueUrlQueue();
+	});
+
+	beforeNavigate((navigation) => {
+		// Our own gotos stay on /issues; other gotos (cart, session redirect)
+		// must cancel queued issue URL updates.
+		if (navigation.type === 'goto' && navigation.to?.url.pathname === '/issues') return;
+		resetIssueUrlQueue();
+	});
 
 	let exportFileBase = $derived.by(() => {
 		const selectedLocations = data.filters.locationIds
@@ -86,14 +100,10 @@
 	}
 
 	function togglePrintMode() {
-		const url = new URL(page.url.href);
-		if (data.printMode) {
-			url.searchParams.delete('print');
-		} else {
-			url.searchParams.set('print', 'true');
-		}
-		// SvelteKit 3 replaced `noScroll`/`keepFocus` with `reset: false`.
-		void goto(url, { reset: false });
+		void updateIssueUrl((params) => {
+			if (params.get('print') === 'true') params.delete('print');
+			else params.set('print', 'true');
+		});
 	}
 </script>
 
@@ -155,6 +165,7 @@
 			locations={data.locations}
 			grouping={data.grouping}
 			sort={data.sort}
+			fields={data.fields}
 			groupName={page.data.user?.group_name ?? ''}
 			filters={data.filters}
 			today={data.today}

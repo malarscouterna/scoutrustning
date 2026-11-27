@@ -576,7 +576,7 @@ Issue reports are first-class entities. Each issue has a URL, lifecycle, assigne
 ### `GET /api/v0/issues`
 List issues for the group. Any authenticated user.
 
-**Query params**: `status` (comma-separated: `open,in_progress,resolved,archived`), `severity` (comma-separated: `usable,unusable,missing`), `mine=true` (issues the user reported or is assigned to), `article_id` (UUID), `location_ids` (comma-separated location UUIDs; matches issues with at least one linked article at any of the locations).
+**Query params**: `status` (comma-separated: `open,in_progress,resolved,archived`), `severity` (comma-separated: `usable,unusable,missing`), `mine=true` (issues the user reported or is assigned to), `article_id` (UUID), `location_ids` (comma-separated location UUIDs; matches issues with at least one linked article at any of the locations), `search` (case-insensitive substring; matches title, description, reporter/assignee names, article and location names, the issue UUID with or without hyphens, and comments in the thread).
 
 **Response** `200` - array of issue objects with nested `articles` and `assignees` arrays.
 

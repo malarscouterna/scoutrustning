@@ -1,10 +1,11 @@
 <script lang="ts">
 	import type { Location } from '#lib/api/client.ts';
 	import type { IssueFilterState, IssueSeverity, IssueStatus } from '#lib/issues.ts';
-	import { ISSUE_SEVERITIES, ISSUE_STATUSES } from '#lib/issues.ts';
+	import { ISSUE_SEVERITIES, ISSUE_STATUSES, parseIssueFilters } from '#lib/issues.ts';
+	import { updateIssueUrl } from '#lib/issueUrl.ts';
 	import { msg } from '#lib/msg.ts';
-	import { goto } from '$app/navigation';
-	import { page } from '$app/state';
+	import { afterNavigate, beforeNavigate } from '$app/navigation';
+	import { onDestroy, untrack } from 'svelte';
 	import * as m from '#lib/paraglide/messages.js';
 
 	interface Props {
@@ -14,19 +15,100 @@
 
 	let { locations, filters }: Props = $props();
 
-	function updateParams(mutate: (params: URLSearchParams) => void) {
-		const url = new URL(page.url.href);
-		mutate(url.searchParams);
-		// SvelteKit 3 replaced `noScroll`/`keepFocus` with `reset: false`.
-		void goto(url, { reset: false });
+	let search = $state(untrack(() => filters.search));
+	let pendingSearch: string | null = null;
+	let searchTimer: ReturnType<typeof setTimeout> | undefined;
+
+	$effect(() => {
+		const fromUrl = filters.search;
+		untrack(() => {
+			if (pendingSearch !== null) {
+				if (fromUrl === pendingSearch) pendingSearch = null;
+				return;
+			}
+			if (search !== fromUrl) search = fromUrl;
+		});
+	});
+
+	onDestroy(() => {
+		if (searchTimer) clearTimeout(searchTimer);
+	});
+
+	beforeNavigate((navigation) => {
+		if (navigation.type === 'goto' && navigation.to?.url.pathname === '/issues') return;
+		// Cancel a pending debounce so it cannot re-apply a search after the user
+		// navigates away or presses Back/Forward.
+		if (searchTimer) clearTimeout(searchTimer);
+		searchTimer = undefined;
+		pendingSearch = null;
+	});
+
+	afterNavigate((navigation) => {
+		if (navigation.type !== 'popstate') return;
+		// Cancel any pending debounce and resync the input with the history target.
+		if (searchTimer) clearTimeout(searchTimer);
+		searchTimer = undefined;
+		pendingSearch = null;
+		search = navigation.to?.url.searchParams.get('search')?.trim() ?? '';
+	});
+
+	function updateParams(
+		mutate: (params: URLSearchParams) => void,
+		options?: { replace?: boolean }
+	) {
+		return updateIssueUrl(mutate, options);
+	}
+
+	async function applySearch(value: string) {
+		try {
+			await updateParams(
+				(params) => {
+					if (value) params.set('search', value);
+					else params.delete('search');
+				},
+				{ replace: true }
+			);
+		} finally {
+			if (pendingSearch === value) pendingSearch = null;
+		}
+	}
+
+	function scheduleSearch(value: string) {
+		search = value;
+		pendingSearch = value;
+		if (searchTimer) clearTimeout(searchTimer);
+		searchTimer = setTimeout(() => {
+			searchTimer = undefined;
+			void applySearch(value);
+		}, 300);
+	}
+
+	function flushSearch() {
+		if (searchTimer) clearTimeout(searchTimer);
+		searchTimer = undefined;
+		pendingSearch = search;
+		void applySearch(search);
+	}
+
+	function handleSearchKeydown(event: KeyboardEvent) {
+		if (event.key !== 'Enter') return;
+		event.preventDefault();
+		flushSearch();
 	}
 
 	function clearFilters() {
+		if (searchTimer) {
+			clearTimeout(searchTimer);
+			searchTimer = undefined;
+		}
+		search = '';
+		pendingSearch = null;
 		updateParams((params) => {
 			params.delete('status');
 			params.delete('severity');
 			params.delete('location');
 			params.delete('closed');
+			params.delete('search');
 		});
 	}
 
@@ -35,37 +117,45 @@
 	}
 
 	function toggleLocation(id: string) {
-		const next = filters.locationIds.includes(id)
-			? filters.locationIds.filter((locationId) => locationId !== id)
-			: [...filters.locationIds, id];
-
 		updateParams((params) => {
+			const current = parseIssueFilters(params).locationIds;
+			const next = current.includes(id)
+				? current.filter((locationId) => locationId !== id)
+				: [...current, id];
+
 			if (next.length === 0) params.delete('location');
 			else params.set('location', next.join(','));
 		});
 	}
 
-	function toggleStatus(status: IssueStatus) {
-		const isSelected = filters.statuses.includes(status);
-		// Never allow the filter to become empty - that would silently mean "all statuses".
-		if (isSelected && filters.statuses.length <= 1) return;
-
-		const next = isSelected
-			? filters.statuses.filter((value) => value !== status)
-			: [...filters.statuses, status];
-
+	function toggleStatus(status: IssueStatus, input: HTMLInputElement) {
+		let blocked = false;
 		updateParams((params) => {
+			const current = parseIssueFilters(params).statuses;
+			const isSelected = current.includes(status);
+			// Never allow the filter to become empty - that would silently mean "all statuses".
+			if (isSelected && current.length <= 1) {
+				blocked = true;
+				return;
+			}
+
+			const next = isSelected
+				? current.filter((value) => value !== status)
+				: [...current, status];
+
 			if (next.length === 0) params.delete('status');
 			else params.set('status', next.join(','));
 		});
+		if (blocked) input.checked = true;
 	}
 
 	function toggleSeverity(severity: IssueSeverity) {
-		const next = filters.severities.includes(severity)
-			? filters.severities.filter((value) => value !== severity)
-			: [...filters.severities, severity];
-
 		updateParams((params) => {
+			const current = parseIssueFilters(params).severities;
+			const next = current.includes(severity)
+				? current.filter((value) => value !== severity)
+				: [...current, severity];
+
 			if (next.length === 0) params.delete('severity');
 			else params.set('severity', next.join(','));
 		});
@@ -101,6 +191,18 @@
 	const chipIdle = 'border-neutral-300 text-neutral-600 hover:bg-neutral-50';
 </script>
 
+<div class="mb-3 print:hidden">
+	<input
+		type="search"
+		class="w-full rounded border border-neutral-300 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none"
+		placeholder={m.page_issues_filter_search_placeholder()}
+		aria-label={m.page_issues_filter_search()}
+		value={search}
+		oninput={(event) => scheduleSearch(event.currentTarget.value)}
+		onkeydown={handleSearchKeydown}
+	/>
+</div>
+
 <details class="mb-4 rounded border border-neutral-200 bg-white text-sm print:hidden">
 	<summary class="flex w-full cursor-pointer items-start gap-3 p-3">
 		<span class="shrink-0 text-xs font-semibold uppercase tracking-wide text-neutral-500">
@@ -112,6 +214,10 @@
 			<span>{m.page_issues_filter_status()}: {statusSummary}</span>
 			<span class="mx-1">·</span>
 			<span>{m.page_issues_filter_severity()}: {severitySummary}</span>
+			{#if filters.search}
+				<span class="mx-1">·</span>
+				<span>{m.page_issues_filter_search_summary({ query: filters.search })}</span>
+			{/if}
 		</span>
 		<span class="chevron mt-0.5 shrink-0 text-xs text-neutral-400 transition-transform" aria-hidden="true">▾</span>
 	</summary>
@@ -174,7 +280,7 @@
 								checked={filters.statuses.includes(status)}
 								disabled={filters.statuses.length <= 1 && filters.statuses.includes(status)}
 								title={m.page_issues_filter_status_required()}
-								onchange={() => toggleStatus(status)}
+								onchange={(event) => toggleStatus(status, event.currentTarget)}
 							/>
 							<span>{msg(`issue_status_${status}`) ?? status}</span>
 						</label>

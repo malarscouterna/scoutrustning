@@ -76,6 +76,12 @@ func (h *IssueHandler) List(w http.ResponseWriter, r *http.Request) {
 			locationIDs = append(locationIDs, id)
 		}
 	}
+	search := strings.TrimSpace(r.URL.Query().Get("search"))
+	search = strings.ToValidUTF8(search, "")
+	search = strings.ReplaceAll(search, "\x00", "")
+	if runes := []rune(search); len(runes) > 200 {
+		search = string(runes[:200])
+	}
 	mine := r.URL.Query().Get("mine") == "true"
 	var articleID pgtype.UUID
 	if v := r.URL.Query().Get("article_id"); v != "" {
@@ -95,6 +101,7 @@ func (h *IssueHandler) List(w http.ResponseWriter, r *http.Request) {
 		UserID:      claims.MemberID,
 		ArticleID:   articleID,
 		LocationIds: locationIDs,
+		Search:      search,
 	})
 	if err != nil {
 		slog.Error("failed to list issues", "error", err)

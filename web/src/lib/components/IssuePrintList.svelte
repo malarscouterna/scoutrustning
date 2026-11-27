@@ -1,11 +1,21 @@
 <script lang="ts">
 	import type { Issue, Location } from '#lib/api/client.ts';
-	import type { IssueFilterState, IssueGrouping, IssueSort } from '#lib/issues.ts';
-	import { ISSUE_GROUPINGS, ISSUE_SORTS, sortIssues } from '#lib/issues.ts';
+	import type {
+		IssueFilterState,
+		IssueGrouping,
+		IssuePrintField,
+		IssueSort
+	} from '#lib/issues.ts';
+	import {
+		ISSUE_GROUPINGS,
+		ISSUE_PRINT_FIELDS,
+		ISSUE_SORTS,
+		parseIssuePrintFields,
+		sortIssues
+	} from '#lib/issues.ts';
+	import { updateIssueUrl } from '#lib/issueUrl.ts';
 	import { msg } from '#lib/msg.ts';
 	import { issueSeverityColors, issueStatusColors } from '#lib/styles.ts';
-	import { goto } from '$app/navigation';
-	import { page } from '$app/state';
 	import * as m from '#lib/paraglide/messages.js';
 
 	interface Props {
@@ -13,14 +23,17 @@
 		locations: Location[];
 		grouping: IssueGrouping;
 		sort: IssueSort;
+		fields: IssuePrintField[];
 		groupName: string;
 		filters: IssueFilterState;
 		today: string;
 		dateLocale: string;
 	}
 
-	let { issues, locations, grouping, sort, groupName, filters, today, dateLocale }: Props =
+	let { issues, locations, grouping, sort, fields, groupName, filters, today, dateLocale }: Props =
 		$props();
+
+	let checkedIssueIds = $state<string[]>([]);
 
 	interface IssueGroup {
 		key: string;
@@ -35,11 +48,60 @@
 	const statusOrder = ['open', 'in_progress', 'resolved', 'archived'];
 
 	function updateParam(key: string, value: string) {
-		const url = new URL(page.url.href);
-		if (value) url.searchParams.set(key, value);
-		else url.searchParams.delete(key);
-		// SvelteKit 3 replaced `noScroll`/`keepFocus` with `reset: false`.
-		void goto(url, { reset: false });
+		void updateIssueUrl((params) => {
+			if (value) params.set(key, value);
+			else params.delete(key);
+		});
+	}
+
+	function toggleField(field: IssuePrintField) {
+		void updateIssueUrl(
+			(params) => {
+				const current = parseIssuePrintFields(params);
+				const next = current.includes(field)
+					? current.filter((value) => value !== field)
+					: [...current, field];
+				// Keep the param present even when empty: absent means defaults.
+				params.set(
+					'fields',
+					ISSUE_PRINT_FIELDS.filter((value) => next.includes(value)).join(',')
+				);
+			},
+			{ replace: true }
+		);
+	}
+
+	function fieldLabel(field: IssuePrintField): string {
+		switch (field) {
+			case 'title':
+				return m.page_issues_csv_title();
+			case 'status':
+				return m.page_issues_filter_status();
+			case 'severity':
+				return m.page_issues_filter_severity();
+			case 'location':
+				return m.page_issues_print_location();
+			case 'assignee':
+				return m.page_issues_print_assigned();
+			case 'reporter':
+				return m.page_issues_print_reporter();
+			case 'date':
+				return m.page_issues_print_field_date();
+			case 'description':
+				return m.page_issue_description_heading();
+			case 'checkbox':
+				return m.page_issues_print_field_checkbox();
+			case 'id':
+				return m.page_issues_print_field_id();
+			default:
+				return field;
+		}
+	}
+
+	function toggleChecked(issueId: string) {
+		checkedIssueIds = checkedIssueIds.includes(issueId)
+			? checkedIssueIds.filter((id) => id !== issueId)
+			: [...checkedIssueIds, issueId];
 	}
 
 	function addToGroup(groups: Map<string, IssueGroup>, key: string, label: string, issue: Issue) {
@@ -154,6 +216,28 @@
 		return issue.assignees.map((assignee) => assignee.user_name).join(', ');
 	}
 
+	function metaItems(issue: Issue): string[] {
+		const items: string[] = [];
+		if (fields.includes('location')) {
+			const names = locationNames(issue);
+			items.push(
+				`${m.page_issues_print_location()}: ${
+					names.length > 0 ? names.join(', ') : m.page_issues_print_unknown_location()
+				}`
+			);
+		}
+		if (fields.includes('assignee')) {
+			items.push(`${m.page_issues_print_assigned()}: ${assigneeNames(issue)}`);
+		}
+		if (fields.includes('reporter')) {
+			items.push(`${m.page_issues_print_reporter()}: ${issue.reporter_name}`);
+		}
+		if (fields.includes('date')) {
+			items.push(formatDate(issue.created_at));
+		}
+		return items;
+	}
+
 	let filterSummary = $derived.by(() => {
 		const selectedLocations = filters.locationIds
 			.map((id) => locations.find((location) => location.id === id)?.name)
@@ -171,7 +255,15 @@
 				? filters.severities.map((severity) => msg(`issue_severity_${severity}`) ?? severity).join(', ')
 				: m.page_issues_filter_all();
 
-		return `${m.page_issues_filter_locations()}: ${locationText} · ${m.page_issues_filter_status()}: ${statusText} · ${m.page_issues_filter_severity()}: ${severityText}`;
+		const parts = [
+			`${m.page_issues_filter_locations()}: ${locationText}`,
+			`${m.page_issues_filter_status()}: ${statusText}`,
+			`${m.page_issues_filter_severity()}: ${severityText}`
+		];
+		if (filters.search) {
+			parts.push(m.page_issues_filter_search_summary({ query: filters.search }));
+		}
+		return parts.join(' · ');
 	});
 </script>
 
@@ -220,6 +312,25 @@
 			{/each}
 		</select>
 	</label>
+
+	<details class="w-full">
+		<summary class="cursor-pointer text-xs font-medium text-neutral-500">
+			{m.page_issues_print_fields()}
+		</summary>
+		<div class="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-5">
+			{#each ISSUE_PRINT_FIELDS as field (field)}
+				<label class="flex items-center gap-2 text-xs">
+					<input
+						type="checkbox"
+						class="h-3 w-3 accent-blue-700"
+						checked={fields.includes(field)}
+						onchange={() => toggleField(field)}
+					/>
+					<span>{fieldLabel(field)}</span>
+				</label>
+			{/each}
+		</div>
+	</details>
 </div>
 
 {#if issues.length === 0}
@@ -238,51 +349,72 @@
 				<div class="space-y-3">
 					{#each group.issues as issue (issue.id)}
 						<article class="break-inside-avoid border-b border-neutral-200 pb-3 last:border-b-0">
-							<div class="flex flex-wrap items-start justify-between gap-2">
-								<a
-									href="/issues/{issue.id}"
-									class="text-sm font-medium text-blue-800 hover:underline print:text-black print:no-underline"
-								>
-									{issue.title}
-								</a>
-								<div class="flex flex-wrap gap-1">
-									<span
-										class="rounded px-2 py-0.5 text-[11px] font-medium {issueStatusColors[
-											issue.status
-										] ?? 'bg-neutral-100'} print:border print:border-neutral-400 print:bg-transparent print:text-black"
-									>
-										{msg(`issue_status_${issue.status}`) ?? issue.status}
-									</span>
-									<span
-										class="rounded px-2 py-0.5 text-[11px] font-medium {issueSeverityColors[
-											issue.severity
-										] ?? 'bg-neutral-100'} print:border print:border-neutral-400 print:bg-transparent print:text-black"
-									>
-										{msg(`issue_severity_${issue.severity}`) ?? issue.severity}
-									</span>
+							<div class="flex items-start gap-2">
+								{#if fields.includes('checkbox')}
+									<input
+										type="checkbox"
+										class="mt-0.5 h-4 w-4 shrink-0 accent-blue-700"
+										checked={checkedIssueIds.includes(issue.id)}
+										onchange={() => toggleChecked(issue.id)}
+										aria-label={issue.title}
+									/>
+								{/if}
+
+								<div class="min-w-0 flex-1">
+									<div class="flex flex-wrap items-start justify-between gap-2">
+										<div class="flex flex-wrap items-baseline gap-2">
+											{#if fields.includes('id')}
+												<span class="font-mono text-[11px] text-neutral-500">
+													#{issue.id.slice(0, 6)}
+												</span>
+											{/if}
+											{#if fields.includes('title')}
+												<a
+													href="/issues/{issue.id}"
+													class="text-sm font-medium text-blue-800 hover:underline print:text-black print:no-underline"
+												>
+													{issue.title}
+												</a>
+											{/if}
+										</div>
+
+										{#if fields.includes('status') || fields.includes('severity')}
+											<div class="flex flex-wrap gap-1">
+												{#if fields.includes('status')}
+													<span
+														class="rounded px-2 py-0.5 text-[11px] font-medium {issueStatusColors[
+															issue.status
+														] ?? 'bg-neutral-100'} print:border print:border-neutral-400 print:bg-transparent print:text-black"
+													>
+														{msg(`issue_status_${issue.status}`) ?? issue.status}
+													</span>
+												{/if}
+												{#if fields.includes('severity')}
+													<span
+														class="rounded px-2 py-0.5 text-[11px] font-medium {issueSeverityColors[
+															issue.severity
+														] ?? 'bg-neutral-100'} print:border print:border-neutral-400 print:bg-transparent print:text-black"
+													>
+														{msg(`issue_severity_${issue.severity}`) ?? issue.severity}
+													</span>
+												{/if}
+											</div>
+										{/if}
+									</div>
+
+									{#if metaItems(issue).length > 0}
+										<p class="mt-1 text-xs text-neutral-600">
+											{metaItems(issue).join(' · ')}
+										</p>
+									{/if}
+
+									{#if fields.includes('description') && issue.description}
+										<p class="mt-1 whitespace-pre-line break-words text-sm text-neutral-800">
+											{issue.description}
+										</p>
+									{/if}
 								</div>
 							</div>
-
-							<p class="mt-1 text-xs text-neutral-600">
-								<span>
-									{m.page_issues_print_location()}:
-									{locationNames(issue).length > 0
-										? locationNames(issue).join(', ')
-										: m.page_issues_print_unknown_location()}
-								</span>
-								<span class="mx-1">·</span>
-								<span>{m.page_issues_print_assigned()}: {assigneeNames(issue)}</span>
-								<span class="mx-1">·</span>
-								<span>{m.page_issues_print_reporter()}: {issue.reporter_name}</span>
-								<span class="mx-1">·</span>
-								<span>{formatDate(issue.created_at)}</span>
-							</p>
-
-							{#if issue.description}
-								<p class="mt-1 whitespace-pre-line break-words text-sm text-neutral-800">
-									{issue.description}
-								</p>
-							{/if}
 						</article>
 					{/each}
 				</div>

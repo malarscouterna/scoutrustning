@@ -14,7 +14,9 @@ WHERE ir.id = @id AND ir.group_id = @group_id;
 -- name: ListIssues :many
 -- Filters: status (comma-separated via array), severity (comma-separated via array),
 -- mine (reporter_id = user_id OR assigned), article_id (linked articles),
--- location_ids (issues with a linked article at any of the selected locations).
+-- location_ids (issues with a linked article at any of the selected locations),
+-- search (case-insensitive substring across title, description, reporter, assignees,
+-- article/location names, issue id, and comments in the thread).
 SELECT
     ir.*,
     u.name AS reporter_name
@@ -23,6 +25,51 @@ JOIN users u ON ir.reporter_id = u.id
 WHERE ir.group_id = @group_id
     AND (COALESCE(array_length(@statuses::text[], 1), 0) = 0 OR ir.status = ANY(@statuses::text[]))
     AND (COALESCE(array_length(@severities::text[], 1), 0) = 0 OR ir.severity = ANY(@severities::text[]))
+    AND (
+        @search::text = ''
+        OR strpos(lower(ir.title), lower(@search)) > 0
+        OR strpos(lower(ir.description), lower(@search)) > 0
+        OR strpos(lower(u.name), lower(@search)) > 0
+        OR (
+            replace(ltrim(lower(@search), '#'), '-', '') <> ''
+            AND (
+                strpos(lower(ir.id::text), ltrim(lower(@search), '#')) > 0
+                OR strpos(
+                    replace(lower(ir.id::text), '-', ''),
+                    replace(ltrim(lower(@search), '#'), '-', '')
+                ) > 0
+            )
+        )
+        OR EXISTS (
+            SELECT 1
+            FROM issue_assignees sa
+            JOIN users su ON sa.user_id = su.id
+            WHERE sa.issue_id = ir.id
+              AND sa.group_id = @group_id
+              AND strpos(lower(su.name), lower(@search)) > 0
+        )
+        OR EXISTS (
+            SELECT 1
+            FROM issue_articles sar
+            JOIN articles ar ON sar.article_id = ar.id
+            JOIN locations sl ON ar.location_id = sl.id
+            WHERE sar.issue_id = ir.id
+              AND sar.group_id = @group_id
+              AND (
+                  strpos(lower(ar.commercial_name), lower(@search)) > 0
+                  OR strpos(lower(ar.common_name), lower(@search)) > 0
+                  OR strpos(lower(sl.name), lower(@search)) > 0
+              )
+        )
+        OR EXISTS (
+            SELECT 1
+            FROM issue_events se
+            WHERE se.issue_id = ir.id
+              AND se.group_id = @group_id
+              AND se.event_type = 'comment'
+              AND strpos(lower(se.description), lower(@search)) > 0
+        )
+    )
     AND (NOT @mine::bool OR (
         ir.reporter_id = @user_id
         OR ir.id IN (
