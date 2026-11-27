@@ -19,7 +19,25 @@ WHERE ir.id = @id AND ir.group_id = @group_id;
 -- article/location names, issue id, and comments in the thread).
 SELECT
     ir.*,
-    u.name AS reporter_name
+    u.name AS reporter_name,
+    CASE
+        WHEN @include_mine::bool THEN (
+            ir.reporter_id = @user_id
+            OR EXISTS (
+                SELECT 1 FROM issue_assignees m_ia
+                WHERE m_ia.issue_id = ir.id
+                  AND m_ia.user_id = @user_id
+                  AND m_ia.group_id = @group_id
+            )
+            OR EXISTS (
+                SELECT 1 FROM issue_events m_ie
+                WHERE m_ie.issue_id = ir.id
+                  AND m_ie.actor_id = @user_id
+                  AND m_ie.group_id = @group_id
+            )
+        )
+        ELSE false
+    END AS is_mine
 FROM issue_reports ir
 JOIN users u ON ir.reporter_id = u.id
 WHERE ir.group_id = @group_id
@@ -89,6 +107,27 @@ WHERE ir.group_id = @group_id
         WHERE ia.group_id = @group_id AND a.location_id = ANY(@location_ids::uuid[])
     ))
 ORDER BY ir.updated_at DESC, ir.created_at DESC;
+
+-- name: HasIssues :one
+-- Whether the group (or the user, with mine = true) has any issues at all.
+-- Used to distinguish "no issues yet" from "no issues match the filters".
+SELECT EXISTS (
+    SELECT 1
+    FROM issue_reports ir
+    WHERE ir.group_id = @group_id
+      AND (
+          NOT @mine::bool
+          OR ir.reporter_id = @user_id
+          OR ir.id IN (
+              SELECT issue_id FROM issue_assignees
+              WHERE user_id = @user_id AND group_id = @group_id
+          )
+          OR ir.id IN (
+              SELECT issue_id FROM issue_events
+              WHERE actor_id = @user_id AND group_id = @group_id
+          )
+      )
+);
 
 -- name: GetUserIssues :many
 -- Open/in-progress issues reported by or assigned to the given user. Used by the

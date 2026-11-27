@@ -320,6 +320,8 @@ export interface Issue {
 	updated_at: string;
 	articles: IssueArticle[];
 	assignees: IssueAssignee[];
+	/** Only meaningful when the list was requested with include_mine=true. */
+	is_mine: boolean;
 }
 
 // Issue as returned by GET /issues/:id, POST /issues, etc. (detail)
@@ -725,16 +727,23 @@ updateLanguage: (language: string | null) =>
 			requestMut<void>(`/categories/${id}`, 'DELETE', undefined, opts),
 
 		// Issues
-		listIssues: (params?: { status?: string; mine?: boolean; article_id?: string; severity?: string; location_ids?: string[]; search?: string }) => {
+		listIssues: (params?: { status?: string; mine?: boolean; include_mine?: boolean; article_id?: string; severity?: string; location_ids?: string[]; search?: string }) => {
 			const query = new URLSearchParams();
 			if (params?.status) query.set('status', params.status);
 			if (params?.mine) query.set('mine', 'true');
+			if (params?.include_mine) query.set('include_mine', 'true');
 			if (params?.article_id) query.set('article_id', params.article_id);
 			if (params?.severity) query.set('severity', params.severity);
 			if (params?.location_ids?.length) query.set('location_ids', params.location_ids.join(','));
 			if (params?.search) query.set('search', params.search);
 			const qs = query.toString();
 			return request<Issue[]>(`/issues${qs ? '?' + qs : ''}`, opts);
+		},
+		hasIssues: (params?: { mine?: boolean }) => {
+			const query = new URLSearchParams();
+			if (params?.mine) query.set('mine', 'true');
+			const qs = query.toString();
+			return request<{ exists: boolean }>(`/issues/exists${qs ? '?' + qs : ''}`, opts);
 		},
 		createIssue: (data: { article_id: string; severity: string; description: string; booking_id?: string; image_ids?: string[]; count?: number }) =>
 			requestMut<IssueDetail>('/issues', 'POST', data, opts),

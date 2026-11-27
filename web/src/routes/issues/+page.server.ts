@@ -1,48 +1,46 @@
 import { createApiClient } from '#lib/api/client.ts';
 import { isManager } from '#lib/user.ts';
-import {
-	parseIssueFilters,
-	parseIssueGrouping,
-	parseIssuePrintFields,
-	parseIssueSort
-} from '#lib/issues.ts';
+import { parseIssueFilters } from '#lib/issues.ts';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ fetch, url, parent }) => {
 	const api = createApiClient({ fetch });
 	const { user } = await parent();
 	const filters = parseIssueFilters(url.searchParams);
-	const printMode = url.searchParams.get('print') === 'true';
-	const grouping = parseIssueGrouping(url.searchParams.get('group'));
-	const sort = parseIssueSort(url.searchParams.get('sort'));
-	const fields = parseIssuePrintFields(url.searchParams);
+	const manager = isManager(user);
 
 	const status = filters.statuses.join(',') || undefined;
 	const severity = filters.severities.join(',') || undefined;
 	const search = filters.search || undefined;
 
-	const [myIssues, allIssues, locations] = await Promise.all([
-		api.listIssues({
-			status,
-			severity,
-			location_ids: filters.locationIds,
-			search,
-			mine: true
-		}),
-		isManager(user)
+	// Managers need the full group list plus a flag for their own issues. Fetch
+	// it once instead of running the same filtered query twice.
+	const [issues, locations] = await Promise.all([
+		manager
 			? api.listIssues({
 					status,
 					severity,
 					location_ids: filters.locationIds,
-					search
+					search,
+					include_mine: true
 				})
-			: Promise.resolve([]),
+			: api.listIssues({
+					status,
+					severity,
+					location_ids: filters.locationIds,
+					search,
+					mine: true
+				}),
 		api.listLocations()
 	]);
 
-	const myIds = new Set(myIssues.map((i) => i.id));
-	const otherIssues = allIssues.filter((i) => !myIds.has(i.id));
-	const printIssues = isManager(user) ? allIssues : myIssues;
+	const myIssues = manager ? issues.filter((issue) => issue.is_mine) : issues;
+	const otherIssues = manager ? issues.filter((issue) => !issue.is_mine) : [];
+	const printIssues = issues;
+	// Only when the filtered result is empty do we need to know whether the user
+	// has no issues at all or simply none matching the current filters.
+	const hasAnyIssues =
+		issues.length > 0 || (await api.hasIssues({ mine: !manager })).exists;
 	const dateLocale = user?.language === 'en' ? 'en-GB' : 'sv-SE';
 	const today = new Intl.DateTimeFormat(dateLocale, {
 		dateStyle: 'long',
@@ -61,13 +59,10 @@ export const load: PageServerLoad = async ({ fetch, url, parent }) => {
 		printIssues,
 		locations,
 		filters,
-		printMode,
-		grouping,
-		sort,
-		fields,
+		hasAnyIssues,
 		today,
 		dateStamp,
 		dateLocale,
-		isManager: isManager(user)
+		isManager: manager
 	};
 };

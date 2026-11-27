@@ -8,19 +8,17 @@ export const load: PageServerLoad = async ({ fetch, parent }) => {
 
 	if (!user) return { bookings: [], myIssues: [], managerIssues: [], pendingApprovals: [] };
 
-	const [bookings, myIssues] = await Promise.all([
+	const manager = isManager(user);
+	const [bookings, issues, pendingApprovals] = await Promise.all([
 		api.listBookings(),
-		api.listIssues({ mine: true, status: 'open,in_progress' })
+		manager
+			? api.listIssues({ status: 'open,in_progress', include_mine: true })
+			: api.listIssues({ mine: true, status: 'open,in_progress' }),
+		manager ? api.listPendingApprovals() : Promise.resolve([])
 	]);
 
-	let managerIssues: Awaited<ReturnType<typeof api.listIssues>> = [];
-	let pendingApprovals: Awaited<ReturnType<typeof api.listBookings>> = [];
-	if (isManager(user)) {
-		[managerIssues, pendingApprovals] = await Promise.all([
-			api.listIssues({ status: 'open,in_progress' }),
-			api.listPendingApprovals()
-		]);
-	}
+	const myIssues = manager ? issues.filter((issue) => issue.is_mine) : issues;
+	const managerIssues = manager ? issues.filter((issue) => !issue.is_mine) : [];
 
 	return { bookings, myIssues, managerIssues, pendingApprovals };
 };

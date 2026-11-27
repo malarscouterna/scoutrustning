@@ -576,9 +576,12 @@ Issue reports are first-class entities. Each issue has a URL, lifecycle, assigne
 ### `GET /api/v0/issues`
 List issues for the group. Any authenticated user.
 
-**Query params**: `status` (comma-separated: `open,in_progress,resolved,archived`), `severity` (comma-separated: `usable,unusable,missing`), `mine=true` (issues the user reported or is assigned to), `article_id` (UUID), `location_ids` (comma-separated location UUIDs; matches issues with at least one linked article at any of the locations), `search` (case-insensitive substring; matches title, description, reporter/assignee names, article and location names, the issue UUID with or without hyphens, and comments in the thread).
+**Query params**: `status` (comma-separated: `open,in_progress,resolved,archived`), `severity` (comma-separated: `usable,unusable,missing`), `mine=true` (issues the user reported or is assigned to), `include_mine=true` (adds an `is_mine` boolean per issue; used by managers to split the group list in one request), `article_id` (UUID), `location_ids` (comma-separated location UUIDs; matches issues with at least one linked article at any of the locations), `search` (case-insensitive substring; matches title, description, reporter/assignee names, article and location names, the issue UUID with or without hyphens, and comments in the thread).
 
-**Response** `200` - array of issue objects with nested `articles` and `assignees` arrays.
+**Response** `200` - array of issue objects with nested `articles` and `assignees` arrays, plus `is_mine` (always present; only computed when `include_mine=true`).
+
+### `GET /api/v0/issues/exists`
+Returns `{"exists": true|false}` indicating whether the group has any issues at all, or any of the current user's issues with `mine=true`. Used by the UI to distinguish “no issues yet” from “no issues match the current filters”.
 
 ### `POST /api/v0/issues`
 Create an issue. Any authenticated user.

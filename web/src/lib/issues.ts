@@ -90,6 +90,12 @@ export function parseIssueGrouping(value: string | null): IssueGrouping {
 	return isOneOf(ISSUE_GROUPINGS, value ?? '') ? (value as IssueGrouping) : 'location';
 }
 
+export function parseIssueCompactMode(params: URLSearchParams): boolean {
+	// `print=true` was the original parameter name; keep supporting old links and
+	// bookmarks while new toggles write `compact=true`.
+	return params.get('compact') === 'true' || params.get('print') === 'true';
+}
+
 export function parseIssueSort(value: string | null): IssueSort {
 	return isOneOf(ISSUE_SORTS, value ?? '') ? (value as IssueSort) : 'oldest';
 }

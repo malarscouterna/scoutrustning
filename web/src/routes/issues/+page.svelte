@@ -8,13 +8,17 @@
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 	import { downloadTextFile, sanitizeFileName, toCsv } from '#lib/download.ts';
-	import { resetIssueUrlQueue, updateIssueUrl } from '#lib/issueUrl.ts';
-	import { sortIssues } from '#lib/issues.ts';
+	import { currentIssueUrl, resetIssueUrlQueue, updateIssueUrl } from '#lib/issueUrl.ts';
+	import { parseIssueCompactMode, parseIssueSort, sortIssues } from '#lib/issues.ts';
 	import { msg } from '#lib/msg.ts';
 	import type { Issue } from '#lib/api/client.ts';
 	import * as m from '#lib/paraglide/messages.js';
 
 	let { data }: { data: PageData } = $props();
+
+	let issueUrl = $derived(currentIssueUrl());
+	let compactMode = $derived(parseIssueCompactMode(issueUrl.searchParams));
+	let sort = $derived(parseIssueSort(issueUrl.searchParams.get('sort')));
 
 	onMount(() => {
 		// Drop any queued URL updates left over from an earlier visit.
@@ -71,7 +75,7 @@
 	}
 
 	function exportCsv() {
-		const issues = sortIssues(data.printIssues, data.sort);
+		const issues = sortIssues(data.printIssues, sort);
 		const rows = [
 			[
 				m.page_issues_csv_title(),
@@ -99,11 +103,16 @@
 		downloadTextFile(`${exportFileBase}.csv`, toCsv(rows), 'text/csv;charset=utf-8');
 	}
 
-	function togglePrintMode() {
-		void updateIssueUrl((params) => {
-			if (params.get('print') === 'true') params.delete('print');
-			else params.set('print', 'true');
-		});
+	function toggleCompactMode() {
+		void updateIssueUrl(
+			(params) => {
+				const isCompact = parseIssueCompactMode(params);
+				params.delete('print');
+				if (isCompact) params.delete('compact');
+				else params.set('compact', 'true');
+			},
+			{ shallow: true }
+		);
 	}
 </script>
 
@@ -113,10 +122,10 @@
 		<div class="flex flex-wrap items-center gap-2">
 			<button
 				type="button"
-				onclick={togglePrintMode}
+				onclick={toggleCompactMode}
 				class="rounded border border-neutral-300 px-3 py-2 text-sm text-neutral-600 hover:bg-neutral-50"
 			>
-				{data.printMode
+				{compactMode
 					? m.page_issues_btn_close_print_mode()
 					: m.page_issues_btn_print_mode()}
 			</button>
@@ -131,7 +140,7 @@
 
 	<IssueFilters locations={data.locations} filters={data.filters} />
 
-	<div class={data.printMode ? 'hidden' : 'print:hidden'}>
+	<div class={compactMode ? 'hidden' : 'print:hidden'}>
 		{#if data.myIssues.length > 0}
 			<section class="mb-6">
 				<h2 class="mb-2 text-sm font-medium text-neutral-500">{m.page_issues_my_issues()}</h2>
@@ -155,17 +164,17 @@
 		{/if}
 
 		{#if data.myIssues.length === 0 && (!data.isManager || data.otherIssues.length === 0)}
-			<p class="text-sm text-neutral-500">{m.page_issues_empty()}</p>
+			<p class="text-sm text-neutral-500">
+				{data.hasAnyIssues ? m.page_issues_print_no_issues() : m.page_issues_empty()}
+			</p>
 		{/if}
 	</div>
 
-	<div class={data.printMode ? '' : 'hidden print:block'}>
+	<div class={compactMode ? '' : 'hidden print:block'}>
 		<IssuePrintList
 			issues={data.printIssues}
 			locations={data.locations}
-			grouping={data.grouping}
-			sort={data.sort}
-			fields={data.fields}
+			hasAnyIssues={data.hasAnyIssues}
 			groupName={page.data.user?.group_name ?? ''}
 			filters={data.filters}
 			today={data.today}
