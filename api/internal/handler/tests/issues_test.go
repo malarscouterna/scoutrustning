@@ -2,9 +2,11 @@ package tests
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -717,11 +719,38 @@ func TestIssueList_FiltersAndAssignees(t *testing.T) {
 	}
 
 	hajkIssueID := newIssue(hajkArticle, "unusable", "Hajk issue")
-	newIssue(kammareArticle, "missing", "Kammaren issue")
+	kammareIssueID := newIssue(kammareArticle, "missing", "Kammaren issue")
 
 	// Assign the leader so the list response's assignees can be verified.
 	b, _ := json.Marshal(map[string]string{"user_id": "3000005"})
 	resp, err := manager.Post("/api/v0/issues/"+hajkIssueID+"/assignees", bytes.NewReader(b))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("expected 201 assigning issue, got %d: %s", resp.StatusCode, body)
+	}
+	resp.Body.Close()
+
+	// Searchable comment on the Hajk issue.
+	b, _ = json.Marshal(map[string]string{"description": "Tältstången är sprucken"})
+	resp, err = leader.Post("/api/v0/issues/"+hajkIssueID+"/comments", bytes.NewReader(b))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("expected 201 adding comment, got %d: %s", resp.StatusCode, body)
+	}
+	resp.Body.Close()
+
+	// Assign a different member to the Kammaren issue so assignee search is
+	// distinguishable from the reporter (who is also the Hajk assignee).
+	b, _ = json.Marshal(map[string]string{"user_id": "3000002"})
+	resp, err = manager.Post("/api/v0/issues/"+kammareIssueID+"/assignees", bytes.NewReader(b))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -779,6 +808,148 @@ func TestIssueList_FiltersAndAssignees(t *testing.T) {
 		issues := listIssues("?location_ids=" + hajkID + "&severity=missing")
 		if len(issues) != 0 {
 			t.Errorf("expected no missing issues at Hajkförrådet, got %d", len(issues))
+		}
+	})
+
+	t.Run("search matches title and description case-insensitively", func(t *testing.T) {
+		issues := listIssues("?search=HAJK")
+		if len(issues) != 1 {
+			t.Fatalf("expected 1 issue matching HAJK, got %d", len(issues))
+		}
+		if issues[0]["id"] != hajkIssueID {
+			t.Errorf("expected the Hajk issue, got %v", issues[0]["id"])
+		}
+	})
+
+	t.Run("search matches comments in the thread", func(t *testing.T) {
+		issues := listIssues("?search=sprucken")
+		if len(issues) != 1 {
+			t.Fatalf("expected 1 issue with matching comment, got %d", len(issues))
+		}
+		if issues[0]["id"] != hajkIssueID {
+			t.Errorf("expected the Hajk issue, got %v", issues[0]["id"])
+		}
+	})
+
+	t.Run("search matches issue id prefix", func(t *testing.T) {
+		issues := listIssues("?search=" + hajkIssueID[:6])
+		if len(issues) != 1 {
+			t.Fatalf("expected 1 issue matching id prefix, got %d", len(issues))
+		}
+		if issues[0]["id"] != hajkIssueID {
+			t.Errorf("expected the Hajk issue, got %v", issues[0]["id"])
+		}
+	})
+
+	t.Run("search accepts the displayed id with hash and full uuid", func(t *testing.T) {
+		for _, query := range []string{
+			url.QueryEscape("#" + hajkIssueID[:6]),
+			url.QueryEscape(hajkIssueID),
+		} {
+			issues := listIssues("?search=" + query)
+			if len(issues) != 1 {
+				t.Fatalf("expected 1 issue for search %q, got %d", query, len(issues))
+			}
+			if issues[0]["id"] != hajkIssueID {
+				t.Errorf("expected the Hajk issue for search %q, got %v", query, issues[0]["id"])
+			}
+		}
+	})
+
+	t.Run("search ignores whitespace and malformed text", func(t *testing.T) {
+		for _, query := range []string{
+			url.QueryEscape("   "),
+			"%00",
+			"%FF",
+		} {
+			issues := listIssues("?search=" + query)
+			if len(issues) != 2 {
+				t.Errorf("expected all 2 issues for blank search %q, got %d", query, len(issues))
+			}
+		}
+	})
+
+	t.Run("search treats percent and underscore literally", func(t *testing.T) {
+		for _, query := range []string{"%25", "_"} {
+			if issues := listIssues("?search=" + query); len(issues) != 0 {
+				t.Errorf("expected no issues for literal search %q, got %d", query, len(issues))
+			}
+		}
+	})
+
+	t.Run("hyphen-only search does not match every issue id", func(t *testing.T) {
+		// Generated titles contain " - ", which is a legitimate text match. Remove
+		// hyphens from the titles so only the UUID branch could cause a match.
+		ctx := context.Background()
+		var hajkTitle, kammareTitle string
+		if err := env.Pool.QueryRow(ctx, "SELECT title FROM issue_reports WHERE id = $1::uuid", hajkIssueID).Scan(&hajkTitle); err != nil {
+			t.Fatal(err)
+		}
+		if err := env.Pool.QueryRow(ctx, "SELECT title FROM issue_reports WHERE id = $1::uuid", kammareIssueID).Scan(&kammareTitle); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := env.Pool.Exec(ctx, "UPDATE issue_reports SET title = 'No hyphens'"); err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			if _, err := env.Pool.Exec(ctx, "UPDATE issue_reports SET title = $1 WHERE id = $2::uuid", hajkTitle, hajkIssueID); err != nil {
+				t.Errorf("restoring hajk title: %v", err)
+			}
+			if _, err := env.Pool.Exec(ctx, "UPDATE issue_reports SET title = $1 WHERE id = $2::uuid", kammareTitle, kammareIssueID); err != nil {
+				t.Errorf("restoring kammare title: %v", err)
+			}
+		}()
+
+		if issues := listIssues("?search=-"); len(issues) != 0 {
+			t.Errorf("expected no issues for hyphen-only search, got %d", len(issues))
+		}
+	})
+
+	t.Run("hash only selects the id, not text", func(t *testing.T) {
+		if issues := listIssues("?search=" + url.QueryEscape("#Hajk")); len(issues) != 0 {
+			t.Errorf("expected no issues for #Hajk, got %d", len(issues))
+		}
+	})
+
+	t.Run("overlong search is accepted but cannot match", func(t *testing.T) {
+		if issues := listIssues("?search=" + strings.Repeat("a", 250)); len(issues) != 0 {
+			t.Errorf("expected no issues for overlong search, got %d", len(issues))
+		}
+	})
+
+	t.Run("search matches reporter and assignee names", func(t *testing.T) {
+		if issues := listIssues("?search=Hanna"); len(issues) != 2 {
+			t.Errorf("expected 2 issues reported by Hanna, got %d", len(issues))
+		}
+		issues := listIssues("?search=Gillis")
+		if len(issues) != 1 {
+			t.Fatalf("expected 1 issue assigned to Gillis, got %d", len(issues))
+		}
+		if issues[0]["id"] != kammareIssueID {
+			t.Errorf("expected the Kammaren issue, got %v", issues[0]["id"])
+		}
+	})
+
+	t.Run("search matches location and article names", func(t *testing.T) {
+		if issues := listIssues("?search=Hajkförrådet"); len(issues) != 1 {
+			t.Errorf("expected 1 issue at Hajkförrådet, got %d", len(issues))
+		}
+		// The common name is not used in the generated title, so this isolates
+		// the linked-article branch of the search.
+		if issues := listIssues("?search=" + url.QueryEscape("FilterKammare 1")); len(issues) != 1 {
+			t.Errorf("expected 1 issue with the FilterKammare common name, got %d", len(issues))
+		}
+	})
+
+	t.Run("search combines with other filters", func(t *testing.T) {
+		if issues := listIssues("?search=Hajk&severity=missing"); len(issues) != 0 {
+			t.Errorf("expected no missing Hajk issues, got %d", len(issues))
+		}
+	})
+
+	t.Run("search with no match returns none", func(t *testing.T) {
+		if issues := listIssues("?search=zzzz-no-such-issue"); len(issues) != 0 {
+			t.Errorf("expected no issues, got %d", len(issues))
 		}
 	})
 

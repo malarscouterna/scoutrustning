@@ -218,7 +218,9 @@ Har du skrivit fel, eller visade sig problemet vara större eller mindre än du 
 Tryck **Kompakt vy** för att visa en kompakt lista anpassad för papper. Där ser du varje ärendes rubrik, status, allvarlighetsgrad, plats, tilldelad person, rapportör och hela felbeskrivningen.
 
 - Filtrera på en eller flera platser, status och allvarlighetsgrad innan du skriver ut eller exporterar. Filtren finns även i den vanliga ärendelistan och sparas i adressen, så de kan bokmärkas eller delas.
+- Använd sökfältet för att hitta ärenden på rubrik, beskrivning, rapportör, tilldelad person, utrustning, plats, ärendenummer eller kommentarer i tråden. Sökningen gäller även utskrift och CSV-export.
 - Välj gruppering: **Plats**, **Allvarlighetsgrad**, **Status** eller **Tilldelad person**. Välj också sortering inom grupperna.
+- Under **Visa fält** väljer du vilka uppgifter som visas för varje ärende: rubrik, status, allvarlighetsgrad, plats, tilldelad person, rapportör, datum och beskrivning. Du kan också lägga till en kryssruta att bocka av på papperet och ett kort ärendenummer (de första sex tecknen i ärendets id).
 - **Skriv ut** skriver ut listan. Välj **Spara som PDF** i skrivardialogen för att spara den som PDF med samma layout.
 - **Exportera CSV** laddar ner den filtrerade listan som en CSV-fil som kan öppnas i Excel, Google Kalkylark, LibreOffice och liknande.
 - Filerna får automatiskt ett namn med kår, plats och datum.

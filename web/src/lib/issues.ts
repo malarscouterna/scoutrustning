@@ -5,16 +5,40 @@ export const ISSUE_SEVERITIES = ['missing', 'unusable', 'usable'] as const;
 export const DEFAULT_ISSUE_STATUSES: IssueStatus[] = ['open', 'in_progress'];
 export const ISSUE_GROUPINGS = ['location', 'severity', 'status', 'assignee'] as const;
 export const ISSUE_SORTS = ['oldest', 'newest', 'updated'] as const;
+export const ISSUE_PRINT_FIELDS = [
+	'checkbox',
+	'id',
+	'title',
+	'status',
+	'severity',
+	'location',
+	'assignee',
+	'reporter',
+	'date',
+	'description'
+] as const;
+export const DEFAULT_ISSUE_PRINT_FIELDS: IssuePrintField[] = [
+	'title',
+	'status',
+	'severity',
+	'location',
+	'assignee',
+	'reporter',
+	'date',
+	'description'
+];
 
 export type IssueStatus = (typeof ISSUE_STATUSES)[number];
 export type IssueSeverity = (typeof ISSUE_SEVERITIES)[number];
 export type IssueGrouping = (typeof ISSUE_GROUPINGS)[number];
 export type IssueSort = (typeof ISSUE_SORTS)[number];
+export type IssuePrintField = (typeof ISSUE_PRINT_FIELDS)[number];
 
 export interface IssueFilterState {
 	statuses: IssueStatus[];
 	severities: IssueSeverity[];
 	locationIds: string[];
+	search: string;
 }
 
 function csvValues(params: URLSearchParams, key: string): string[] {
@@ -51,8 +75,15 @@ export function parseIssueFilters(params: URLSearchParams): IssueFilterState {
 		severities: csvValues(params, 'severity').filter(
 			(value): value is IssueSeverity => isOneOf(ISSUE_SEVERITIES, value)
 		),
-		locationIds: csvValues(params, 'location').filter(isUUID)
+		locationIds: csvValues(params, 'location').filter(isUUID),
+		search: (params.get('search') ?? '').trim()
 	};
+}
+
+export function parseIssuePrintFields(params: URLSearchParams): IssuePrintField[] {
+	if (!params.has('fields')) return [...DEFAULT_ISSUE_PRINT_FIELDS];
+	const selected = new Set(csvValues(params, 'fields'));
+	return ISSUE_PRINT_FIELDS.filter((field) => selected.has(field));
 }
 
 export function parseIssueGrouping(value: string | null): IssueGrouping {

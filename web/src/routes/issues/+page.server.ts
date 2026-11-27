@@ -1,6 +1,11 @@
 import { createApiClient } from '#lib/api/client.ts';
 import { isManager } from '#lib/user.ts';
-import { parseIssueFilters, parseIssueGrouping, parseIssueSort } from '#lib/issues.ts';
+import {
+	parseIssueFilters,
+	parseIssueGrouping,
+	parseIssuePrintFields,
+	parseIssueSort
+} from '#lib/issues.ts';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ fetch, url, parent }) => {
@@ -10,22 +15,26 @@ export const load: PageServerLoad = async ({ fetch, url, parent }) => {
 	const printMode = url.searchParams.get('print') === 'true';
 	const grouping = parseIssueGrouping(url.searchParams.get('group'));
 	const sort = parseIssueSort(url.searchParams.get('sort'));
+	const fields = parseIssuePrintFields(url.searchParams);
 
 	const status = filters.statuses.join(',') || undefined;
 	const severity = filters.severities.join(',') || undefined;
+	const search = filters.search || undefined;
 
 	const [myIssues, allIssues, locations] = await Promise.all([
 		api.listIssues({
 			status,
 			severity,
 			location_ids: filters.locationIds,
+			search,
 			mine: true
 		}),
 		isManager(user)
 			? api.listIssues({
 					status,
 					severity,
-					location_ids: filters.locationIds
+					location_ids: filters.locationIds,
+					search
 				})
 			: Promise.resolve([]),
 		api.listLocations()
@@ -55,6 +64,7 @@ export const load: PageServerLoad = async ({ fetch, url, parent }) => {
 		printMode,
 		grouping,
 		sort,
+		fields,
 		today,
 		dateStamp,
 		dateLocale,
