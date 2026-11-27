@@ -1,8 +1,19 @@
 <script lang="ts">
 	import type { Location } from '#lib/api/client.ts';
-	import type { IssueFilterState, IssueSeverity, IssueStatus } from '#lib/issues.ts';
-	import { ISSUE_SEVERITIES, ISSUE_STATUSES, parseIssueFilters } from '#lib/issues.ts';
-	import { updateIssueUrl } from '#lib/issueUrl.ts';
+	import type { IssueFilterState, IssuePrintField, IssueSeverity, IssueStatus } from '#lib/issues.ts';
+	import {
+		ISSUE_GROUPINGS,
+		ISSUE_PRINT_FIELDS,
+		ISSUE_SEVERITIES,
+		ISSUE_SORTS,
+		ISSUE_STATUSES,
+		parseIssueCompactMode,
+		parseIssueFilters,
+		parseIssueGrouping,
+		parseIssuePrintFields,
+		parseIssueSort
+	} from '#lib/issues.ts';
+	import { currentIssueUrl, updateIssueUrl } from '#lib/issueUrl.ts';
 	import { msg } from '#lib/msg.ts';
 	import { afterNavigate, beforeNavigate } from '$app/navigation';
 	import { onDestroy, untrack } from 'svelte';
@@ -14,6 +25,12 @@
 	}
 
 	let { locations, filters }: Props = $props();
+
+	let issueUrl = $derived(currentIssueUrl());
+	let compactMode = $derived(parseIssueCompactMode(issueUrl.searchParams));
+	let grouping = $derived(parseIssueGrouping(issueUrl.searchParams.get('group')));
+	let sort = $derived(parseIssueSort(issueUrl.searchParams.get('sort')));
+	let fields = $derived(parseIssuePrintFields(issueUrl.searchParams));
 
 	let search = $state(untrack(() => filters.search));
 	let pendingSearch: string | null = null;
@@ -57,6 +74,70 @@
 		options?: { replace?: boolean }
 	) {
 		return updateIssueUrl(mutate, options);
+	}
+
+	function setGrouping(value: string) {
+		void updateIssueUrl(
+			(params) => {
+				if (value === 'location') params.delete('group');
+				else params.set('group', value);
+			},
+			{ shallow: true }
+		);
+	}
+
+	function setSort(value: string) {
+		void updateIssueUrl(
+			(params) => {
+				if (value === 'oldest') params.delete('sort');
+				else params.set('sort', value);
+			},
+			{ shallow: true }
+		);
+	}
+
+	function toggleField(field: IssuePrintField) {
+		void updateIssueUrl(
+			(params) => {
+				const current = parseIssuePrintFields(params);
+				const next = current.includes(field)
+					? current.filter((value) => value !== field)
+					: [...current, field];
+				// Keep the param present even when empty: absent means defaults.
+				params.set(
+					'fields',
+					ISSUE_PRINT_FIELDS.filter((value) => next.includes(value)).join(',')
+				);
+			},
+			{ replace: true, shallow: true }
+		);
+	}
+
+	function fieldLabel(field: IssuePrintField): string {
+		switch (field) {
+			case 'title':
+				return m.page_issues_csv_title();
+			case 'status':
+				return m.page_issues_filter_status();
+			case 'severity':
+				return m.page_issues_filter_severity();
+			case 'location':
+				return m.page_issues_print_location();
+			case 'assignee':
+				return m.page_issues_print_assigned();
+			case 'reporter':
+				return m.page_issues_print_reporter();
+			case 'date':
+				return m.page_issues_print_field_date();
+			case 'description':
+				return m.page_issue_description_heading();
+			case 'checkbox':
+				return m.page_issues_print_field_checkbox();
+			case 'id':
+				return m.page_issues_print_field_id();
+			default:
+				return field;
+		}
 	}
 
 	async function applySearch(value: string) {
@@ -206,7 +287,9 @@
 <details class="mb-4 rounded border border-neutral-200 bg-white text-sm print:hidden">
 	<summary class="flex w-full cursor-pointer items-start gap-3 p-3">
 		<span class="shrink-0 text-xs font-semibold uppercase tracking-wide text-neutral-500">
-			{m.page_issues_filters_heading()}
+			{compactMode
+				? m.page_issues_filters_heading_compact()
+				: m.page_issues_filters_heading()}
 		</span>
 		<span class="min-w-0 flex-1 text-xs text-neutral-500">
 			<span>{m.page_issues_filter_locations()}: {locationSummary}</span>
@@ -217,6 +300,14 @@
 			{#if filters.search}
 				<span class="mx-1">·</span>
 				<span>{m.page_issues_filter_search_summary({ query: filters.search })}</span>
+			{/if}
+			{#if compactMode && (grouping !== 'location' || sort !== 'oldest')}
+				<span class="mx-1">·</span>
+				<span>
+					{m.page_issues_filter_view()}:
+					{msg(`page_issues_group_${grouping}`) ?? grouping},
+					{msg(`page_issues_sort_${sort}`) ?? sort}
+				</span>
 			{/if}
 		</span>
 		<span class="chevron mt-0.5 shrink-0 text-xs text-neutral-400 transition-transform" aria-hidden="true">▾</span>
@@ -310,6 +401,68 @@
 					{/each}
 				</div>
 			</fieldset>
+
+			{#if compactMode}
+				<fieldset class="min-w-0 sm:col-span-2 lg:col-span-3">
+					<legend class="mb-2 text-xs font-medium text-neutral-500">
+						{m.page_issues_filter_view()}
+					</legend>
+					<div class="flex flex-wrap items-start gap-x-5 gap-y-3">
+						<label class="flex items-center gap-2">
+							<span class="text-xs font-medium text-neutral-500">
+								{m.page_issues_print_grouping()}
+							</span>
+							<select
+								class="rounded border border-neutral-300 bg-white px-2 py-1 text-sm"
+								value={grouping}
+								onchange={(event) => setGrouping(event.currentTarget.value)}
+							>
+								{#each ISSUE_GROUPINGS as value (value)}
+									<option value={value}>
+										{msg(`page_issues_group_${value}`) ?? value}
+									</option>
+								{/each}
+							</select>
+						</label>
+
+						<label class="flex items-center gap-2">
+							<span class="text-xs font-medium text-neutral-500">
+								{m.page_issues_print_sorting()}
+							</span>
+							<select
+								class="rounded border border-neutral-300 bg-white px-2 py-1 text-sm"
+								value={sort}
+								onchange={(event) => setSort(event.currentTarget.value)}
+							>
+								{#each ISSUE_SORTS as value (value)}
+									<option value={value}>
+										{msg(`page_issues_sort_${value}`) ?? value}
+									</option>
+								{/each}
+							</select>
+						</label>
+
+						<div class="min-w-0">
+							<span class="mb-1 block text-xs font-medium text-neutral-500">
+								{m.page_issues_print_fields()}
+							</span>
+							<div class="flex flex-wrap gap-x-4 gap-y-1">
+								{#each ISSUE_PRINT_FIELDS as field (field)}
+									<label class="flex items-center gap-1.5 text-xs">
+										<input
+											type="checkbox"
+											class="h-3 w-3 accent-blue-700"
+											checked={fields.includes(field)}
+											onchange={() => toggleField(field)}
+										/>
+										<span>{fieldLabel(field)}</span>
+									</label>
+								{/each}
+							</div>
+						</div>
+					</div>
+				</fieldset>
+			{/if}
 		</div>
 	</div>
 </details>

@@ -1,16 +1,13 @@
 <script lang="ts">
 	import type { Issue, Location } from '#lib/api/client.ts';
-	import type { IssueFilterState, IssuePrintField } from '#lib/issues.ts';
+	import type { IssueFilterState } from '#lib/issues.ts';
 	import {
-		ISSUE_GROUPINGS,
-		ISSUE_PRINT_FIELDS,
-		ISSUE_SORTS,
 		parseIssueGrouping,
 		parseIssuePrintFields,
 		parseIssueSort,
 		sortIssues
 	} from '#lib/issues.ts';
-	import { currentIssueUrl, updateIssueUrl } from '#lib/issueUrl.ts';
+	import { currentIssueUrl } from '#lib/issueUrl.ts';
 	import { msg } from '#lib/msg.ts';
 	import { issueSeverityColors, issueStatusColors } from '#lib/styles.ts';
 	import * as m from '#lib/paraglide/messages.js';
@@ -47,60 +44,6 @@
 
 	const severityOrder = ['missing', 'unusable', 'usable'];
 	const statusOrder = ['open', 'in_progress', 'resolved', 'archived'];
-
-	function updateParam(key: string, value: string) {
-		void updateIssueUrl(
-			(params) => {
-				if (value) params.set(key, value);
-				else params.delete(key);
-			},
-			{ shallow: true }
-		);
-	}
-
-	function toggleField(field: IssuePrintField) {
-		void updateIssueUrl(
-			(params) => {
-				const current = parseIssuePrintFields(params);
-				const next = current.includes(field)
-					? current.filter((value) => value !== field)
-					: [...current, field];
-				// Keep the param present even when empty: absent means defaults.
-				params.set(
-					'fields',
-					ISSUE_PRINT_FIELDS.filter((value) => next.includes(value)).join(',')
-				);
-			},
-			{ replace: true, shallow: true }
-		);
-	}
-
-	function fieldLabel(field: IssuePrintField): string {
-		switch (field) {
-			case 'title':
-				return m.page_issues_csv_title();
-			case 'status':
-				return m.page_issues_filter_status();
-			case 'severity':
-				return m.page_issues_filter_severity();
-			case 'location':
-				return m.page_issues_print_location();
-			case 'assignee':
-				return m.page_issues_print_assigned();
-			case 'reporter':
-				return m.page_issues_print_reporter();
-			case 'date':
-				return m.page_issues_print_field_date();
-			case 'description':
-				return m.page_issue_description_heading();
-			case 'checkbox':
-				return m.page_issues_print_field_checkbox();
-			case 'id':
-				return m.page_issues_print_field_id();
-			default:
-				return field;
-		}
-	}
 
 	function toggleChecked(issueId: string) {
 		checkedIssueIds = checkedIssueIds.includes(issueId)
@@ -271,7 +214,7 @@
 	});
 </script>
 
-<header class="mb-4 border-b border-neutral-300 pb-3">
+<header class="mb-4 hidden border-b border-neutral-300 pb-3 print:block">
 	<div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
 		<div>
 			{#if groupName}
@@ -285,57 +228,6 @@
 	</div>
 	<p class="mt-1 text-[11px] leading-snug text-neutral-600">{filterSummary}</p>
 </header>
-
-<div class="mb-4 flex flex-wrap items-center gap-3 text-sm print:hidden">
-	<label class="flex items-center gap-2">
-		<span class="text-xs font-medium text-neutral-500">{m.page_issues_print_grouping()}</span>
-		<select
-			class="rounded border border-neutral-300 bg-white px-2 py-1 text-sm"
-			value={grouping}
-			onchange={(event) => updateParam('group', event.currentTarget.value)}
-		>
-			{#each ISSUE_GROUPINGS as value (value)}
-				<option value={value}>
-					{msg(`page_issues_group_${value}`) ?? value}
-				</option>
-			{/each}
-		</select>
-	</label>
-
-	<label class="flex items-center gap-2">
-		<span class="text-xs font-medium text-neutral-500">{m.page_issues_print_sorting()}</span>
-		<select
-			class="rounded border border-neutral-300 bg-white px-2 py-1 text-sm"
-			value={sort}
-			onchange={(event) => updateParam('sort', event.currentTarget.value)}
-		>
-			{#each ISSUE_SORTS as value (value)}
-				<option value={value}>
-					{msg(`page_issues_sort_${value}`) ?? value}
-				</option>
-			{/each}
-		</select>
-	</label>
-
-	<details class="w-full">
-		<summary class="cursor-pointer text-xs font-medium text-neutral-500">
-			{m.page_issues_print_fields()}
-		</summary>
-		<div class="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-5">
-			{#each ISSUE_PRINT_FIELDS as field (field)}
-				<label class="flex items-center gap-2 text-xs">
-					<input
-						type="checkbox"
-						class="h-3 w-3 accent-blue-700"
-						checked={fields.includes(field)}
-						onchange={() => toggleField(field)}
-					/>
-					<span>{fieldLabel(field)}</span>
-				</label>
-			{/each}
-		</div>
-	</details>
-</div>
 
 {#if issues.length === 0}
 	<p class="text-sm text-neutral-500">

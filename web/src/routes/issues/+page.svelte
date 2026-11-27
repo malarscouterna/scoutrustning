@@ -118,7 +118,10 @@
 
 <div class="mx-auto max-w-4xl p-4 print:max-w-none print:p-0">
 	<div class="mb-4 flex flex-wrap items-center justify-between gap-2 print:hidden">
-		<h1 class="text-heading-sm font-bold">{m.page_issues_heading()}</h1>
+		<h1 class="text-heading-sm font-bold">
+			{m.page_issues_heading()}
+			<span class="text-sm font-normal text-neutral-500">({data.printIssues.length})</span>
+		</h1>
 		<div class="flex flex-wrap items-center gap-2">
 			<button
 				type="button"

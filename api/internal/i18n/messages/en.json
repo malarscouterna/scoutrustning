@@ -326,6 +326,8 @@
   "page_issues_csv_created": "Created",
   "page_issues_csv_updated": "Updated",
   "page_issues_filters_heading": "Filters",
+  "page_issues_filters_heading_compact": "Filters and view",
+  "page_issues_filter_view": "View",
   "page_issues_filter_locations": "Location",
   "page_issues_filter_status": "Status",
   "page_issues_filter_status_required": "At least one status must be selected",
