@@ -326,6 +326,8 @@
   "page_issues_csv_created": "Skapad",
   "page_issues_csv_updated": "Uppdaterad",
   "page_issues_filters_heading": "Filter",
+  "page_issues_filters_heading_compact": "Filter och visning",
+  "page_issues_filter_view": "Visning",
   "page_issues_filter_locations": "Plats",
   "page_issues_filter_status": "Status",
   "page_issues_filter_status_required": "Minst en status måste vara vald",
