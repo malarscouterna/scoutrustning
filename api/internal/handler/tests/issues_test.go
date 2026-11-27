@@ -1006,4 +1006,69 @@ func TestIssueList_FiltersAndAssignees(t *testing.T) {
 			t.Errorf("expected Hanna Yggdrasil, got %v", assignee["user_name"])
 		}
 	})
+
+	t.Run("include_mine flags the requesting user's issues", func(t *testing.T) {
+		untouchedID := newIssue(hajkArticle, "usable", "Untouched by manager")
+
+		resp, err := manager.Get("/api/v0/issues?include_mine=true")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("expected 200, got %d: %s", resp.StatusCode, body)
+		}
+		var issues []map[string]any
+		if err := json.NewDecoder(resp.Body).Decode(&issues); err != nil {
+			t.Fatal(err)
+		}
+		isMine := map[string]bool{}
+		for _, issue := range issues {
+			isMine[issue["id"].(string)] = issue["is_mine"].(bool)
+		}
+		if !isMine[hajkIssueID] {
+			t.Error("expected the Hajk issue to be mine (manager assigned it)")
+		}
+		if !isMine[kammareIssueID] {
+			t.Error("expected the Kammaren issue to be mine (manager is assigned)")
+		}
+		if isMine[untouchedID] {
+			t.Error("expected the untouched issue not to be mine")
+		}
+	})
+
+	t.Run("is_mine is false unless requested", func(t *testing.T) {
+		for _, issue := range listIssues("") {
+			if issue["is_mine"] != false {
+				t.Errorf("expected is_mine false, got %v", issue["is_mine"])
+			}
+		}
+	})
+
+	t.Run("exists distinguishes an empty user from an empty filter", func(t *testing.T) {
+		check := func(client *testutil.TestClient, query string, want bool) {
+			t.Helper()
+			resp, err := client.Get("/api/v0/issues/exists" + query)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				body, _ := io.ReadAll(resp.Body)
+				t.Fatalf("expected 200, got %d: %s", resp.StatusCode, body)
+			}
+			var body map[string]bool
+			if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			if body["exists"] != want {
+				t.Errorf("expected exists=%v for %q, got %v", want, query, body["exists"])
+			}
+		}
+
+		check(leader, "?mine=true", true)
+		check(manager, "", true)
+		check(env.ClientAs("view-only").WithActiveGroup("766"), "?mine=true", false)
+	})
 }

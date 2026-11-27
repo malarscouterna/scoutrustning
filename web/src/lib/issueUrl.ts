@@ -2,9 +2,11 @@ import { goto } from '$app/navigation';
 import { page } from '$app/state';
 
 // Issue filters, search, sorting, grouping and field selection all live in the
-// URL. SvelteKit does not commit `page.url` until a navigation finishes, and a
-// newer `goto` aborts an older one. Build every change from the latest intended
-// URL instead, so overlapping changes are not silently dropped.
+// URL. Shallow routing stores its target in `page.shallow.url`, so all changes
+// build from `currentIssueUrl()`. SvelteKit does not commit `page.url` until a
+// navigation finishes, and a newer `goto` aborts an older one. Build every
+// change from the latest intended URL instead, so overlapping changes are not
+// silently dropped.
 let pendingUrl: URL | null = null;
 let queue: Promise<void> = Promise.resolve();
 let generation = 0;
@@ -13,11 +15,17 @@ function isAbort(error: unknown): boolean {
 	return error instanceof Error && (error.name === 'AbortError' || /aborted/i.test(error.message));
 }
 
+// `goto(..., { shallow: true })` updates `page.shallow.url`, not `page.url`.
+// Use the shallow target when present so presentation params survive later loads.
+export function currentIssueUrl(): URL {
+	return new URL((page.shallow?.url ?? page.url).href);
+}
+
 export function updateIssueUrl(
 	mutate: (params: URLSearchParams) => void,
-	options: { replace?: boolean } = {}
+	options: { replace?: boolean; shallow?: boolean } = {}
 ): Promise<void> {
-	const base = pendingUrl ?? new URL(page.url.href);
+	const base = pendingUrl ?? currentIssueUrl();
 	const next = new URL(base.href);
 	mutate(next.searchParams);
 	if (next.href === base.href) return Promise.resolve();
@@ -33,7 +41,7 @@ export function updateIssueUrl(
 			if (pendingUrl !== next) return;
 
 			try {
-				await goto(next, { reset: false, replace: options.replace });
+				await goto(next, { reset: false, replace: options.replace, shallow: options.shallow });
 			} catch (error) {
 				if (!isAbort(error)) {
 					console.error('Issue page navigation failed', error);

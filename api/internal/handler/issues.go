@@ -29,6 +29,7 @@ func (h *IssueHandler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Get("/", h.List)
 	r.Post("/", h.Create)
+	r.Get("/exists", h.HasIssues)
 	r.Get("/{id}", h.Get)
 	r.Put("/{id}", h.Update)
 	r.Post("/{id}/comments", h.AddComment)
@@ -83,6 +84,7 @@ func (h *IssueHandler) List(w http.ResponseWriter, r *http.Request) {
 		search = string(runes[:200])
 	}
 	mine := r.URL.Query().Get("mine") == "true"
+	includeMine := r.URL.Query().Get("include_mine") == "true"
 	var articleID pgtype.UUID
 	if v := r.URL.Query().Get("article_id"); v != "" {
 		id, err := parseUUID(v)
@@ -98,6 +100,7 @@ func (h *IssueHandler) List(w http.ResponseWriter, r *http.Request) {
 		Statuses:    statuses,
 		Severities:  severities,
 		Mine:        mine,
+		IncludeMine: includeMine,
 		UserID:      claims.MemberID,
 		ArticleID:   articleID,
 		LocationIds: locationIDs,
@@ -182,6 +185,24 @@ func (h *IssueHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	WriteJSON(w, http.StatusOK, result)
+}
+
+// HasIssues reports whether the group (or the current user with mine=true) has
+// any issues at all. Used to distinguish an empty group from an empty filtered
+// result without fetching the issues themselves.
+func (h *IssueHandler) HasIssues(w http.ResponseWriter, r *http.Request) {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	exists, err := h.Q.HasIssues(r.Context(), db.HasIssuesParams{
+		GroupID: claims.GroupID,
+		Mine:    r.URL.Query().Get("mine") == "true",
+		UserID:  claims.MemberID,
+	})
+	if err != nil {
+		slog.Error("failed to check issues", "error", err)
+		WriteError(w, http.StatusInternalServerError, "failed to check issues")
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]bool{"exists": exists})
 }
 
 func (h *IssueHandler) Create(w http.ResponseWriter, r *http.Request) {

@@ -1,19 +1,16 @@
 <script lang="ts">
 	import type { Issue, Location } from '#lib/api/client.ts';
-	import type {
-		IssueFilterState,
-		IssueGrouping,
-		IssuePrintField,
-		IssueSort
-	} from '#lib/issues.ts';
+	import type { IssueFilterState, IssuePrintField } from '#lib/issues.ts';
 	import {
 		ISSUE_GROUPINGS,
 		ISSUE_PRINT_FIELDS,
 		ISSUE_SORTS,
+		parseIssueGrouping,
 		parseIssuePrintFields,
+		parseIssueSort,
 		sortIssues
 	} from '#lib/issues.ts';
-	import { updateIssueUrl } from '#lib/issueUrl.ts';
+	import { currentIssueUrl, updateIssueUrl } from '#lib/issueUrl.ts';
 	import { msg } from '#lib/msg.ts';
 	import { issueSeverityColors, issueStatusColors } from '#lib/styles.ts';
 	import * as m from '#lib/paraglide/messages.js';
@@ -21,17 +18,21 @@
 	interface Props {
 		issues: Issue[];
 		locations: Location[];
-		grouping: IssueGrouping;
-		sort: IssueSort;
-		fields: IssuePrintField[];
+		hasAnyIssues: boolean;
 		groupName: string;
 		filters: IssueFilterState;
 		today: string;
 		dateLocale: string;
 	}
 
-	let { issues, locations, grouping, sort, fields, groupName, filters, today, dateLocale }: Props =
+	let { issues, locations, hasAnyIssues, groupName, filters, today, dateLocale }: Props =
 		$props();
+
+	// Shallow gotos update `page.shallow.url`, not `page.url`; parse the effective URL.
+	let urlSearchParams = $derived(currentIssueUrl().searchParams);
+	let grouping = $derived(parseIssueGrouping(urlSearchParams.get('group')));
+	let sort = $derived(parseIssueSort(urlSearchParams.get('sort')));
+	let fields = $derived(parseIssuePrintFields(urlSearchParams));
 
 	let checkedIssueIds = $state<string[]>([]);
 
@@ -48,10 +49,13 @@
 	const statusOrder = ['open', 'in_progress', 'resolved', 'archived'];
 
 	function updateParam(key: string, value: string) {
-		void updateIssueUrl((params) => {
-			if (value) params.set(key, value);
-			else params.delete(key);
-		});
+		void updateIssueUrl(
+			(params) => {
+				if (value) params.set(key, value);
+				else params.delete(key);
+			},
+			{ shallow: true }
+		);
 	}
 
 	function toggleField(field: IssuePrintField) {
@@ -67,7 +71,7 @@
 					ISSUE_PRINT_FIELDS.filter((value) => next.includes(value)).join(',')
 				);
 			},
-			{ replace: true }
+			{ replace: true, shallow: true }
 		);
 	}
 
@@ -334,7 +338,9 @@
 </div>
 
 {#if issues.length === 0}
-	<p class="text-sm text-neutral-500">{m.page_issues_print_no_issues()}</p>
+	<p class="text-sm text-neutral-500">
+		{hasAnyIssues ? m.page_issues_print_no_issues() : m.page_issues_empty()}
+	</p>
 {:else}
 	<div class="space-y-5">
 		{#each groups as group (group.key)}

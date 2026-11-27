@@ -324,6 +324,41 @@ func (q *Queries) GetUserIssues(ctx context.Context, arg GetUserIssuesParams) ([
 	return items, nil
 }
 
+const hasIssues = `-- name: HasIssues :one
+SELECT EXISTS (
+    SELECT 1
+    FROM issue_reports ir
+    WHERE ir.group_id = $1
+      AND (
+          NOT $2::bool
+          OR ir.reporter_id = $3
+          OR ir.id IN (
+              SELECT issue_id FROM issue_assignees
+              WHERE user_id = $3 AND group_id = $1
+          )
+          OR ir.id IN (
+              SELECT issue_id FROM issue_events
+              WHERE actor_id = $3 AND group_id = $1
+          )
+      )
+)
+`
+
+type HasIssuesParams struct {
+	GroupID string `json:"group_id"`
+	Mine    bool   `json:"mine"`
+	UserID  string `json:"user_id"`
+}
+
+// Whether the group (or the user, with mine = true) has any issues at all.
+// Used to distinguish "no issues yet" from "no issues match the filters".
+func (q *Queries) HasIssues(ctx context.Context, arg HasIssuesParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasIssues, arg.GroupID, arg.Mine, arg.UserID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const insertIssueAssignee = `-- name: InsertIssueAssignee :exec
 INSERT INTO issue_assignees (issue_id, user_id, group_id)
 VALUES ($1, $2, $3)
@@ -607,24 +642,42 @@ func (q *Queries) ListIssueEvents(ctx context.Context, arg ListIssueEventsParams
 const listIssues = `-- name: ListIssues :many
 SELECT
     ir.id, ir.group_id, ir.title, ir.description, ir.severity, ir.status, ir.reporter_id, ir.booking_id, ir.created_at, ir.updated_at,
-    u.name AS reporter_name
+    u.name AS reporter_name,
+    CASE
+        WHEN $1::bool THEN (
+            ir.reporter_id = $2
+            OR EXISTS (
+                SELECT 1 FROM issue_assignees m_ia
+                WHERE m_ia.issue_id = ir.id
+                  AND m_ia.user_id = $2
+                  AND m_ia.group_id = $3
+            )
+            OR EXISTS (
+                SELECT 1 FROM issue_events m_ie
+                WHERE m_ie.issue_id = ir.id
+                  AND m_ie.actor_id = $2
+                  AND m_ie.group_id = $3
+            )
+        )
+        ELSE false
+    END AS is_mine
 FROM issue_reports ir
 JOIN users u ON ir.reporter_id = u.id
-WHERE ir.group_id = $1
-    AND (COALESCE(array_length($2::text[], 1), 0) = 0 OR ir.status = ANY($2::text[]))
-    AND (COALESCE(array_length($3::text[], 1), 0) = 0 OR ir.severity = ANY($3::text[]))
+WHERE ir.group_id = $3
+    AND (COALESCE(array_length($4::text[], 1), 0) = 0 OR ir.status = ANY($4::text[]))
+    AND (COALESCE(array_length($5::text[], 1), 0) = 0 OR ir.severity = ANY($5::text[]))
     AND (
-        $4::text = ''
-        OR strpos(lower(ir.title), lower($4)) > 0
-        OR strpos(lower(ir.description), lower($4)) > 0
-        OR strpos(lower(u.name), lower($4)) > 0
+        $6::text = ''
+        OR strpos(lower(ir.title), lower($6)) > 0
+        OR strpos(lower(ir.description), lower($6)) > 0
+        OR strpos(lower(u.name), lower($6)) > 0
         OR (
-            replace(ltrim(lower($4), '#'), '-', '') <> ''
+            replace(ltrim(lower($6), '#'), '-', '') <> ''
             AND (
-                strpos(lower(ir.id::text), ltrim(lower($4), '#')) > 0
+                strpos(lower(ir.id::text), ltrim(lower($6), '#')) > 0
                 OR strpos(
                     replace(lower(ir.id::text), '-', ''),
-                    replace(ltrim(lower($4), '#'), '-', '')
+                    replace(ltrim(lower($6), '#'), '-', '')
                 ) > 0
             )
         )
@@ -633,8 +686,8 @@ WHERE ir.group_id = $1
             FROM issue_assignees sa
             JOIN users su ON sa.user_id = su.id
             WHERE sa.issue_id = ir.id
-              AND sa.group_id = $1
-              AND strpos(lower(su.name), lower($4)) > 0
+              AND sa.group_id = $3
+              AND strpos(lower(su.name), lower($6)) > 0
         )
         OR EXISTS (
             SELECT 1
@@ -642,50 +695,51 @@ WHERE ir.group_id = $1
             JOIN articles ar ON sar.article_id = ar.id
             JOIN locations sl ON ar.location_id = sl.id
             WHERE sar.issue_id = ir.id
-              AND sar.group_id = $1
+              AND sar.group_id = $3
               AND (
-                  strpos(lower(ar.commercial_name), lower($4)) > 0
-                  OR strpos(lower(ar.common_name), lower($4)) > 0
-                  OR strpos(lower(sl.name), lower($4)) > 0
+                  strpos(lower(ar.commercial_name), lower($6)) > 0
+                  OR strpos(lower(ar.common_name), lower($6)) > 0
+                  OR strpos(lower(sl.name), lower($6)) > 0
               )
         )
         OR EXISTS (
             SELECT 1
             FROM issue_events se
             WHERE se.issue_id = ir.id
-              AND se.group_id = $1
+              AND se.group_id = $3
               AND se.event_type = 'comment'
-              AND strpos(lower(se.description), lower($4)) > 0
+              AND strpos(lower(se.description), lower($6)) > 0
         )
     )
-    AND (NOT $5::bool OR (
-        ir.reporter_id = $6
+    AND (NOT $7::bool OR (
+        ir.reporter_id = $2
         OR ir.id IN (
-            SELECT issue_id FROM issue_assignees WHERE user_id = $6 AND group_id = $1
+            SELECT issue_id FROM issue_assignees WHERE user_id = $2 AND group_id = $3
         )
         OR ir.id IN (
-            SELECT issue_id FROM issue_events WHERE actor_id = $6 AND group_id = $1
+            SELECT issue_id FROM issue_events WHERE actor_id = $2 AND group_id = $3
         )
     ))
-    AND ($7::uuid IS NULL OR ir.id IN (
-        SELECT issue_id FROM issue_articles WHERE article_id = $7 AND group_id = $1
+    AND ($8::uuid IS NULL OR ir.id IN (
+        SELECT issue_id FROM issue_articles WHERE article_id = $8 AND group_id = $3
     ))
-    AND (COALESCE(array_length($8::uuid[], 1), 0) = 0 OR ir.id IN (
+    AND (COALESCE(array_length($9::uuid[], 1), 0) = 0 OR ir.id IN (
         SELECT ia.issue_id
         FROM issue_articles ia
         JOIN articles a ON ia.article_id = a.id
-        WHERE ia.group_id = $1 AND a.location_id = ANY($8::uuid[])
+        WHERE ia.group_id = $3 AND a.location_id = ANY($9::uuid[])
     ))
 ORDER BY ir.updated_at DESC, ir.created_at DESC
 `
 
 type ListIssuesParams struct {
+	IncludeMine bool          `json:"include_mine"`
+	UserID      string        `json:"user_id"`
 	GroupID     string        `json:"group_id"`
 	Statuses    []string      `json:"statuses"`
 	Severities  []string      `json:"severities"`
 	Search      string        `json:"search"`
 	Mine        bool          `json:"mine"`
-	UserID      string        `json:"user_id"`
 	ArticleID   pgtype.UUID   `json:"article_id"`
 	LocationIds []pgtype.UUID `json:"location_ids"`
 }
@@ -702,6 +756,7 @@ type ListIssuesRow struct {
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 	ReporterName string             `json:"reporter_name"`
+	IsMine       bool               `json:"is_mine"`
 }
 
 // Filters: status (comma-separated via array), severity (comma-separated via array),
@@ -711,12 +766,13 @@ type ListIssuesRow struct {
 // article/location names, issue id, and comments in the thread).
 func (q *Queries) ListIssues(ctx context.Context, arg ListIssuesParams) ([]ListIssuesRow, error) {
 	rows, err := q.db.Query(ctx, listIssues,
+		arg.IncludeMine,
+		arg.UserID,
 		arg.GroupID,
 		arg.Statuses,
 		arg.Severities,
 		arg.Search,
 		arg.Mine,
-		arg.UserID,
 		arg.ArticleID,
 		arg.LocationIds,
 	)
@@ -739,6 +795,7 @@ func (q *Queries) ListIssues(ctx context.Context, arg ListIssuesParams) ([]ListI
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.ReporterName,
+			&i.IsMine,
 		); err != nil {
 			return nil, err
 		}
