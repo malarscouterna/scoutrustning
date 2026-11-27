@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.16.0](https://github.com/malarscouterna/scoutrustning/compare/v0.15.1...v0.16.0) (2026-11-27)
+
+
+### Features
+
+* **web,api:** add compact printable issue list ([c5401ed](https://github.com/malarscouterna/scoutrustning/commit/c5401edf339b1b945af2058079cef393887b477a))
+* **web,api:** add issue export options and polish print view ([1b48ca8](https://github.com/malarscouterna/scoutrustning/commit/1b48ca8b822b36b45fdf66d2bc3ddeea3adfd333))
+* **web,api:** add issue search and compact field options ([3be91c0](https://github.com/malarscouterna/scoutrustning/commit/3be91c0470694e60a646b2a4d8e00e3f0e117aeb))
+* **web:** consolidate issue filters and compact view controls ([c9eb7a3](https://github.com/malarscouterna/scoutrustning/commit/c9eb7a33f2f95c8d73d7b8f116edf6c07a5e385e))
+
+
+### Bug Fixes
+
+* **web,api:** harden shallow issue navigation and is_mine coverage ([e6f5b7f](https://github.com/malarscouterna/scoutrustning/commit/e6f5b7fe9afa155ad591dbf4b96a112b54533910))
+
+
+### Performance
+
+* **web,api:** reduce issue list reloads and clarify empty states ([ca079e8](https://github.com/malarscouterna/scoutrustning/commit/ca079e8e001b1fd3220d947dd1716915410ffa96))
+
 ## [0.15.1](https://github.com/malarscouterna/scoutrustning/compare/v0.15.0...v0.15.1) (2026-11-25)
 
 
